@@ -21,7 +21,7 @@ class DemoSeederTest extends TestCase
         $statuses = Deployment::pluck('status')->map->value->unique()->sort()->values()->all();
         $this->assertSame(['building', 'deploying', 'failed', 'live', 'queued', 'superseded'], $statuses);
 
-        foreach (['/applications', '/applications/create', '/applications/1', '/environments/1', '/environments/1/deployments', "/deployments/{$deployment->id}", '/environments/1/logs', '/environments/1/env', '/environments/1/domains', '/environments/1/settings', '/clusters', '/settings/audit'] as $path) {
+        foreach (['/applications', '/applications/create', '/applications/1', '/environments/1', '/environments/1/deployments', "/deployments/{$deployment->id}", '/environments/1/logs', '/environments/1/env', '/environments/1/domains', '/environments/1/datastores', '/environments/2/datastores', '/settings/backups', '/environments/1/settings', '/clusters', '/settings/audit'] as $path) {
             $this->actingAs($owner)->get($path)->assertOk();
         }
     }
