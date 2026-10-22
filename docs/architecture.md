@@ -44,6 +44,10 @@ Images have names like `registry.opencloud.svc.cluster.local:5000/<application-i
 
 The dashboard runs `kubectl` with its in-cluster service account for `local`. The service account has `cluster-admin` on `local`.
 
+The NetworkPolicies in `platform/networkpolicies.yaml` let only the dashboard reach BuildKit, and only the dashboard and BuildKit reach the registry. The node still pulls through the registry ClusterIP, because kube-router lets traffic from the node itself reach local pods. `tests/e2e/network-policy.sh` proves both.
+
+A release is a tag `v*`. `.github/workflows/release.yml` publishes the dashboard image for amd64 and arm64 and a release archive with `install.sh`, `platform/`, and `bin/`. `tests/e2e/build-release-archive.sh` builds the archive for the workflow and for the tests. When `install.sh` runs from `curl | bash`, it downloads that archive, checks its SHA-256 sum, extracts it to `/opt/opencloud/<version>`, and runs from there.
+
 The installer keeps its state in `/var/lib/opencloud`. The files `APP_KEY` and `setup-token` there have mode 600. The installer copies them into the Secret `dashboard` and never into a manifest file. The k3s options live in `/etc/rancher/k3s/config.yaml`. If `APP_KEY` is missing while the database exists, the installer stops, because a new key cannot read the stored secrets.
 
 The dashboard is at `http://<server-ip>:8000`. Caddy forwards port 8000 to the dashboard Service.
