@@ -9,7 +9,7 @@ class ProviderCredential extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['provider', 'token', 'checked_at', 'missing_rights'];
+    protected $fillable = ['provider', 'token', 'checked_at', 'missing_rights', 'details'];
 
     protected $hidden = ['token'];
 
@@ -19,6 +19,7 @@ class ProviderCredential extends Model
             'token' => 'encrypted',
             'checked_at' => 'datetime',
             'missing_rights' => 'array',
+            'details' => 'array',
         ];
     }
 }
