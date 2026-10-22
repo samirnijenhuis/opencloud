@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\AuditLogController;
+use App\Http\Controllers\Settings\BackupTargetController;
 use App\Http\Controllers\Settings\InviteController;
 use App\Http\Controllers\Settings\MemberController;
 use App\Http\Controllers\Settings\PasswordController;
@@ -27,6 +28,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('settings/members/{user}', [MemberController::class, 'destroy'])->name('members.destroy');
 
     Route::get('settings/audit', [AuditLogController::class, 'index'])->name('audit.index');
+
+    Route::get('settings/backups', [BackupTargetController::class, 'edit'])->name('backup-target.edit');
+    Route::put('settings/backups', [BackupTargetController::class, 'update'])->name('backup-target.update');
+    Route::delete('settings/backups', [BackupTargetController::class, 'destroy'])->name('backup-target.destroy');
 
     Route::post('settings/invites', [InviteController::class, 'store'])->name('invites.store');
     Route::delete('settings/invites/{invite}', [InviteController::class, 'destroy'])->name('invites.destroy');

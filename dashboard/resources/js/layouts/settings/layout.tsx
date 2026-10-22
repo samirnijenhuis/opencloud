@@ -31,7 +31,13 @@ const sidebarNavItems: NavItem[] = [
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
     const currentPath = window.location.pathname;
     const { can } = usePage<SharedData>().props;
-    const items = can.view_audit_log ? [...sidebarNavItems, { title: 'Audit log', url: '/settings/audit', icon: null }] : sidebarNavItems;
+    const { auth } = usePage<SharedData>().props;
+    const items = [
+        ...sidebarNavItems,
+        ...(can.view_audit_log ? [{ title: 'Audit log', url: '/settings/audit', icon: null }] : []),
+        // Backups block. Only an owner opens this page.
+        ...(auth.user.role === 'owner' ? [{ title: 'Backups', url: '/settings/backups', icon: null }] : []),
+    ];
 
     return (
         <div className="px-4 py-6">
