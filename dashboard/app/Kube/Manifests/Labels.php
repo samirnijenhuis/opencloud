@@ -15,6 +15,10 @@ final class Labels
 
     public const DEPLOYMENT = 'opencloud.dev/deployment';
 
+    public const DATASTORE = 'opencloud.dev/datastore';
+
+    public const ATTACHMENT = 'opencloud.dev/attachment';
+
     /** @return array<string, string> */
     public static function environment(Environment $environment): array
     {
