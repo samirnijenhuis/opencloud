@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\ApplicationController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\ClusterController;
+use App\Http\Controllers\DatastoreController;
 use App\Http\Controllers\DeploymentController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EnvironmentController;
@@ -50,6 +52,12 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/settings', [EnvironmentController::class, 'settings'])->name('environments.settings');
     Route::patch('environments/{environment}/settings', [EnvironmentController::class, 'update'])->name('environments.update');
+
+    Route::get('environments/{environment}/datastores', [DatastoreController::class, 'index'])->name('environments.datastores');
+    Route::post('environments/{environment}/datastores', [DatastoreController::class, 'store'])->name('datastores.store');
+    Route::delete('datastore-attachments/{attachment}', [DatastoreController::class, 'destroy'])->name('datastores.destroy');
+    Route::post('datastore-attachments/{attachment}/backups', [BackupController::class, 'store'])->name('backups.store');
+    Route::post('backups/{backup}/restore', [BackupController::class, 'restore'])->name('backups.restore');
 
     Route::get('clusters', [ClusterController::class, 'index'])->name('clusters.index');
 });
