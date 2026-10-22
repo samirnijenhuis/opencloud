@@ -12,7 +12,7 @@ class Domain extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['environment_id', 'hostname', 'dns_status', 'dns_mode', 'certificate_status'];
+    protected $fillable = ['environment_id', 'hostname', 'dns_status', 'dns_mode', 'certificate_status', 'dns_found', 'dns_checked_at'];
 
     protected $attributes = [
         'dns_status' => DnsStatus::Pending->value,
