@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\ApplicationType;
+use App\GitHub\RepositoryName;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -40,6 +42,19 @@ class Application extends Model
     public function cloneUrl(): string
     {
         return str_contains($this->repository, '://') ? $this->repository : "https://github.com/{$this->repository}.git";
+    }
+
+    /**
+     * One repository can back more than one application, for example a staging copy.
+     *
+     * @param  string  $repository  "owner/name" from RepositoryName::parse()
+     * @return Collection<int, self>
+     */
+    public static function forGitHubRepository(string $repository): Collection
+    {
+        return self::query()->orderBy('id')->get()
+            ->filter(fn (self $application) => RepositoryName::parse($application->repository) === $repository)
+            ->values();
     }
 
     /** @return HasMany<Environment, $this> */

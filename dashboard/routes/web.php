@@ -7,11 +7,14 @@ use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EnvironmentController;
 use App\Http\Controllers\EnvironmentLogController;
 use App\Http\Controllers\EnvVarController;
+use App\Http\Controllers\GitHubWebhookController;
 use App\Http\Controllers\InviteAcceptController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard')->name('home');
+
+Route::post('webhooks/github', GitHubWebhookController::class)->name('webhooks.github');
 
 Route::middleware('throttle:10,1')->group(function () {
     Route::get('setup/{token}', [SetupController::class, 'show'])->name('setup');
