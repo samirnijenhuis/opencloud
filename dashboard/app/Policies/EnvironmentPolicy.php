@@ -28,6 +28,16 @@ class EnvironmentPolicy
             : Ability::ChangeUnprotectedEnvironment);
     }
 
+    /**
+     * A developer can deploy previews and staging, but production deploys need someone trusted with production secrets.
+     */
+    public function deploy(User $user, Environment $environment): bool
+    {
+        return $user->role->allows($environment->is_protected
+            ? Ability::ChangeProtectedEnvironment
+            : Ability::Deploy);
+    }
+
     public function delete(User $user, Environment $environment): bool
     {
         return $user->role->allows(Ability::ManageApplications);

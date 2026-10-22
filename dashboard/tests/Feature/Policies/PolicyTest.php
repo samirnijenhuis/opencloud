@@ -30,12 +30,13 @@ class PolicyTest extends TestCase
     }
 
     #[DataProvider('environmentUpdates')]
-    public function test_only_owners_and_admins_change_a_protected_environment(Role $role, bool $protected, bool $expected): void
+    public function test_only_owners_and_admins_change_or_deploy_a_protected_environment(Role $role, bool $protected, bool $expected): void
     {
         $user = User::factory()->create(['role' => $role]);
         $environment = Environment::factory()->create(['is_protected' => $protected]);
 
         $this->assertSame($expected, $user->can('update', $environment));
+        $this->assertSame($expected, $user->can('deploy', $environment));
     }
 
     /** @return array<string, array{Role, array<string, bool>}> */
