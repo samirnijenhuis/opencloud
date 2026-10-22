@@ -12,7 +12,7 @@ use App\Models\Environment;
  * One MySQL server per cluster, with one database and one user per environment. SQL goes in on stdin, so no
  * password shows up in a process list.
  */
-final class MysqlEngine implements Engine
+final class MysqlEngine implements SqlEngine
 {
     private const CLIENT = ['bash', '-c', 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --user=root'];
 
@@ -58,6 +58,30 @@ final class MysqlEngine implements Engine
             'DB_USERNAME' => [$attachment->username, false],
             'DB_PASSWORD' => [$attachment->password, true],
         ];
+    }
+
+    public function dump(Kubectl $kubectl, DatastoreAttachment $attachment, mixed $sink): void
+    {
+        $this->stream($kubectl, $attachment, 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump --user=root --single-transaction --routines --triggers --no-tablespaces '.$attachment->database_name.' | gzip', output: $sink);
+    }
+
+    public function restore(Kubectl $kubectl, DatastoreAttachment $attachment, mixed $gzipDump): void
+    {
+        ['database' => $database] = $this->quoted($attachment);
+
+        $this->run($kubectl, $attachment->datastore, ["DROP DATABASE IF EXISTS {$database};", "CREATE DATABASE {$database};"]);
+        $this->stream($kubectl, $attachment, 'gunzip | MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --user=root '.$attachment->database_name, stdin: $gzipDump);
+    }
+
+    /**
+     * @param  resource|null  $stdin
+     * @param  resource|null  $output
+     */
+    private function stream(Kubectl $kubectl, DatastoreAttachment $attachment, string $pipeline, mixed $stdin = null, mixed $output = null): void
+    {
+        $command = ['bash', '-c', "set -o pipefail; {$pipeline}"];
+
+        $kubectl->exec(DatastoreManifests::NAMESPACE, DatastoreManifests::serverPod($attachment->datastore), $command, $stdin, 'mysql', 3600, $output)->throw();
     }
 
     /** @param  list<string>  $statements */

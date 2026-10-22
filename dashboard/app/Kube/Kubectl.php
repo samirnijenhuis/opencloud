@@ -15,13 +15,17 @@ class Kubectl
         return app(KubectlFactory::class)->for($cluster);
     }
 
-    /** @param  list<string>  $args */
-    public function run(array $args, ?string $stdin = null, int $timeout = 120): KubectlResult
+    /**
+     * @param  list<string>  $args
+     * @param  string|resource|null  $stdin
+     * @param  resource|null  $output  receives stdout as it arrives, so a large dump never sits in memory
+     */
+    public function run(array $args, mixed $stdin = null, int $timeout = 120, mixed $output = null): KubectlResult
     {
         if ($this->cluster->kind === ClusterKind::Local) {
             $kubeconfig = config('opencloud.local_kubeconfig');
 
-            return $this->process($this->command($args, $kubeconfig ?: null), $stdin, $timeout);
+            return $this->process($this->command($args, $kubeconfig ?: null), $stdin, $timeout, $output);
         }
 
         $path = tempnam(sys_get_temp_dir(), 'kubeconfig-');
@@ -29,7 +33,7 @@ class Kubectl
         file_put_contents($path, $this->cluster->kubeconfig);
 
         try {
-            return $this->process($this->command($args, $path), $stdin, $timeout);
+            return $this->process($this->command($args, $path), $stdin, $timeout, $output);
         } finally {
             unlink($path);
         }
@@ -76,8 +80,12 @@ class Kubectl
         return trim($result->output) === '' ? null : $result->json();
     }
 
-    /** @param  list<string>  $command */
-    public function exec(string $namespace, string $target, array $command, ?string $stdin = null, ?string $container = null, int $timeout = 300): KubectlResult
+    /**
+     * @param  list<string>  $command
+     * @param  string|resource|null  $stdin
+     * @param  resource|null  $output
+     */
+    public function exec(string $namespace, string $target, array $command, mixed $stdin = null, ?string $container = null, int $timeout = 300, mixed $output = null): KubectlResult
     {
         $args = ['exec', ...($stdin !== null ? ['-i'] : []), $target, '--namespace='.$namespace];
 
@@ -85,7 +93,7 @@ class Kubectl
             $args[] = '--container='.$container;
         }
 
-        return $this->run([...$args, '--', ...$command], $stdin, $timeout);
+        return $this->run([...$args, '--', ...$command], $stdin, $timeout, $output);
     }
 
     /** @param  array<string, string>  $selector */
@@ -120,8 +128,12 @@ class Kubectl
         return [config('opencloud.kubectl_binary', 'kubectl'), ...($kubeconfig !== null ? ['--kubeconfig='.$kubeconfig] : []), ...$args];
     }
 
-    /** @param  list<string>  $command */
-    protected function process(array $command, ?string $stdin, int $timeout): KubectlResult
+    /**
+     * @param  list<string>  $command
+     * @param  string|resource|null  $stdin
+     * @param  resource|null  $output
+     */
+    protected function process(array $command, mixed $stdin, int $timeout, mixed $output = null): KubectlResult
     {
         $process = new Process($command, timeout: $timeout);
 
@@ -129,9 +141,20 @@ class Kubectl
             $process->setInput($stdin);
         }
 
-        $process->run();
+        if ($output === null) {
+            $process->run();
 
-        return new KubectlResult($process->getExitCode() ?? 1, $process->getOutput(), $process->getErrorOutput());
+            return new KubectlResult($process->getExitCode() ?? 1, $process->getOutput(), $process->getErrorOutput());
+        }
+
+        $process->run(function (string $type, string $buffer) use ($process, $output) {
+            if ($type === Process::OUT) {
+                fwrite($output, $buffer);
+                $process->clearOutput();
+            }
+        });
+
+        return new KubectlResult($process->getExitCode() ?? 1, '', $process->getErrorOutput());
     }
 
     /** @return list<string> */

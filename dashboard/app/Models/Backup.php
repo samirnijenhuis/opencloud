@@ -32,4 +32,13 @@ class Backup extends Model
     {
         return $this->belongsTo(DatastoreAttachment::class, 'datastore_attachment_id');
     }
+
+    /** The attachment that owns the database now. A detach and a new attach keep the database name. */
+    public function currentAttachment(): ?DatastoreAttachment
+    {
+        return DatastoreAttachment::query()
+            ->where('datastore_id', $this->datastore_id)
+            ->where('database_name', $this->database_name)
+            ->first();
+    }
 }

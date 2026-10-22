@@ -12,7 +12,7 @@ use App\Models\Environment;
  * One Postgres server per cluster, with one database and one role per environment. The image trusts local socket
  * connections, so psql in the pod needs no password.
  */
-final class PostgresEngine implements Engine
+final class PostgresEngine implements SqlEngine
 {
     private const CLIENT = ['psql', '--username=postgres', '--dbname=postgres', '--set=ON_ERROR_STOP=1', '--quiet', '--no-psqlrc'];
 
@@ -69,6 +69,35 @@ final class PostgresEngine implements Engine
             'DB_USERNAME' => [$attachment->username, false],
             'DB_PASSWORD' => [$attachment->password, true],
         ];
+    }
+
+    /** Without owners and grants in the dump, the restore can run as the role of the environment. */
+    public function dump(Kubectl $kubectl, DatastoreAttachment $attachment, mixed $sink): void
+    {
+        $this->stream($kubectl, $attachment, "pg_dump --username=postgres --no-owner --no-privileges {$attachment->database_name} | gzip", output: $sink);
+    }
+
+    public function restore(Kubectl $kubectl, DatastoreAttachment $attachment, mixed $gzipDump): void
+    {
+        $name = $attachment->database_name;
+
+        $this->run($kubectl, $attachment->datastore, [
+            "DROP DATABASE IF EXISTS \"{$name}\" WITH (FORCE);",
+            "CREATE DATABASE \"{$name}\" OWNER \"{$attachment->username}\";",
+            "REVOKE ALL ON DATABASE \"{$name}\" FROM PUBLIC;",
+        ]);
+        $this->stream($kubectl, $attachment, "gunzip | psql --username={$attachment->username} --dbname={$name} --set=ON_ERROR_STOP=1 --quiet --no-psqlrc", stdin: $gzipDump);
+    }
+
+    /**
+     * @param  resource|null  $stdin
+     * @param  resource|null  $output
+     */
+    private function stream(Kubectl $kubectl, DatastoreAttachment $attachment, string $pipeline, mixed $stdin = null, mixed $output = null): void
+    {
+        $command = ['bash', '-c', "set -o pipefail; {$pipeline}"];
+
+        $kubectl->exec(DatastoreManifests::NAMESPACE, DatastoreManifests::serverPod($attachment->datastore), $command, $stdin, 'postgres', 3600, $output)->throw();
     }
 
     /** @param  list<string>  $statements */
