@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\Ability;
+use App\Models\Application;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -44,6 +46,10 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
+            ],
+            'can' => [
+                'create_application' => $request->user()?->can('create', Application::class) ?? false,
+                'view_audit_log' => $request->user()?->role->allows(Ability::ManageApplications) ?? false,
             ],
         ]);
     }
