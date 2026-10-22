@@ -8,6 +8,7 @@ MACHINE=oc-e2e-$(date +%s)
 ARCH=$(docker version --format '{{.Server.Arch}}')
 VERSION=e2e
 IMAGE=ghcr.io/opencloud-dev/opencloud:$VERSION
+CADDY_IMAGE=ghcr.io/opencloud-dev/opencloud-caddy:$VERSION
 TMP_ROOT=${TMPDIR:-/tmp}
 WORK=$(mktemp -d "${TMP_ROOT%/}/oc-e2e.XXXXXX")
 # OrbStack machines see the Mac file system under /mnt/mac.
@@ -28,7 +29,7 @@ on_machine() {
 }
 
 cleanup() {
-    rm -f "$WORK/opencloud.tar"
+    rm -f "$WORK/opencloud.tar" "$WORK/caddy.tar"
     if [[ ${KEEP:-0} == 1 ]]; then
         echo "KEEP=1: the machine $MACHINE stays. Delete it with: orb delete -f $MACHINE"
     else
@@ -39,7 +40,7 @@ cleanup() {
 
 run_install() {
     local log=$1
-    on_machine env OPENCLOUD_VERSION="$VERSION" OPENCLOUD_IMAGE_ARCHIVE=/opt/opencloud/opencloud.tar \
+    on_machine env OPENCLOUD_VERSION="$VERSION" OPENCLOUD_IMAGE_ARCHIVE=/opt/opencloud/opencloud.tar OPENCLOUD_CADDY_IMAGE_ARCHIVE=/opt/opencloud/caddy.tar \
         bash /opt/opencloud/install.sh >"$log" 2>&1
 }
 
@@ -52,13 +53,18 @@ docker build --platform "linux/$ARCH" -t "$IMAGE" "$ROOT/dashboard" >"$WORK/buil
     { tail -50 "$WORK/build.log"; exit 1; }
 docker save --platform "linux/$ARCH" -o "$WORK/opencloud.tar" "$IMAGE"
 
+echo "Building $CADDY_IMAGE for linux/$ARCH"
+docker build --platform "linux/$ARCH" -t "$CADDY_IMAGE" "$ROOT/platform/images/caddy" >"$WORK/build-caddy.log" 2>&1 ||
+    { tail -50 "$WORK/build-caddy.log"; exit 1; }
+docker save --platform "linux/$ARCH" -o "$WORK/caddy.tar" "$CADDY_IMAGE"
+
 echo "Creating the machine $MACHINE"
 orb create "ubuntu:noble" "$MACHINE" >/dev/null
 trap cleanup EXIT
 IP=$(orb -m "$MACHINE" hostname -I | awk '{ print $1 }')
 
 on_machine mkdir -p /opt/opencloud
-on_machine cp -R "$REMOTE_SRC/install.sh" "$REMOTE_SRC/platform" "$REMOTE_SRC/bin" "$REMOTE_WORK/opencloud.tar" /opt/opencloud/
+on_machine cp -R "$REMOTE_SRC/install.sh" "$REMOTE_SRC/platform" "$REMOTE_SRC/bin" "$REMOTE_WORK/opencloud.tar" "$REMOTE_WORK/caddy.tar" /opt/opencloud/
 
 echo "Running install.sh on $MACHINE ($IP)"
 start=$(date +%s)
@@ -92,6 +98,10 @@ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$IP:8000/set
 ok=0
 [[ $code == 404 ]] && ok=1
 record "the setup page answers 404 with a wrong token (got $code)" "$ok"
+
+ok=0
+on_machine k3s kubectl -n opencloud exec deploy/caddy -- caddy list-modules 2>/dev/null | grep -qx 'dns.providers.cloudflare' && ok=1
+record "the Caddy pod runs the custom image with dns.providers.cloudflare" "$ok"
 
 ok=0
 if on_machine bash "$REMOTE_SRC/tests/e2e/registry-round-trip.sh" >"$WORK/registry.log" 2>&1; then
