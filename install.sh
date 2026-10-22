@@ -3,8 +3,9 @@
 set -euo pipefail
 
 K3S_VERSION=v1.36.5+k3s1
+OPENCLOUD_REPO=${OPENCLOUD_REPO:-opencloud-dev/opencloud}
 OPENCLOUD_VERSION=${OPENCLOUD_VERSION:-latest}
-OPENCLOUD_IMAGE=${OPENCLOUD_IMAGE:-ghcr.io/opencloud-dev/opencloud:$OPENCLOUD_VERSION}
+OPENCLOUD_IMAGE=${OPENCLOUD_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud:$OPENCLOUD_VERSION}
 OPENCLOUD_TLS_ISSUER=${OPENCLOUD_TLS_ISSUER:-acme}
 STATE_DIR=/var/lib/opencloud
 SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
@@ -36,6 +37,39 @@ server_ip() {
 
 port_holders() {
     ss -Htlnp "sport = :$1" | grep -o '(("[^"]*"' | cut -d'"' -f2 | sort -u
+}
+
+# The curl | bash case: no files sit beside the script, so fetch the release archive and run the installer from it.
+bootstrap() {
+    [[ -z ${BASH_SOURCE[0]:-} || ! -d $PLATFORM_DIR ]] || return 0
+
+    [[ $EUID -eq 0 ]] || fail "Run the installer as root, for example: curl -fsSL <url>/install.sh | sudo bash"
+    local tool
+    for tool in curl tar sha256sum; do
+        command -v "$tool" >/dev/null || fail "The command $tool is missing. Install it, for example: apt-get install -y curl"
+    done
+
+    local base=${OPENCLOUD_RELEASE_URL:-}
+    if [[ -z $base ]]; then
+        if [[ $OPENCLOUD_VERSION == latest ]]; then
+            base=https://github.com/$OPENCLOUD_REPO/releases/latest/download
+        else
+            base=https://github.com/$OPENCLOUD_REPO/releases/download/$OPENCLOUD_VERSION
+        fi
+    fi
+
+    local name=opencloud-$OPENCLOUD_VERSION.tar.gz tmp
+    tmp=$(mktemp -d)
+    say "Downloading $base/$name"
+    curl -fsSL -o "$tmp/$name" "$base/$name" || fail "Cannot download $base/$name. Check the version and the network."
+    curl -fsSL -o "$tmp/$name.sha256" "$base/$name.sha256" || fail "Cannot download $base/$name.sha256."
+    (cd "$tmp" && sha256sum -c "$name.sha256" >/dev/null) || fail "The checksum of $name does not match $name.sha256. Do not install this archive."
+
+    local dir=/opt/opencloud/$OPENCLOUD_VERSION
+    install -d -m 0755 "$dir"
+    tar -xzf "$tmp/$name" -C "$dir"
+    say "Running the installer from $dir"
+    exec bash "$dir/install.sh" "$@"
 }
 
 preflight() {
@@ -141,7 +175,7 @@ load_dashboard_image() {
 
 apply_platform() {
     say "Applying the opencloud manifests"
-    kc apply -f "$PLATFORM_DIR/rbac.yaml" -f "$PLATFORM_DIR/registry.yaml" -f "$PLATFORM_DIR/buildkitd.yaml" -f "$PLATFORM_DIR/caddy.yaml"
+    kc apply -f "$PLATFORM_DIR/rbac.yaml" -f "$PLATFORM_DIR/registry.yaml" -f "$PLATFORM_DIR/buildkitd.yaml" -f "$PLATFORM_DIR/caddy.yaml" -f "$PLATFORM_DIR/networkpolicies.yaml"
     sed -e "s|__DASHBOARD_IMAGE__|$OPENCLOUD_IMAGE|g" \
         -e "s|__APP_URL__|http://$SERVER_IP:8000|g" \
         -e "s|__OPENCLOUD_VERSION__|$OPENCLOUD_VERSION|g" \
@@ -176,6 +210,7 @@ configure_caddy() {
 }
 
 main() {
+    bootstrap "$@"
     preflight
     install_k3s
     ensure_secrets

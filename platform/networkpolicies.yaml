@@ -1,0 +1,44 @@
+# Only the dashboard may reach BuildKit, and only the dashboard and BuildKit may reach the registry.
+# Other pods in namespace opencloud (Caddy) and the dashboard Service stay open.
+# The node pulls images through the registry ClusterIP. kube-router lets traffic from the node itself reach local pods,
+# so the node needs no rule here. tests/e2e proves it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: buildkitd-from-dashboard
+  namespace: opencloud
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: buildkitd
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dashboard
+      ports:
+        - protocol: TCP
+          port: 1234
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: registry-from-dashboard-and-buildkitd
+  namespace: opencloud
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: registry
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: dashboard
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: buildkitd
+      ports:
+        - protocol: TCP
+          port: 5000
