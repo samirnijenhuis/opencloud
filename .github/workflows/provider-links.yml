@@ -1,0 +1,28 @@
+name: provider-links
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          tools: composer:v2
+
+      - run: composer install --no-interaction --prefer-dist
+
+      - run: cp .env.example .env && php artisan key:generate
+
+      - name: Request each provider key page
+        run: php artisan opencloud:check-provider-links
