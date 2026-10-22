@@ -9,6 +9,7 @@ use App\Http\Controllers\EnvironmentLogController;
 use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\GitHubWebhookController;
 use App\Http\Controllers\InviteAcceptController;
+use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +34,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('applications/create', [ApplicationController::class, 'create'])->name('applications.create');
     Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
     Route::get('applications/{application}', [ApplicationController::class, 'show'])->name('applications.show');
+    Route::patch('applications/{application}/previews', [PreviewSettingsController::class, 'update'])->name('applications.previews.update');
 
     Route::get('environments/{environment}', [EnvironmentController::class, 'show'])->name('environments.show');
     Route::get('environments/{environment}/deployments', [DeploymentController::class, 'index'])->name('environments.deployments');
