@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: opencloud <command>
+
+Commands:
+  status                              Show the opencloud pods.
+  logs [web|worker|scheduler|caddy]   Show the logs of one part. Extra flags go to kubectl logs, for example -f.
+  setup-url                           Print the URL that creates the owner account.
+EOF
+}
+
+kc() {
+    k3s kubectl -n opencloud "$@"
+}
+
+if [[ $EUID -ne 0 ]]; then
+    echo "Run opencloud as root, for example: sudo opencloud ${*:-status}" >&2
+    exit 1
+fi
+
+case "${1:-}" in
+status)
+    kc get pods -o wide
+    ;;
+logs)
+    part=${2:-web}
+    shift $(($# > 1 ? 2 : 1))
+    case $part in
+    web | worker | scheduler) kc logs deployment/dashboard -c "$part" "$@" ;;
+    caddy) kc logs deployment/caddy "$@" ;;
+    *)
+        usage >&2
+        exit 1
+        ;;
+    esac
+    ;;
+setup-url)
+    app_url=$(kc get deployment dashboard -o 'jsonpath={.spec.template.spec.containers[?(@.name=="web")].env[?(@.name=="APP_URL")].value}')
+    token=$(kc get secret dashboard -o 'jsonpath={.data.OPENCLOUD_SETUP_TOKEN}' | base64 -d)
+    echo "Setup URL: $app_url/setup/$token"
+    ;;
+help | -h | --help)
+    usage
+    ;;
+*)
+    usage >&2
+    exit 1
+    ;;
+esac

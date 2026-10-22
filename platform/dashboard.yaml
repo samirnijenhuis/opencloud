@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: dashboard
+    app.kubernetes.io/part-of: opencloud
+spec:
+  replicas: 1
+  # SQLite on a host path allows one pod at a time.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dashboard
+        app.kubernetes.io/part-of: opencloud
+    spec:
+      serviceAccountName: opencloud-dashboard
+      containers:
+        - name: web
+          image: "__DASHBOARD_IMAGE__"
+          imagePullPolicy: IfNotPresent
+          args: [web]
+          env: &env
+            - name: APP_URL
+              value: "__APP_URL__"
+            - name: APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dashboard
+                  key: APP_KEY
+            - name: OPENCLOUD_SETUP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: dashboard
+                  key: OPENCLOUD_SETUP_TOKEN
+            - name: OPENCLOUD_VERSION
+              value: "__OPENCLOUD_VERSION__"
+            - name: OPENCLOUD_TLS_ISSUER
+              value: "__TLS_ISSUER__"
+            - name: OPENCLOUD_DATA_PATH
+              value: /var/lib/opencloud/data
+            - name: DB_DATABASE
+              value: /var/lib/opencloud/data/database.sqlite
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /up
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+          volumeMounts: &mounts
+            - name: data
+              mountPath: /var/lib/opencloud/data
+        - name: worker
+          image: "__DASHBOARD_IMAGE__"
+          imagePullPolicy: IfNotPresent
+          args: [worker]
+          env: *env
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts: *mounts
+        - name: scheduler
+          image: "__DASHBOARD_IMAGE__"
+          imagePullPolicy: IfNotPresent
+          args: [scheduler]
+          env: *env
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts: *mounts
+      volumes:
+        - name: data
+          hostPath:
+            path: /var/lib/opencloud/data
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: dashboard
+    app.kubernetes.io/part-of: opencloud
+spec:
+  selector:
+    app.kubernetes.io/name: dashboard
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -1,0 +1,3 @@
+disable:
+  - traefik
+secrets-encryption: true

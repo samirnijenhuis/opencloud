@@ -1,0 +1,22 @@
+{
+  "apps": {
+    "http": {
+      "servers": {
+        "dashboard": {
+          "listen": [":8000"],
+          "automatic_https": { "disable": true },
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [{ "dial": "dashboard.opencloud.svc.cluster.local:8080" }]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
