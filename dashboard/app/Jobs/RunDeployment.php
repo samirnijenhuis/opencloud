@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Build\Builder;
+use App\Clusters\ImageCopy;
 use App\Datastores\DatastoreStatus;
 use App\Deploy\DeploymentLog;
 use App\Deploy\EnvironmentVariables;
@@ -95,7 +96,7 @@ class RunDeployment implements ShouldQueue
             $log->write("The repository is a {$build->type->value} app.");
         }
 
-        $deployment->image = $build->image;
+        $deployment->image = ImageCopy::toCluster($deployment, $build->image, $log);
         $deployment->moveTo(DeploymentStatus::Deploying);
 
         $this->waitForDatastores($environment, $log);

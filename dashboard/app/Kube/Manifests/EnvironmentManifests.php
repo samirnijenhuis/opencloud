@@ -2,6 +2,7 @@
 
 namespace App\Kube\Manifests;
 
+use App\Clusters\ClusterRegistry;
 use App\Enums\ApplicationType;
 use App\Models\Deployment;
 use App\Models\Environment;
@@ -13,6 +14,8 @@ use stdClass;
 final readonly class EnvironmentManifests
 {
     public const SERVICE_PORT = 8080;
+
+    public const PULL_SECRET = 'opencloud-registry';
 
     private const ROLLING = ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]];
 
@@ -102,6 +105,22 @@ final readonly class EnvironmentManifests
             'metadata' => $this->metadata(self::secretName($deployment), [...Labels::environment($this->environment), Labels::DEPLOYMENT => (string) $deployment->id]),
             'type' => 'Opaque',
             'data' => $data === [] ? new stdClass : $data,
+        ];
+    }
+
+    /**
+     * The credentials for the registry of the cluster. Each pod of the environment pulls its image with them.
+     *
+     * @return array<string, mixed>
+     */
+    public function pullSecret(ClusterRegistry $registry): array
+    {
+        return [
+            'apiVersion' => 'v1',
+            'kind' => 'Secret',
+            'metadata' => $this->metadata(self::PULL_SECRET, Labels::environment($this->environment)),
+            'type' => 'kubernetes.io/dockerconfigjson',
+            'data' => ['.dockerconfigjson' => base64_encode(json_encode($registry->dockerConfig(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES))],
         ];
     }
 
@@ -197,6 +216,7 @@ final readonly class EnvironmentManifests
                     'metadata' => ['labels' => $labels],
                     'spec' => [
                         'restartPolicy' => 'Never',
+                        ...$this->imagePullSecrets(),
                         'containers' => [$this->container(Process::Deploy, $deployment, [
                             'command' => ['sh', '-c', implode(' && ', $this->environment->deploy_commands)],
                         ])],
@@ -233,10 +253,16 @@ final readonly class EnvironmentManifests
                 'strategy' => $strategy,
                 'template' => [
                     'metadata' => ['labels' => Labels::deployment($this->environment, $process, $deployment)],
-                    'spec' => ['containers' => [$this->container($process, $deployment, $container)]],
+                    'spec' => [...$this->imagePullSecrets(), 'containers' => [$this->container($process, $deployment, $container)]],
                 ],
             ],
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function imagePullSecrets(): array
+    {
+        return $this->environment->application->cluster->registry() === null ? [] : ['imagePullSecrets' => [['name' => self::PULL_SECRET]]];
     }
 
     /**

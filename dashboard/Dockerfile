@@ -9,6 +9,8 @@ RUN npm run build
 
 FROM moby/buildkit:v0.25.1 AS buildkit
 
+FROM gcr.io/go-containerregistry/crane:v0.22.1 AS crane
+
 FROM dunglas/frankenphp:1-php8.4
 
 ARG TARGETARCH
@@ -23,6 +25,7 @@ RUN install-php-extensions pdo_sqlite intl zip bcmath pcntl opcache \
     && chmod +x /usr/local/bin/kubectl
 
 COPY --from=buildkit /usr/bin/buildctl /usr/local/bin/buildctl
+COPY --from=crane /ko-app/crane /usr/local/bin/crane
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 WORKDIR /app
