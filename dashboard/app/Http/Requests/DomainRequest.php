@@ -33,6 +33,8 @@ class DomainRequest extends FormRequest
     {
         return [
             'hostname' => ['required', 'string', 'regex:'.StoreApplicationRequest::HOSTNAME, 'unique:domains,hostname'],
+            'manage_dns' => ['sometimes', 'boolean'],
+            'proxied' => ['sometimes', 'boolean'],
         ];
     }
 

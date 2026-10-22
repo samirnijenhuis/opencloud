@@ -1,24 +1,28 @@
 import InputError from '@/components/input-error';
 import { DnsBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import EnvironmentLayout from '@/layouts/environment-layout';
 import { timeAgo } from '@/lib/format';
 import { type DnsStatus, type EnvironmentPageProps } from '@/types';
-import { router, useForm } from '@inertiajs/react';
+import { router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 type Domain = {
     id: number;
     hostname: string;
     dns_status: DnsStatus;
+    dns_mode: 'manual' | 'cloudflare';
     dns_found: string[];
     certificate_status: string;
     dns_checked_at: string | null;
 };
 
-type Props = EnvironmentPageProps & { domains: Domain[]; ingressIp: string | null };
+type Props = EnvironmentPageProps & { domains: Domain[]; ingressIp: string | null; cloudflareZones: string[] };
+
+const inZone = (hostname: string, zones: string[]) => zones.some((zone) => hostname === zone || hostname.endsWith(`.${zone}`));
 
 const certificateLabels: Record<string, string> = {
     pending: 'Certificate pending',
@@ -28,6 +32,15 @@ const certificateLabels: Record<string, string> = {
 
 function Guidance({ domain, ingressIp }: { domain: Domain; ingressIp: string | null }) {
     const address = ingressIp ?? 'the cluster address';
+
+    if (domain.dns_mode === 'cloudflare' && domain.dns_status !== 'ok' && domain.dns_status !== 'proxied') {
+        return (
+            <p className="text-sm">
+                opencloud manages the DNS record in Cloudflare. It waits for the record to show up
+                {domain.dns_status === 'wrong' && domain.dns_found.length > 0 ? `. We found ${domain.dns_found.join(', ')}.` : '.'}
+            </p>
+        );
+    }
 
     if (domain.dns_status === 'ok') {
         return <p className="text-sm">The A record points at {address}.</p>;
@@ -58,8 +71,10 @@ function Guidance({ domain, ingressIp }: { domain: Domain; ingressIp: string | n
 }
 
 export default function EnvironmentDomains(props: Props) {
-    const { environment, domains, ingressIp, can } = props;
-    const form = useForm({ hostname: '' });
+    const { environment, domains, ingressIp, cloudflareZones, can } = props;
+    const { errors } = usePage().props as { errors: Record<string, string> };
+    const form = useForm<{ hostname: string; manage_dns: boolean; proxied: boolean }>({ hostname: '', manage_dns: false, proxied: false });
+    const offerCloudflare = inZone(form.data.hostname.trim().toLowerCase(), cloudflareZones);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -76,6 +91,8 @@ export default function EnvironmentDomains(props: Props) {
 
     return (
         <EnvironmentLayout page={props} tab="domains" title="Domains">
+            {errors.domain && <p className="text-sm text-red-700 dark:text-red-400">{errors.domain}</p>}
+
             {domains.length === 0 ? (
                 <p className="text-sm">This environment has no domain yet.</p>
             ) : (
@@ -119,6 +136,29 @@ export default function EnvironmentDomains(props: Props) {
                         <Button disabled={form.processing || form.data.hostname.trim() === ''}>Add domain</Button>
                     </div>
                     <InputError message={form.errors.hostname} />
+                    {offerCloudflare && (
+                        <div className="space-y-2 text-sm">
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="manage_dns"
+                                    checked={form.data.manage_dns}
+                                    onCheckedChange={(checked) => form.setData('manage_dns', checked === true)}
+                                />
+                                <Label htmlFor="manage_dns">Let opencloud manage the DNS record</Label>
+                            </div>
+                            {form.data.manage_dns && (
+                                <div className="flex items-center gap-2 pl-6">
+                                    <Checkbox
+                                        id="proxied"
+                                        checked={form.data.proxied}
+                                        onCheckedChange={(checked) => form.setData('proxied', checked === true)}
+                                    />
+                                    <Label htmlFor="proxied">Send traffic through the Cloudflare proxy</Label>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <InputError message={form.errors.manage_dns} />
                 </form>
             ) : (
                 <p className="text-muted-foreground text-sm">Only an admin or an owner can add or remove domains.</p>
