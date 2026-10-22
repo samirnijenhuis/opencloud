@@ -62,6 +62,11 @@ class Environment extends Model
         ];
     }
 
+    public function kubeNamespace(): string
+    {
+        return "oc-env-{$this->id}";
+    }
+
     /** @return BelongsTo<Application, $this> */
     public function application(): BelongsTo
     {

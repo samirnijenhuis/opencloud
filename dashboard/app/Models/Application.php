@@ -12,12 +12,17 @@ class Application extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'repository', 'cluster_id', 'type'];
+    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port'];
+
+    protected $attributes = [
+        'port' => 8080,
+    ];
 
     protected function casts(): array
     {
         return [
             'type' => ApplicationType::class,
+            'port' => 'integer',
         ];
     }
 
@@ -25,6 +30,12 @@ class Application extends Model
     public function cluster(): BelongsTo
     {
         return $this->belongsTo(Cluster::class);
+    }
+
+    /** A repository is "owner/name" on GitHub, or a full URL. */
+    public function cloneUrl(): string
+    {
+        return str_contains($this->repository, '://') ? $this->repository : "https://github.com/{$this->repository}.git";
     }
 
     /** @return HasMany<Environment, $this> */

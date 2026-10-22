@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Models;
 
+use App\Domains\DnsStatus;
 use App\Enums\DeploymentStatus;
 use App\Enums\DnsMode;
 use App\Enums\EnvironmentKind;
@@ -69,7 +70,7 @@ class DataModelTest extends TestCase
         $domain = Domain::factory()->create(['hostname' => 'shop.example.com'])->fresh();
 
         $this->assertSame(DnsMode::Manual, $domain->dns_mode);
-        $this->assertSame('pending', $domain->dns_status);
+        $this->assertSame(DnsStatus::Pending, $domain->dns_status);
         $this->assertSame('pending', $domain->certificate_status);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domains\DnsStatus;
 use App\Enums\DnsMode;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +15,7 @@ class Domain extends Model
     protected $fillable = ['environment_id', 'hostname', 'dns_status', 'dns_mode', 'certificate_status'];
 
     protected $attributes = [
-        'dns_status' => 'pending',
+        'dns_status' => DnsStatus::Pending->value,
         'dns_mode' => DnsMode::Manual->value,
         'certificate_status' => 'pending',
     ];
@@ -22,7 +23,10 @@ class Domain extends Model
     protected function casts(): array
     {
         return [
+            'dns_status' => DnsStatus::class,
             'dns_mode' => DnsMode::class,
+            'dns_found' => 'array',
+            'dns_checked_at' => 'datetime',
         ];
     }
 
