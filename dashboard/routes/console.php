@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\FailStuckDeployments;
 use App\Jobs\SyncCaddy;
 use App\Models\Cluster;
 use Illuminate\Foundation\Inspiring;
@@ -14,3 +15,5 @@ Artisan::command('inspire', function () {
 Schedule::call(fn () => Cluster::query()->each(fn (Cluster $cluster) => SyncCaddy::dispatch($cluster)))
     ->name('sync-caddy')
     ->everyFiveMinutes();
+
+Schedule::job(new FailStuckDeployments)->everyMinute();
