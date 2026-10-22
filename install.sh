@@ -185,6 +185,7 @@ apply_platform() {
         -e "s|__APP_URL__|http://$SERVER_IP:8000|g" \
         -e "s|__OPENCLOUD_VERSION__|$OPENCLOUD_VERSION|g" \
         -e "s|__TLS_ISSUER__|$OPENCLOUD_TLS_ISSUER|g" \
+        -e "s|__PUBLIC_IP__|$SERVER_IP|g" \
         "$PLATFORM_DIR/dashboard.yaml" | kc apply -f -
 
     say "Waiting for the opencloud pods"

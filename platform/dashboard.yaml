@@ -43,6 +43,8 @@ spec:
               value: "__OPENCLOUD_VERSION__"
             - name: OPENCLOUD_TLS_ISSUER
               value: "__TLS_ISSUER__"
+            - name: OPENCLOUD_PUBLIC_IP
+              value: "__PUBLIC_IP__"
             - name: OPENCLOUD_DATA_PATH
               value: /var/lib/opencloud/data
             - name: DB_DATABASE
