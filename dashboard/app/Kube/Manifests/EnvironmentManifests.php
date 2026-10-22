@@ -14,8 +14,6 @@ final readonly class EnvironmentManifests
 {
     public const SERVICE_PORT = 8080;
 
-    public const SECRET = 'env';
-
     private const ROLLING = ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]];
 
     public function __construct(private Environment $environment) {}
@@ -88,19 +86,20 @@ final readonly class EnvironmentManifests
     }
 
     /**
+     * Each deployment gets its own Secret, so a failed deployment never changes the env of the live pods.
      * The values go in `data`, not `stringData`. Server-side apply does not remove a key that leaves `stringData`.
      *
      * @param  array<string, string>  $env
      * @return array<string, mixed>
      */
-    public function secret(array $env): array
+    public function secret(Deployment $deployment, array $env): array
     {
         $data = array_map(base64_encode(...), $env);
 
         return [
             'apiVersion' => 'v1',
             'kind' => 'Secret',
-            'metadata' => $this->metadata(self::SECRET, Labels::environment($this->environment)),
+            'metadata' => $this->metadata(self::secretName($deployment), [...Labels::environment($this->environment), Labels::DEPLOYMENT => (string) $deployment->id]),
             'type' => 'Opaque',
             'data' => $data === [] ? new stdClass : $data,
         ];
@@ -212,6 +211,11 @@ final readonly class EnvironmentManifests
         return "deploy-{$deployment->id}";
     }
 
+    public static function secretName(Deployment $deployment): string
+    {
+        return "env-{$deployment->id}";
+    }
+
     /**
      * @param  array<string, mixed>  $strategy
      * @param  array<string, mixed>  $container
@@ -248,7 +252,7 @@ final readonly class EnvironmentManifests
             'name' => $process->value,
             'image' => $deployment->image,
             ...$extra,
-            'envFrom' => [['secretRef' => ['name' => self::SECRET]]],
+            'envFrom' => [['secretRef' => ['name' => self::secretName($deployment)]]],
             'resources' => ['requests' => $resources, 'limits' => $resources],
         ];
     }

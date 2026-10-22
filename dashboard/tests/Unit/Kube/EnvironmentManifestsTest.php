@@ -36,24 +36,24 @@ class EnvironmentManifestsTest extends TestCase
         ], $this->manifests()->namespace());
     }
 
-    public function test_the_secret_holds_the_env_base64_encoded(): void
+    public function test_the_secret_of_a_deployment_holds_the_env_base64_encoded(): void
     {
         $this->assertSame([
             'apiVersion' => 'v1',
             'kind' => 'Secret',
             'metadata' => [
-                'name' => 'env',
+                'name' => 'env-12',
                 'namespace' => 'oc-env-7',
-                'labels' => ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7'],
+                'labels' => ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/deployment' => '12'],
             ],
             'type' => 'Opaque',
             'data' => ['APP_ENV' => 'cHJvZHVjdGlvbg==', 'DB_PASSWORD' => 'czNjcjN0'],
-        ], $this->manifests()->secret(['APP_ENV' => 'production', 'DB_PASSWORD' => 's3cr3t']));
+        ], $this->manifests()->secret($this->deployment(), ['APP_ENV' => 'production', 'DB_PASSWORD' => 's3cr3t']));
     }
 
     public function test_an_empty_secret_encodes_data_as_a_json_object(): void
     {
-        $secret = $this->manifests()->secret([]);
+        $secret = $this->manifests()->secret($this->deployment(), []);
 
         $this->assertEquals(new stdClass, $secret['data']);
         $this->assertStringContainsString('"data":{}', json_encode($secret));
@@ -76,7 +76,7 @@ class EnvironmentManifestsTest extends TestCase
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                         'ports' => [['name' => 'http', 'containerPort' => 8080]],
                         'readinessProbe' => ['httpGet' => ['path' => '/up', 'port' => 'http']],
-                        'envFrom' => [['secretRef' => ['name' => 'env']]],
+                        'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                         'resources' => self::RESOURCES,
                     ]]],
                 ],
@@ -95,7 +95,7 @@ class EnvironmentManifestsTest extends TestCase
             'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
             'ports' => [['name' => 'http', 'containerPort' => 3000]],
             'readinessProbe' => ['httpGet' => ['path' => '/health', 'port' => 'http']],
-            'envFrom' => [['secretRef' => ['name' => 'env']]],
+            'envFrom' => [['secretRef' => ['name' => 'env-12']]],
             'resources' => [
                 'requests' => ['cpu' => '1000m', 'memory' => '1024Mi'],
                 'limits' => ['cpu' => '1000m', 'memory' => '1024Mi'],
@@ -121,7 +121,7 @@ class EnvironmentManifestsTest extends TestCase
                         'name' => 'worker',
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                         'command' => ['php', 'artisan', 'queue:work', '--sleep=3', '--tries=3', '--max-time=3600'],
-                        'envFrom' => [['secretRef' => ['name' => 'env']]],
+                        'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                         'resources' => self::RESOURCES,
                     ]]],
                 ],
@@ -147,7 +147,7 @@ class EnvironmentManifestsTest extends TestCase
                         'name' => 'scheduler',
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                         'command' => ['php', 'artisan', 'schedule:work'],
-                        'envFrom' => [['secretRef' => ['name' => 'env']]],
+                        'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                         'resources' => self::RESOURCES,
                     ]]],
                 ],
@@ -211,7 +211,7 @@ class EnvironmentManifestsTest extends TestCase
                             'name' => 'deploy',
                             'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                             'command' => ['sh', '-c', 'php artisan migrate --force && php artisan db:seed --force'],
-                            'envFrom' => [['secretRef' => ['name' => 'env']]],
+                            'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                             'resources' => self::RESOURCES,
                         ]],
                     ],

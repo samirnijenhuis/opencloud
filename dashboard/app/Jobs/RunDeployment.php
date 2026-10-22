@@ -9,6 +9,7 @@ use App\Enums\ApplicationType;
 use App\Enums\DeploymentStatus;
 use App\Kube\Kubectl;
 use App\Kube\Manifests\EnvironmentManifests;
+use App\Kube\Manifests\Labels;
 use App\Models\Deployment;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -93,7 +94,7 @@ class RunDeployment implements ShouldQueue
 
         $kubectl = Kubectl::for($application->cluster);
         $manifests = new EnvironmentManifests($environment);
-        $kubectl->apply([$manifests->namespace(), $manifests->secret(EnvironmentVariables::runtime($environment))]);
+        $kubectl->apply([$manifests->namespace(), $manifests->secret($deployment, EnvironmentVariables::runtime($environment))]);
 
         if ($environment->deploy_commands !== []) {
             $this->runDeployCommands($kubectl, $manifests, $deployment, $log);
@@ -181,9 +182,33 @@ class RunDeployment implements ShouldQueue
     {
         try {
             SyncCaddy::dispatch($deployment->environment->application->cluster);
+            $this->pruneEnvSecrets($deployment);
             $this->checkHomePage($deployment, $log);
         } catch (Throwable $e) {
             $log->write("A step after the deployment went live failed. {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Keeps the Secret of the live deployment and the two newest, so a rollback still finds its env.
+     * The name "env" without an id is the Secret from before each deployment had its own.
+     */
+    private function pruneEnvSecrets(Deployment $live): void
+    {
+        $environment = $live->environment;
+        $namespace = $environment->kubeNamespace();
+        $kubectl = Kubectl::for($environment->application->cluster);
+        $secrets = $kubectl->get('secrets', namespace: $namespace, selector: Labels::environment($environment))['items'] ?? [];
+
+        $ids = collect($secrets)
+            ->map(fn (array $secret) => $secret['metadata']['name'])
+            ->filter(fn (string $name) => preg_match('/^env(-\d+)?$/', $name) === 1)
+            ->mapWithKeys(fn (string $name) => [$name => (int) substr($name, 4)])
+            ->sortDesc();
+        $keep = [...$ids->keys()->take(2), EnvironmentManifests::secretName($live)];
+
+        foreach ($ids->keys()->diff($keep) as $name) {
+            $kubectl->delete('secret', $name, $namespace);
         }
     }
 
