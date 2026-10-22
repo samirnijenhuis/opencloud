@@ -9,6 +9,7 @@ use App\Models\Deployment;
 use App\Models\Environment;
 use App\Models\GithubApp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -36,8 +37,9 @@ class PushWebhookTest extends TestCase
         $this->postWebhook('push', $push, secret: null)->assertStatus(401);
         $this->assertSame(0, Deployment::count());
 
-        $this->postWebhook('push', $push)->assertStatus(202);
+        $this->postWebhook('push', $push)->assertStatus(202)->assertCookieMissing(config('session.cookie'));
         $this->assertSame(2, Deployment::count());
+        $this->assertSame(0, DB::table('sessions')->count());
     }
 
     public function test_there_is_no_valid_signature_without_a_github_app(): void
