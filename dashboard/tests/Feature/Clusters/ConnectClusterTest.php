@@ -77,6 +77,15 @@ class ConnectClusterTest extends TestCase
         $this->assertCount(1, $this->kubectl->calls);
     }
 
+    public function test_a_kubeconfig_that_kubectl_cannot_read_is_refused_without_the_temporary_file_name(): void
+    {
+        $this->kubectl->respond('version', new KubectlResult(1, '', 'error: error loading config file "/tmp/kubeconfig-a1B2c3": yaml: mapping values are not allowed in this context'));
+
+        $this->assertRefused(
+            'Opencloud cannot reach the cluster with this kubeconfig. kubectl said: error: error loading config file the kubeconfig: yaml: mapping values are not allowed in this context',
+        );
+    }
+
     public function test_a_kubeconfig_without_full_rights_is_refused(): void
     {
         $this->kubectl->respond('auth can-i', new KubectlResult(1, "no\n"));

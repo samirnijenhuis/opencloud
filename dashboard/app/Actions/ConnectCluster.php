@@ -39,6 +39,7 @@ class ConnectCluster
 
         if (! $version->ok()) {
             $said = trim(strtok($version->error ?: $version->output, "\n") ?: 'nothing');
+            $said = preg_replace('#"[^"]*/kubeconfig-[^"]*"#', 'the kubeconfig', $said);
 
             throw ValidationException::withMessages(['kubeconfig' => "Opencloud cannot reach the cluster with this kubeconfig. kubectl said: {$said}"]);
         }
