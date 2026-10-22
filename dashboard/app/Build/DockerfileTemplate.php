@@ -6,7 +6,7 @@ use Composer\Semver\VersionParser;
 use RuntimeException;
 
 /**
- * Turns composer.json and package.json of a Laravel app into Dockerfile text. Pure: no files, no processes.
+ * Turns composer.json and package.json of a Laravel app into Dockerfile text. It reads only its own template file.
  */
 final readonly class DockerfileTemplate
 {

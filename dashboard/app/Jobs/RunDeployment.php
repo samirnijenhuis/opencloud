@@ -51,7 +51,7 @@ class RunDeployment implements ShouldQueue
         $log = DeploymentLog::for($deployment);
 
         if ($deployment->status !== DeploymentStatus::Queued) {
-            // The lock outlives a run, so a second run here means the first one died midway. Its steps cannot resume.
+            // The lock keeps a second run out while the first one lives. So this run follows a run that died midway, and those steps cannot resume.
             $this->markFailed($deployment, $log, 'The worker stopped during the deployment.');
 
             return;
