@@ -4,6 +4,7 @@ namespace Tests\Feature\Http;
 
 use App\Actions\DeleteBackupTarget;
 use App\Actions\StoreBackupTarget;
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\AuditEvent;
 use App\Models\BackupTarget;
 use App\Models\User;
@@ -51,7 +52,7 @@ class BackupTargetControllerTest extends TestCase
         BackupTarget::factory()->create(['bucket' => 'opencloud-backups', 'access_key' => 'AKIAEXAMPLE', 'secret_key' => 'super-secret-key']);
         $owner = User::factory()->owner()->create();
 
-        $response = $this->actingAs($owner)->get('/settings/backups', ['X-Inertia' => 'true'])->assertOk();
+        $response = $this->actingAs($owner)->get('/settings/backups', ['X-Inertia' => 'true', 'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request())])->assertOk();
 
         $response->assertJsonPath('props.target', ['endpoint' => 'https://s3.example.com', 'bucket' => 'opencloud-backups', 'keys_set' => true]);
         $this->assertStringNotContainsString('AKIAEXAMPLE', $response->getContent());
