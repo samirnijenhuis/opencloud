@@ -34,6 +34,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     const items = [
         ...sidebarNavItems,
         ...(can.manage_credentials ? [{ title: 'Provider keys', url: '/settings/providers', icon: null }] : []),
+        ...(can.manage_credentials ? [{ title: 'Backups', url: '/settings/backups', icon: null }] : []),
         ...(can.view_audit_log ? [{ title: 'Audit log', url: '/settings/audit', icon: null }] : []),
     ];
 

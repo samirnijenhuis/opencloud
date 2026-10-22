@@ -12,6 +12,7 @@ const tabs = [
     { key: 'logs', title: 'Logs', route: 'environments.logs' },
     { key: 'env', title: 'Environment values', route: 'environments.env' },
     { key: 'domains', title: 'Domains', route: 'environments.domains' },
+    { key: 'datastores', title: 'Datastores', route: 'environments.datastores' },
     { key: 'settings', title: 'Settings', route: 'environments.settings' },
 ] as const;
 

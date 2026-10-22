@@ -2,9 +2,12 @@
 
 namespace Database\Seeders;
 
+use App\Backups\BackupStatus;
+use App\Datastores\DatastoreStatus;
 use App\Domains\DnsStatus;
 use App\Enums\ApplicationType;
 use App\Enums\ClusterKind;
+use App\Enums\DatastoreKind;
 use App\Enums\DeploymentStatus;
 use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
@@ -12,7 +15,10 @@ use App\Enums\EnvVarSource;
 use App\Enums\Size;
 use App\Models\Application;
 use App\Models\AuditEvent;
+use App\Models\Backup;
 use App\Models\Cluster;
+use App\Models\Datastore;
+use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
@@ -65,6 +71,7 @@ class DemoSeeder extends Seeder
 
         $this->envValues($production, $docsProduction);
         $this->domains($production, $staging, $docsProduction);
+        $this->datastores($cluster, $production, $staging, $owner);
 
         AuditEvent::record($owner, 'application.created', $shop, ['repository' => $shop->repository, 'type' => 'laravel']);
         AuditEvent::record($owner, 'application.created', $docs, ['repository' => $docs->repository, 'type' => 'dockerfile']);
@@ -186,12 +193,73 @@ class DemoSeeder extends Seeder
             $environment->envVars()->create(['key' => $key, 'value' => $value, 'is_secret' => $secret, 'available_at' => $availability]);
         }
 
-        foreach (['DB_HOST' => 'mysql.shop.svc', 'DB_PASSWORD' => 'demo-database-password'] as $key => $value) {
-            $production->envVars()->create([
+    }
+
+    private function datastores(Cluster $cluster, Environment $production, Environment $staging, User $owner): void
+    {
+        $mysql = $this->attachment($cluster, $production, DatastoreKind::Mysql, DatastoreStatus::Ready, 'shop_production');
+        $this->attachment($cluster, $production, DatastoreKind::Valkey, DatastoreStatus::Provisioning, null);
+        $this->attachment($cluster, $production, DatastoreKind::Rustfs, DatastoreStatus::Failed, 'shop-production', 'The bucket could not be created. The storage server did not answer.');
+        $this->attachment($cluster, $staging, DatastoreKind::Postgres, DatastoreStatus::Pending, 'shop_staging');
+
+        $this->envKeys($mysql, ['DB_CONNECTION' => 'mysql', 'DB_HOST' => 'mysql.shop.svc', 'DB_PASSWORD' => 'demo-database-password']);
+        $this->envKeys($production->datastoreAttachments()->whereHas('datastore', fn ($query) => $query->where('kind', DatastoreKind::Valkey))->sole(), ['REDIS_HOST' => 'valkey.shop.svc', 'REDIS_PASSWORD' => 'demo-valkey-password']);
+
+        $backups = [
+            [BackupStatus::Done, 'local', 5 * 1440 + 120, 3_145_728, null],
+            [BackupStatus::Done, 's3', 3 * 1440 + 120, 3_250_000, null],
+            [BackupStatus::Failed, 's3', 1440 + 120, null, 'The upload to the backup target failed.'],
+            [BackupStatus::Done, 's3', 120, 3_410_000, null],
+            [BackupStatus::Running, 's3', 1, null, null],
+        ];
+
+        foreach ($backups as [$status, $disk, $minutesAgo, $size, $error]) {
+            $backup = new Backup([
+                'datastore_id' => $mysql->datastore_id,
+                'datastore_attachment_id' => $mysql->id,
+                'database_name' => $mysql->database_name,
+                'disk' => $disk,
+                'location' => "{$disk}://backups/{$mysql->database_name}-{$minutesAgo}.sql.gz",
+                'size' => $size,
+                'status' => $status,
+                'error' => $error,
+            ]);
+            $backup->created_at = Carbon::now()->subMinutes($minutesAgo);
+            $backup->save();
+        }
+
+        $restored = Backup::where('status', BackupStatus::Done)->orderBy('id')->first();
+        AuditEvent::record($owner, 'backup.restore_requested', $restored, ['datastore_id' => $restored->datastore_id, 'database_name' => $restored->database_name]);
+        AuditEvent::record($owner, 'backup.restore_failed', $restored, ['datastore_id' => $restored->datastore_id, 'database_name' => $restored->database_name, 'error' => 'The dump is not a valid gzip file.']);
+    }
+
+    private function attachment(Cluster $cluster, Environment $environment, DatastoreKind $kind, DatastoreStatus $status, ?string $name, ?string $error = null): DatastoreAttachment
+    {
+        $datastore = Datastore::firstOrCreate(
+            ['cluster_id' => $cluster->id, 'kind' => $kind],
+            ['version' => '1', 'status' => DatastoreStatus::Ready->value, 'root_password' => 'demo-root-password'],
+        );
+
+        return $environment->datastoreAttachments()->create([
+            'datastore_id' => $datastore->id,
+            'database_name' => $name,
+            'username' => $name,
+            'password' => 'demo-attachment-password',
+            'status' => $status,
+            'error' => $error,
+        ]);
+    }
+
+    /** @param  array<string, string>  $values */
+    private function envKeys(DatastoreAttachment $attachment, array $values): void
+    {
+        foreach ($values as $key => $value) {
+            $attachment->environment->envVars()->create([
                 'key' => $key,
                 'value' => $value,
-                'is_secret' => $key === 'DB_PASSWORD',
+                'is_secret' => str_ends_with($key, 'PASSWORD'),
                 'source' => EnvVarSource::Datastore,
+                'datastore_attachment_id' => $attachment->id,
             ]);
         }
     }
