@@ -5,9 +5,7 @@ use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    return Inertia::render('welcome');
-})->name('home');
+Route::redirect('/', '/dashboard')->name('home');
 
 Route::middleware('throttle:10,1')->group(function () {
     Route::get('setup/{token}', [SetupController::class, 'show'])->name('setup');
