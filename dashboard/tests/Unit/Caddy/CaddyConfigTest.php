@@ -42,4 +42,43 @@ class CaddyConfigTest extends TestCase
             (new CaddyConfig('acme', null))->build(false, [])['apps']['tls']['automation']['policies'][0]['issuers'],
         );
     }
+
+    public function test_cloudflare_hostnames_get_a_dns_challenge_policy_before_the_catch_all(): void
+    {
+        $config = (new CaddyConfig('acme', 'ops@example.com'))->build(
+            false,
+            ['b.example.com' => 'web.oc-env-2.svc.cluster.local:8080', 'a.example.com' => 'web.oc-env-1.svc.cluster.local:8080', 'manual.example.org' => 'web.oc-env-3.svc.cluster.local:8080'],
+            'cf-token',
+            ['b.example.com', 'a.example.com'],
+        );
+
+        $this->assertSame(
+            '{"policies":['.
+            '{"subjects":["a.example.com","b.example.com"],"issuers":[{"module":"acme","email":"ops@example.com","challenges":{"dns":{"provider":{"name":"cloudflare","api_token":"cf-token"}}}}]},'.
+            '{"issuers":[{"module":"acme","email":"ops@example.com"}]}'.
+            ']}',
+            json_encode($config['apps']['tls']['automation'], JSON_UNESCAPED_SLASHES),
+        );
+    }
+
+    public function test_a_cloudflare_hostname_without_a_route_gets_no_policy(): void
+    {
+        $config = (new CaddyConfig('acme', null))->build(false, ['a.example.com' => 'x:1'], 'cf-token', ['gone.example.com']);
+
+        $this->assertSame([['issuers' => [['module' => 'acme']]]], $config['apps']['tls']['automation']['policies']);
+    }
+
+    public function test_cloudflare_hostnames_without_a_token_use_the_default_policy(): void
+    {
+        $config = (new CaddyConfig('acme', null))->build(false, ['a.example.com' => 'x:1'], null, ['a.example.com']);
+
+        $this->assertSame([['issuers' => [['module' => 'acme']]]], $config['apps']['tls']['automation']['policies']);
+    }
+
+    public function test_the_internal_issuer_never_uses_the_dns_challenge(): void
+    {
+        $config = (new CaddyConfig('internal', null))->build(false, ['a.example.com' => 'x:1'], 'cf-token', ['a.example.com']);
+
+        $this->assertSame([['issuers' => [['module' => 'internal']]]], $config['apps']['tls']['automation']['policies']);
+    }
 }

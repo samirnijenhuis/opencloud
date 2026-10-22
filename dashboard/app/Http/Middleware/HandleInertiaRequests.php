@@ -49,6 +49,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'can' => [
                 'create_application' => $request->user()?->can('create', Application::class) ?? false,
+                'manage_credentials' => $request->user()?->role->allows(Ability::ManageCredentials) ?? false,
                 'view_audit_log' => $request->user()?->role->allows(Ability::ManageApplications) ?? false,
             ],
         ]);

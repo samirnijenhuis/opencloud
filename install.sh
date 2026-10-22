@@ -6,6 +6,7 @@ K3S_VERSION=v1.36.5+k3s1
 OPENCLOUD_REPO=${OPENCLOUD_REPO:-opencloud-dev/opencloud}
 OPENCLOUD_VERSION=${OPENCLOUD_VERSION:-latest}
 OPENCLOUD_IMAGE=${OPENCLOUD_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud:$OPENCLOUD_VERSION}
+OPENCLOUD_CADDY_IMAGE=${OPENCLOUD_CADDY_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud-caddy:$OPENCLOUD_VERSION}
 OPENCLOUD_TLS_ISSUER=${OPENCLOUD_TLS_ISSUER:-acme}
 STATE_DIR=/var/lib/opencloud
 # When bash reads the script from a pipe, no file backs it, so nothing sits beside it. The current folder does not count.
@@ -118,6 +119,9 @@ preflight() {
     if [[ -n ${OPENCLOUD_IMAGE_ARCHIVE:-} && ! -f $OPENCLOUD_IMAGE_ARCHIVE ]]; then
         fail "OPENCLOUD_IMAGE_ARCHIVE points to $OPENCLOUD_IMAGE_ARCHIVE, but that file does not exist."
     fi
+    if [[ -n ${OPENCLOUD_CADDY_IMAGE_ARCHIVE:-} && ! -f $OPENCLOUD_CADDY_IMAGE_ARCHIVE ]]; then
+        fail "OPENCLOUD_CADDY_IMAGE_ARCHIVE points to $OPENCLOUD_CADDY_IMAGE_ARCHIVE, but that file does not exist."
+    fi
 
     SERVER_IP=$(server_ip)
     [[ -n $SERVER_IP ]] || fail "Cannot find the IP address of this server. Set OPENCLOUD_PUBLIC_IP to the public IP address."
@@ -170,17 +174,25 @@ ensure_secrets() {
         --dry-run=client -o yaml | kc apply -f -
 }
 
-load_dashboard_image() {
-    [[ -n ${OPENCLOUD_IMAGE_ARCHIVE:-} ]] || return 0
-    say "Importing the dashboard image from $OPENCLOUD_IMAGE_ARCHIVE"
-    k3s ctr images import "$OPENCLOUD_IMAGE_ARCHIVE"
-    k3s ctr images ls -q | awk -v ref="$OPENCLOUD_IMAGE" '$0 == ref || substr($0, length($0) - length(ref)) == "/" ref { found = 1 } END { exit !found }' ||
-        fail "The archive $OPENCLOUD_IMAGE_ARCHIVE does not contain the image $OPENCLOUD_IMAGE. Set OPENCLOUD_IMAGE to the image name in the archive."
+# Usage: import_image <name> <archive> <image> <variable that sets the image>
+import_image() {
+    local name=$1 archive=$2 image=$3 variable=$4
+    [[ -n $archive ]] || return 0
+    say "Importing the $name image from $archive"
+    k3s ctr images import "$archive"
+    k3s ctr images ls -q | awk -v ref="$image" '$0 == ref || substr($0, length($0) - length(ref)) == "/" ref { found = 1 } END { exit !found }' ||
+        fail "The archive $archive does not contain the image $image. Set $variable to the image name in the archive."
+}
+
+load_images() {
+    import_image dashboard "${OPENCLOUD_IMAGE_ARCHIVE:-}" "$OPENCLOUD_IMAGE" OPENCLOUD_IMAGE
+    import_image Caddy "${OPENCLOUD_CADDY_IMAGE_ARCHIVE:-}" "$OPENCLOUD_CADDY_IMAGE" OPENCLOUD_CADDY_IMAGE
 }
 
 apply_platform() {
     say "Applying the opencloud manifests"
-    kc apply -f "$PLATFORM_DIR/rbac.yaml" -f "$PLATFORM_DIR/registry.yaml" -f "$PLATFORM_DIR/buildkitd.yaml" -f "$PLATFORM_DIR/caddy.yaml" -f "$PLATFORM_DIR/networkpolicies.yaml"
+    kc apply -f "$PLATFORM_DIR/rbac.yaml" -f "$PLATFORM_DIR/registry.yaml" -f "$PLATFORM_DIR/buildkitd.yaml" -f "$PLATFORM_DIR/networkpolicies.yaml"
+    sed -e "s|__CADDY_IMAGE__|$OPENCLOUD_CADDY_IMAGE|g" "$PLATFORM_DIR/caddy.yaml" | kc apply -f -
     sed -e "s|__DASHBOARD_IMAGE__|$OPENCLOUD_IMAGE|g" \
         -e "s|__APP_URL__|http://$SERVER_IP:8000|g" \
         -e "s|__OPENCLOUD_VERSION__|$OPENCLOUD_VERSION|g" \
@@ -220,7 +232,7 @@ main() {
     preflight
     install_k3s
     ensure_secrets
-    load_dashboard_image
+    load_images
     apply_platform
     configure_caddy
     install -m 0755 "$SOURCE_DIR/bin/opencloud" /usr/local/bin/opencloud

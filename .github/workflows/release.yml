@@ -35,6 +35,16 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/opencloud:${{ github.ref_name }}
             ghcr.io/${{ github.repository_owner }}/opencloud:latest
 
+      - name: Build and push the Caddy image
+        uses: docker/build-push-action@v6
+        with:
+          context: platform/images/caddy
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/opencloud-caddy:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/opencloud-caddy:latest
+
       # The "latest" copy lets install.sh use the fixed URL releases/latest/download/opencloud-latest.tar.gz.
       - name: Build the release archives
         run: |

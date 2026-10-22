@@ -5,9 +5,11 @@ namespace App\Caddy;
 use App\Domains\DnsStatus;
 use App\Enums\ClusterKind;
 use App\Enums\DeploymentStatus;
+use App\Enums\DnsMode;
 use App\Kube\Manifests\EnvironmentManifests;
 use App\Models\Cluster;
 use App\Models\Domain;
+use App\Models\ProviderCredential;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -27,26 +29,32 @@ final readonly class CaddyConfig
     /** @return array<string, mixed> */
     public function forCluster(Cluster $cluster): array
     {
-        $routes = Domain::query()
+        $domains = Domain::query()
             ->with('environment')
             ->whereIn('dns_status', array_filter(DnsStatus::cases(), fn (DnsStatus $status) => $status->routable()))
             ->whereHas('environment', fn (Builder $environment) => $environment
                 ->whereHas('application', fn (Builder $application) => $application->where('cluster_id', $cluster->id))
                 ->whereHas('deployments', fn (Builder $deployment) => $deployment->where('status', DeploymentStatus::Live)))
-            ->get()
+            ->get();
+
+        $routes = $domains
             ->mapWithKeys(fn (Domain $domain) => [
                 $domain->hostname => "web.{$domain->environment->kubeNamespace()}.svc.cluster.local:".EnvironmentManifests::SERVICE_PORT,
             ])
             ->all();
 
-        return $this->build($cluster->kind === ClusterKind::Local, $routes);
+        $cloudflareToken = ProviderCredential::query()->where('provider', 'cloudflare')->first()?->token;
+        $cloudflareHosts = $domains->where('dns_mode', DnsMode::Cloudflare)->pluck('hostname')->all();
+
+        return $this->build($cluster->kind === ClusterKind::Local, $routes, $cloudflareToken, $cloudflareHosts);
     }
 
     /**
      * @param  array<string, string>  $routes  hostname => upstream address
+     * @param  list<string>  $cloudflareHosts  hostnames that get their certificate with the Cloudflare DNS challenge
      * @return array<string, mixed>
      */
-    public function build(bool $withDashboard, array $routes): array
+    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = []): array
     {
         ksort($routes, SORT_STRING);
         $servers = [];
@@ -67,9 +75,31 @@ final readonly class CaddyConfig
         return [
             'apps' => [
                 'http' => ['servers' => $servers],
-                'tls' => ['automation' => ['policies' => [['issuers' => [$this->issuer()]]]]],
+                'tls' => ['automation' => ['policies' => $this->policies($cloudflareToken, array_values(array_intersect($cloudflareHosts, array_keys($routes))))]],
             ],
         ];
+    }
+
+    /**
+     * The policy with subjects comes first. The last policy has no subjects and serves every other hostname.
+     *
+     * @param  list<string>  $cloudflareHosts
+     * @return list<array<string, mixed>>
+     */
+    private function policies(?string $cloudflareToken, array $cloudflareHosts): array
+    {
+        $policies = [];
+
+        // The local CA needs no DNS challenge.
+        if ($cloudflareToken !== null && $cloudflareHosts !== [] && $this->tlsIssuer !== 'internal') {
+            sort($cloudflareHosts, SORT_STRING);
+            $dns = ['dns' => ['provider' => ['name' => 'cloudflare', 'api_token' => $cloudflareToken]]];
+            $policies[] = ['subjects' => $cloudflareHosts, 'issuers' => [[...$this->issuer(), 'challenges' => $dns]]];
+        }
+
+        $policies[] = ['issuers' => [$this->issuer()]];
+
+        return $policies;
     }
 
     /** @return array<string, string> */

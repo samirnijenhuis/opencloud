@@ -8,7 +8,7 @@ This document is the contract for the code. The design document `docs/superpower
 |---|---|
 | `install.sh` | The one-command installer for a fresh Ubuntu 24.04 server. |
 | `bin/opencloud` | The CLI that the installer puts on the server, for example `opencloud upgrade`. |
-| `platform/` | Kubernetes manifests for the opencloud parts on the `local` cluster, and the Caddy image. |
+| `platform/` | Kubernetes manifests for the opencloud parts on the `local` cluster. `platform/images/caddy/` holds the Caddy image. |
 | `dashboard/` | The Laravel app. It is the dashboard, the API, and the queue worker. |
 | `dashboard/Dockerfile` | The image of the dashboard. CI publishes it. |
 | `dashboard/resources/docker/` | The Dockerfile template for user Laravel apps. |
@@ -46,7 +46,7 @@ The dashboard runs `kubectl` with its in-cluster service account for `local`. Th
 
 The NetworkPolicies in `platform/networkpolicies.yaml` let only the dashboard reach BuildKit, and only the dashboard and BuildKit reach the registry. The node still pulls through the registry ClusterIP, because kube-router lets traffic from the node itself reach local pods. `tests/e2e/network-policy.sh` proves both.
 
-A release is a tag `v*`. `.github/workflows/release.yml` publishes the dashboard image for amd64 and arm64 and a release archive with `install.sh`, `platform/`, and `bin/`. `tests/e2e/build-release-archive.sh` builds the archive for the workflow and for the tests. When `install.sh` runs from `curl | bash`, it downloads that archive, checks its SHA-256 sum, extracts it to `/opt/opencloud/<version>`, and runs from there.
+A release is a tag `v*`. `.github/workflows/release.yml` publishes the dashboard image and the Caddy image (`opencloud-caddy`) for amd64 and arm64 and a release archive with `install.sh`, `platform/`, and `bin/`. `tests/e2e/build-release-archive.sh` builds the archive for the workflow and for the tests. When `install.sh` runs from `curl | bash`, it downloads that archive, checks its SHA-256 sum, extracts it to `/opt/opencloud/<version>`, and runs from there.
 
 The installer keeps its state in `/var/lib/opencloud`. The files `APP_KEY` and `setup-token` there have mode 600. The installer copies them into the Secret `dashboard` and never into a manifest file. The k3s options live in `/etc/rancher/k3s/config.yaml`. If `APP_KEY` is missing while the database exists, the installer stops, because a new key cannot read the stored secrets.
 
@@ -66,7 +66,13 @@ Each environment gets its own namespace, `oc-env-<environment-id>`. Datastores l
 
 Caddy runs with `--resume`, so it keeps the last config when it restarts. The scheduler also sends the full config every five minutes, so drift repairs itself.
 
-A domain goes into the Caddy config only after its DNS check passes. Caddy then gets the certificate with its normal automatic HTTPS. Opencloud does not use on-demand TLS, because the dashboard always knows each hostname before Caddy needs it. The certificate issuer comes from the setting `OPENCLOUD_TLS_ISSUER`. The value `acme` uses Let's Encrypt. The value `internal` uses the local Caddy CA, for tests.
+A domain goes into the Caddy config only after its DNS check passes. Caddy then gets the certificate with its normal automatic HTTPS. Opencloud does not use on-demand TLS, because the dashboard always knows each hostname before Caddy needs it. The Caddy image is the official Caddy of the same version plus the module `github.com/caddy-dns/cloudflare`, built with xcaddy in `platform/images/caddy/Dockerfile`. `install.sh` imports it from `OPENCLOUD_CADDY_IMAGE_ARCHIVE` or pulls it from `ghcr.io`.
+
+A domain in `cloudflare` DNS mode needs the Cloudflare key. Opencloud creates the A record through the Cloudflare API, and `CaddyConfig` puts the hostname under a TLS automation policy with the Cloudflare DNS challenge and the stored token. That policy comes before the policy without subjects. Removing the domain deletes the record that opencloud created. The certificate issuer comes from the setting `OPENCLOUD_TLS_ISSUER`. The value `acme` uses Let's Encrypt. The value `internal` uses the local Caddy CA, for tests.
+
+## Provider keys
+
+`App\CloudProviders\Providers` is the one table of provider guides: DigitalOcean, Hetzner, AWS, and Cloudflare. Each `ProviderGuide` has the key page URL, the rights to select, an optional CLI command, and a check class. A check makes read-only API calls and returns a `CheckResult` with the status `ok`, `invalid`, or `missing_rights`. The AWS check signs its requests with `AwsSignatureV4`. The settings page "Provider keys" is for the owner only. The command `opencloud:check-provider-links` requests each key page, and a weekly workflow runs it.
 
 ## Builds
 
@@ -97,10 +103,12 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `StartDeployment` | `handle(Environment $environment, ?User $by, ?string $commitSha = null): Deployment` | Creates a `queued` deployment and dispatches `RunDeployment`. A null SHA means the head of the environment branch. |
 | `SetEnvVar` | `handle(Environment $environment, User $by, string $key, ?string $value, bool $isSecret, EnvVarAvailability $availableAt): EnvVar` | Creates or replaces one user value. A null value on an existing secret keeps the old secret value. |
 | `DeleteEnvVar` | `handle(EnvVar $envVar, User $by): void` | Deletes one user value. |
-| `AddDomain` | `handle(Environment $environment, User $by, string $hostname): Domain` | Stores the domain and dispatches `CheckDomain`. |
-| `RemoveDomain` | `handle(Domain $domain, User $by): void` | Deletes the domain and syncs Caddy. |
+| `AddDomain` | `handle(Environment $environment, User $by, string $hostname, bool $manageDns = false, bool $proxied = false): Domain` | Stores the domain and dispatches `CheckDomain`. With `$manageDns`, it first creates or updates the Cloudflare A record. |
+| `RemoveDomain` | `handle(Domain $domain, User $by): void` | Deletes the Cloudflare record that opencloud created, deletes the domain, and syncs Caddy. |
 | `AttachDatastore` | `handle(Environment $environment, User $by, DatastoreKind $kind): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment, and dispatches its provisioning. |
 | `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. |
+| `StoreProviderCredential` | `handle(User $by, string $provider, string $token): CheckResult` | Checks the key with the provider. It stores the key encrypted when the check passes or only optional rights are missing. The audit event never holds the key. |
+| `DeleteProviderCredential` | `handle(ProviderCredential $credential, User $by): void` | Deletes the key. |
 | `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
 
 ## Queues

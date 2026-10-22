@@ -5,6 +5,7 @@ namespace Tests\Feature\Caddy;
 use App\Domains\DnsStatus;
 use App\Enums\ClusterKind;
 use App\Enums\DeploymentStatus;
+use App\Enums\DnsMode;
 use App\Jobs\SyncCaddy;
 use App\Kube\FakeKubectl;
 use App\Models\Application;
@@ -12,6 +13,7 @@ use App\Models\Cluster;
 use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
+use App\Models\ProviderCredential;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,6 +57,26 @@ class SyncCaddyTest extends TestCase
                 '{"match":[{"host":["shop.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"'.$upstream.'"}]}]}'.
                 ']}}},"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}',
         ]], $fake->calls);
+    }
+
+    public function test_a_cloudflare_domain_gets_a_dns_challenge_policy_with_the_stored_token(): void
+    {
+        config(['opencloud.tls_issuer' => 'acme', 'opencloud.acme_email' => null]);
+        $fake = FakeKubectl::install();
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $live = $this->environment($cluster, DeploymentStatus::Live);
+        Domain::factory()->for($live)->create(['hostname' => 'app.example.com', 'dns_status' => DnsStatus::Proxied, 'dns_mode' => DnsMode::Cloudflare]);
+        Domain::factory()->for($live)->create(['hostname' => 'manual.example.org', 'dns_status' => DnsStatus::Ok]);
+        ProviderCredential::factory()->create(['provider' => 'cloudflare', 'token' => 'cf-token']);
+
+        SyncCaddy::dispatch($cluster);
+
+        $this->assertStringEndsWith(
+            '"tls":{"automation":{"policies":['.
+            '{"subjects":["app.example.com"],"issuers":[{"module":"acme","challenges":{"dns":{"provider":{"name":"cloudflare","api_token":"cf-token"}}}}]},'.
+            '{"issuers":[{"module":"acme"}]}]}}}}',
+            $fake->calls[0]['stdin'],
+        );
     }
 
     public function test_the_scheduler_syncs_every_cluster_every_five_minutes(): void

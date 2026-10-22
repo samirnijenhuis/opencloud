@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: caddy
-          image: caddy:2.11.7
+          image: "__CADDY_IMAGE__"
           imagePullPolicy: IfNotPresent
           command: [caddy, run, --resume]
           ports:
