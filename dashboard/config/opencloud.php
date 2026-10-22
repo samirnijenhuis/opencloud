@@ -26,6 +26,17 @@ return [
 
     'registry_host' => 'registry.opencloud.svc.cluster.local:5000',
 
+    /*
+     * The fixed ClusterIP of the local registry. crane reads from this address when it copies an image to another cluster.
+     * crane talks plain HTTP to a private IP by itself. Its --insecure flag would also drop the TLS checks of the target registry.
+     */
+    'registry_address' => '10.43.200.200:5000',
+
+    /*
+     * Caddy on clusters other than local. Keep it the same as the image in platform/caddy.yaml.
+     */
+    'caddy_image' => env('OPENCLOUD_CADDY_IMAGE', 'caddy:2.11.7'),
+
     'buildkit_addr' => 'tcp://buildkitd.opencloud.svc.cluster.local:1234',
 
     /*

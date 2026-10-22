@@ -62,6 +62,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('backups/{backup}/restore', [BackupController::class, 'restore'])->name('backups.restore');
 
     Route::get('clusters', [ClusterController::class, 'index'])->name('clusters.index');
+    Route::get('clusters/create', [ClusterController::class, 'create'])->name('clusters.create');
+    Route::post('clusters', [ClusterController::class, 'store'])->name('clusters.store');
+    Route::get('clusters/{cluster}', [ClusterController::class, 'show'])->name('clusters.show');
+    Route::post('clusters/{cluster}/reinstall', [ClusterController::class, 'reinstall'])->name('clusters.reinstall');
+    Route::delete('clusters/{cluster}', [ClusterController::class, 'destroy'])->name('clusters.destroy');
 });
 
 require __DIR__.'/settings.php';

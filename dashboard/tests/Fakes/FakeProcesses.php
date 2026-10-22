@@ -7,7 +7,7 @@ use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Stands in for git and buildctl. A fake checkout writes $repository into the build folder.
+ * Stands in for git, buildctl, and crane. A fake checkout writes $repository into the build folder.
  */
 final class FakeProcesses
 {
@@ -26,6 +26,11 @@ final class FakeProcesses
 
     /** @var list<string> the Dockerfile text that each build saw */
     public array $dockerfiles = [];
+
+    /** @var list<string> the config.json that crane found in DOCKER_CONFIG for each copy */
+    public array $craneConfigs = [];
+
+    public int $craneExitCode = 0;
 
     public static function install(): self
     {
@@ -71,6 +76,12 @@ final class FakeProcesses
             $this->dockerfiles[] = file_get_contents("{$process->path}/{$filename}");
 
             return (new FakeProcessDescription)->output($this->buildOutput)->exitCode($this->buildExitCode);
+        }
+
+        if ($command[0] === 'crane') {
+            $this->craneConfigs[] = file_get_contents($process->environment['DOCKER_CONFIG'].'/config.json');
+
+            return Process::result(errorOutput: $this->craneExitCode === 0 ? '' : 'UNAUTHORIZED: authentication required', exitCode: $this->craneExitCode);
         }
 
         return Process::result();

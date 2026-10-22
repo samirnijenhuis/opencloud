@@ -56,12 +56,13 @@ final class Builder
         }
     }
 
-    public static function imageReference(Deployment $deployment): string
+    /** The same name and tag in each registry. Without a registry, it is the name that BuildKit pushes to the local registry. */
+    public static function imageReference(Deployment $deployment, ?string $registry = null): string
     {
         $environment = $deployment->environment;
         $tag = substr($deployment->commit_sha, 0, 7).'-'.$deployment->id;
 
-        return config('opencloud.registry_host')."/{$environment->application_id}/{$environment->id}:{$tag}";
+        return ($registry ?? config('opencloud.registry_host'))."/{$environment->application_id}/{$environment->id}:{$tag}";
     }
 
     /**

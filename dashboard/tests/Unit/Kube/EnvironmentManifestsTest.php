@@ -2,10 +2,13 @@
 
 namespace Tests\Unit\Kube;
 
+use App\Clusters\ClusterRegistry;
 use App\Enums\ApplicationType;
+use App\Enums\ClusterKind;
 use App\Enums\Size;
 use App\Kube\Manifests\EnvironmentManifests;
 use App\Models\Application;
+use App\Models\Cluster;
 use App\Models\Deployment;
 use App\Models\Environment;
 use PHPUnit\Framework\TestCase;
@@ -220,6 +223,42 @@ class EnvironmentManifestsTest extends TestCase
         ], $this->manifests(['deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force']])->deployJob($this->deployment()));
     }
 
+    public function test_the_pull_secret_holds_the_registry_credentials_as_a_docker_config(): void
+    {
+        $secret = $this->manifests()->pullSecret(new ClusterRegistry('192.0.2.5:5000/team', 'robot', 'pull-pass', insecure: true));
+
+        $this->assertSame([
+            'apiVersion' => 'v1',
+            'kind' => 'Secret',
+            'metadata' => [
+                'name' => 'opencloud-registry',
+                'namespace' => 'oc-env-7',
+                'labels' => ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7'],
+            ],
+            'type' => 'kubernetes.io/dockerconfigjson',
+        ], array_diff_key($secret, ['data' => true]));
+        $this->assertSame(
+            '{"auths":{"192.0.2.5:5000":{"username":"robot","password":"pull-pass","auth":"cm9ib3Q6cHVsbC1wYXNz"}}}',
+            base64_decode($secret['data']['.dockerconfigjson']),
+        );
+    }
+
+    public function test_pods_on_a_cluster_with_a_registry_pull_with_the_pull_secret(): void
+    {
+        $manifests = $this->manifests(['deploy_commands' => ['php artisan migrate --force']], cluster: $this->clusterWithRegistry());
+        $deployment = new Deployment(['image' => '192.0.2.5:5000/team/3/7:abc1234-12']);
+        $deployment->id = 12;
+
+        $web = $manifests->web($deployment)['spec']['template']['spec'];
+        $job = $manifests->deployJob($deployment)['spec']['template']['spec'];
+
+        $this->assertSame([['name' => 'opencloud-registry']], $web['imagePullSecrets']);
+        $this->assertSame('192.0.2.5:5000/team/3/7:abc1234-12', $web['containers'][0]['image']);
+        $this->assertSame([['name' => 'opencloud-registry']], $job['imagePullSecrets']);
+        $this->assertSame([['name' => 'opencloud-registry']], $manifests->worker($deployment)['spec']['template']['spec']['imagePullSecrets']);
+        $this->assertSame(['containers'], array_keys($this->manifests()->web($deployment)['spec']['template']['spec']), 'The local cluster pulls without a secret.');
+    }
+
     public function test_a_laravel_app_runs_three_processes_and_removes_the_autoscaler_when_it_has_a_fixed_count(): void
     {
         $manifests = $this->manifests();
@@ -254,10 +293,11 @@ class EnvironmentManifestsTest extends TestCase
     }
 
     /** @param  array<string, mixed>  $attributes */
-    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::Laravel, int $port = 8080): EnvironmentManifests
+    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::Laravel, int $port = 8080, ?Cluster $cluster = null): EnvironmentManifests
     {
         $application = new Application(['type' => $type, 'port' => $port]);
         $application->id = 3;
+        $application->setRelation('cluster', $cluster ?? new Cluster(['kind' => ClusterKind::Local]));
 
         $environment = new Environment(['name' => 'production', ...$attributes]);
         $environment->id = 7;
@@ -265,6 +305,17 @@ class EnvironmentManifestsTest extends TestCase
         $environment->setRelation('application', $application);
 
         return new EnvironmentManifests($environment);
+    }
+
+    /** The password is encrypted, and this test runs without the app, so the cluster has none. */
+    private function clusterWithRegistry(): Cluster
+    {
+        return new Cluster([
+            'kind' => ClusterKind::Connected,
+            'registry_url' => '192.0.2.5:5000/team',
+            'registry_username' => 'robot',
+            'registry_insecure' => true,
+        ]);
     }
 
     private function deployment(): Deployment
