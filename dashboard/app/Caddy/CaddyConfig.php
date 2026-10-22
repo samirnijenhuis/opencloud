@@ -8,6 +8,7 @@ use App\Enums\DeploymentStatus;
 use App\Enums\DnsMode;
 use App\Kube\Manifests\EnvironmentManifests;
 use App\Models\Cluster;
+use App\Models\DashboardDomain;
 use App\Models\Domain;
 use App\Models\ProviderCredential;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,6 +43,11 @@ final readonly class CaddyConfig
                 $domain->hostname => "web.{$domain->environment->kubeNamespace()}.svc.cluster.local:".EnvironmentManifests::SERVICE_PORT,
             ])
             ->all();
+
+        // The dashboard host is a route like an app host. Caddy then gets its certificate and redirects HTTP to HTTPS.
+        if ($cluster->kind === ClusterKind::Local && ($dashboard = DashboardDomain::verified()) !== null) {
+            $routes[$dashboard->hostname] = self::DASHBOARD_UPSTREAM;
+        }
 
         $cloudflareToken = ProviderCredential::query()->where('provider', 'cloudflare')->first()?->token;
         $cloudflareHosts = $domains->where('dns_mode', DnsMode::Cloudflare)->pluck('hostname')->all();
