@@ -1,29 +1,31 @@
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { Head } from '@inertiajs/react';
+import { ClusterBadge, kindLabels, type ClusterKind, type ClusterStatus } from '@/pages/clusters/cluster-status';
+import { Head, Link } from '@inertiajs/react';
 
 type Cluster = {
     id: number;
     name: string;
-    kind: 'local' | 'connected' | 'created';
+    kind: ClusterKind;
     ingress_ip: string | null;
-    status: string;
+    status: ClusterStatus;
     parts_version: string | null;
 };
 
-const kindLabels: Record<Cluster['kind'], string> = {
-    local: 'Local, on the dashboard server',
-    connected: 'Connected',
-    created: 'Created by opencloud',
-};
-
-export default function ClustersIndex({ clusters }: { clusters: Cluster[] }) {
+export default function ClustersIndex({ clusters, canConnect }: { clusters: Cluster[]; canConnect: boolean }) {
     return (
         <AppLayout breadcrumbs={[{ title: 'Clusters', href: '/clusters' }]}>
             <Head title="Clusters" />
 
             <div className="mx-auto w-full max-w-5xl space-y-6 p-4">
-                <h1 className="text-2xl font-semibold tracking-tight">Clusters</h1>
+                <div className="flex items-center justify-between gap-4">
+                    <h1 className="text-2xl font-semibold tracking-tight">Clusters</h1>
+                    {canConnect && (
+                        <Button asChild>
+                            <Link href={route('clusters.create')}>Connect a cluster</Link>
+                        </Button>
+                    )}
+                </div>
 
                 {clusters.length === 0 ? (
                     <p className="text-muted-foreground text-sm">There are no clusters yet.</p>
@@ -42,11 +44,15 @@ export default function ClustersIndex({ clusters }: { clusters: Cluster[] }) {
                             <tbody className="divide-y">
                                 {clusters.map((cluster) => (
                                     <tr key={cluster.id}>
-                                        <td className="p-3 font-medium">{cluster.name}</td>
+                                        <td className="p-3 font-medium">
+                                            <Link href={route('clusters.show', cluster.id)} className="hover:underline">
+                                                {cluster.name}
+                                            </Link>
+                                        </td>
                                         <td className="p-3">{kindLabels[cluster.kind]}</td>
                                         <td className="p-3 font-mono">{cluster.ingress_ip ?? '-'}</td>
                                         <td className="p-3">
-                                            <Badge variant={cluster.status === 'ready' ? 'default' : 'secondary'}>{cluster.status}</Badge>
+                                            <ClusterBadge status={cluster.status} />
                                         </td>
                                         <td className="p-3 font-mono">{cluster.parts_version ?? '-'}</td>
                                     </tr>
