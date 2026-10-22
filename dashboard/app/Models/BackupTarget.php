@@ -9,13 +9,14 @@ class BackupTarget extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['endpoint', 'bucket', 'access_key', 'secret_key'];
+    protected $fillable = ['endpoint', 'bucket', 'region', 'path_style', 'access_key', 'secret_key'];
 
     protected $hidden = ['access_key', 'secret_key'];
 
     protected function casts(): array
     {
         return [
+            'path_style' => 'boolean',
             'access_key' => 'encrypted',
             'secret_key' => 'encrypted',
         ];

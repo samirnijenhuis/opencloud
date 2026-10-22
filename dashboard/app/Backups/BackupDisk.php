@@ -44,16 +44,16 @@ final class BackupDisk
         return Storage::build(['driver' => 'local', 'root' => config('opencloud.data_path'), 'throw' => true]);
     }
 
-    private static function s3(BackupTarget $target): Filesystem
+    public static function s3(BackupTarget $target): Filesystem
     {
         return Storage::build([
             'driver' => 's3',
             'key' => $target->access_key,
             'secret' => $target->secret_key,
-            'region' => 'us-east-1',
+            'region' => $target->region ?? 'us-east-1',
             'bucket' => $target->bucket,
             'endpoint' => $target->endpoint,
-            'use_path_style_endpoint' => true,
+            'use_path_style_endpoint' => $target->path_style ?? true,
             'throw' => true,
         ]);
     }

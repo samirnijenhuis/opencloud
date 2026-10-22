@@ -2,6 +2,7 @@ import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -9,10 +10,17 @@ import SettingsLayout from '@/layouts/settings/layout';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
-type Props = { target: { endpoint: string; bucket: string; keys_set: boolean } | null };
+type Props = { target: { endpoint: string; bucket: string; region: string; path_style: boolean; keys_set: boolean } | null };
 
 export default function Backups({ target }: Props) {
-    const form = useForm({ endpoint: target?.endpoint ?? '', bucket: target?.bucket ?? '', access_key: '', secret_key: '' });
+    const form = useForm({
+        endpoint: target?.endpoint ?? '',
+        bucket: target?.bucket ?? '',
+        region: target?.region ?? 'us-east-1',
+        path_style: target?.path_style ?? true,
+        access_key: '',
+        secret_key: '',
+    });
     const { data, setData, errors, processing } = form;
 
     const submit: FormEventHandler = (e) => {
@@ -24,7 +32,7 @@ export default function Backups({ target }: Props) {
         if (confirm('Delete the backup target? New backups go to the disk of this server. Backups in the bucket stay there.')) {
             router.delete(route('backup-target.destroy'), {
                 preserveScroll: true,
-                onSuccess: () => form.setData({ endpoint: '', bucket: '', access_key: '', secret_key: '' }),
+                onSuccess: () => form.setData({ endpoint: '', bucket: '', region: 'us-east-1', path_style: true, access_key: '', secret_key: '' }),
             });
         }
     };
@@ -58,6 +66,15 @@ export default function Backups({ target }: Props) {
                             <Input id="bucket" value={data.bucket} onChange={(e) => setData('bucket', e.target.value)} />
                             <InputError message={errors.bucket} />
                         </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="region">Region</Label>
+                            <Input id="region" value={data.region} onChange={(e) => setData('region', e.target.value)} />
+                            <InputError message={errors.region} />
+                        </div>
+                        <Label className="flex items-center gap-2 font-normal">
+                            <Checkbox checked={data.path_style} onCheckedChange={(checked) => setData('path_style', checked === true)} />
+                            Use path-style addresses. Most services other than AWS need this.
+                        </Label>
                         <div className="grid gap-2">
                             <Label htmlFor="access_key" className="flex items-center gap-2">
                                 Access key {target?.keys_set && <Badge variant="secondary">Set</Badge>}

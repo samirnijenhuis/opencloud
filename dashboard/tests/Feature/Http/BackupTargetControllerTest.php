@@ -54,7 +54,7 @@ class BackupTargetControllerTest extends TestCase
 
         $response = $this->actingAs($owner)->get('/settings/backups', ['X-Inertia' => 'true', 'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request())])->assertOk();
 
-        $response->assertJsonPath('props.target', ['endpoint' => 'https://s3.example.com', 'bucket' => 'opencloud-backups', 'keys_set' => true]);
+        $response->assertJsonPath('props.target', ['endpoint' => 'https://s3.example.com', 'bucket' => 'opencloud-backups', 'region' => 'us-east-1', 'path_style' => true, 'keys_set' => true]);
         $this->assertStringNotContainsString('AKIAEXAMPLE', $response->getContent());
         $this->assertStringNotContainsString('super-secret-key', $response->getContent());
     }
@@ -76,7 +76,7 @@ class BackupTargetControllerTest extends TestCase
 
         $event = AuditEvent::sole();
         $this->assertSame('backup_target.saved', $event->action);
-        $this->assertSame(['endpoint' => 'https://s3.example.com', 'bucket' => 'opencloud-backups'], $event->context);
+        $this->assertSame(['endpoint' => 'https://s3.example.com', 'bucket' => 'opencloud-backups', 'region' => 'us-east-1'], $event->context);
         $this->assertStringNotContainsString('super-secret-key', json_encode($event->context));
     }
 
@@ -101,6 +101,17 @@ class BackupTargetControllerTest extends TestCase
         $target = BackupTarget::sole();
         $this->assertSame(['other-bucket', 'AKIAOLD', 'old-secret'], [$target->bucket, $target->access_key, $target->secret_key]);
         $this->assertSame(['AKIAOLD', 'old-secret'], [$this->builtConfigs[0]['key'], $this->builtConfigs[0]['secret']]);
+    }
+
+    public function test_the_region_and_the_path_style_reach_the_s3_driver_and_are_saved(): void
+    {
+        $this->fakeS3();
+        $owner = User::factory()->owner()->create();
+
+        $this->actingAs($owner)->put('/settings/backups', $this->input(['region' => 'eu-central-1', 'path_style' => false]))->assertSessionHasNoErrors();
+
+        $this->assertSame(['eu-central-1', false], [$this->builtConfigs[0]['region'], $this->builtConfigs[0]['use_path_style_endpoint']]);
+        $this->assertSame(['eu-central-1', false], [BackupTarget::sole()->region, BackupTarget::sole()->path_style]);
     }
 
     public function test_the_first_target_needs_both_keys_and_a_valid_endpoint(): void

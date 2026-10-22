@@ -2,10 +2,10 @@
 
 namespace App\Actions;
 
+use App\Backups\BackupDisk;
 use App\Models\AuditEvent;
 use App\Models\BackupTarget;
 use App\Models\User;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Throwable;
@@ -17,7 +17,7 @@ class StoreBackupTarget
      *
      * @throws InvalidArgumentException when the bucket cannot be reached with these settings
      */
-    public function handle(User $by, string $endpoint, string $bucket, ?string $accessKey, ?string $secretKey): BackupTarget
+    public function handle(User $by, string $endpoint, string $bucket, ?string $accessKey, ?string $secretKey, string $region = 'us-east-1', bool $pathStyle = true): BackupTarget
     {
         $target = BackupTarget::query()->latest('id')->first() ?? new BackupTarget;
         $accessKey ??= $target->access_key;
@@ -27,30 +27,21 @@ class StoreBackupTarget
             throw new InvalidArgumentException('Enter the access key and the secret key.');
         }
 
-        $this->check($endpoint, $bucket, $accessKey, $secretKey);
+        $target->fill(['endpoint' => $endpoint, 'bucket' => $bucket, 'region' => $region, 'path_style' => $pathStyle, 'access_key' => $accessKey, 'secret_key' => $secretKey]);
+        $this->check($target);
+        $target->save();
 
-        $target->fill(['endpoint' => $endpoint, 'bucket' => $bucket, 'access_key' => $accessKey, 'secret_key' => $secretKey])->save();
-
-        AuditEvent::record($by, 'backup_target.saved', $target, ['endpoint' => $endpoint, 'bucket' => $bucket]);
+        AuditEvent::record($by, 'backup_target.saved', $target, ['endpoint' => $endpoint, 'bucket' => $bucket, 'region' => $region]);
 
         return $target;
     }
 
-    private function check(string $endpoint, string $bucket, string $accessKey, string $secretKey): void
+    private function check(BackupTarget $target): void
     {
         $path = '.opencloud-check-'.Str::random(12);
 
         try {
-            $disk = Storage::build([
-                'driver' => 's3',
-                'key' => $accessKey,
-                'secret' => $secretKey,
-                'region' => 'us-east-1',
-                'bucket' => $bucket,
-                'endpoint' => $endpoint,
-                'use_path_style_endpoint' => true,
-                'throw' => true,
-            ]);
+            $disk = BackupDisk::s3($target);
             $disk->put($path, 'ok');
             $disk->delete($path);
         } catch (Throwable $e) {
