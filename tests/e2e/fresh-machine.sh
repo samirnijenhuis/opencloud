@@ -100,6 +100,14 @@ fi
 [[ $ok == 1 ]] || tail -30 "$WORK/registry.log"
 record "a BuildKit image goes through the registry and runs as a pod" "$ok"
 
+ok=0
+if on_machine bash "$REMOTE_SRC/tests/e2e/network-policy.sh" >"$WORK/network.log" 2>&1; then
+    grep -qx 'dashboard open' "$WORK/network.log" && grep -qx 'buildkitd blocked' "$WORK/network.log" &&
+        grep -qx 'registry blocked' "$WORK/network.log" && ok=1
+fi
+[[ $ok == 1 ]] || tail -30 "$WORK/network.log"
+record "a pod in another namespace reaches the dashboard but not buildkitd:1234 or registry:5000" "$ok"
+
 second_status=0
 run_install "$WORK/install-2.log" || second_status=$?
 second_url=$(setup_url_lines "$WORK/install-2.log")
