@@ -7,7 +7,7 @@ Usage: opencloud <command>
 
 Commands:
   status                              Show the opencloud pods.
-  logs [web|worker|scheduler|caddy]   Show the logs of one part. Extra flags go to kubectl logs, for example -f.
+  logs [web|worker|builder|scheduler|caddy]  Show the logs of one part. Extra flags go to kubectl logs, for example -f.
   setup-url                           Print the URL that creates the owner account.
 EOF
 }
@@ -29,7 +29,7 @@ logs)
     part=${2:-web}
     shift $(($# > 1 ? 2 : 1))
     case $part in
-    web | worker | scheduler) kc logs deployment/dashboard -c "$part" "$@" ;;
+    web | worker | builder | scheduler) kc logs deployment/dashboard -c "$part" "$@" ;;
     caddy) kc logs deployment/caddy "$@" ;;
     *)
         usage >&2
