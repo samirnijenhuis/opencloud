@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Jobs;
 
+use App\Datastores\DatastoreStatus;
 use App\Enums\ApplicationType;
 use App\Enums\ClusterKind;
 use App\Enums\DeploymentStatus;
@@ -10,11 +11,13 @@ use App\Kube\FakeKubectl;
 use App\Kube\KubectlResult;
 use App\Models\Application;
 use App\Models\Cluster;
+use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Environment;
 use App\Models\EnvVar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Sleep;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
 
@@ -198,6 +201,63 @@ class RunDeploymentTest extends TestCase
         $this->assertSame(DeploymentStatus::Failed, $this->new->fresh()->status);
         $this->assertSame([], $this->kubectl->callsStartingWith('get secrets'));
         $this->assertSame([], $this->kubectl->callsStartingWith('delete secret'));
+    }
+
+    public function test_the_deployment_waits_for_its_datastores_before_it_applies_the_env_secret(): void
+    {
+        Sleep::fake(syncWithCarbon: true);
+        $attachment = DatastoreAttachment::factory()->for($this->environment)->create(['status' => DatastoreStatus::Provisioning]);
+        $sleeps = 0;
+        Sleep::whenFakingSleep(function () use ($attachment, &$sleeps) {
+            if (++$sleeps === 3) {
+                $attachment->update(['status' => DatastoreStatus::Ready]);
+            }
+        });
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        Sleep::assertSleptTimes(3);
+        $this->assertStringContainsString(
+            "2026-10-23T12:00:00Z Waiting for the datastores: mysql.\n".
+            "2026-10-23T12:00:15Z Running the deploy commands: php artisan migrate --force\n",
+            $this->new->fresh()->log,
+        );
+    }
+
+    public function test_a_failed_datastore_fails_the_deployment_with_its_error(): void
+    {
+        DatastoreAttachment::factory()->for($this->environment)->create([
+            'status' => DatastoreStatus::Failed,
+            'error' => "ERROR 1045 (28000): Access denied for user 'root'@'localhost'",
+        ]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame([['new', 'building'], ['new', 'deploying'], ['new', 'failed']], $this->moves);
+        $this->assertSame(DeploymentStatus::Live, $this->old->fresh()->status);
+        $this->assertSame([], $this->kubectl->callsStartingWith('apply'));
+        $this->assertStringEndsWith(
+            "2026-10-23T12:00:00Z The deployment failed. The mysql datastore failed. ERROR 1045 (28000): Access denied for user 'root'@'localhost'\n",
+            $this->new->fresh()->log,
+        );
+    }
+
+    public function test_a_datastore_that_stays_pending_fails_the_deployment_after_ten_minutes(): void
+    {
+        Sleep::fake(syncWithCarbon: true);
+        DatastoreAttachment::factory()->for($this->environment)->create(['status' => DatastoreStatus::Pending]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        Sleep::assertSleptTimes(120);
+        $this->assertSame(DeploymentStatus::Failed, $this->new->fresh()->status);
+        $this->assertSame([], $this->kubectl->callsStartingWith('apply'));
+        $this->assertStringEndsWith(
+            "2026-10-23T12:00:00Z Waiting for the datastores: mysql.\n".
+            "2026-10-23T12:10:00Z The deployment failed. The datastores did not become ready in 10 minutes. Still waiting for: mysql.\n",
+            $this->new->fresh()->log,
+        );
     }
 
     public function test_a_server_error_on_the_home_page_leaves_the_deployment_live_with_a_warning(): void

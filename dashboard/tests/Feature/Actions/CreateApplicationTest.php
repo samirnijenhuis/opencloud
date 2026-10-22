@@ -3,13 +3,16 @@
 namespace Tests\Feature\Actions;
 
 use App\Actions\CreateApplication;
+use App\Datastores\DatastoreStatus;
 use App\Enums\ApplicationType;
 use App\Enums\ClusterKind;
+use App\Enums\DatastoreKind;
 use App\Enums\DeploymentStatus;
 use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
 use App\Enums\EnvVarSource;
 use App\Jobs\CheckDomain;
+use App\Jobs\ProvisionDatastoreAttachment;
 use App\Jobs\RunDeployment;
 use App\Models\Application;
 use App\Models\AuditEvent;
@@ -61,7 +64,7 @@ class CreateApplicationTest extends TestCase
         ], $environments);
 
         $production = $application->environments()->where('name', 'production')->sole();
-        $env = $production->envVars()->orderBy('key')->get()->map(fn (EnvVar $v) => [$v->key, $v->is_secret, $v->available_at, $v->source])->all();
+        $env = $production->envVars()->where('source', EnvVarSource::User)->orderBy('key')->get()->map(fn (EnvVar $v) => [$v->key, $v->is_secret, $v->available_at, $v->source])->all();
         $this->assertSame([
             ['APP_KEY', true, EnvVarAvailability::Runtime, EnvVarSource::User],
             ['COMPOSER_AUTH', true, EnvVarAvailability::Build, EnvVarSource::User],
@@ -72,6 +75,14 @@ class CreateApplicationTest extends TestCase
         $this->assertMatchesRegularExpression('/^base64:[A-Za-z0-9+\/]{43}=$/', $appKey);
         $this->assertSame(32, strlen(base64_decode(substr($appKey, 7))));
 
+        $attachment = $production->datastoreAttachments()->sole();
+        $this->assertSame([DatastoreKind::Mysql, "env_{$production->id}", DatastoreStatus::Pending], [$attachment->datastore->kind, $attachment->database_name, $attachment->status]);
+        $this->assertSame(
+            ['DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME'],
+            $production->envVars()->where('source', EnvVarSource::Datastore)->orderBy('key')->pluck('key')->all(),
+        );
+        Queue::assertPushed(ProvisionDatastoreAttachment::class, fn (ProvisionDatastoreAttachment $job) => $job->attachment->is($attachment));
+
         $this->assertSame(['shop.example.com'], $production->domains()->pluck('hostname')->all());
         Queue::assertPushed(CheckDomain::class, fn (CheckDomain $job) => $job->domain->hostname === 'shop.example.com');
 
@@ -80,12 +91,33 @@ class CreateApplicationTest extends TestCase
         Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->is($deployment));
 
         $this->assertSame(
-            ['application.created', 'env_var.created', 'env_var.created', 'env_var.created', 'env_var.created', 'domain.added', 'deployment.started'],
+            ['application.created', 'env_var.created', 'env_var.created', 'env_var.created', 'env_var.created', 'datastore.attached', 'domain.added', 'deployment.started'],
             AuditEvent::orderBy('id')->pluck('action')->all(),
         );
         $audit = AuditEvent::all()->toJson();
         $this->assertStringNotContainsString('sk_live_123456', $audit);
         $this->assertStringNotContainsString(substr($appKey, 7), $audit);
+    }
+
+    public function test_the_database_choice_attaches_postgres_or_nothing(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+        $cluster = Cluster::factory()->create();
+        $create = fn (string $name, string $database) => app(CreateApplication::class)->handle(User::factory()->create(), [
+            'name' => $name,
+            'repository' => "acme/{$name}",
+            'cluster_id' => $cluster->id,
+            'database' => $database,
+        ])->environments()->where('name', 'production')->sole();
+
+        $postgres = $create('blog', 'postgres');
+        $none = $create('docs', 'none');
+
+        $this->assertSame([DatastoreKind::Postgres], $postgres->datastoreAttachments()->get()->map(fn ($attachment) => $attachment->datastore->kind)->all());
+        $this->assertSame('pgsql', $postgres->envVars()->where('key', 'DB_CONNECTION')->sole()->value);
+        $this->assertSame(0, $none->datastoreAttachments()->count());
+        $this->assertSame(['APP_KEY'], $none->envVars()->pluck('key')->all());
     }
 
     public function test_a_given_app_key_replaces_the_generated_one(): void
