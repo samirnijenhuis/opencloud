@@ -251,7 +251,11 @@ export default function ApplicationCreate({
                     <Row label="Build command" hint="Optional">
                         <Input
                             className="font-mono text-sm"
-                            placeholder={laravel ? 'Default: composer install and npm run build' : 'Not used. The Dockerfile builds the image.'}
+                            placeholder={
+                                laravel
+                                    ? 'Optional extra step after the build, for example php artisan icons:cache'
+                                    : 'Not used. The Dockerfile builds the image.'
+                            }
                             value={data.build_command}
                             onChange={(e) => setData('build_command', e.target.value)}
                         />

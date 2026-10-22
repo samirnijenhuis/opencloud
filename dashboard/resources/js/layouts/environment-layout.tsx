@@ -70,7 +70,7 @@ export default function EnvironmentLayout({
 
                 {errors.deploy && <p className="text-sm text-red-600 dark:text-red-400">{errors.deploy}</p>}
 
-                <nav className="-mb-2 flex gap-1 overflow-x-auto border-b" aria-label="Environment sections">
+                <nav className="flex gap-1 overflow-x-auto overflow-y-hidden border-b [scrollbar-width:none]" aria-label="Environment sections">
                     {tabs.map((item) => (
                         <Link
                             key={item.key}
