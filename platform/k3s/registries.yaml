@@ -1,0 +1,5 @@
+# The node cannot resolve cluster DNS, so it pulls the in-cluster image names through the fixed ClusterIP of the registry Service.
+mirrors:
+  "registry.opencloud.svc.cluster.local:5000":
+    endpoint:
+      - "http://10.43.200.200:5000"

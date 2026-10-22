@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caddy
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: caddy
+    app.kubernetes.io/part-of: opencloud
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: caddy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: caddy
+        app.kubernetes.io/part-of: opencloud
+    spec:
+      containers:
+        - name: caddy
+          image: caddy:2.11.7
+          imagePullPolicy: IfNotPresent
+          command: [caddy, run, --resume]
+          ports:
+            - name: http
+              containerPort: 80
+            - name: https
+              containerPort: 443
+            - name: dashboard
+              containerPort: 8000
+          # A TCP check on the admin API, because Caddy logs each HTTP request to it.
+          readinessProbe:
+            exec:
+              command: [nc, -z, 127.0.0.1, "2019"]
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: data
+          hostPath:
+            path: /var/lib/opencloud/caddy/data
+            type: DirectoryOrCreate
+        # --resume reads the last loaded config from here after a restart.
+        - name: config
+          hostPath:
+            path: /var/lib/opencloud/caddy/config
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: caddy
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: caddy
+    app.kubernetes.io/part-of: opencloud
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: caddy
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    - name: https
+      port: 443
+      targetPort: https
+    - name: dashboard
+      port: 8000
+      targetPort: dashboard
