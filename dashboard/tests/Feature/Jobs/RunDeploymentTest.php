@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Jobs;
 
+use App\Datastores\DatastoreStatus;
 use App\Enums\ApplicationType;
 use App\Enums\ClusterKind;
 use App\Enums\DeploymentStatus;
@@ -10,11 +11,13 @@ use App\Kube\FakeKubectl;
 use App\Kube\KubectlResult;
 use App\Models\Application;
 use App\Models\Cluster;
+use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Environment;
 use App\Models\EnvVar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Sleep;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
 
@@ -59,6 +62,7 @@ class RunDeploymentTest extends TestCase
 
         $this->kubectl->respond("logs job/deploy-{$this->new->id}", new KubectlResult(0, "Migrating: create_users_table\nconnected with hunter22\n"));
         $this->kubectl->respond('exec deploy/web', new KubectlResult(0, 'HTTP/1.1 200 OK'));
+        $this->kubectl->respond('get secrets', $this->secretList(['env', "env-{$this->old->id}", "env-{$this->new->id}"]));
 
         Deployment::updated(function (Deployment $deployment) {
             if ($deployment->wasChanged('status')) {
@@ -87,6 +91,8 @@ class RunDeploymentTest extends TestCase
             ['rollout', 'status', 'deployment/scheduler', "--namespace={$namespace}", '--timeout=300s'],
             ['delete', 'horizontalpodautoscaler', 'web', "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
             ['exec', '-i', 'deploy/caddy', '--namespace=opencloud', '--', 'sh', '-c', 'cat > /tmp/caddy.json && wget -q -O- --header "Content-Type: application/json" --post-file /tmp/caddy.json http://127.0.0.1:2019/load'],
+            ['get', 'secrets', "--selector=opencloud.dev/application={$this->environment->application_id},opencloud.dev/environment={$this->environment->id}", "--namespace={$namespace}", '--ignore-not-found', '-o', 'json'],
+            ['delete', 'secret', 'env', "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
             ['exec', 'deploy/web', "--namespace={$namespace}", '--container=web', '--', 'php', '-r', self::HOME_PAGE_CHECK],
         ], array_column($this->kubectl->calls, 'args'));
 
@@ -99,6 +105,9 @@ class RunDeploymentTest extends TestCase
             ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'DB_PASSWORD' => 'hunter22', 'LOG_CHANNEL' => 'stderr'],
             array_map(base64_decode(...), $applied[1]['data']),
         );
+        $this->assertSame("env-{$this->new->id}", $applied[1]['metadata']['name']);
+        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[2]['spec']['template']['spec']['containers'][0]['envFrom']);
+        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[3]['spec']['template']['spec']['containers'][0]['envFrom']);
         $this->assertSame($image, $applied[3]['spec']['template']['spec']['containers'][0]['image']);
 
         $new = $this->new->fresh();
@@ -166,6 +175,91 @@ class RunDeploymentTest extends TestCase
         );
     }
 
+    public function test_going_live_keeps_the_live_secret_and_the_two_newest_and_deletes_the_rest(): void
+    {
+        $failed = Deployment::factory()->for($this->environment)->count(2)->create(['status' => DeploymentStatus::Failed]);
+        $newest = $failed->last();
+        $this->kubectl->respond('get secrets', $this->secretList([
+            'env', "env-{$this->old->id}", "env-{$this->new->id}", "env-{$failed->first()->id}", "env-{$newest->id}",
+        ]));
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertSame(
+            [['secret', "env-{$this->old->id}"], ['secret', 'env']],
+            array_map(fn (array $call) => array_slice($call['args'], 1, 2), $this->kubectl->callsStartingWith('delete secret')),
+        );
+    }
+
+    public function test_a_failed_deployment_leaves_every_secret_in_place(): void
+    {
+        $this->kubectl->respond('rollout status deployment/web', new KubectlResult(1, '', 'error: timed out'));
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame(DeploymentStatus::Failed, $this->new->fresh()->status);
+        $this->assertSame([], $this->kubectl->callsStartingWith('get secrets'));
+        $this->assertSame([], $this->kubectl->callsStartingWith('delete secret'));
+    }
+
+    public function test_the_deployment_waits_for_its_datastores_before_it_applies_the_env_secret(): void
+    {
+        Sleep::fake(syncWithCarbon: true);
+        $attachment = DatastoreAttachment::factory()->for($this->environment)->create(['status' => DatastoreStatus::Provisioning]);
+        $sleeps = 0;
+        Sleep::whenFakingSleep(function () use ($attachment, &$sleeps) {
+            if (++$sleeps === 3) {
+                $attachment->update(['status' => DatastoreStatus::Ready]);
+            }
+        });
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        Sleep::assertSleptTimes(3);
+        $this->assertStringContainsString(
+            "2026-10-23T12:00:00Z Waiting for the datastores: mysql.\n".
+            "2026-10-23T12:00:15Z Running the deploy commands: php artisan migrate --force\n",
+            $this->new->fresh()->log,
+        );
+    }
+
+    public function test_a_failed_datastore_fails_the_deployment_with_its_error(): void
+    {
+        DatastoreAttachment::factory()->for($this->environment)->create([
+            'status' => DatastoreStatus::Failed,
+            'error' => "ERROR 1045 (28000): Access denied for user 'root'@'localhost'",
+        ]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame([['new', 'building'], ['new', 'deploying'], ['new', 'failed']], $this->moves);
+        $this->assertSame(DeploymentStatus::Live, $this->old->fresh()->status);
+        $this->assertSame([], $this->kubectl->callsStartingWith('apply'));
+        $this->assertStringEndsWith(
+            "2026-10-23T12:00:00Z The deployment failed. The mysql datastore failed. ERROR 1045 (28000): Access denied for user 'root'@'localhost'\n",
+            $this->new->fresh()->log,
+        );
+    }
+
+    public function test_a_datastore_that_stays_pending_fails_the_deployment_after_ten_minutes(): void
+    {
+        Sleep::fake(syncWithCarbon: true);
+        DatastoreAttachment::factory()->for($this->environment)->create(['status' => DatastoreStatus::Pending]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        Sleep::assertSleptTimes(120);
+        $this->assertSame(DeploymentStatus::Failed, $this->new->fresh()->status);
+        $this->assertSame([], $this->kubectl->callsStartingWith('apply'));
+        $this->assertStringEndsWith(
+            "2026-10-23T12:00:00Z Waiting for the datastores: mysql.\n".
+            "2026-10-23T12:10:00Z The deployment failed. The datastores did not become ready in 10 minutes. Still waiting for: mysql.\n",
+            $this->new->fresh()->log,
+        );
+    }
+
     public function test_a_server_error_on_the_home_page_leaves_the_deployment_live_with_a_warning(): void
     {
         $this->kubectl->respond('exec deploy/web', new KubectlResult(0, 'HTTP/1.1 500 Internal Server Error'));
@@ -200,5 +294,11 @@ class RunDeploymentTest extends TestCase
         $this->assertSame([['new', 'building'], ['new', 'failed']], $this->moves);
         $this->assertSame([], $this->kubectl->calls);
         $this->assertStringEndsWith("2026-10-23T12:00:00Z The deployment failed. buildctl exited with code 1.\n", $this->new->fresh()->log);
+    }
+
+    /** @param  list<string>  $names */
+    private function secretList(array $names): KubectlResult
+    {
+        return new KubectlResult(0, json_encode(['items' => array_map(fn (string $name) => ['metadata' => ['name' => $name]], $names)]));
     }
 }

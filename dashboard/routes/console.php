@@ -1,7 +1,13 @@
 <?php
 
+use App\Enums\DatastoreKind;
+use App\Jobs\BackupDashboard;
+use App\Jobs\BackupDatastore;
+use App\Jobs\CopyBuckets;
+use App\Jobs\FailStuckDeployments;
 use App\Jobs\SyncCaddy;
 use App\Models\Cluster;
+use App\Models\Datastore;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -14,3 +20,11 @@ Artisan::command('inspire', function () {
 Schedule::call(fn () => Cluster::query()->each(fn (Cluster $cluster) => SyncCaddy::dispatch($cluster)))
     ->name('sync-caddy')
     ->everyFiveMinutes();
+
+Schedule::job(new FailStuckDeployments)->everyMinute();
+
+Schedule::call(function () {
+    Datastore::query()->whereIn('kind', [DatastoreKind::Mysql, DatastoreKind::Postgres])->each(fn (Datastore $datastore) => BackupDatastore::dispatch($datastore));
+    Datastore::query()->where('kind', DatastoreKind::Rustfs)->each(fn (Datastore $datastore) => CopyBuckets::dispatch($datastore));
+    BackupDashboard::dispatch();
+})->name('nightly-backups')->dailyAt('03:00');

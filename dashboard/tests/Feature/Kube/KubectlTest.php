@@ -27,7 +27,7 @@ class KubectlTest extends TestCase
                 parent::__construct($cluster);
             }
 
-            protected function process(array $command, ?string $stdin, int $timeout): KubectlResult
+            protected function process(array $command, mixed $stdin, int $timeout, mixed $output = null): KubectlResult
             {
                 $path = substr($command[1], strlen('--kubeconfig='));
                 $this->seen = [
@@ -47,6 +47,22 @@ class KubectlTest extends TestCase
         $this->assertSame("apiVersion: v1\nkind: Config\n", $seen['contents']);
         $this->assertSame(0600, $seen['mode']);
         $this->assertFileDoesNotExist($seen['path']);
+    }
+
+    public function test_a_stream_goes_in_on_stdin_and_stdout_streams_into_the_output(): void
+    {
+        config(['opencloud.kubectl_binary' => base_path('tests/Fakes/bin/cat-stdin')]);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $input = fopen('php://temp', 'w+');
+        fwrite($input, str_repeat("0123456789abcdef\n", 200_000));
+        rewind($input);
+        $output = fopen('php://temp', 'w+');
+
+        $result = Kubectl::for($local)->exec('oc-datastores', 'mysql-1-0', ['mysql'], $input, output: $output);
+
+        rewind($output);
+        $this->assertSame([0, ''], [$result->exitCode, $result->output]);
+        $this->assertSame(str_repeat("0123456789abcdef\n", 200_000), stream_get_contents($output));
     }
 
     public function test_the_local_cluster_uses_the_in_cluster_config(): void

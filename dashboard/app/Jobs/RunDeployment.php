@@ -3,18 +3,23 @@
 namespace App\Jobs;
 
 use App\Build\Builder;
+use App\Datastores\DatastoreStatus;
 use App\Deploy\DeploymentLog;
 use App\Deploy\EnvironmentVariables;
 use App\Enums\ApplicationType;
 use App\Enums\DeploymentStatus;
 use App\Kube\Kubectl;
 use App\Kube\Manifests\EnvironmentManifests;
+use App\Kube\Manifests\Labels;
+use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
+use App\Models\Environment;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Sleep;
 use RuntimeException;
 use Throwable;
 
@@ -30,6 +35,8 @@ class RunDeployment implements ShouldQueue
     private const JOB_DEADLINE_SECONDS = 960;
 
     private const ROLLOUT_TIMEOUT_SECONDS = 300;
+
+    private const DATASTORE_WAIT_SECONDS = 600;
 
     public function __construct(public Deployment $deployment) {}
 
@@ -91,9 +98,11 @@ class RunDeployment implements ShouldQueue
         $deployment->image = $build->image;
         $deployment->moveTo(DeploymentStatus::Deploying);
 
+        $this->waitForDatastores($environment, $log);
+
         $kubectl = Kubectl::for($application->cluster);
         $manifests = new EnvironmentManifests($environment);
-        $kubectl->apply([$manifests->namespace(), $manifests->secret(EnvironmentVariables::runtime($environment))]);
+        $kubectl->apply([$manifests->namespace(), $manifests->secret($deployment, EnvironmentVariables::runtime($environment))]);
 
         if ($environment->deploy_commands !== []) {
             $this->runDeployCommands($kubectl, $manifests, $deployment, $log);
@@ -120,6 +129,42 @@ class RunDeployment implements ShouldQueue
         });
 
         $log->write('The deployment is live.');
+    }
+
+    /** The env Secret holds the datastore credentials, and the deploy commands migrate, so both wait for the datastores. */
+    private function waitForDatastores(Environment $environment, DeploymentLog $log): void
+    {
+        $deadline = now()->addSeconds(self::DATASTORE_WAIT_SECONDS);
+        $logged = false;
+
+        while (true) {
+            $attachments = $environment->datastoreAttachments()->with('datastore')->get();
+            $failed = $attachments->first(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::Failed);
+
+            if ($failed !== null) {
+                throw new RuntimeException("The {$failed->datastore->kind->value} datastore failed. {$failed->error}");
+            }
+
+            $waiting = $attachments
+                ->reject(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::Ready)
+                ->map(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->value)
+                ->implode(', ');
+
+            if ($waiting === '') {
+                return;
+            }
+
+            if (now()->greaterThanOrEqualTo($deadline)) {
+                throw new RuntimeException('The datastores did not become ready in '.(self::DATASTORE_WAIT_SECONDS / 60)." minutes. Still waiting for: {$waiting}.");
+            }
+
+            if (! $logged) {
+                $log->write("Waiting for the datastores: {$waiting}.");
+                $logged = true;
+            }
+
+            Sleep::for(5)->seconds();
+        }
     }
 
     private function runDeployCommands(Kubectl $kubectl, EnvironmentManifests $manifests, Deployment $deployment, DeploymentLog $log): void
@@ -181,9 +226,33 @@ class RunDeployment implements ShouldQueue
     {
         try {
             SyncCaddy::dispatch($deployment->environment->application->cluster);
+            $this->pruneEnvSecrets($deployment);
             $this->checkHomePage($deployment, $log);
         } catch (Throwable $e) {
             $log->write("A step after the deployment went live failed. {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Keeps the Secret of the live deployment and the two newest, so a rollback still finds its env.
+     * The name "env" without an id is the Secret from before each deployment had its own.
+     */
+    private function pruneEnvSecrets(Deployment $live): void
+    {
+        $environment = $live->environment;
+        $namespace = $environment->kubeNamespace();
+        $kubectl = Kubectl::for($environment->application->cluster);
+        $secrets = $kubectl->get('secrets', namespace: $namespace, selector: Labels::environment($environment))['items'] ?? [];
+
+        $ids = collect($secrets)
+            ->map(fn (array $secret) => $secret['metadata']['name'])
+            ->filter(fn (string $name) => preg_match('/^env(-\d+)?$/', $name) === 1)
+            ->mapWithKeys(fn (string $name) => [$name => (int) substr($name, 4)])
+            ->sortDesc();
+        $keep = [...$ids->keys()->take(2), EnvironmentManifests::secretName($live)];
+
+        foreach ($ids->keys()->diff($keep) as $name) {
+            $kubectl->delete('secret', $name, $namespace);
         }
     }
 

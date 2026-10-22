@@ -12,7 +12,7 @@ class EnvVar extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['environment_id', 'key', 'value', 'is_secret', 'available_at', 'source'];
+    protected $fillable = ['environment_id', 'key', 'value', 'is_secret', 'available_at', 'source', 'datastore_attachment_id'];
 
     protected $hidden = ['value'];
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Datastores\DatastoreStatus;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,7 +14,9 @@ class Datastore extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['cluster_id', 'kind', 'source', 'version', 'status'];
+    protected $fillable = ['cluster_id', 'kind', 'source', 'version', 'status', 'root_password', 'error'];
+
+    protected $hidden = ['root_password'];
 
     protected $attributes = [
         'source' => DatastoreSource::Standard->value,
@@ -25,6 +28,8 @@ class Datastore extends Model
         return [
             'kind' => DatastoreKind::class,
             'source' => DatastoreSource::class,
+            'status' => DatastoreStatus::class,
+            'root_password' => 'encrypted',
         ];
     }
 

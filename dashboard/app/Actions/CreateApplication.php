@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Build\Git;
 use App\Enums\ApplicationType;
+use App\Enums\DatastoreKind;
 use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
 use App\Models\Application;
@@ -17,11 +18,13 @@ class CreateApplication
         private SetEnvVar $setEnvVar,
         private AddDomain $addDomain,
         private StartDeployment $startDeployment,
+        private AttachDatastore $attachDatastore,
     ) {}
 
     /**
      * Creates the application, its protected production environment, the preview template, the env values,
-     * and the domains. Then it starts the first deployment of production.
+     * the database, and the domains. Then it starts the first deployment of production.
+     * A Laravel app gets a MySQL database unless `database` is `none`. Other apps get one only when `database` asks.
      *
      * @param array{
      *     name: string,
@@ -32,6 +35,7 @@ class CreateApplication
      *     branch?: string,
      *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
      *     domains?: list<string>,
+     *     database?: 'mysql'|'postgres'|'none',
      * } $data
      */
     public function handle(User $by, array $data): Application
@@ -40,11 +44,12 @@ class CreateApplication
         $type = $type instanceof ApplicationType ? $type : ApplicationType::from($type);
         $branch = $data['branch'] ?? 'main';
         $env = $data['env'] ?? [];
+        $database = $data['database'] ?? ($type === ApplicationType::Laravel ? 'mysql' : 'none');
 
         // A wrong repository or branch fails here, before any record exists.
         $commitSha = Git::head((new Application(['repository' => $data['repository']]))->cloneUrl(), $branch);
 
-        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env) {
+        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database) {
             $application = Application::create([
                 'name' => $data['name'],
                 'repository' => $data['repository'],
@@ -90,6 +95,10 @@ class CreateApplication
                     $value['is_secret'] ?? false,
                     $availableAt instanceof EnvVarAvailability ? $availableAt : EnvVarAvailability::from($availableAt),
                 );
+            }
+
+            if ($database !== 'none') {
+                $this->attachDatastore->handle($production, $by, DatastoreKind::from($database));
             }
 
             foreach ($data['domains'] ?? [] as $hostname) {

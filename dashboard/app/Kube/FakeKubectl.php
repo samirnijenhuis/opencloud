@@ -37,9 +37,9 @@ class FakeKubectl extends KubectlFactory
                 parent::__construct($cluster);
             }
 
-            protected function process(array $command, ?string $stdin, int $timeout): KubectlResult
+            protected function process(array $command, mixed $stdin, int $timeout, mixed $output = null): KubectlResult
             {
-                return $this->fake->record($this->cluster->name, $command, $stdin);
+                return $this->fake->record($this->cluster->name, $command, $stdin, $output);
             }
         };
     }
@@ -57,20 +57,33 @@ class FakeKubectl extends KubectlFactory
         return $this;
     }
 
-    /** @param  list<string>  $command */
-    public function record(string $cluster, array $command, ?string $stdin): KubectlResult
+    /**
+     * A stream on stdin is read into the recorded call. Output goes to the $output stream when one is given.
+     *
+     * @param  list<string>  $command
+     * @param  string|resource|null  $stdin
+     * @param  resource|null  $output
+     */
+    public function record(string $cluster, array $command, mixed $stdin, mixed $output = null): KubectlResult
     {
         $args = array_values(array_filter(array_slice($command, 1), fn (string $arg) => ! str_starts_with($arg, '--kubeconfig=')));
+        $stdin = is_resource($stdin) ? stream_get_contents($stdin) : $stdin;
         $this->calls[] = ['cluster' => $cluster, 'args' => $args, 'stdin' => $stdin];
         $line = implode(' ', $args);
+        $result = new KubectlResult(0, Str::startsWith($line, 'get ') ? '' : 'ok');
 
         foreach (array_reverse($this->responders) as [$prefix, $responder]) {
             if (str_starts_with($line, $prefix)) {
-                return $responder($args, $stdin);
+                $result = $responder($args, $stdin);
+                break;
             }
         }
 
-        return new KubectlResult(0, Str::startsWith($line, 'get ') ? '' : 'ok');
+        if ($output !== null) {
+            fwrite($output, $result->output);
+        }
+
+        return $result;
     }
 
     /** @return list<array{cluster: string, args: list<string>, stdin: ?string}> */

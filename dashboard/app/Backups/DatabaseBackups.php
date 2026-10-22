@@ -1,0 +1,116 @@
+<?php
+
+namespace App\Backups;
+
+use App\Datastores\Engines;
+use App\Datastores\SqlEngine;
+use App\Kube\Kubectl;
+use App\Models\Backup;
+use App\Models\DatastoreAttachment;
+use App\Support\SecretMasker;
+use Illuminate\Contracts\Filesystem\Filesystem;
+use InvalidArgumentException;
+use RuntimeException;
+use Throwable;
+
+/**
+ * Dumps, keeps, and restores the database of one MySQL or Postgres attachment.
+ */
+final class DatabaseBackups
+{
+    public const KEEP = 7;
+
+    /** A failed dump returns a failed backup with the error, so the nightly run goes on with the next database. */
+    public function backup(DatastoreAttachment $attachment, bool $prune = true): Backup
+    {
+        $datastore = $attachment->datastore;
+        [$diskName, $disk] = BackupDisk::current();
+        $backup = $attachment->backups()->create([
+            'datastore_id' => $datastore->id,
+            'database_name' => $attachment->database_name,
+            'disk' => $diskName,
+            'location' => sprintf('backups/%d/%d/%s.sql.gz', $datastore->id, $attachment->environment_id, now()->format('Ymd-His')),
+            'status' => BackupStatus::Running,
+        ]);
+        $dump = tmpfile();
+
+        try {
+            $this->engine($attachment)->dump(Kubectl::for($datastore->cluster), $attachment, $dump);
+            rewind($dump);
+            $disk->writeStream($backup->location, $dump);
+            $backup->update(['status' => BackupStatus::Done, 'size' => $disk->size($backup->location)]);
+        } catch (Throwable $e) {
+            $this->deleteFile($disk, $backup->location);
+            $backup->update(['status' => BackupStatus::Failed, 'error' => (new SecretMasker(array_filter([$datastore->root_password, $attachment->password])))->mask($e->getMessage())]);
+
+            return $backup;
+        } finally {
+            fclose($dump);
+        }
+
+        if ($prune) {
+            $this->prune($attachment);
+        }
+
+        return $backup;
+    }
+
+    /**
+     * Backs up the current database first, so a wrong restore can be undone.
+     *
+     * @throws RuntimeException when the backup before the restore fails, or the restore fails
+     */
+    public function restore(Backup $backup): void
+    {
+        $attachment = $backup->currentAttachment() ?? throw new InvalidArgumentException('The database of this backup is no longer attached.');
+        $before = $this->backup($attachment, prune: false);
+
+        if ($before->status === BackupStatus::Failed) {
+            throw new RuntimeException("The backup before the restore failed, so the restore did not start. {$before->error}");
+        }
+
+        $dump = BackupDisk::for($backup)->readStream($backup->location);
+
+        try {
+            $this->engine($attachment)->restore(Kubectl::for($attachment->datastore->cluster), $attachment, $dump);
+        } finally {
+            fclose($dump);
+        }
+
+        $this->prune($attachment);
+    }
+
+    /** Keeps the newest KEEP finished backups of the database and removes every older backup. */
+    public function prune(DatastoreAttachment $attachment): void
+    {
+        $backups = Backup::query()
+            ->where('datastore_id', $attachment->datastore_id)
+            ->where('database_name', $attachment->database_name)
+            ->orderByDesc('id')
+            ->get();
+        $oldestKept = $backups->where('status', BackupStatus::Done)->values()->get(self::KEEP - 1);
+
+        if ($oldestKept === null) {
+            return;
+        }
+
+        foreach ($backups->where('id', '<', $oldestKept->id) as $old) {
+            $this->deleteFile(BackupDisk::for($old), $old->location);
+            $old->delete();
+        }
+    }
+
+    private function engine(DatastoreAttachment $attachment): SqlEngine
+    {
+        $engine = Engines::for($attachment->datastore->kind);
+
+        return $engine instanceof SqlEngine ? $engine : throw new InvalidArgumentException("A {$attachment->datastore->kind->value} datastore has no database to back up.");
+    }
+
+    private function deleteFile(Filesystem $disk, string $path): void
+    {
+        if ($disk->exists($path)) {
+            $disk->delete($path);
+        }
+    }
+}
