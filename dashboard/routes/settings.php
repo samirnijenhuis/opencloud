@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\AuditLogController;
 use App\Http\Controllers\Settings\BackupTargetController;
+use App\Http\Controllers\Settings\DashboardDomainController;
 use App\Http\Controllers\Settings\InviteController;
 use App\Http\Controllers\Settings\MemberController;
 use App\Http\Controllers\Settings\PasswordController;
@@ -38,6 +39,11 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/backups', [BackupTargetController::class, 'edit'])->name('backup-target.edit');
     Route::put('settings/backups', [BackupTargetController::class, 'update'])->name('backup-target.update');
     Route::delete('settings/backups', [BackupTargetController::class, 'destroy'])->name('backup-target.destroy');
+
+    Route::get('settings/dashboard-address', [DashboardDomainController::class, 'edit'])->name('dashboard-domain.edit');
+    Route::put('settings/dashboard-address', [DashboardDomainController::class, 'update'])->name('dashboard-domain.update');
+    Route::post('settings/dashboard-address/check', [DashboardDomainController::class, 'check'])->name('dashboard-domain.check');
+    Route::delete('settings/dashboard-address', [DashboardDomainController::class, 'destroy'])->name('dashboard-domain.destroy');
 
     Route::post('settings/invites', [InviteController::class, 'store'])->name('invites.store');
     Route::delete('settings/invites/{invite}', [InviteController::class, 'destroy'])->name('invites.destroy');
