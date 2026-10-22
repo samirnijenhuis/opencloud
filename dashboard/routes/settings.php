@@ -3,6 +3,7 @@
 use App\Http\Controllers\Settings\AuditLogController;
 use App\Http\Controllers\Settings\BackupTargetController;
 use App\Http\Controllers\Settings\DashboardDomainController;
+use App\Http\Controllers\Settings\GitHubController;
 use App\Http\Controllers\Settings\InviteController;
 use App\Http\Controllers\Settings\MemberController;
 use App\Http\Controllers\Settings\PasswordController;
@@ -44,6 +45,8 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/dashboard-address', [DashboardDomainController::class, 'update'])->name('dashboard-domain.update');
     Route::post('settings/dashboard-address/check', [DashboardDomainController::class, 'check'])->name('dashboard-domain.check');
     Route::delete('settings/dashboard-address', [DashboardDomainController::class, 'destroy'])->name('dashboard-domain.destroy');
+    Route::get('settings/github', [GitHubController::class, 'index'])->name('github.index');
+    Route::get('settings/github/callback', [GitHubController::class, 'callback'])->name('github.callback');
 
     Route::post('settings/invites', [InviteController::class, 'store'])->name('invites.store');
     Route::delete('settings/invites/{invite}', [InviteController::class, 'destroy'])->name('invites.destroy');

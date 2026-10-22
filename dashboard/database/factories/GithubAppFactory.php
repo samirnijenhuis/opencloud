@@ -17,6 +17,8 @@ class GithubAppFactory extends Factory
     {
         return [
             'app_id' => fake()->numberBetween(100000, 999999),
+            'slug' => 'opencloud-'.fake()->slug(1),
+            'owner' => fake()->userName(),
             'private_key' => "-----BEGIN RSA PRIVATE KEY-----\n".fake()->sha256()."\n-----END RSA PRIVATE KEY-----",
             'webhook_secret' => fake()->sha256(),
         ];

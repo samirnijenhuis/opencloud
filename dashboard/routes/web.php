@@ -9,11 +9,15 @@ use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EnvironmentController;
 use App\Http\Controllers\EnvironmentLogController;
 use App\Http\Controllers\EnvVarController;
+use App\Http\Controllers\GitHubWebhookController;
 use App\Http\Controllers\InviteAcceptController;
+use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard')->name('home');
+
+Route::post('webhooks/github', GitHubWebhookController::class)->name('webhooks.github');
 
 Route::middleware('throttle:10,1')->group(function () {
     Route::get('setup/{token}', [SetupController::class, 'show'])->name('setup');
@@ -32,6 +36,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('applications/create', [ApplicationController::class, 'create'])->name('applications.create');
     Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
     Route::get('applications/{application}', [ApplicationController::class, 'show'])->name('applications.show');
+    Route::patch('applications/{application}/previews', [PreviewSettingsController::class, 'update'])->name('applications.previews.update');
 
     Route::get('environments/{environment}', [EnvironmentController::class, 'show'])->name('environments.show');
     Route::get('environments/{environment}/deployments', [DeploymentController::class, 'index'])->name('environments.deployments');

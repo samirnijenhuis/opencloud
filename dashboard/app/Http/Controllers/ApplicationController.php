@@ -7,6 +7,7 @@ use App\Enums\ApplicationType;
 use App\Enums\ClusterKind;
 use App\Enums\EnvironmentKind;
 use App\Enums\Size;
+use App\GitHub\RepositoryName;
 use App\Http\Requests\StoreApplicationRequest;
 use App\Models\Application;
 use App\Models\Cluster;
@@ -136,6 +137,8 @@ class ApplicationController extends Controller
             ->get()
             ->keyBy('environment_id');
 
+        $githubRepository = RepositoryName::parse($application->repository);
+
         return Inertia::render('applications/show', [
             'application' => [
                 'id' => $application->id,
@@ -143,6 +146,15 @@ class ApplicationController extends Controller
                 'repository' => $application->repository,
                 'type' => $application->type,
             ],
+            'previews' => [
+                'previews_enabled' => $application->previews_enabled,
+                'allow_forks' => $application->allow_forks,
+                'preview_domain' => $application->preview_domain,
+                'ingress_ip' => $application->cluster->ingress_ip,
+                'max_previews' => config('opencloud.max_previews'),
+                'template_id' => $application->environments()->where('kind', EnvironmentKind::PreviewTemplate)->value('id'),
+            ],
+            'canUpdate' => $request->user()->can('update', $application),
             'environments' => $environments
                 ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::Permanent ? 1 : 2), $environment->name])
                 ->map(fn (Environment $environment) => [
@@ -152,6 +164,7 @@ class ApplicationController extends Controller
                     'is_protected' => $environment->is_protected,
                     'branch' => $environment->branch,
                     'pr_number' => $environment->pr_number,
+                    'pr_url' => $githubRepository && $environment->pr_number ? "https://github.com/{$githubRepository}/pull/{$environment->pr_number}" : null,
                     'status' => $latest->get($environment->id)?->status,
                     'url' => ($hostname = $environment->domains->first()?->hostname) ? "https://{$hostname}" : null,
                 ])

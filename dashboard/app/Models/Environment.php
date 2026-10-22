@@ -30,6 +30,7 @@ class Environment extends Model
         'health_path',
         'worker_enabled',
         'scheduler_enabled',
+        'pr_comment_id',
     ];
 
     protected $attributes = [
@@ -52,6 +53,7 @@ class Environment extends Model
             'is_protected' => 'boolean',
             'auto_deploy' => 'boolean',
             'pr_number' => 'integer',
+            'pr_comment_id' => 'integer',
             'size' => Size::class,
             'min_instances' => 'integer',
             'max_instances' => 'integer',

@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         // Caddy sends the original scheme and host. It reaches the dashboard from the pod network, so trust every sender.
         $middleware->trustProxies(at: '*');
+        // GitHub proves itself with the webhook signature instead.
+        $middleware->validateCsrfTokens(except: ['webhooks/github']);
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,

@@ -105,15 +105,17 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `DeleteEnvVar` | `handle(EnvVar $envVar, User $by): void` | Deletes one user value. |
 | `AddDomain` | `handle(Environment $environment, User $by, string $hostname, bool $manageDns = false, bool $proxied = false): Domain` | Stores the domain and dispatches `CheckDomain`. With `$manageDns`, it first creates or updates the Cloudflare A record. |
 | `RemoveDomain` | `handle(Domain $domain, User $by): void` | Deletes the Cloudflare record that opencloud created, deletes the domain, and syncs Caddy. |
-| `AttachDatastore` | `handle(Environment $environment, User $by, DatastoreKind $kind): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment, and dispatches its provisioning. |
+| `AttachDatastore` | `handle(Environment $environment, ?User $by, DatastoreKind $kind): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment, and dispatches its provisioning. |
 | `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. |
 | `StoreProviderCredential` | `handle(User $by, string $provider, string $token): CheckResult` | Checks the key with the provider. It stores the key encrypted when the check passes or only optional rights are missing. The audit event never holds the key. |
 | `DeleteProviderCredential` | `handle(ProviderCredential $credential, User $by): void` | Deletes the key. |
+| `ConnectGitHubApp` | `handle(User $by, string $code): GithubApp` | Exchanges the code of the manifest flow and stores the GitHub App. It replaces the old app. |
+| `UpdatePreviewSettings` | `handle(Application $application, User $by, array $settings): void` | Stores `previews_enabled`, `allow_forks`, and `preview_domain`. |
 | `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
 
 ## Queues
 
-The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, and `RestoreDatabase`. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, and `ProvisionDatastoreAttachment`. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
+The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, and `RestoreDatabase`. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, `ProvisionDatastoreAttachment`, `DeployPush`, `SyncPreview`, and `PostPreviewComment`. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
 
 ## Datastores
 
@@ -122,6 +124,24 @@ Each kind has one engine in `app/Datastores`, and `Engines::for()` picks it. MyS
 Each deployment has its own env Secret, `env-<deployment-id>`. A failed deploy cannot change the env of the pods that still run. After a deployment goes live, the job keeps the live Secret and the two newest, and deletes the rest.
 
 Backups run every night at 03:00. A dump streams through `kubectl exec` into a gzip file under `<data_path>/backups`, or into the S3 backup target when one exists. The newest 7 dumps per attachment stay. A restore first backs up the current state, then empties the database and streams the dump back.
+
+## GitHub
+
+`App\GitHub` is the boundary to GitHub. One `GithubApp` row holds the app of the install. The owner creates it on the page `/settings/github` with the manifest flow. `GitHubClient` signs an RS256 app token with `AppJwt`. It finds the installation of a repository and keeps the installation token encrypted in the cache until one minute before it expires. Tests swap every call with `Http::fake()`.
+
+`App\Build\Git` is the only class that runs `git` against a remote. For a github.com repository with the app installed, it uses `https://x-access-token:<token>@github.com/<owner>/<repo>.git`. It fetches the URL directly, so `.git` never stores the token. It masks the token in the message of a failed command. Without a token it uses the plain URL, so public repositories work without the app.
+
+`POST /webhooks/github` checks `X-Hub-Signature-256` with `hash_equals` first and answers 401 on a bad signature. It parses the payload into `PushEvent` or `PullRequestEvent`, queues one job, and answers 202. A repeated `X-GitHub-Delivery` id does nothing.
+
+## Previews
+
+A `push` queues `DeployPush`. It deploys the pushed commit to each `permanent` environment of the branch with `auto_deploy` on.
+
+A `pull_request` queues `SyncPreview`. The actions `opened`, `reopened`, and `synchronize` run `App\Previews\OpenPreview`. The action `closed` runs `App\Previews\ClosePreview`.
+
+- `OpenPreview` skips the pull request when previews are off, or when it comes from a fork and `allow_forks` is off. At `opencloud.max_previews` previews, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings and the `user` env values of the preview template and runs one instance. It gets its own `APP_KEY` when the template has none, and it attaches the datastore kinds of production. Its domain is `pr-<number>.<preview_domain>`, or `pr-<number>-<application slug>.<ingress ip>.sslip.io` without a preview domain. Then it deploys the head commit.
+- `ClosePreview` waits while a deployment of the preview builds or rolls out. Then it deletes the namespace and calls `DetachDatastore::destroy()` for each attachment. It deletes the environment and its records, and it syncs Caddy.
+- `DeploymentObserver` queues `PostPreviewComment` when a preview deployment moves to `live`. The job creates one comment with the preview URL and keeps its id in `pr_comment_id`. Later deployments update that comment. A failed call only writes a warning to the log.
 
 ## Roles
 

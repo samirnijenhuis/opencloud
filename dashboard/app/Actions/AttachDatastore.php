@@ -29,7 +29,7 @@ class AttachDatastore
      *
      * @throws InvalidArgumentException when the environment already has the other kind of database
      */
-    public function handle(Environment $environment, User $by, DatastoreKind $kind): DatastoreAttachment
+    public function handle(Environment $environment, ?User $by, DatastoreKind $kind): DatastoreAttachment
     {
         $attachments = $environment->datastoreAttachments()->with('datastore')->get();
         $existing = $attachments->first(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind === $kind);
