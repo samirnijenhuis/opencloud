@@ -12,10 +12,12 @@ class Application extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port'];
+    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'allow_forks', 'preview_domain'];
 
     protected $attributes = [
         'port' => 8080,
+        'previews_enabled' => true,
+        'allow_forks' => false,
     ];
 
     protected function casts(): array
@@ -23,6 +25,8 @@ class Application extends Model
         return [
             'type' => ApplicationType::class,
             'port' => 'integer',
+            'previews_enabled' => 'boolean',
+            'allow_forks' => 'boolean',
         ];
     }
 
