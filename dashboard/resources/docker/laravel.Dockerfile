@@ -12,9 +12,11 @@ RUN --mount=type=cache,target=/tmp/composer-cache {{ secret_mounts }}composer in
 
 FROM node:22-alpine AS assets
 WORKDIR /app
+# A stalled download fails after 60 seconds and npm tries again, instead of waiting 5 minutes.
+ENV NPM_FLAGS="--no-audit --no-fund --fetch-timeout=60000 --fetch-retries=5 --fetch-retry-mintimeout=2000"
 COPY . .
 COPY --from=vendor /app/vendor ./vendor
-RUN --mount=type=cache,target=/root/.npm {{ secret_mounts }}if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build
+RUN --mount=type=cache,target=/root/.npm {{ secret_mounts }}if [ -f package-lock.json ]; then npm ci $NPM_FLAGS; else npm install $NPM_FLAGS; fi && npm run build
 {{/assets}}
 
 FROM base
