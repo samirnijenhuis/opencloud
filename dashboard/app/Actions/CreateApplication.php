@@ -10,6 +10,7 @@ use App\Enums\EnvVarAvailability;
 use App\Models\Application;
 use App\Models\AuditEvent;
 use App\Models\User;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class CreateApplication
@@ -36,6 +37,7 @@ class CreateApplication
      *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
      *     domains?: list<string>,
      *     database?: 'mysql'|'postgres'|'none',
+     *     settings?: array<string, mixed>,
      * } $data
      */
     public function handle(User $by, array $data): Application
@@ -58,9 +60,10 @@ class CreateApplication
                 'port' => $data['port'] ?? 8080,
             ]);
 
-            $settings = $type === ApplicationType::Laravel
-                ? ['deploy_commands' => ['php artisan migrate --force']]
-                : ['health_path' => '/'];
+            $settings = [
+                ...($type === ApplicationType::Laravel ? ['deploy_commands' => ['php artisan migrate --force']] : ['health_path' => '/']),
+                ...($data['settings'] ?? []),
+            ];
 
             $production = $application->environments()->create([
                 'name' => 'production',
@@ -70,12 +73,13 @@ class CreateApplication
                 ...$settings,
             ]);
 
+            // Previews run as one small instance, so the template takes the commands but not the size.
             $application->environments()->create([
                 'name' => 'preview-template',
                 'kind' => EnvironmentKind::PreviewTemplate,
                 'is_protected' => false,
                 'auto_deploy' => false,
-                ...$settings,
+                ...Arr::except($settings, ['size', 'min_instances', 'max_instances', 'cpu_target']),
             ]);
 
             AuditEvent::record($by, 'application.created', $application, ['repository' => $application->repository, 'type' => $type->value]);

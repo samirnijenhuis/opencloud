@@ -120,6 +120,41 @@ class CreateApplicationTest extends TestCase
         $this->assertSame(['APP_KEY'], $none->envVars()->pluck('key')->all());
     }
 
+    public function test_the_settings_apply_before_the_first_deployment_and_the_preview_template_keeps_its_size(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+
+        $application = app(CreateApplication::class)->handle(User::factory()->create(), [
+            'name' => 'shop',
+            'repository' => 'acme/shop',
+            'cluster_id' => Cluster::factory()->create()->id,
+            'database' => 'none',
+            'settings' => [
+                'size' => 'l',
+                'min_instances' => 2,
+                'max_instances' => 6,
+                'cpu_target' => 60,
+                'build_command' => 'php artisan icons:cache',
+                'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force'],
+                'worker_enabled' => false,
+                'scheduler_enabled' => true,
+            ],
+        ]);
+        $production = $application->environments()->where('name', 'production')->sole();
+        $template = $application->environments()->where('name', 'preview-template')->sole();
+
+        $this->assertSame(
+            ['l', 2, 6, 60, 'php artisan icons:cache', ['php artisan migrate --force', 'php artisan db:seed --force'], false, true],
+            [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->build_command, $production->deploy_commands, $production->worker_enabled, $production->scheduler_enabled],
+        );
+        $this->assertSame(
+            ['s', 1, 1, 70, 'php artisan icons:cache', ['php artisan migrate --force', 'php artisan db:seed --force'], false, true],
+            [$template->size->value, $template->min_instances, $template->max_instances, $template->cpu_target, $template->build_command, $template->deploy_commands, $template->worker_enabled, $template->scheduler_enabled],
+        );
+        Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->environment->is($production));
+    }
+
     public function test_a_given_app_key_replaces_the_generated_one(): void
     {
         Queue::fake();

@@ -140,6 +140,16 @@ class ApplicationControllerTest extends TestCase
                 ],
                 'domains' => ['shop.example.com'],
                 'database' => 'postgres',
+                'settings' => [
+                    'size' => 's',
+                    'min_instances' => 1,
+                    'max_instances' => 3,
+                    'cpu_target' => 70,
+                    'build_command' => null,
+                    'deploy_commands' => ['php artisan migrate --force'],
+                    'worker_enabled' => true,
+                    'scheduler_enabled' => false,
+                ],
             ])
             ->andReturn($created);
 
@@ -151,11 +161,6 @@ class ApplicationControllerTest extends TestCase
             'domain' => 'Shop.Example.com',
             'database' => 'postgres',
         ]))->assertRedirect("/environments/{$production->id}");
-
-        $production->refresh();
-        $this->assertSame('s', $production->size->value);
-        $this->assertSame([1, 3, 70, true, false], [$production->min_instances, $production->max_instances, $production->cpu_target, $production->worker_enabled, $production->scheduler_enabled]);
-        $this->assertSame(['php artisan migrate --force'], $production->deploy_commands);
     }
 
     public function test_it_creates_an_application_end_to_end_from_a_repository_alone(): void
@@ -182,7 +187,7 @@ class ApplicationControllerTest extends TestCase
         $response->assertRedirect("/environments/{$production->id}");
         $this->assertSame(['shop', ApplicationType::Dockerfile, 3000, EnvironmentKind::Permanent], [$application->name, $application->type, $application->port, $production->kind]);
         $this->assertSame(['m', 2, 4, 60, false, false], [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->worker_enabled, $production->scheduler_enabled]);
-        $this->assertSame(1, AuditEvent::where('action', 'environment.updated')->count());
+        $this->assertSame(0, AuditEvent::where('action', 'environment.updated')->count());
     }
 
     public function test_a_repository_that_git_cannot_read_comes_back_as_a_form_error(): void

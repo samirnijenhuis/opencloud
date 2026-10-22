@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreateApplication;
-use App\Actions\UpdateEnvironmentSettings;
 use App\Enums\ApplicationType;
 use App\Enums\ClusterKind;
 use App\Enums\EnvironmentKind;
@@ -80,7 +79,7 @@ class ApplicationController extends Controller
         ]);
     }
 
-    public function store(StoreApplicationRequest $request, CreateApplication $createApplication, UpdateEnvironmentSettings $updateSettings): RedirectResponse
+    public function store(StoreApplicationRequest $request, CreateApplication $createApplication): RedirectResponse
     {
         $data = $request->validated();
         $user = $request->user();
@@ -103,23 +102,22 @@ class ApplicationController extends Controller
                 ], $data['env'] ?? []),
                 'domains' => isset($data['domain']) ? [$data['domain']] : [],
                 'database' => $laravel ? $data['database'] : 'none',
+                'settings' => [
+                    'size' => $data['size'],
+                    'min_instances' => $data['min_instances'],
+                    'max_instances' => $data['max_instances'],
+                    'cpu_target' => $data['cpu_target'],
+                    'build_command' => $data['build_command'] ?? null,
+                    'deploy_commands' => $data['deploy_commands'] ?? [],
+                    'worker_enabled' => $laravel && ($data['worker_enabled'] ?? false),
+                    'scheduler_enabled' => $laravel && ($data['scheduler_enabled'] ?? false),
+                ],
             ]);
         } catch (RuntimeException) {
             return back()->withInput()->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
         }
 
         $production = $application->environments()->where('name', 'production')->firstOrFail();
-
-        $updateSettings->handle($production, $user, [
-            'size' => $data['size'],
-            'min_instances' => $data['min_instances'],
-            'max_instances' => $data['max_instances'],
-            'cpu_target' => $data['cpu_target'],
-            'build_command' => $data['build_command'] ?? null,
-            'deploy_commands' => $data['deploy_commands'] ?? [],
-            'worker_enabled' => $laravel && ($data['worker_enabled'] ?? false),
-            'scheduler_enabled' => $laravel && ($data['scheduler_enabled'] ?? false),
-        ]);
 
         return to_route('environments.show', $production);
     }
