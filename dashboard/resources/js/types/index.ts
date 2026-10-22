@@ -26,7 +26,7 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
-    can: { create_application: boolean; view_audit_log: boolean };
+    can: { create_application: boolean; view_audit_log: boolean; manage_credentials: boolean };
     [key: string]: unknown;
 }
 

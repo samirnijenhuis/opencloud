@@ -5,6 +5,7 @@ use App\Http\Controllers\Settings\InviteController;
 use App\Http\Controllers\Settings\MemberController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\ProviderKeyController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -25,6 +26,11 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/members', [MemberController::class, 'index'])->name('members.index');
     Route::patch('settings/members/{user}', [MemberController::class, 'update'])->name('members.update');
     Route::delete('settings/members/{user}', [MemberController::class, 'destroy'])->name('members.destroy');
+
+    Route::get('settings/providers', [ProviderKeyController::class, 'index'])->name('provider-keys.index');
+    Route::put('settings/providers/{provider}', [ProviderKeyController::class, 'update'])->name('provider-keys.update');
+    Route::post('settings/provider-credentials/{credential}/check', [ProviderKeyController::class, 'recheck'])->name('provider-keys.check');
+    Route::delete('settings/provider-credentials/{credential}', [ProviderKeyController::class, 'destroy'])->name('provider-keys.destroy');
 
     Route::get('settings/audit', [AuditLogController::class, 'index'])->name('audit.index');
 
