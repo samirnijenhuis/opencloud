@@ -75,7 +75,7 @@ ok=0
 record "the Mac gets 200 from http://$IP:8000/up (got $code)" "$ok"
 
 ok=0
-orb -m "$MACHINE" test -f "/opt/opencloud/$VERSION/platform/networkpolicies.yaml" && ok=1
+orb -m "$MACHINE" sudo test -f "/opt/opencloud/$VERSION/platform/networkpolicies.yaml" && ok=1
 record "the archive was extracted to /opt/opencloud/$VERSION" "$ok"
 
 ! printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL'

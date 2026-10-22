@@ -8,7 +8,12 @@ OPENCLOUD_VERSION=${OPENCLOUD_VERSION:-latest}
 OPENCLOUD_IMAGE=${OPENCLOUD_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud:$OPENCLOUD_VERSION}
 OPENCLOUD_TLS_ISSUER=${OPENCLOUD_TLS_ISSUER:-acme}
 STATE_DIR=/var/lib/opencloud
-SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+# When bash reads the script from a pipe, no file backs it, so nothing sits beside it. The current folder does not count.
+if [[ -f ${BASH_SOURCE[0]:-} ]]; then
+    SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+else
+    SOURCE_DIR=
+fi
 PLATFORM_DIR=$SOURCE_DIR/platform
 
 say() {
@@ -41,7 +46,7 @@ port_holders() {
 
 # The curl | bash case: no files sit beside the script, so fetch the release archive and run the installer from it.
 bootstrap() {
-    [[ -z ${BASH_SOURCE[0]:-} || ! -d $PLATFORM_DIR ]] || return 0
+    [[ -z $SOURCE_DIR || ! -d $PLATFORM_DIR ]] || return 0
 
     [[ $EUID -eq 0 ]] || fail "Run the installer as root, for example: curl -fsSL <url>/install.sh | sudo bash"
     local tool
