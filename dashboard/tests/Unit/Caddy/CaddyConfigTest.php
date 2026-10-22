@@ -17,7 +17,7 @@ class CaddyConfigTest extends TestCase
         $this->assertSame(
             '{"apps":{"http":{"servers":{'.
             '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}]}]}]},'.
-            '"apps":{"listen":[":80",":443"],"routes":['.
+            '"apps":{"listen":[":443"],"routes":['.
             '{"match":[{"host":["a.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"web.oc-env-3.svc.cluster.local:8080"}]}]},'.
             '{"match":[{"host":["x.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"web.oc-env-7.svc.cluster.local:8080"}]}]}'.
             ']}}},"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}',
@@ -29,7 +29,7 @@ class CaddyConfigTest extends TestCase
     {
         $this->assertSame([
             'apps' => [
-                'http' => ['servers' => ['apps' => ['listen' => [':80', ':443'], 'routes' => []]]],
+                'http' => ['servers' => ['apps' => ['listen' => [':443'], 'routes' => []]]],
                 'tls' => ['automation' => ['policies' => [['issuers' => [['module' => 'acme', 'email' => 'ops@example.com']]]]]],
             ],
         ], (new CaddyConfig('acme', 'ops@example.com'))->build(false, []));

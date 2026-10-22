@@ -50,7 +50,7 @@ class SyncCaddyTest extends TestCase
             ],
             'stdin' => '{"apps":{"http":{"servers":{'.
                 '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}]}]}]},'.
-                '"apps":{"listen":[":80",":443"],"routes":['.
+                '"apps":{"listen":[":443"],"routes":['.
                 '{"match":[{"host":["cdn.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"'.$upstream.'"}]}]},'.
                 '{"match":[{"host":["shop.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"'.$upstream.'"}]}]}'.
                 ']}}},"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}',

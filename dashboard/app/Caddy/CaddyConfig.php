@@ -56,7 +56,7 @@ final readonly class CaddyConfig
         }
 
         $servers['apps'] = [
-            'listen' => [':80', ':443'],
+            'listen' => [':443'],
             'routes' => array_map(
                 fn (string $hostname, string $upstream) => ['match' => [['host' => [$hostname]]], 'handle' => [self::proxy($upstream)]],
                 array_keys($routes),

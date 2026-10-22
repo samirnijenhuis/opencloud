@@ -28,7 +28,11 @@ web)
     ;;
 worker)
     wait_for_migrations
-    exec php artisan queue:work --sleep=1 --tries=1 --timeout=3600
+    exec php artisan queue:work --queue=default --sleep=1 --tries=1 --timeout=600
+    ;;
+builder)
+    wait_for_migrations
+    exec php artisan queue:work --queue=builds --sleep=1 --tries=1 --timeout=3600
     ;;
 scheduler)
     wait_for_migrations

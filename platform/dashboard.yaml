@@ -78,6 +78,18 @@ spec:
             limits:
               memory: 512Mi
           volumeMounts: *mounts
+        - name: builder
+          image: "__DASHBOARD_IMAGE__"
+          imagePullPolicy: IfNotPresent
+          args: [builder]
+          env: *env
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts: *mounts
         - name: scheduler
           image: "__DASHBOARD_IMAGE__"
           imagePullPolicy: IfNotPresent

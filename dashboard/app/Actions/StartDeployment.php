@@ -35,7 +35,7 @@ class StartDeployment
         $deployment = $environment->deployments()->create(['commit_sha' => $commitSha, 'triggered_by' => $by?->id]);
 
         AuditEvent::record($by, 'deployment.started', $deployment, ['environment_id' => $environment->id, 'commit_sha' => $commitSha]);
-        RunDeployment::dispatch($deployment)->afterCommit();
+        RunDeployment::dispatch($deployment)->onQueue('builds')->afterCommit();
 
         return $deployment;
     }

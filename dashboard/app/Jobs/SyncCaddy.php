@@ -4,37 +4,31 @@ namespace App\Jobs;
 
 use App\Caddy\CaddySync;
 use App\Models\Cluster;
-use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 /**
- * Sends the full Caddy config to one cluster. A change during a running sync queues one more sync, so no change is lost.
+ * Sends the full Caddy config to one cluster. One worker serves the default queue, so two syncs never run at the same time.
+ * A change during a running sync queues one more sync, so no change is lost.
  */
 class SyncCaddy implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
 
-    public int $backoff = 10;
+    public int $tries = 5;
+
+    /** @var list<int> */
+    public array $backoff = [5, 15, 30, 60];
+
+    /** The lock must expire on its own, because a job that fails before it runs never releases it. */
+    public int $uniqueFor = 60;
 
     public function __construct(public Cluster $cluster) {}
 
     public function uniqueId(): string
     {
         return (string) $this->cluster->id;
-    }
-
-    /** @return list<object> */
-    public function middleware(): array
-    {
-        return [(new WithoutOverlapping("caddy-{$this->cluster->id}"))->releaseAfter(5)->expireAfter(120)];
-    }
-
-    public function retryUntil(): DateTimeInterface
-    {
-        return now()->addMinutes(10);
     }
 
     public function handle(CaddySync $sync): void

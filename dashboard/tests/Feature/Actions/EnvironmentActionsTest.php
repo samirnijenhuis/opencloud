@@ -59,7 +59,7 @@ class EnvironmentActionsTest extends TestCase
         $this->assertSame([['git', 'ls-remote', 'https://github.com/acme/shop.git', 'refs/heads/main']], $processes->commands());
         $this->assertSame(['GIT_TERMINAL_PROMPT' => '0'], $processes->ran[0]['env']);
         $this->assertSame('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', $deployment->commit_sha);
-        Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->is($deployment));
+        Queue::assertPushedOn('builds', RunDeployment::class, fn (RunDeployment $job) => $job->deployment->is($deployment));
         $this->assertSame(
             ['deployment.started', ['environment_id' => $this->environment->id, 'commit_sha' => 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']],
             [AuditEvent::sole()->action, AuditEvent::sole()->context],
