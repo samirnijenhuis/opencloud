@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\AuditLogController;
+use App\Http\Controllers\Settings\GitHubController;
 use App\Http\Controllers\Settings\InviteController;
 use App\Http\Controllers\Settings\MemberController;
 use App\Http\Controllers\Settings\PasswordController;
@@ -27,6 +28,9 @@ Route::middleware('auth')->group(function () {
     Route::delete('settings/members/{user}', [MemberController::class, 'destroy'])->name('members.destroy');
 
     Route::get('settings/audit', [AuditLogController::class, 'index'])->name('audit.index');
+
+    Route::get('settings/github', [GitHubController::class, 'index'])->name('github.index');
+    Route::get('settings/github/callback', [GitHubController::class, 'callback'])->name('github.callback');
 
     Route::post('settings/invites', [InviteController::class, 'store'])->name('invites.store');
     Route::delete('settings/invites/{invite}', [InviteController::class, 'destroy'])->name('invites.destroy');
