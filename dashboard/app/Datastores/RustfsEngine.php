@@ -1,0 +1,87 @@
+<?php
+
+namespace App\Datastores;
+
+use App\Kube\Kubectl;
+use App\Kube\Manifests\DatastoreManifests;
+use App\Models\Datastore;
+use App\Models\DatastoreAttachment;
+use App\Models\Environment;
+
+/**
+ * One RustFS server per cluster, with one bucket and one IAM user per environment. A canned policy with the bucket
+ * name allows the user that bucket only. The rc client in the server pod runs the admin commands.
+ */
+final class RustfsEngine implements Engine
+{
+    private const LOGIN = 'rc alias set local http://127.0.0.1:9000 "$RUSTFS_ACCESS_KEY" "$RUSTFS_SECRET_KEY" >/dev/null';
+
+    /** rc exits with 5 when the user or the bucket does not exist. */
+    private const NOT_FOUND = '[ $? -eq 5 ]';
+
+    public function server(Datastore $datastore): array
+    {
+        return DatastoreManifests::rustfs($datastore);
+    }
+
+    public function names(Environment $environment): array
+    {
+        return ['database_name' => "env-{$environment->id}", 'username' => "env-{$environment->id}"];
+    }
+
+    /** The secret key comes in on stdin, so it is not in the argv of kubectl. */
+    public function attach(Kubectl $kubectl, DatastoreAttachment $attachment): void
+    {
+        $bucket = $attachment->database_name;
+        $user = $attachment->username;
+        $policy = json_encode([
+            'Version' => '2012-10-17',
+            'Statement' => [['Effect' => 'Allow', 'Action' => ['s3:*'], 'Resource' => ["arn:aws:s3:::{$bucket}", "arn:aws:s3:::{$bucket}/*"]]],
+        ], JSON_UNESCAPED_SLASHES);
+
+        $this->run($kubectl, $attachment->datastore, [
+            'read -r secret',
+            self::LOGIN,
+            "rc bucket create --ignore-existing local/{$bucket} >/dev/null",
+            "printf '%s' '{$policy}' > /tmp/{$user}.json",
+            "rc admin policy create local {$user} /tmp/{$user}.json >/dev/null",
+            "rc admin user add local {$user} \"\$secret\" >/dev/null",
+            "rc admin policy attach local {$user} --user {$user} >/dev/null",
+        ], $attachment->password."\n");
+    }
+
+    public function detach(Kubectl $kubectl, DatastoreAttachment $attachment, bool $destroyData): void
+    {
+        $user = $attachment->username;
+
+        $this->run($kubectl, $attachment->datastore, [
+            self::LOGIN,
+            "rc admin user rm local {$user} >/dev/null || ".self::NOT_FOUND,
+            "rc admin policy rm local {$user} >/dev/null",
+            ...($destroyData ? ["rc bucket remove --force local/{$attachment->database_name} >/dev/null || ".self::NOT_FOUND] : []),
+        ]);
+    }
+
+    public function env(DatastoreAttachment $attachment): array
+    {
+        $host = DatastoreManifests::host(DatastoreManifests::serverName($attachment->datastore));
+
+        return [
+            'FILESYSTEM_DISK' => ['s3', false],
+            'AWS_ACCESS_KEY_ID' => [$attachment->username, false],
+            'AWS_SECRET_ACCESS_KEY' => [$attachment->password, true],
+            'AWS_DEFAULT_REGION' => ['us-east-1', false],
+            'AWS_BUCKET' => [$attachment->database_name, false],
+            'AWS_ENDPOINT' => ["http://{$host}:9000", false],
+            'AWS_USE_PATH_STYLE_ENDPOINT' => ['true', false],
+        ];
+    }
+
+    /** @param  list<string>  $lines */
+    private function run(Kubectl $kubectl, Datastore $datastore, array $lines, ?string $stdin = null): void
+    {
+        $script = implode("\n", ['set -e', ...$lines]);
+
+        $kubectl->exec(DatastoreManifests::NAMESPACE, DatastoreManifests::serverPod($datastore), ['sh', '-c', $script], $stdin, 'rc')->throw();
+    }
+}
