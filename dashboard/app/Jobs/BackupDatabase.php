@@ -16,7 +16,10 @@ class BackupDatabase implements ShouldQueue
 
     public bool $deleteWhenMissingModels = true;
 
-    public function __construct(public DatastoreAttachment $attachment) {}
+    public function __construct(public DatastoreAttachment $attachment)
+    {
+        $this->onQueue('builds');
+    }
 
     public function handle(DatabaseBackups $backups): void
     {

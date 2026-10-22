@@ -21,7 +21,10 @@ class RestoreDatabase implements ShouldQueue
     /** A second try would drop the database again, so a failed restore stays failed. */
     public int $tries = 1;
 
-    public function __construct(public Backup $backup, public ?User $by) {}
+    public function __construct(public Backup $backup, public ?User $by)
+    {
+        $this->onQueue('builds');
+    }
 
     public function handle(DatabaseBackups $backups): void
     {

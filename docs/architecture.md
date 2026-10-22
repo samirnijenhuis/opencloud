@@ -103,6 +103,18 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. |
 | `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
 
+## Queues
+
+The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, and `RestoreDatabase`. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, and `ProvisionDatastoreAttachment`. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
+
+## Datastores
+
+Each kind has one engine in `app/Datastores`, and `Engines::for()` picks it. MySQL and Postgres run one server per cluster. Each environment gets its own database and user with rights on that database only. RustFS runs one server per cluster with a sidecar container `rc`. Each environment gets a bucket, an IAM user, and a policy that allows only that bucket. Valkey runs one small instance per attachment. Attach writes the Laravel env values with source `datastore`. Detach removes the user or key and keeps the data. `DetachDatastore::destroy()` also removes the data, for previews.
+
+Each deployment has its own env Secret, `env-<deployment-id>`. A failed deploy cannot change the env of the pods that still run. After a deployment goes live, the job keeps the live Secret and the two newest, and deletes the rest.
+
+Backups run every night at 03:00. A dump streams through `kubectl exec` into a gzip file under `<data_path>/backups`, or into the S3 backup target when one exists. The newest 7 dumps per attachment stay. A restore first backs up the current state, then empties the database and streams the dump back.
+
 ## Roles
 
 `App\Enums\Role` holds the matrix of rights in one place. Policies ask `Role::allows(Ability)` and never compare role names directly. A developer has no write rights on a protected environment.
