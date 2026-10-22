@@ -39,6 +39,10 @@ logs)
     ;;
 setup-url)
     app_url=$(kc get deployment dashboard -o 'jsonpath={.spec.template.spec.containers[?(@.name=="web")].env[?(@.name=="APP_URL")].value}')
+    if [[ $(kc exec deploy/dashboard -c web -- php artisan opencloud:setup-state 2>/dev/null) == done ]]; then
+        echo "Dashboard: $app_url (the owner account exists, so setup is closed)"
+        exit 0
+    fi
     token=$(kc get secret dashboard -o 'jsonpath={.data.OPENCLOUD_SETUP_TOKEN}' | base64 -d)
     echo "Setup URL: $app_url/setup/$token"
     ;;
