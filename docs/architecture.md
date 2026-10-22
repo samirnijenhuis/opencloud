@@ -50,7 +50,7 @@ A release is a tag `v*`. `.github/workflows/release.yml` publishes the dashboard
 
 The installer keeps its state in `/var/lib/opencloud`. The files `APP_KEY` and `setup-token` there have mode 600. The installer copies them into the Secret `dashboard` and never into a manifest file. The k3s options live in `/etc/rancher/k3s/config.yaml`. If `APP_KEY` is missing while the database exists, the installer stops, because a new key cannot read the stored secrets.
 
-The dashboard is at `http://<server-ip>:8000`. Caddy forwards port 8000 to the dashboard Service.
+The dashboard is at `http://<server-ip>:8000`. Caddy forwards port 8000 to the dashboard Service. The owner can also give the dashboard a domain in Settings. After its DNS check passes, Caddy serves the dashboard on that domain over HTTPS, and the dashboard uses the domain as its root URL. The queue workers restart then, because they read the root URL when they boot.
 
 ## How the dashboard talks to a cluster
 

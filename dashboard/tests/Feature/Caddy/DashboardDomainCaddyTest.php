@@ -11,6 +11,7 @@ use App\Models\Cluster;
 use App\Models\DashboardDomain;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -77,5 +78,6 @@ class DashboardDomainCaddyTest extends TestCase
 
         $this->assertSame(self::WITHOUT, $this->configJson($local));
         Queue::assertPushed(SyncCaddy::class, fn (SyncCaddy $sync) => $sync->cluster->is($local));
+        $this->assertTrue(Cache::has('illuminate:queue:restart'));
     }
 }

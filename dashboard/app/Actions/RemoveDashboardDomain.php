@@ -6,6 +6,7 @@ use App\Jobs\SyncCaddy;
 use App\Models\AuditEvent;
 use App\Models\DashboardDomain;
 use App\Models\User;
+use Illuminate\Support\Facades\Artisan;
 
 class RemoveDashboardDomain
 {
@@ -18,5 +19,8 @@ class RemoveDashboardDomain
         if (($cluster = DashboardDomain::localCluster()) !== null) {
             SyncCaddy::dispatch($cluster)->afterCommit();
         }
+
+        // Workers read the root URL when they boot, so they restart to drop the old address.
+        Artisan::call('queue:restart');
     }
 }

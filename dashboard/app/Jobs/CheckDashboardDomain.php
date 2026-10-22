@@ -7,6 +7,7 @@ use App\Domains\DnsStatus;
 use App\Models\DashboardDomain;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Artisan;
 
 /**
  * Checks the A records of the dashboard domain until they point at the local cluster. A passed check puts the domain into Caddy.
@@ -34,6 +35,9 @@ class CheckDashboardDomain implements ShouldQueue
             if ($cluster !== null) {
                 SyncCaddy::dispatch($cluster);
             }
+
+            // Workers read the root URL when they boot, so they restart to pick up the new address.
+            Artisan::call('queue:restart');
 
             return;
         }

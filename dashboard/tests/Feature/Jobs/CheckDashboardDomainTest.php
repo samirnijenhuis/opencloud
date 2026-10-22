@@ -10,6 +10,7 @@ use App\Jobs\SyncCaddy;
 use App\Models\Cluster;
 use App\Models\DashboardDomain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -54,6 +55,7 @@ class CheckDashboardDomainTest extends TestCase
         $this->assertSame($expected, $domain->fresh()->dns_status);
         $this->assertSame($addresses, $domain->fresh()->dns_found);
         $this->assertNotNull($domain->fresh()->dns_checked_at);
+        $this->assertSame($passes, Cache::has('illuminate:queue:restart'));
 
         if ($passes) {
             Queue::assertPushed(SyncCaddy::class, fn (SyncCaddy $sync) => $sync->cluster->is($local));
