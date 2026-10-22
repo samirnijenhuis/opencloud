@@ -81,6 +81,22 @@ A domain goes into the Caddy config only after its DNS check passes. Caddy then 
 
 `App\Jobs\RunDeployment` runs one deployment from start to end. It builds, runs the deploy commands in a Kubernetes Job, applies the manifests, waits for the rollout, and syncs Caddy. If a step fails, the deployment becomes `failed`, and the old live deployment stays live.
 
+## Actions are the seam between the UI and the engine
+
+Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the request, check the policy, and call one action class in `app/Actions`. Each action writes the database records, records an audit event, and dispatches jobs. The engine code in `app/Kube`, `app/Caddy`, `app/Build`, `app/Datastores`, and `app/Jobs` runs behind the actions.
+
+| Action | Signature | What it does |
+|---|---|---|
+| `CreateApplication` | `handle(User $by, array $data): Application` | Creates the application, a protected `production` environment, the `preview_template` environment, the default MySQL attachment for a Laravel app unless `$data['database']` is `none`, the domains, and the env values. Then it starts the first deployment. |
+| `StartDeployment` | `handle(Environment $environment, ?User $by, ?string $commitSha = null): Deployment` | Creates a `queued` deployment and dispatches `RunDeployment`. A null SHA means the head of the environment branch. |
+| `SetEnvVar` | `handle(Environment $environment, User $by, string $key, ?string $value, bool $isSecret, EnvVarAvailability $availableAt): EnvVar` | Creates or replaces one user value. A null value on an existing secret keeps the old secret value. |
+| `DeleteEnvVar` | `handle(EnvVar $envVar, User $by): void` | Deletes one user value. |
+| `AddDomain` | `handle(Environment $environment, User $by, string $hostname): Domain` | Stores the domain and dispatches `CheckDomain`. |
+| `RemoveDomain` | `handle(Domain $domain, User $by): void` | Deletes the domain and syncs Caddy. |
+| `AttachDatastore` | `handle(Environment $environment, User $by, DatastoreKind $kind): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment, and dispatches its provisioning. |
+| `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. |
+| `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. |
+
 ## Roles
 
 `App\Enums\Role` holds the matrix of rights in one place. Policies ask `Role::allows(Ability)` and never compare role names directly. A developer has no write rights on a protected environment.
