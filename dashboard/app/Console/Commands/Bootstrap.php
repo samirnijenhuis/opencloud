@@ -14,7 +14,12 @@ class Bootstrap extends Command
 
     public function handle(): int
     {
-        $cluster = Cluster::updateOrCreate(['kind' => ClusterKind::Local], ['name' => 'local']);
+        $publicIp = config('opencloud.public_ip');
+
+        $cluster = Cluster::updateOrCreate(
+            ['kind' => ClusterKind::Local],
+            ['name' => 'local', ...($publicIp ? ['ingress_ip' => $publicIp] : [])],
+        );
 
         $this->info("The local cluster is cluster {$cluster->id}.");
 
