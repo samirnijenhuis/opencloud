@@ -9,6 +9,7 @@ MACHINE=oc-curl-$(date +%s)
 ARCH=$(docker version --format '{{.Server.Arch}}')
 VERSION=v0.0.0-e2e
 IMAGE=ghcr.io/opencloud-dev/opencloud:$VERSION
+CADDY_IMAGE=ghcr.io/opencloud-dev/opencloud-caddy:$VERSION
 TMP_ROOT=${TMPDIR:-/tmp}
 WORK=$(mktemp -d "${TMP_ROOT%/}/oc-curl.XXXXXX")
 SERVE=$WORK/serve
@@ -41,6 +42,11 @@ docker build --platform "linux/$ARCH" -t "$IMAGE" "$ROOT/dashboard" >"$WORK/buil
     { tail -50 "$WORK/build.log"; exit 1; }
 docker save --platform "linux/$ARCH" -o "$WORK/opencloud.tar" "$IMAGE"
 
+echo "Building $CADDY_IMAGE for linux/$ARCH"
+docker build --platform "linux/$ARCH" -t "$CADDY_IMAGE" "$ROOT/platform/images/caddy" >"$WORK/build-caddy.log" 2>&1 ||
+    { tail -50 "$WORK/build-caddy.log"; exit 1; }
+docker save --platform "linux/$ARCH" -o "$WORK/caddy.tar" "$CADDY_IMAGE"
+
 "$ROOT/tests/e2e/build-release-archive.sh" "$VERSION" "$SERVE" >/dev/null
 cp "$ROOT/install.sh" "$SERVE/install.sh"
 
@@ -56,10 +62,11 @@ IP=$(orb -m "$MACHINE" hostname -I | awk '{ print $1 }')
 
 orb -m "$MACHINE" sudo mkdir -p /opt/oc-test
 orb -m "$MACHINE" sudo cp "$REMOTE_WORK/opencloud.tar" /opt/oc-test/opencloud.tar
+orb -m "$MACHINE" sudo cp "$REMOTE_WORK/caddy.tar" /opt/oc-test/caddy.tar
 
 echo "Running curl | bash on $MACHINE ($IP) from $BASE"
 status=0
-orb -m "$MACHINE" sudo bash -c "curl -fsSL $BASE/install.sh | OPENCLOUD_RELEASE_URL=$BASE OPENCLOUD_VERSION=$VERSION OPENCLOUD_IMAGE_ARCHIVE=/opt/oc-test/opencloud.tar bash" \
+orb -m "$MACHINE" sudo bash -c "curl -fsSL $BASE/install.sh | OPENCLOUD_RELEASE_URL=$BASE OPENCLOUD_VERSION=$VERSION OPENCLOUD_IMAGE_ARCHIVE=/opt/oc-test/opencloud.tar OPENCLOUD_CADDY_IMAGE_ARCHIVE=/opt/oc-test/caddy.tar bash" \
     >"$WORK/install.log" 2>&1 || status=$?
 echo "Install exit code: $status."
 [[ $status == 0 ]] || tail -40 "$WORK/install.log"
