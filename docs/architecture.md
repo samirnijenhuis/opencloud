@@ -40,7 +40,7 @@ The installer creates this layout on the dashboard VPS. All opencloud parts live
 | Registry | Deployment `registry` with the image `registry:3`, data on the host path `/var/lib/opencloud/registry`. | Service `registry` with the fixed ClusterIP `10.43.200.200`, port 5000 |
 | BuildKit | Deployment `buildkitd`, privileged, state on the host path `/var/lib/opencloud/buildkit`. | Service `buildkitd.opencloud.svc.cluster.local:1234` |
 
-Images have names like `registry.opencloud.svc.cluster.local:5000/<application-id>/<environment-id>:<commit-sha>`. BuildKit pushes to that name over plain HTTP, because it resolves cluster DNS. The node cannot resolve cluster DNS, so the installer writes `/etc/rancher/k3s/registries.yaml` with a mirror from that name to `http://10.43.200.200:5000`. The registry is never reachable from outside the cluster.
+Images have names like `registry.opencloud.svc.cluster.local:5000/<application-id>/<environment-id>:<short-sha>-<deployment-id>`. BuildKit pushes to that name over plain HTTP, because it resolves cluster DNS. The node cannot resolve cluster DNS, so the installer writes `/etc/rancher/k3s/registries.yaml` with a mirror from that name to `http://10.43.200.200:5000`. The registry is never reachable from outside the cluster.
 
 The dashboard runs `kubectl` with its in-cluster service account for `local`. The service account has `cluster-admin` on `local`.
 
@@ -70,7 +70,7 @@ A domain goes into the Caddy config only after its DNS check passes. Caddy then 
 
 ## Builds
 
-`App\Build\DockerfileTemplate` is a pure class. It reads `composer.json` and `package.json` and returns the Dockerfile text for a Laravel app. The template lives in `dashboard/resources/docker/laravel.Dockerfile`. The image runs FrankenPHP on port 8080 and serves `/app/public`.
+`App\Build\DockerfileTemplate` is a pure class. It reads `composer.json` and `package.json` and returns the Dockerfile text for a Laravel app. The template lives in `dashboard/resources/docker/laravel.Dockerfile`. The image runs FrankenPHP on port 8080 and serves `/app/public`. BuildKit cache mounts keep the Composer and npm downloads between builds. The web process runs `php artisan optimize` when it starts, because the config cache must see the runtime env.
 
 `App\Build\Builder` clones the commit into a temporary folder, writes the Dockerfile, and runs `buildctl` against BuildKit. Build-time env values go in as BuildKit secrets, never as build arguments.
 
@@ -101,7 +101,7 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `RemoveDomain` | `handle(Domain $domain, User $by): void` | Deletes the domain and syncs Caddy. |
 | `AttachDatastore` | `handle(Environment $environment, User $by, DatastoreKind $kind): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment, and dispatches its provisioning. |
 | `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. |
-| `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. |
+| `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
 
 ## Roles
 

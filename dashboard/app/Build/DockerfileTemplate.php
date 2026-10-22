@@ -53,7 +53,7 @@ final readonly class DockerfileTemplate
             'base_image' => str_replace('{php}', $this->phpVersion($composer), $this->baseImage),
             'base_extensions' => implode(' ', self::BASE_EXTENSIONS),
             'extra_extensions' => $extra === [] ? '' : 'RUN install-php-extensions '.implode(' ', $extra),
-            'composer_secrets' => implode('', array_map(fn (string $key) => "--mount=type=secret,id={$key},env={$key} ", $buildSecrets)),
+            'secret_mounts' => implode('', array_map(fn (string $key) => "--mount=type=secret,id={$key},env={$key} ", $buildSecrets)),
             'build_command' => $buildCommand === null || trim($buildCommand) === '' ? '' : 'RUN '.trim($buildCommand),
         ]);
     }

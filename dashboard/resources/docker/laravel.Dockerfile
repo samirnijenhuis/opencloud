@@ -2,18 +2,19 @@ FROM {{ base_image }} AS base
 RUN install-php-extensions {{ base_extensions }}
 {{ extra_extensions }}
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+ENV COMPOSER_CACHE_DIR=/tmp/composer-cache
 WORKDIR /app
 
 FROM base AS vendor
 COPY . .
-RUN {{ composer_secrets }}composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
+RUN --mount=type=cache,target=/tmp/composer-cache {{ secret_mounts }}composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
 {{#assets}}
 
 FROM node:22-alpine AS assets
 WORKDIR /app
 COPY . .
 COPY --from=vendor /app/vendor ./vendor
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build
+RUN --mount=type=cache,target=/root/.npm {{ secret_mounts }}if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build
 {{/assets}}
 
 FROM base
@@ -26,3 +27,4 @@ RUN composer dump-autoload --optimize --no-dev && php artisan package:discover -
 {{ build_command }}
 ENV SERVER_NAME=:8080
 EXPOSE 8080
+CMD ["sh", "-c", "php artisan optimize || echo 'opencloud: php artisan optimize failed, so the app starts without caches'; exec frankenphp run --config /etc/frankenphp/Caddyfile --adapter caddyfile"]

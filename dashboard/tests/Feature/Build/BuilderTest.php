@@ -54,7 +54,7 @@ class BuilderTest extends TestCase
         $this->assertSame([$dir, $dir, $dir, $dir, $dir], array_column($processes->ran, 'path'));
         $this->assertSame(['COMPOSER_AUTH' => 'ghp_secret_token'], $processes->ran[4]['env']);
         $this->assertStringContainsString(
-            "RUN --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist\n\nFROM node:22-alpine AS assets\n",
+            "RUN --mount=type=cache,target=/tmp/composer-cache --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist\n\nFROM node:22-alpine AS assets\n",
             $processes->dockerfiles[0],
         );
         $this->assertSame(

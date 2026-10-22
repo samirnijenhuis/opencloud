@@ -18,17 +18,18 @@ class DockerfileTemplateTest extends TestCase
             FROM dunglas/frankenphp:1-php8.4 AS base
             RUN install-php-extensions bcmath exif gd intl opcache pcntl pdo_mysql pdo_pgsql redis zip
             COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+            ENV COMPOSER_CACHE_DIR=/tmp/composer-cache
             WORKDIR /app
 
             FROM base AS vendor
             COPY . .
-            RUN composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
+            RUN --mount=type=cache,target=/tmp/composer-cache composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
 
             FROM node:22-alpine AS assets
             WORKDIR /app
             COPY . .
             COPY --from=vendor /app/vendor ./vendor
-            RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build
+            RUN --mount=type=cache,target=/root/.npm if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build
 
             FROM base
             COPY . .
@@ -37,6 +38,7 @@ class DockerfileTemplateTest extends TestCase
             RUN composer dump-autoload --optimize --no-dev && php artisan package:discover --ansi
             ENV SERVER_NAME=:8080
             EXPOSE 8080
+            CMD ["sh", "-c", "php artisan optimize || echo 'opencloud: php artisan optimize failed, so the app starts without caches'; exec frankenphp run --config /etc/frankenphp/Caddyfile --adapter caddyfile"]
 
             DOCKERFILE, $this->template()->render($composer, $package));
     }
@@ -59,11 +61,12 @@ class DockerfileTemplateTest extends TestCase
             RUN install-php-extensions bcmath exif gd intl opcache pcntl pdo_mysql pdo_pgsql redis zip
             RUN install-php-extensions imagick swoole
             COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+            ENV COMPOSER_CACHE_DIR=/tmp/composer-cache
             WORKDIR /app
 
             FROM base AS vendor
             COPY . .
-            RUN --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH --mount=type=secret,id=NOVA_LICENSE,env=NOVA_LICENSE composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
+            RUN --mount=type=cache,target=/tmp/composer-cache --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH --mount=type=secret,id=NOVA_LICENSE,env=NOVA_LICENSE composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
 
             FROM base
             COPY . .
@@ -72,6 +75,7 @@ class DockerfileTemplateTest extends TestCase
             RUN php artisan icons:cache
             ENV SERVER_NAME=:8080
             EXPOSE 8080
+            CMD ["sh", "-c", "php artisan optimize || echo 'opencloud: php artisan optimize failed, so the app starts without caches'; exec frankenphp run --config /etc/frankenphp/Caddyfile --adapter caddyfile"]
 
             DOCKERFILE, (new DockerfileTemplate(['8.2', '8.3', '8.4'], 'ghcr.io/acme/php:{php}-frankenphp'))->render(
             $composer,
