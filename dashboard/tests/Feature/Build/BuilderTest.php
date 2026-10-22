@@ -40,8 +40,7 @@ class BuilderTest extends TestCase
         $this->assertSame("registry.opencloud.svc.cluster.local:5000/{$deployment->environment->application_id}/{$deployment->environment_id}:0123456-{$deployment->id}", $result->image);
         $this->assertSame([
             ['git', 'init', '--quiet'],
-            ['git', 'remote', 'add', 'origin', 'https://github.com/acme/shop.git'],
-            ['git', 'fetch', '--quiet', '--depth', '1', 'origin', self::SHA],
+            ['git', 'fetch', '--quiet', '--depth', '1', 'https://github.com/acme/shop.git', self::SHA],
             ['git', 'checkout', '--quiet', 'FETCH_HEAD'],
             [
                 'buildctl', '--addr', 'tcp://buildkitd.opencloud.svc.cluster.local:1234',
@@ -51,8 +50,8 @@ class BuilderTest extends TestCase
                 '--output', "type=image,name={$result->image},push=true,registry.insecure=true",
             ],
         ], $processes->commands());
-        $this->assertSame([$dir, $dir, $dir, $dir, $dir], array_column($processes->ran, 'path'));
-        $this->assertSame(['COMPOSER_AUTH' => 'ghp_secret_token'], $processes->ran[4]['env']);
+        $this->assertSame([$dir, $dir, $dir, $dir], array_column($processes->ran, 'path'));
+        $this->assertSame(['COMPOSER_AUTH' => 'ghp_secret_token'], $processes->ran[3]['env']);
         $this->assertStringContainsString(
             "RUN --mount=type=cache,target=/tmp/composer-cache --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist\n\nFROM node:22-alpine AS assets\n",
             $processes->dockerfiles[0],
@@ -77,9 +76,9 @@ class BuilderTest extends TestCase
         $result = (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
         $this->assertSame(ApplicationType::Dockerfile, $result->type);
-        $this->assertSame(['git', 'remote', 'add', 'origin', 'https://git.example.com/acme/site.git'], $processes->commands()[1]);
-        $this->assertContains('filename=Dockerfile', $processes->commands()[4]);
-        $this->assertNotContains('--secret', $processes->commands()[4]);
+        $this->assertSame(['git', 'fetch', '--quiet', '--depth', '1', 'https://git.example.com/acme/site.git', self::SHA], $processes->commands()[1]);
+        $this->assertContains('filename=Dockerfile', $processes->commands()[3]);
+        $this->assertNotContains('--secret', $processes->commands()[3]);
         $this->assertSame(["FROM nginx:alpine\n"], $processes->dockerfiles);
     }
 
@@ -96,7 +95,7 @@ class BuilderTest extends TestCase
             $this->assertSame('The repository has no Dockerfile at its root, and its composer.json does not require laravel/framework.', $e->getMessage());
         }
 
-        $this->assertSame(['git', 'git', 'git', 'git'], array_column($processes->commands(), 0));
+        $this->assertSame(['git', 'git', 'git'], array_column($processes->commands(), 0));
         $this->assertDirectoryDoesNotExist($processes->ran[0]['path']);
     }
 
