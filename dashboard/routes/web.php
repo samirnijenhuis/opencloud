@@ -1,9 +1,15 @@
 <?php
 
+use App\Http\Controllers\ApplicationController;
+use App\Http\Controllers\ClusterController;
+use App\Http\Controllers\DeploymentController;
+use App\Http\Controllers\DomainController;
+use App\Http\Controllers\EnvironmentController;
+use App\Http\Controllers\EnvironmentLogController;
+use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\InviteAcceptController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::redirect('/', '/dashboard')->name('home');
 
@@ -18,9 +24,34 @@ Route::middleware('throttle:10,1')->group(function () {
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('dashboard', function () {
-        return Inertia::render('dashboard');
-    })->name('dashboard');
+    Route::redirect('dashboard', '/applications')->name('dashboard');
+
+    Route::get('applications', [ApplicationController::class, 'index'])->name('applications.index');
+    Route::get('applications/create', [ApplicationController::class, 'create'])->name('applications.create');
+    Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
+    Route::get('applications/{application}', [ApplicationController::class, 'show'])->name('applications.show');
+
+    Route::get('environments/{environment}', [EnvironmentController::class, 'show'])->name('environments.show');
+    Route::get('environments/{environment}/deployments', [DeploymentController::class, 'index'])->name('environments.deployments');
+    Route::post('environments/{environment}/deployments', [DeploymentController::class, 'store'])->name('deployments.store');
+    Route::get('deployments/{deployment}', [DeploymentController::class, 'show'])->name('deployments.show');
+
+    Route::get('environments/{environment}/logs', [EnvironmentLogController::class, 'show'])->name('environments.logs');
+    Route::get('environments/{environment}/logs/read', [EnvironmentLogController::class, 'read'])->name('environments.logs.read');
+
+    Route::get('environments/{environment}/env', [EnvVarController::class, 'index'])->name('environments.env');
+    Route::post('environments/{environment}/env', [EnvVarController::class, 'store'])->name('env-vars.store');
+    Route::delete('env-vars/{envVar}', [EnvVarController::class, 'destroy'])->name('env-vars.destroy');
+
+    Route::get('environments/{environment}/domains', [DomainController::class, 'index'])->name('environments.domains');
+    Route::post('environments/{environment}/domains', [DomainController::class, 'store'])->name('domains.store');
+    Route::post('domains/{domain}/check', [DomainController::class, 'check'])->name('domains.check');
+    Route::delete('domains/{domain}', [DomainController::class, 'destroy'])->name('domains.destroy');
+
+    Route::get('environments/{environment}/settings', [EnvironmentController::class, 'settings'])->name('environments.settings');
+    Route::patch('environments/{environment}/settings', [EnvironmentController::class, 'update'])->name('environments.update');
+
+    Route::get('clusters', [ClusterController::class, 'index'])->name('clusters.index');
 });
 
 require __DIR__.'/settings.php';

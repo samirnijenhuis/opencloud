@@ -1,0 +1,163 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Actions\CreateApplication;
+use App\Actions\UpdateEnvironmentSettings;
+use App\Enums\ApplicationType;
+use App\Enums\ClusterKind;
+use App\Enums\EnvironmentKind;
+use App\Enums\Size;
+use App\Http\Requests\StoreApplicationRequest;
+use App\Models\Application;
+use App\Models\Cluster;
+use App\Models\Deployment;
+use App\Models\Domain;
+use App\Models\Environment;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
+use Inertia\Response;
+use RuntimeException;
+
+class ApplicationController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $applications = Application::query()->with('cluster:id,name')->orderBy('name')->get();
+        $productions = Environment::query()
+            ->whereIn('application_id', $applications->modelKeys())
+            ->where('name', 'production')
+            ->get()
+            ->keyBy('application_id');
+
+        $latest = Deployment::query()
+            ->whereIn('id', Deployment::query()->selectRaw('max(id)')->whereIn('environment_id', $productions->modelKeys())->groupBy('environment_id'))
+            ->get()
+            ->keyBy('environment_id');
+
+        $domains = Domain::query()
+            ->whereIn('environment_id', $productions->modelKeys())
+            ->orderBy('id')
+            ->get()
+            ->groupBy('environment_id');
+
+        return Inertia::render('applications/index', [
+            'applications' => $applications->map(function (Application $application) use ($productions, $latest, $domains) {
+                $production = $productions->get($application->id);
+                $deployment = $production ? $latest->get($production->id) : null;
+                $hostname = $production ? $domains->get($production->id)?->first()?->hostname : null;
+
+                return [
+                    'id' => $application->id,
+                    'name' => $application->name,
+                    'repository' => $application->repository,
+                    'production_id' => $production?->id,
+                    'status' => $deployment?->status,
+                    'url' => $hostname ? "https://{$hostname}" : null,
+                    'deployed_at' => $deployment?->created_at->toIso8601String(),
+                ];
+            })->values(),
+            'canCreate' => $request->user()->can('create', Application::class),
+        ]);
+    }
+
+    public function create(): Response
+    {
+        Gate::authorize('create', Application::class);
+
+        $clusters = Cluster::query()->orderBy('id')->get(['id', 'name', 'kind', 'ingress_ip']);
+
+        return Inertia::render('applications/create', [
+            'clusters' => $clusters,
+            'defaultClusterId' => ($clusters->firstWhere('kind', ClusterKind::Local) ?? $clusters->first())?->id,
+            'sizes' => array_map(fn (Size $size) => [
+                'value' => $size->value,
+                'cpu_millicores' => $size->cpuMillicores(),
+                'memory_mib' => $size->memoryMib(),
+            ], Size::cases()),
+        ]);
+    }
+
+    public function store(StoreApplicationRequest $request, CreateApplication $createApplication, UpdateEnvironmentSettings $updateSettings): RedirectResponse
+    {
+        $data = $request->validated();
+        $user = $request->user();
+        $type = ApplicationType::from($data['type']);
+        $laravel = $type === ApplicationType::Laravel;
+
+        try {
+            $application = $createApplication->handle($user, [
+                'name' => $data['name'] ?? basename(preg_replace('/\.git$/', '', $data['repository'])),
+                'repository' => $data['repository'],
+                'cluster_id' => $data['cluster_id'],
+                'type' => $type,
+                'port' => $laravel ? 8080 : $data['port'],
+                'branch' => $data['branch'] ?? 'main',
+                'env' => array_map(fn (array $row) => [
+                    'key' => $row['key'],
+                    'value' => $row['value'] ?? '',
+                    'is_secret' => $row['is_secret'] ?? false,
+                    'available_at' => $row['available_at'] ?? 'runtime',
+                ], $data['env'] ?? []),
+                'domains' => isset($data['domain']) ? [$data['domain']] : [],
+                'database' => $laravel ? $data['database'] : 'none',
+            ]);
+        } catch (RuntimeException) {
+            return back()->withInput()->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
+        }
+
+        $production = $application->environments()->where('name', 'production')->firstOrFail();
+
+        $updateSettings->handle($production, $user, [
+            'size' => $data['size'],
+            'min_instances' => $data['min_instances'],
+            'max_instances' => $data['max_instances'],
+            'cpu_target' => $data['cpu_target'],
+            'build_command' => $data['build_command'] ?? null,
+            'deploy_commands' => $data['deploy_commands'] ?? [],
+            'worker_enabled' => $laravel && ($data['worker_enabled'] ?? false),
+            'scheduler_enabled' => $laravel && ($data['scheduler_enabled'] ?? false),
+        ]);
+
+        return to_route('environments.show', $production);
+    }
+
+    public function show(Request $request, Application $application): Response
+    {
+        Gate::authorize('view', $application);
+
+        $environments = $application->environments()
+            ->where('kind', '!=', EnvironmentKind::PreviewTemplate)
+            ->with(['domains' => fn ($query) => $query->orderBy('id')])
+            ->get();
+
+        $latest = Deployment::query()
+            ->whereIn('id', Deployment::query()->selectRaw('max(id)')->whereIn('environment_id', $environments->modelKeys())->groupBy('environment_id'))
+            ->get()
+            ->keyBy('environment_id');
+
+        return Inertia::render('applications/show', [
+            'application' => [
+                'id' => $application->id,
+                'name' => $application->name,
+                'repository' => $application->repository,
+                'type' => $application->type,
+            ],
+            'environments' => $environments
+                ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::Permanent ? 1 : 2), $environment->name])
+                ->map(fn (Environment $environment) => [
+                    'id' => $environment->id,
+                    'name' => $environment->name,
+                    'kind' => $environment->kind,
+                    'is_protected' => $environment->is_protected,
+                    'branch' => $environment->branch,
+                    'pr_number' => $environment->pr_number,
+                    'status' => $latest->get($environment->id)?->status,
+                    'url' => ($hostname = $environment->domains->first()?->hostname) ? "https://{$hostname}" : null,
+                ])
+                ->values(),
+        ]);
+    }
+}
