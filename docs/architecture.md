@@ -36,13 +36,15 @@ The installer creates this layout on the dashboard VPS. All opencloud parts live
 | Part | Kind | Address |
 |---|---|---|
 | Dashboard | One pod with three containers, `web`, `worker`, and `scheduler`. They share the host path `/var/lib/opencloud/data`, which holds `database.sqlite`. | Service `dashboard.opencloud.svc.cluster.local:8080` |
-| Caddy | Deployment `caddy`, Service `caddy` of type `LoadBalancer` with ports 80, 443, and 8000. k3s ServiceLB binds these ports on the host. | Admin API on `127.0.0.1:2019` inside the pod only |
+| Caddy | Deployment `caddy`, Service `caddy` of type `LoadBalancer` with ports 80, 443, and 8000. k3s ServiceLB binds these ports on the host. Certificates and the last config live on the host paths `/var/lib/opencloud/caddy/data` and `/var/lib/opencloud/caddy/config`, so they survive a pod restart. | Admin API on `127.0.0.1:2019` inside the pod only |
 | Registry | Deployment `registry` with the image `registry:3`, data on the host path `/var/lib/opencloud/registry`. | Service `registry` with the fixed ClusterIP `10.43.200.200`, port 5000 |
 | BuildKit | Deployment `buildkitd`, privileged, state on the host path `/var/lib/opencloud/buildkit`. | Service `buildkitd.opencloud.svc.cluster.local:1234` |
 
 Images have names like `registry.opencloud.svc.cluster.local:5000/<application-id>/<environment-id>:<commit-sha>`. BuildKit pushes to that name over plain HTTP, because it resolves cluster DNS. The node cannot resolve cluster DNS, so the installer writes `/etc/rancher/k3s/registries.yaml` with a mirror from that name to `http://10.43.200.200:5000`. The registry is never reachable from outside the cluster.
 
 The dashboard runs `kubectl` with its in-cluster service account for `local`. The service account has `cluster-admin` on `local`.
+
+The installer keeps its state in `/var/lib/opencloud`. The files `APP_KEY` and `setup-token` there have mode 600. The installer copies them into the Secret `dashboard` and never into a manifest file. The k3s options live in `/etc/rancher/k3s/config.yaml`. If `APP_KEY` is missing while the database exists, the installer stops, because a new key cannot read the stored secrets.
 
 The dashboard is at `http://<server-ip>:8000`. Caddy forwards port 8000 to the dashboard Service.
 

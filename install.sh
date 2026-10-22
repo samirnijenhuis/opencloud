@@ -116,6 +116,9 @@ install_k3s() {
 
 ensure_secrets() {
     install -d -m 0700 "$STATE_DIR"
+    if [[ ! -s $STATE_DIR/APP_KEY && -s $STATE_DIR/data/database.sqlite ]]; then
+        fail "$STATE_DIR/APP_KEY is missing, but the dashboard database exists. A new key cannot read the stored secrets. Put the saved APP_KEY back in $STATE_DIR/APP_KEY and run the installer again."
+    fi
     (
         umask 077
         [[ -s $STATE_DIR/APP_KEY ]] || printf 'base64:%s' "$(head -c 32 /dev/urandom | base64)" >"$STATE_DIR/APP_KEY"

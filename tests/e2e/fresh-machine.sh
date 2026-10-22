@@ -82,6 +82,17 @@ ok=0
 [[ $code == 200 ]] && ok=1
 record "the Mac gets 200 from http://$IP:8000/up (got $code)" "$ok"
 
+setup_path=${first_url#Setup URL: http://$IP:8000}
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$IP:8000$setup_path" || true)
+ok=0
+[[ $code == 200 ]] && ok=1
+record "the setup page answers 200 with the printed token (got $code)" "$ok"
+
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$IP:8000/setup/wrong-token" || true)
+ok=0
+[[ $code == 404 ]] && ok=1
+record "the setup page answers 404 with a wrong token (got $code)" "$ok"
+
 ok=0
 if on_machine bash "$REMOTE_SRC/tests/e2e/registry-round-trip.sh" >"$WORK/registry.log" 2>&1; then
     grep -q '^hello from the opencloud registry$' "$WORK/registry.log" && ok=1
