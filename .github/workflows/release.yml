@@ -46,11 +46,8 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/opencloud-caddy:${{ github.ref_name }}
             ghcr.io/${{ github.repository_owner }}/opencloud-caddy:latest
 
-      # The "latest" copy lets install.sh use the fixed URL releases/latest/download/opencloud-latest.tar.gz.
-      - name: Build the release archives
-        run: |
-          tests/e2e/build-release-archive.sh "$GITHUB_REF_NAME" dist
-          tests/e2e/build-release-archive.sh latest dist
+      - name: Build the release archive
+        run: tests/e2e/build-release-archive.sh "$GITHUB_REF_NAME" dist
 
       - name: Create the GitHub release
         uses: softprops/action-gh-release@v2
@@ -59,6 +56,4 @@ jobs:
           files: |
             dist/opencloud-${{ github.ref_name }}.tar.gz
             dist/opencloud-${{ github.ref_name }}.tar.gz.sha256
-            dist/opencloud-latest.tar.gz
-            dist/opencloud-latest.tar.gz.sha256
             install.sh
