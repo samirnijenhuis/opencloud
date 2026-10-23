@@ -69,6 +69,7 @@ The installer keeps its state in `/var/lib/opencloud`. Keep a copy of `/var/lib/
 | `sudo opencloud status` | Shows the opencloud pods. |
 | `sudo opencloud logs [web\|worker\|builder\|scheduler\|caddy]` | Shows the logs of one part. |
 | `sudo opencloud setup-url` | Prints the setup URL, or the dashboard address after setup. |
+| `sudo opencloud upgrade [version]` | Copies the database and upgrades to a release, by default the latest. If the new dashboard fails its health check, it goes back to the old images and the database copy. |
 
 ## How it works
 
