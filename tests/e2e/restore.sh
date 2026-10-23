@@ -20,7 +20,8 @@ S3_HOST=${RESTORE_TEST_S3_HOST:-host.orb.internal}
 S3_ACCESS_KEY=restore-test-access
 S3_SECRET_KEY=restore-test-secret-$(openssl rand -hex 12)
 BUCKET=opencloud-restore
-VERSION=e2e
+# fresh-machine.sh tags its images with this version, so machine B can get the exact images of machine A.
+VERSION=e2e-restore-$(date +%s)-$$
 RESULTS=()
 EXPECTED_CHECKS=12
 
@@ -152,7 +153,7 @@ done
 s3 -f -o /dev/null -I "http://127.0.0.1:$S3_PORT/$BUCKET" || { echo "The S3 server on the Mac did not create the bucket $BUCKET."; exit 1; }
 
 # 1. Machine A: a normal install with an application that deploys.
-KEEP=1 bash "$ROOT/tests/e2e/fresh-machine.sh" >"$WORK/install-a.log" 2>&1
+KEEP=1 E2E_VERSION="$VERSION" bash "$ROOT/tests/e2e/fresh-machine.sh" >"$WORK/install-a.log" 2>&1
 MACHINE_A=$(sed -n 's/^KEEP=1: the machine \([^ ]*\) stays.*/\1/p' "$WORK/install-a.log")
 setup_url=$(sed -n 's/^PASS the installer prints one Setup URL line (Setup URL: \(.*\))$/\1/p' "$WORK/install-a.log")
 install_seconds=$(sed -n 's/^Install time: \([0-9]*\)s$/\1/p' "$WORK/install-a.log" | tail -1)
