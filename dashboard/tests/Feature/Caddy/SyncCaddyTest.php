@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Caddy;
 
+use App\Clusters\ClusterStatus;
 use App\Domains\DnsStatus;
 use App\Enums\ClusterKind;
 use App\Enums\DeploymentStatus;
@@ -79,11 +80,13 @@ class SyncCaddyTest extends TestCase
         );
     }
 
-    public function test_the_scheduler_syncs_every_cluster_every_five_minutes(): void
+    public function test_the_scheduler_syncs_every_ready_cluster_every_five_minutes(): void
     {
         Queue::fake();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
-        $other = Cluster::factory()->create(['name' => 'do-ams3']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local', 'status' => ClusterStatus::Ready]);
+        $other = Cluster::factory()->create(['name' => 'do-ams3', 'status' => ClusterStatus::Ready]);
+        Cluster::factory()->create(['name' => 'still-installing', 'status' => ClusterStatus::Installing]);
+        Cluster::factory()->create(['name' => 'broken', 'status' => ClusterStatus::Failed]);
 
         $event = collect(app(Schedule::class)->events())->first(fn (Event $event) => $event->description === 'sync-caddy');
         $this->assertSame('*/5 * * * *', $event->expression);

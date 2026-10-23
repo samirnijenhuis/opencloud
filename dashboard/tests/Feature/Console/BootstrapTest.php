@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Console;
 
+use App\Clusters\ClusterStatus;
 use App\Enums\ClusterKind;
 use App\Models\Cluster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,6 +20,7 @@ class BootstrapTest extends TestCase
         $cluster = Cluster::sole();
         $this->assertSame('local', $cluster->name);
         $this->assertSame(ClusterKind::Local, $cluster->kind);
+        $this->assertSame([ClusterStatus::Ready, 'dev'], [$cluster->status, $cluster->parts_version]);
         $this->assertNull($cluster->kubeconfig);
     }
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Clusters\ClusterStatus;
 use App\Enums\DatastoreKind;
 use App\Jobs\BackupDashboard;
 use App\Jobs\BackupDatastore;
@@ -17,7 +18,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // The full config every five minutes repairs any drift, for example after a Caddy restart without its saved config.
-Schedule::call(fn () => Cluster::query()->each(fn (Cluster $cluster) => SyncCaddy::dispatch($cluster)))
+Schedule::call(fn () => Cluster::query()->where('status', ClusterStatus::Ready)->each(fn (Cluster $cluster) => SyncCaddy::dispatch($cluster)))
     ->name('sync-caddy')
     ->everyFiveMinutes();
 

@@ -109,9 +109,18 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. |
 | `StoreProviderCredential` | `handle(User $by, string $provider, string $token): CheckResult` | Checks the key with the provider. It stores the key encrypted when the check passes or only optional rights are missing. The audit event never holds the key. |
 | `DeleteProviderCredential` | `handle(ProviderCredential $credential, User $by): void` | Deletes the key. |
+| `ConnectCluster` | `handle(User $by, array $data): Cluster` | Checks the kubeconfig with `kubectl version` and `kubectl auth can-i`, stores the cluster and its registry encrypted, and dispatches `InstallClusterParts`. |
+| `ReinstallClusterParts` | `handle(Cluster $cluster, User $by): void` | Applies the opencloud parts on a connected cluster again. |
+| `DisconnectCluster` | `handle(Cluster $cluster, User $by, bool $removeParts): void` | Refuses while applications or datastores use the cluster. It can remove the opencloud namespaces. |
 | `ConnectGitHubApp` | `handle(User $by, string $code): GithubApp` | Exchanges the code of the manifest flow and stores the GitHub App. It replaces the old app. |
 | `UpdatePreviewSettings` | `handle(Application $application, User $by, array $settings): void` | Stores `previews_enabled`, `allow_forks`, and `preview_domain`. |
 | `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
+
+## Connected clusters
+
+The owner connects a cluster with its kubeconfig and the address and credentials of a registry near that cluster. `InstallClusterParts` puts Caddy in the namespace `opencloud` with a Service of type `LoadBalancer` and its state on a PVC, and creates the namespace `oc-datastores`. It stores the load balancer address as the ingress IP. Opencloud changes nothing outside its own namespaces, so a cluster that runs other software also works.
+
+For an application on a connected cluster, `RunDeployment` copies the built image from the local registry to the cluster's registry with crane. The environment namespace gets the pull secret `opencloud-registry`, and the pods use the copied image. So a connected cluster can start new pods while the dashboard server is down. The scheduler syncs Caddy only on clusters with the status `ready`.
 
 ## Queues
 
