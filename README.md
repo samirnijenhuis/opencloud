@@ -39,7 +39,7 @@ The project has no published release yet, so this command does not work today. U
 
    ```bash
    git clone <this repository> opencloud && cd opencloud
-   docker build --platform linux/amd64 -t ghcr.io/opencloud-dev/opencloud:dev dashboard
+   docker build --platform linux/amd64 --build-context tofu=tofu -t ghcr.io/opencloud-dev/opencloud:dev dashboard
    docker build --platform linux/amd64 -t ghcr.io/opencloud-dev/opencloud-caddy:dev platform/images/caddy
    docker save -o opencloud.tar ghcr.io/opencloud-dev/opencloud:dev
    docker save -o caddy.tar ghcr.io/opencloud-dev/opencloud-caddy:dev

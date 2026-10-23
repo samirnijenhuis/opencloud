@@ -38,7 +38,7 @@ cleanup() {
 }
 
 echo "Building $IMAGE for linux/$ARCH"
-docker build --platform "linux/$ARCH" -t "$IMAGE" "$ROOT/dashboard" >"$WORK/build.log" 2>&1 ||
+docker build --platform "linux/$ARCH" --build-context tofu="$ROOT/tofu" -t "$IMAGE" "$ROOT/dashboard" >"$WORK/build.log" 2>&1 ||
     { tail -50 "$WORK/build.log"; exit 1; }
 docker save --platform "linux/$ARCH" -o "$WORK/opencloud.tar" "$IMAGE"
 
