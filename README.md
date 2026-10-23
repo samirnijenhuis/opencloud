@@ -146,7 +146,7 @@ Opencloud has no public release yet. This table shows how each part was checked.
 | Cloudflare DNS mode | Tests, and `caddy validate` of the config. Not proven with a real Cloudflare zone. |
 | Clusters and managed Postgres created with OpenTofu on DigitalOcean | Tests, `tofu validate`, and a plan that stops at DigitalOcean's authentication with a fake key. Nothing was created on DigitalOcean. |
 | Let's Encrypt certificates, the default issuer | Not proven. |
-| The installer stop when `APP_KEY` is lost but the database exists | Syntax check only. |
+| The installer stops when `APP_KEY` is lost but the database exists | Live (`fresh-machine.sh`) |
 
 Known limits:
 

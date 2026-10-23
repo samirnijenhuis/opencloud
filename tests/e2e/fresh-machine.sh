@@ -132,5 +132,14 @@ ok=0
 [[ $second_status == 0 ]] || tail -40 "$WORK/install-2.log"
 record "a second install.sh run exits 0 and prints the same Setup URL" "$ok"
 
+on_machine mv /var/lib/opencloud/APP_KEY /var/lib/opencloud/APP_KEY.saved
+guard_status=0
+run_install "$WORK/install-guard.log" || guard_status=$?
+on_machine mv /var/lib/opencloud/APP_KEY.saved /var/lib/opencloud/APP_KEY
+ok=0
+[[ $guard_status != 0 ]] && grep -q 'APP_KEY is missing, but the dashboard database exists' "$WORK/install-guard.log" &&
+    [[ $(on_machine k3s kubectl -n opencloud get secret dashboard -o 'jsonpath={.data.APP_KEY}' | base64 -d) == "$(on_machine cat /var/lib/opencloud/APP_KEY)" ]] && ok=1
+record "the installer stops when APP_KEY is missing but the database exists, and keeps the old key" "$ok"
+
 echo "Install time: ${seconds}s"
 ! printf '%s\n' "${RESULTS[@]}" | grep -q '^FAIL'
