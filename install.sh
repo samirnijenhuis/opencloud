@@ -45,6 +45,13 @@ port_holders() {
     ss -Htlnp "sport = :$1" | grep -o '(("[^"]*"' | cut -d'"' -f2 | sort -u
 }
 
+# Usage: latest_release <owner/repository>. Prints the tag of the newest release, for example v1.2.0.
+latest_release() {
+    local tag
+    tag=$(curl -fsSL --max-time 20 "https://api.github.com/repos/$1/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+    [[ -n $tag ]] && echo "$tag"
+}
+
 # The curl | bash case: no files sit beside the script, so fetch the release archive and run the installer from it.
 bootstrap() {
     [[ -z $SOURCE_DIR || ! -d $PLATFORM_DIR ]] || return 0
@@ -55,14 +62,13 @@ bootstrap() {
         command -v "$tool" >/dev/null || fail "The command $tool is missing. Install it, for example: apt-get install -y curl"
     done
 
-    local base=${OPENCLOUD_RELEASE_URL:-}
-    if [[ -z $base ]]; then
-        if [[ $OPENCLOUD_VERSION == latest ]]; then
-            base=https://github.com/$OPENCLOUD_REPO/releases/latest/download
-        else
-            base=https://github.com/$OPENCLOUD_REPO/releases/download/$OPENCLOUD_VERSION
-        fi
+    # A fixed version lets the dashboard and opencloud upgrade compare it with newer releases.
+    if [[ $OPENCLOUD_VERSION == latest ]]; then
+        OPENCLOUD_VERSION=$(latest_release "$OPENCLOUD_REPO") ||
+            fail "Cannot find the latest release of $OPENCLOUD_REPO. Set the version, for example: OPENCLOUD_VERSION=v1.0.0"
+        export OPENCLOUD_VERSION
     fi
+    local base=${OPENCLOUD_RELEASE_URL:-https://github.com/$OPENCLOUD_REPO/releases/download/$OPENCLOUD_VERSION}
 
     local name=opencloud-$OPENCLOUD_VERSION.tar.gz tmp
     tmp=$(mktemp -d)
@@ -197,6 +203,7 @@ apply_platform() {
     sed -e "s|__DASHBOARD_IMAGE__|$OPENCLOUD_IMAGE|g" \
         -e "s|__APP_URL__|http://$SERVER_IP:8000|g" \
         -e "s|__OPENCLOUD_VERSION__|$OPENCLOUD_VERSION|g" \
+        -e "s|__OPENCLOUD_REPO__|$OPENCLOUD_REPO|g" \
         -e "s|__TLS_ISSUER__|$OPENCLOUD_TLS_ISSUER|g" \
         -e "s|__PUBLIC_IP__|$SERVER_IP|g" \
         "$PLATFORM_DIR/dashboard.yaml" | kc apply -f -
