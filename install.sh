@@ -112,7 +112,8 @@ preflight() {
 
     local url
     for url in https://get.k3s.io https://github.com https://registry-1.docker.io/v2/; do
-        curl -sS -o /dev/null --max-time 15 "$url" 2>/dev/null ||
+        # A new server can need a few seconds before DNS and routing work.
+        curl -sS -o /dev/null --max-time 15 --retry 4 --retry-delay 5 --retry-all-errors "$url" 2>/dev/null ||
             fail "Cannot reach $url. Give the server outbound internet access on port 443."
     done
 
