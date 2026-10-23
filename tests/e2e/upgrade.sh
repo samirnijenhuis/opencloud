@@ -139,7 +139,7 @@ upgrade() {
 }
 
 echo "Building the images of $A, $B, and $C for linux/$ARCH"
-docker build --platform "linux/$ARCH" -t "$IMAGES/opencloud:$A" "$ROOT/dashboard" >"$WORK/build.log" 2>&1 ||
+docker build --platform "linux/$ARCH" --build-context tofu="$ROOT/tofu" -t "$IMAGES/opencloud:$A" "$ROOT/dashboard" >"$WORK/build.log" 2>&1 ||
     { tail -50 "$WORK/build.log"; exit 1; }
 docker build --platform "linux/$ARCH" -t "$IMAGES/opencloud-caddy:$A" "$ROOT/platform/images/caddy" >"$WORK/build-caddy.log" 2>&1 ||
     { tail -50 "$WORK/build-caddy.log"; exit 1; }
