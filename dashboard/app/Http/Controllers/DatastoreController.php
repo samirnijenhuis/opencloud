@@ -7,9 +7,11 @@ use App\Actions\DetachDatastore;
 use App\Backups\BackupStatus;
 use App\Datastores\DatastoreStatus;
 use App\Datastores\Engines;
+use App\Datastores\ManagedDatabase;
 use App\Datastores\SqlEngine;
 use App\Enums\Ability;
 use App\Enums\DatastoreKind;
+use App\Enums\DatastoreSource;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Http\Requests\AttachDatastoreRequest;
 use App\Models\AuditEvent;
@@ -54,15 +56,21 @@ class DatastoreController extends Controller
                 ->values(),
             'has_backup_target' => BackupTarget::query()->exists(),
             'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::Pending, DatastoreStatus::Provisioning], true)
+                || $row['server']['status'] === DatastoreStatus::Destroying
                 || collect($row['backups'] ?? [])->contains('status', BackupStatus::Running)
                 || ($row['restore']['status'] ?? null) === 'running'),
+            'managed' => [
+                'available' => $role->allows(Ability::ManageCredentials) && ManagedDatabase::availableOn($environment->application->cluster),
+                'pricing_url' => ManagedDatabase::PRICING_URL,
+                'size' => config('opencloud.managed_database_size'),
+            ],
         ]);
     }
 
     public function store(AttachDatastoreRequest $request, Environment $environment, AttachDatastore $attachDatastore): RedirectResponse
     {
         try {
-            $attachDatastore->handle($environment, $request->user(), DatastoreKind::from($request->validated('kind')));
+            $attachDatastore->handle($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['kind' => $e->getMessage()]);
         }
@@ -73,6 +81,11 @@ class DatastoreController extends Controller
     public function destroy(Request $request, DatastoreAttachment $attachment, DetachDatastore $detachDatastore): RedirectResponse
     {
         Gate::authorize('update', $attachment->environment);
+
+        if ($attachment->datastore->source === DatastoreSource::Managed) {
+            abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
+            $request->validate(['confirm' => ['accepted']], ['confirm.accepted' => 'Confirm that DigitalOcean deletes the database and its data.']);
+        }
 
         $detachDatastore->handle($attachment, $request->user());
 
@@ -96,6 +109,11 @@ class DatastoreController extends Controller
             ],
             'env_keys' => $attachment->envVars->pluck('key')->sort()->values(),
         ];
+
+        // DigitalOcean backs up a managed database itself, and the nightly dump cannot reach it.
+        if ($datastore->source === DatastoreSource::Managed) {
+            return [...$row, 'managed' => true, 'tofu_log' => $datastore->tofu_log];
+        }
 
         if (! Engines::for($datastore->kind) instanceof SqlEngine) {
             return $row;

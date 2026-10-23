@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Clusters\ClusterStatus;
 use App\Enums\ClusterKind;
 use App\Jobs\InstallClusterParts;
+use App\Jobs\ProvisionCluster;
 use App\Models\AuditEvent;
 use App\Models\Cluster;
 use App\Models\User;
@@ -26,6 +27,8 @@ class ReinstallClusterParts
         $cluster->update(['status' => ClusterStatus::Installing, 'error' => null]);
 
         AuditEvent::record($by, 'cluster.parts_reinstalled', $cluster, ['name' => $cluster->name]);
-        InstallClusterParts::dispatch($cluster);
+
+        // For a created cluster, the OpenTofu apply runs first. It repairs a failed create and changes nothing otherwise.
+        $cluster->kind === ClusterKind::Created ? ProvisionCluster::dispatch($cluster) : InstallClusterParts::dispatch($cluster);
     }
 }

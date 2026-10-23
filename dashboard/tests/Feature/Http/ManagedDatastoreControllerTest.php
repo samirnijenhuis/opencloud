@@ -1,0 +1,147 @@
+<?php
+
+namespace Tests\Feature\Http;
+
+use App\Clusters\ClusterStatus;
+use App\Datastores\DatastoreStatus;
+use App\Enums\ClusterKind;
+use App\Enums\DatastoreKind;
+use App\Enums\DatastoreSource;
+use App\Enums\EnvVarSource;
+use App\Jobs\ProvisionManagedDatabase;
+use App\Jobs\TearDownManagedDatabase;
+use App\Models\Application;
+use App\Models\Cluster;
+use App\Models\Datastore;
+use App\Models\DatastoreAttachment;
+use App\Models\Environment;
+use App\Models\EnvVar;
+use App\Models\ProviderCredential;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Inertia\Testing\AssertableInertia as Assert;
+use Tests\TestCase;
+
+class ManagedDatastoreControllerTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private const TOKEN = 'dop_v1_DO_TOKEN_SECRET_managed';
+
+    private Environment $environment;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Queue::fake();
+        ProviderCredential::factory()->create(['provider' => 'digitalocean', 'token' => self::TOKEN]);
+        $cluster = Cluster::factory()->create([
+            'kind' => ClusterKind::Created,
+            'provider' => 'digitalocean',
+            'status' => ClusterStatus::Ready,
+            'region' => 'ams3',
+            'provider_cluster_id' => 'c0ffee00-1111',
+            'provider_vpc_id' => 'vpc-2222',
+        ]);
+        $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create(['is_protected' => true]);
+    }
+
+    public function test_only_the_owner_gets_the_managed_choice_on_a_digitalocean_cluster(): void
+    {
+        $url = "/environments/{$this->environment->id}/datastores";
+
+        $this->actingAs(User::factory()->owner()->create())->get($url)->assertInertia(fn (Assert $page) => $page
+            ->where('managed', ['available' => true, 'pricing_url' => 'https://www.digitalocean.com/pricing/managed-databases', 'size' => 'db-s-1vcpu-1gb']));
+        $this->actingAs(User::factory()->admin()->create())->get($url)->assertInertia(fn (Assert $page) => $page->where('managed.available', false));
+
+        $local = Environment::factory()->for(Application::factory()->for(Cluster::factory()->create(['kind' => ClusterKind::Local])))->create();
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$local->id}/datastores")
+            ->assertInertia(fn (Assert $page) => $page->where('managed.available', false));
+    }
+
+    public function test_only_the_owner_attaches_a_managed_database(): void
+    {
+        $url = "/environments/{$this->environment->id}/datastores";
+
+        $this->actingAs(User::factory()->admin()->create())->post($url, ['kind' => 'mysql', 'source' => 'managed'])->assertForbidden();
+        $this->assertSame(0, Datastore::query()->count());
+
+        $this->actingAs(User::factory()->owner()->create())->post($url, ['kind' => 'mysql', 'source' => 'managed'])->assertRedirect();
+
+        $this->assertSame([DatastoreSource::Managed, DatastoreKind::Mysql], [Datastore::query()->sole()->source, Datastore::query()->sole()->kind]);
+        Queue::assertPushed(ProvisionManagedDatabase::class);
+    }
+
+    public function test_the_source_is_validated(): void
+    {
+        $this->actingAs(User::factory()->owner()->create())
+            ->post("/environments/{$this->environment->id}/datastores", ['kind' => 'mysql', 'source' => 'aws'])
+            ->assertSessionHasErrors('source');
+    }
+
+    public function test_destroying_a_managed_database_needs_the_owner_and_the_confirmation(): void
+    {
+        $attachment = $this->managedAttachment();
+        $url = "/datastore-attachments/{$attachment->id}";
+
+        $this->actingAs(User::factory()->admin()->create())->delete($url, ['confirm' => true])->assertForbidden();
+        $owner = User::factory()->owner()->create();
+        $this->actingAs($owner)->delete($url)->assertSessionHasErrors(['confirm' => 'Confirm that DigitalOcean deletes the database and its data.']);
+        Queue::assertNothingPushed();
+
+        $this->actingAs($owner)->delete($url, ['confirm' => true])->assertRedirect();
+
+        $this->assertSame(DatastoreStatus::Destroying, $attachment->datastore->fresh()->status);
+        Queue::assertPushed(TearDownManagedDatabase::class);
+    }
+
+    public function test_the_page_shows_a_managed_row_without_backups_and_never_a_secret(): void
+    {
+        $attachment = $this->managedAttachment();
+        $attachment->datastore->update(['tofu_log' => "2026-10-23T00:00:00Z digitalocean_database_cluster.this: Creation complete\n"]);
+        EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'DO_GENERATED_PASSWORD_SECRET', 'is_secret' => true, 'source' => EnvVarSource::Datastore, 'datastore_attachment_id' => $attachment->id]);
+        EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'value' => 'private-db.example.ondigitalocean.com', 'source' => EnvVarSource::Datastore, 'datastore_attachment_id' => $attachment->id]);
+
+        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}/datastores")->assertOk();
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('attachments.0.managed', true)
+            ->where('attachments.0.env_keys', ['DB_HOST', 'DB_PASSWORD'])
+            ->where('attachments.0.tofu_log', "2026-10-23T00:00:00Z digitalocean_database_cluster.this: Creation complete\n")
+            ->missing('attachments.0.backups'));
+
+        foreach (['DO_GENERATED_PASSWORD_SECRET', self::TOKEN, 'private-db.example.ondigitalocean.com'] as $secret) {
+            $this->assertStringNotContainsString($secret, $response->getContent());
+        }
+    }
+
+    public function test_the_page_polls_while_a_managed_database_is_destroyed(): void
+    {
+        $attachment = $this->managedAttachment();
+        $attachment->datastore->update(['status' => DatastoreStatus::Destroying]);
+
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}/datastores")
+            ->assertInertia(fn (Assert $page) => $page->where('polling', true)->where('attachments.0.server.status', 'destroying'));
+    }
+
+    private function managedAttachment(): DatastoreAttachment
+    {
+        $datastore = Datastore::factory()->for($this->environment->application->cluster)->create([
+            'kind' => DatastoreKind::Mysql,
+            'source' => DatastoreSource::Managed,
+            'version' => '8',
+            'status' => DatastoreStatus::Ready,
+        ]);
+
+        return DatastoreAttachment::factory()->create([
+            'datastore_id' => $datastore->id,
+            'environment_id' => $this->environment->id,
+            'database_name' => "env_{$this->environment->id}",
+            'username' => "env_{$this->environment->id}",
+            'password' => 'DO_GENERATED_PASSWORD_SECRET',
+            'status' => DatastoreStatus::Ready,
+        ]);
+    }
+}

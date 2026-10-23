@@ -72,6 +72,14 @@ class ClusterController extends Controller
                 'reinstall' => ! $local && $user->can('update', $cluster),
                 'disconnect' => ! $local && $user->can('delete', $cluster),
             ],
+            'created' => $cluster->kind === ClusterKind::Created ? [
+                'region' => $cluster->region,
+                'node_size' => $cluster->node_size,
+                'min_nodes' => $cluster->min_nodes,
+                'max_nodes' => $cluster->max_nodes,
+                'tofu_log' => $user->can('update', $cluster) ? $cluster->tofu_log : null,
+                'can_destroy' => $user->can('delete', $cluster),
+            ] : null,
         ]);
     }
 

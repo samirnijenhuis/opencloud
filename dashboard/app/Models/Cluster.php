@@ -16,9 +16,10 @@ class Cluster extends Model
     protected $fillable = [
         'name', 'kind', 'provider', 'kubeconfig', 'ingress_ip', 'parts_version', 'status', 'error',
         'registry_url', 'registry_username', 'registry_password', 'registry_insecure',
+        'region', 'node_size', 'min_nodes', 'max_nodes', 'provider_cluster_id', 'provider_vpc_id', 'tofu_log',
     ];
 
-    protected $hidden = ['kubeconfig', 'registry_password'];
+    protected $hidden = ['kubeconfig', 'registry_password', 'tofu_log'];
 
     protected $attributes = [
         'status' => 'pending',
@@ -33,6 +34,8 @@ class Cluster extends Model
             'kubeconfig' => 'encrypted',
             'registry_password' => 'encrypted',
             'registry_insecure' => 'boolean',
+            'min_nodes' => 'integer',
+            'max_nodes' => 'integer',
         ];
     }
 

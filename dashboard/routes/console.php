@@ -2,6 +2,7 @@
 
 use App\Clusters\ClusterStatus;
 use App\Enums\DatastoreKind;
+use App\Enums\DatastoreSource;
 use App\Jobs\BackupDashboard;
 use App\Jobs\BackupDatastore;
 use App\Jobs\CopyBuckets;
@@ -25,7 +26,7 @@ Schedule::call(fn () => Cluster::query()->where('status', ClusterStatus::Ready)-
 Schedule::job(new FailStuckDeployments)->everyMinute();
 
 Schedule::call(function () {
-    Datastore::query()->whereIn('kind', [DatastoreKind::Mysql, DatastoreKind::Postgres])->each(fn (Datastore $datastore) => BackupDatastore::dispatch($datastore));
+    Datastore::query()->where('source', DatastoreSource::Standard)->whereIn('kind', [DatastoreKind::Mysql, DatastoreKind::Postgres])->each(fn (Datastore $datastore) => BackupDatastore::dispatch($datastore));
     Datastore::query()->where('kind', DatastoreKind::Rustfs)->each(fn (Datastore $datastore) => CopyBuckets::dispatch($datastore));
     BackupDashboard::dispatch();
 })->name('nightly-backups')->dailyAt('03:00');
