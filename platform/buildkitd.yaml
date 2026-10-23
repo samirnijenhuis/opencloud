@@ -29,6 +29,10 @@ spec:
         app.kubernetes.io/name: buildkitd
         app.kubernetes.io/part-of: opencloud
     spec:
+      # Build steps use the node's network. Pods here have IPv4 only, and on some networks IPv4 downloads stall
+      # while IPv6 stays fast. The cluster DNS still resolves the registry name.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: buildkitd
           image: moby/buildkit:v0.25.1
