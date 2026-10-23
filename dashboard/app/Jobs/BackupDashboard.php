@@ -30,8 +30,13 @@ class BackupDashboard implements ShouldQueue
 
         try {
             DB::statement('VACUUM INTO ?', [$copy]);
-            $gzip = fopen($copy, 'rb');
-            stream_filter_append($gzip, 'zlib.deflate', STREAM_FILTER_READ, ['window' => 31]);
+            $source = fopen($copy, 'rb');
+            stream_filter_append($source, 'zlib.deflate', STREAM_FILTER_READ, ['window' => 31]);
+            // The S3 client reads the body to sign it and then rewinds it. A filtered stream cannot rewind, a temporary file can.
+            $gzip = tmpfile();
+            stream_copy_to_stream($source, $gzip);
+            fclose($source);
+            rewind($gzip);
             $disk->writeStream(self::FOLDER.'/'.now()->format('Ymd-His').'.sqlite.gz', $gzip);
             fclose($gzip);
         } finally {
