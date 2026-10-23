@@ -37,7 +37,8 @@ return [
      */
     'caddy_image' => env('OPENCLOUD_CADDY_IMAGE', 'caddy:2.11.7'),
 
-    'buildkit_addr' => 'tcp://buildkitd.opencloud.svc.cluster.local:1234',
+    // Empty means the running BuildKit pod, reached through kubectl exec.
+    'buildkit_addr' => env('OPENCLOUD_BUILDKIT_ADDR'),
 
     /*
      * The base image of a Laravel app. "{php}" becomes the PHP minor version, for example 8.4.

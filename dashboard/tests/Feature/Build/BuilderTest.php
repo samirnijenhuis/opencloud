@@ -43,7 +43,7 @@ class BuilderTest extends TestCase
             ['git', 'fetch', '--quiet', '--depth', '1', 'https://github.com/acme/shop.git', self::SHA],
             ['git', 'checkout', '--quiet', 'FETCH_HEAD'],
             [
-                'buildctl', '--addr', 'tcp://buildkitd.opencloud.svc.cluster.local:1234',
+                'buildctl', '--addr', 'kube-pod://buildkitd-test?namespace=opencloud',
                 'build', '--progress=plain', '--frontend', 'dockerfile.v0',
                 '--local', "context={$dir}", '--local', "dockerfile={$dir}", '--opt', 'filename=.opencloud.Dockerfile',
                 '--secret', 'id=COMPOSER_AUTH,env=COMPOSER_AUTH',

@@ -8,7 +8,8 @@ ref=registry.opencloud.svc.cluster.local:5000/e2e/hello:1
 k3s kubectl -n opencloud exec -i deploy/dashboard -c worker -- sh -eu -s "$ref" <<'EOF'
 dir=$(mktemp -d)
 printf 'FROM busybox\nCMD ["echo", "hello from the opencloud registry"]\n' >"$dir/Dockerfile"
-buildctl --addr tcp://buildkitd.opencloud.svc.cluster.local:1234 build \
+pod=$(kubectl -n opencloud get pod -l app.kubernetes.io/name=buildkitd -o jsonpath='{.items[0].metadata.name}')
+buildctl --addr "kube-pod://$pod?namespace=opencloud" build \
     --progress plain \
     --frontend dockerfile.v0 \
     --local context="$dir" \

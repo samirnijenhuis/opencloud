@@ -33,16 +33,12 @@ spec:
         - name: buildkitd
           image: moby/buildkit:v0.25.1
           imagePullPolicy: IfNotPresent
+          # Only the Unix socket. The dashboard reaches BuildKit through kubectl exec, so no pod can reach it over the network.
           args:
             - --addr
             - unix:///run/buildkit/buildkitd.sock
-            - --addr
-            - tcp://0.0.0.0:1234
           securityContext:
             privileged: true
-          ports:
-            - name: buildkitd
-              containerPort: 1234
           readinessProbe:
             exec:
               command: [buildctl, debug, workers]
@@ -66,19 +62,3 @@ spec:
           hostPath:
             path: /var/lib/opencloud/buildkit
             type: DirectoryOrCreate
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: buildkitd
-  namespace: opencloud
-  labels:
-    app.kubernetes.io/name: buildkitd
-    app.kubernetes.io/part-of: opencloud
-spec:
-  selector:
-    app.kubernetes.io/name: buildkitd
-  ports:
-    - name: buildkitd
-      port: 1234
-      targetPort: buildkitd

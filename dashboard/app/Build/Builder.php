@@ -41,7 +41,7 @@ final class Builder
             $exitCode = Process::path($dir)
                 ->env($buildEnv)
                 ->timeout(3600)
-                ->start(self::buildctl($dir, $dockerfile, $image, array_keys($buildEnv)))
+                ->start(self::buildctl(BuildKit::address(), $dir, $dockerfile, $image, array_keys($buildEnv)))
                 ->wait(fn (string $type, string $output) => $log->chunk($output))
                 ->exitCode();
             $log->flush();
@@ -69,10 +69,10 @@ final class Builder
      * @param  list<string>  $secrets
      * @return list<string>
      */
-    public static function buildctl(string $dir, string $dockerfile, string $image, array $secrets): array
+    public static function buildctl(string $address, string $dir, string $dockerfile, string $image, array $secrets): array
     {
         return [
-            'buildctl', '--addr', config('opencloud.buildkit_addr'),
+            'buildctl', '--addr', $address,
             'build', '--progress=plain', '--frontend', 'dockerfile.v0',
             '--local', "context={$dir}", '--local', "dockerfile={$dir}", '--opt', "filename={$dockerfile}",
             ...array_merge(...array_map(fn (string $key) => ['--secret', "id={$key},env={$key}"], $secrets)),

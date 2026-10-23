@@ -112,11 +112,16 @@ record "a BuildKit image goes through the registry and runs as a pod" "$ok"
 
 ok=0
 if on_machine bash "$REMOTE_SRC/tests/e2e/network-policy.sh" >"$WORK/network.log" 2>&1; then
-    grep -qx 'dashboard open' "$WORK/network.log" && grep -qx 'buildkitd blocked' "$WORK/network.log" &&
-        grep -qx 'registry blocked' "$WORK/network.log" && ok=1
+    grep -qx 'dashboard open' "$WORK/network.log" && grep -qx 'registry blocked' "$WORK/network.log" && ok=1
 fi
 [[ $ok == 1 ]] || tail -30 "$WORK/network.log"
-record "a pod in another namespace reaches the dashboard but not buildkitd:1234 or registry:5000" "$ok"
+record "a pod in another namespace reaches the dashboard but not the registry" "$ok"
+
+buildkit_ports=$(on_machine k3s kubectl -n opencloud get pod -l app.kubernetes.io/name=buildkitd -o jsonpath='{.items[*].spec.containers[*].ports}')
+buildkit_services=$(on_machine k3s kubectl -n opencloud get service -l app.kubernetes.io/name=buildkitd -o name)
+ok=0
+[[ -z $buildkit_ports && -z $buildkit_services ]] && ok=1
+record "BuildKit has no network port and no Service" "$ok"
 
 second_status=0
 run_install "$WORK/install-2.log" || second_status=$?
