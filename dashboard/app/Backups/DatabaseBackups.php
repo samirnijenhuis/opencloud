@@ -20,6 +20,14 @@ final class DatabaseBackups
 {
     public const KEEP = 7;
 
+    /** The name of a dump file is its time in this format, so the names sort by time. */
+    public const TIME_FORMAT = 'Ymd-His';
+
+    public static function folder(DatastoreAttachment $attachment): string
+    {
+        return "backups/{$attachment->datastore_id}/{$attachment->environment_id}";
+    }
+
     /** A failed dump returns a failed backup with the error, so the nightly run goes on with the next database. */
     public function backup(DatastoreAttachment $attachment, bool $prune = true): Backup
     {
@@ -29,7 +37,7 @@ final class DatabaseBackups
             'datastore_id' => $datastore->id,
             'database_name' => $attachment->database_name,
             'disk' => $diskName,
-            'location' => sprintf('backups/%d/%d/%s.sql.gz', $datastore->id, $attachment->environment_id, now()->format('Ymd-His')),
+            'location' => self::folder($attachment).'/'.now()->format(self::TIME_FORMAT).'.sql.gz',
             'status' => BackupStatus::Running,
         ]);
         $dump = tmpfile();
