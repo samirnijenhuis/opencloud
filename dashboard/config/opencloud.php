@@ -5,6 +5,11 @@ return [
     'version' => env('OPENCLOUD_VERSION', 'dev'),
 
     /*
+     * The GitHub repository of opencloud. The dashboard asks its releases API once a day for a newer release.
+     */
+    'repository' => env('OPENCLOUD_REPO', 'opencloud-dev/opencloud'),
+
+    /*
      * The installer prints this token in the setup URL. When it is empty, nobody can create the owner.
      */
     'setup_token' => env('OPENCLOUD_SETUP_TOKEN'),

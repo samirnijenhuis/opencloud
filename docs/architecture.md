@@ -36,7 +36,7 @@ The installer creates this layout on the dashboard VPS. All opencloud parts live
 | Part | Kind | Address |
 |---|---|---|
 | Dashboard | One pod with three containers, `web`, `worker`, and `scheduler`. They share the host path `/var/lib/opencloud/data`, which holds `database.sqlite`. | Service `dashboard.opencloud.svc.cluster.local:8080` |
-| Caddy | Deployment `caddy`, Service `caddy` of type `LoadBalancer` with ports 80, 443, and 8000. k3s ServiceLB binds these ports on the host. Certificates and the last config live on the host paths `/var/lib/opencloud/caddy/data` and `/var/lib/opencloud/caddy/config`, so they survive a pod restart. | Admin API on `127.0.0.1:2019` inside the pod only |
+| Caddy | Deployment `caddy` with a rolling update, Service `caddy` of type `LoadBalancer` with ports 80, 443, and 8000. k3s ServiceLB binds these ports on the host. Certificates and the last config live on the host paths `/var/lib/opencloud/caddy/data` and `/var/lib/opencloud/caddy/config`, so they survive a pod restart. | Admin API on `127.0.0.1:2019` inside the pod only |
 | Registry | Deployment `registry` with the image `registry:3`, data on the host path `/var/lib/opencloud/registry`. | Service `registry` with the fixed ClusterIP `10.43.200.200`, port 5000 |
 | BuildKit | Deployment `buildkitd`, privileged, state on the host path `/var/lib/opencloud/buildkit`. | Service `buildkitd.opencloud.svc.cluster.local:1234` |
 
@@ -46,7 +46,7 @@ The dashboard runs `kubectl` with its in-cluster service account for `local`. Th
 
 The NetworkPolicies in `platform/networkpolicies.yaml` let only the dashboard reach BuildKit, and only the dashboard and BuildKit reach the registry. The node still pulls through the registry ClusterIP, because kube-router lets traffic from the node itself reach local pods. `tests/e2e/network-policy.sh` proves both.
 
-A release is a tag `v*`. `.github/workflows/release.yml` publishes the dashboard image and the Caddy image (`opencloud-caddy`) for amd64 and arm64 and a release archive with `install.sh`, `platform/`, and `bin/`. `tests/e2e/build-release-archive.sh` builds the archive for the workflow and for the tests. When `install.sh` runs from `curl | bash`, it downloads that archive, checks its SHA-256 sum, extracts it to `/opt/opencloud/<version>`, and runs from there.
+A release is a tag `v*`. `.github/workflows/release.yml` publishes the dashboard image and the Caddy image (`opencloud-caddy`) for amd64 and arm64 and a release archive with `install.sh`, `platform/`, and `bin/`. `tests/e2e/build-release-archive.sh` builds the archive for the workflow and for the tests. When `install.sh` runs from `curl | bash`, it downloads that archive, checks its SHA-256 sum, extracts it to `/opt/opencloud/<version>`, and runs from there. Without `OPENCLOUD_VERSION`, it asks the GitHub API for the tag of the latest release and installs that tag, so the dashboard always knows its real version.
 
 The installer keeps its state in `/var/lib/opencloud`. The files `APP_KEY` and `setup-token` there have mode 600. The installer copies them into the Secret `dashboard` and never into a manifest file. The k3s options live in `/etc/rancher/k3s/config.yaml`. If `APP_KEY` is missing while the database exists, the installer stops, because a new key cannot read the stored secrets. In restore mode, the installer brings both back from the backup bucket. The section Restore describes it.
 
@@ -123,7 +123,7 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `StoreProviderCredential` | `handle(User $by, string $provider, string $token): CheckResult` | Checks the key with the provider. It stores the key encrypted when the check passes or only optional rights are missing. The audit event never holds the key. |
 | `DeleteProviderCredential` | `handle(ProviderCredential $credential, User $by): void` | Deletes the key. |
 | `ConnectCluster` | `handle(User $by, array $data): Cluster` | Checks the kubeconfig with `kubectl version` and `kubectl auth can-i`, stores the cluster and its registry encrypted, and dispatches `InstallClusterParts`. |
-| `ReinstallClusterParts` | `handle(Cluster $cluster, User $by): void` | Applies the opencloud parts on a connected cluster again. |
+| `ReinstallClusterParts` | `handle(Cluster $cluster, ?User $by): void` | Applies the opencloud parts on a connected cluster again. A null user means opencloud itself, after an upgrade. |
 | `DisconnectCluster` | `handle(Cluster $cluster, User $by, bool $removeParts): void` | Refuses while applications or datastores use the cluster. It can remove the opencloud namespaces. |
 | `ConnectGitHubApp` | `handle(User $by, string $code): GithubApp` | Exchanges the code of the manifest flow and stores the GitHub App. It replaces the old app. |
 | `UpdatePreviewSettings` | `handle(Application $application, User $by, array $settings): void` | Stores `previews_enabled`, `allow_forks`, and `preview_domain`. |
@@ -134,6 +134,28 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 The owner connects a cluster with its kubeconfig and the address and credentials of a registry near that cluster. `InstallClusterParts` puts Caddy in the namespace `opencloud` with a Service of type `LoadBalancer` and its state on a PVC, and creates the namespace `oc-datastores`. It stores the load balancer address as the ingress IP. Opencloud changes nothing outside its own namespaces, so a cluster that runs other software also works.
 
 For an application on a connected cluster, `RunDeployment` copies the built image from the local registry to the cluster's registry with crane. The environment namespace gets the pull secret `opencloud-registry`, and the pods use the copied image. So a connected cluster can start new pods while the dashboard server is down. The scheduler syncs Caddy only on clusters with the status `ready`.
+
+## Upgrades
+
+`sudo opencloud upgrade [version]` upgrades the server. Without a version, it asks the GitHub releases API of `OPENCLOUD_REPO` for the latest release. It refuses an older release unless you add `--force`. A pre-release such as `v1.2.0-rc.1` is older than `v1.2.0`. Each step prints one line.
+
+1. Download the release archive and check its SHA-256 sum, like the installer. `OPENCLOUD_RELEASE_URL` replaces the GitHub download URL for tests. Nothing has changed yet.
+2. Copy the database with `php artisan opencloud:copy-database` in the running dashboard. The command uses `VACUUM INTO`. The copy is `/var/lib/opencloud/data/upgrade-<from>-to-<to>-<time>.sqlite`.
+3. Record the images and the rollout revisions of the deployments `dashboard` and `caddy`.
+4. Run `install.sh` of the new release with the target version. The upgrade passes on the TLS issuer, the public IP, and the repository from the env of the running dashboard. The image archive variables of the installer pass through. The installer log is `/var/log/opencloud/upgrade-<from>-to-<to>-<time>.log`.
+5. Wait for both rollouts and for `/up` through Caddy on port 8000.
+
+If step 4 or 5 fails, the upgrade goes back to the old release. If the dashboard changed, the upgrade scales it to zero. It deletes the write-ahead log and puts back the database copy. Then it runs `kubectl rollout undo` to the recorded revision and scales the dashboard to one.
+
+The upgrade undoes a changed Caddy the same way. Then it waits for `/up` and checks the recorded images. After a way back, the command exits 1.
+
+Caddy uses a rolling update with a 10 second `preStop` sleep, because each release has its own Caddy image tag. The sites keep answering while Caddy changes.
+
+When the new dashboard starts, `opencloud:bootstrap` updates the other clusters. It runs `ReinstallClusterParts` for each cluster that is not `local` and has parts from another release. A cluster with the status `pending` or `installing` keeps its state.
+
+The scheduler runs `CheckLatestRelease` once a day. It caches the tag of the latest release for three days, and a failed request changes nothing. The sidebar shows the running version to each user. When the cached release is newer, it shows the owner the command to run.
+
+`tests/e2e/upgrade.sh` proves an upgrade with no failed request to a live application, and the way back from a release whose dashboard fails.
 
 ## Queues
 

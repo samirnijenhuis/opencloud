@@ -15,10 +15,11 @@ class ReinstallClusterParts
 {
     /**
      * Applies the parts of this release again. The apply is idempotent, so it repairs a failed or changed install.
+     * A null user means opencloud itself, which updates the parts after an upgrade.
      *
      * @throws ValidationException for the local cluster, whose parts the installer manages
      */
-    public function handle(Cluster $cluster, User $by): void
+    public function handle(Cluster $cluster, ?User $by): void
     {
         if ($cluster->kind === ClusterKind::Local) {
             throw ValidationException::withMessages(['cluster' => 'The installer manages the parts of the local cluster. Run opencloud upgrade on the server.']);

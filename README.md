@@ -71,6 +71,7 @@ The installer keeps its state in `/var/lib/opencloud`. Keep a copy of `/var/lib/
 | `sudo opencloud setup-url` | Prints the setup URL, or the dashboard address after setup. |
 | `sudo opencloud restore-status` | Shows the progress of a restore. |
 | `sudo opencloud restore` | Runs the steps of a restore that are not done, for example after you fix a failed step. |
+| `sudo opencloud upgrade [version]` | Copies the database and upgrades to a release, by default the latest. If the new dashboard fails its health check, it goes back to the old images and the database copy. |
 
 ## Restore a lost server
 

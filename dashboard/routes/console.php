@@ -5,6 +5,7 @@ use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
 use App\Jobs\BackupDashboard;
 use App\Jobs\BackupDatastore;
+use App\Jobs\CheckLatestRelease;
 use App\Jobs\CopyBuckets;
 use App\Jobs\FailStuckDeployments;
 use App\Jobs\SyncCaddy;
@@ -24,6 +25,8 @@ Schedule::call(fn () => Cluster::query()->where('status', ClusterStatus::Ready)-
     ->everyFiveMinutes();
 
 Schedule::job(new FailStuckDeployments)->everyMinute();
+
+Schedule::job(new CheckLatestRelease)->daily();
 
 Schedule::call(function () {
     Datastore::query()->where('source', DatastoreSource::Standard)->whereIn('kind', [DatastoreKind::Mysql, DatastoreKind::Postgres])->each(fn (Datastore $datastore) => BackupDatastore::dispatch($datastore));

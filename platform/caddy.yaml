@@ -8,8 +8,13 @@ metadata:
     app.kubernetes.io/part-of: opencloud
 spec:
   replicas: 1
+  # Each release has its own Caddy image tag. The new pod starts before the old one stops, so the sites stay up during an upgrade.
+  # Both pods can share the host paths, because Caddy locks its storage.
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: caddy
@@ -24,6 +29,11 @@ spec:
           image: "__CADDY_IMAGE__"
           imagePullPolicy: IfNotPresent
           command: [caddy, run, --resume]
+          # The old pod keeps serving until the Service stops sending it new connections.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10
           ports:
             - name: http
               containerPort: 80

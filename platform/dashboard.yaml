@@ -41,6 +41,8 @@ spec:
                   key: OPENCLOUD_SETUP_TOKEN
             - name: OPENCLOUD_VERSION
               value: "__OPENCLOUD_VERSION__"
+            - name: OPENCLOUD_REPO
+              value: "__OPENCLOUD_REPO__"
             - name: OPENCLOUD_TLS_ISSUER
               value: "__TLS_ISSUER__"
             - name: OPENCLOUD_PUBLIC_IP
