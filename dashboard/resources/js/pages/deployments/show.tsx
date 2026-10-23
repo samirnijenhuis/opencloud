@@ -6,12 +6,14 @@ import { type Deployment, type EnvironmentPageProps } from '@/types';
 import { Link, usePoll } from '@inertiajs/react';
 import { useEffect, useRef } from 'react';
 
-type Props = EnvironmentPageProps & { deployment: Deployment & { log: string } };
+type WaitingFor = { id: number; application: string; environment: string; queued_before: number };
+
+type Props = EnvironmentPageProps & { deployment: Deployment & { log: string }; waiting_for: WaitingFor | null };
 
 export default function DeploymentShow(props: Props) {
-    const { deployment, environment } = props;
+    const { deployment, environment, waiting_for } = props;
     const running = isRunning(deployment.status);
-    const { start, stop } = usePoll(2000, { only: ['deployment', 'environment'] }, { autoStart: false });
+    const { start, stop } = usePoll(2000, { only: ['deployment', 'environment', 'waiting_for'] }, { autoStart: false });
     const box = useRef<HTMLPreElement>(null);
     const following = useRef(true);
 
@@ -54,6 +56,20 @@ export default function DeploymentShow(props: Props) {
                     All deployments
                 </Link>
             </div>
+
+            {waiting_for && (
+                <Alert>
+                    <AlertDescription>
+                        Opencloud builds one deployment at a time. This deployment starts after{' '}
+                        <Link href={route('deployments.show', waiting_for.id)} className="underline">
+                            deployment {waiting_for.id} of {waiting_for.application} / {waiting_for.environment}
+                        </Link>
+                        {waiting_for.queued_before > 0
+                            ? ` and ${waiting_for.queued_before} other queued ${waiting_for.queued_before === 1 ? 'deployment' : 'deployments'}.`
+                            : '.'}
+                    </AlertDescription>
+                </Alert>
+            )}
 
             {deployment.warning && (
                 <Alert>

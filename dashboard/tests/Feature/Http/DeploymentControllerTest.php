@@ -60,6 +60,26 @@ class DeploymentControllerTest extends TestCase
                 ->where('environment.name', 'production'));
     }
 
+    public function test_a_queued_deployment_names_the_build_it_waits_for(): void
+    {
+        $shop = $this->makeEnvironment();
+        $running = Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::Building]);
+        Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::Queued]);
+        $mine = Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::Queued]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get("/deployments/{$mine->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('waiting_for', [
+                'id' => $running->id,
+                'application' => $shop->application->name,
+                'environment' => 'production',
+                'queued_before' => 1,
+            ]));
+
+        $this->actingAs($user)->get("/deployments/{$running->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('waiting_for', null));
+    }
+
     public function test_a_deployment_without_a_log_has_an_empty_log(): void
     {
         $deployment = Deployment::factory()->for($this->makeEnvironment())->create();

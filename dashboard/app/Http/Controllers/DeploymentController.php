@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\StartDeployment;
+use App\Enums\DeploymentStatus;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Models\Deployment;
 use App\Models\Environment;
@@ -44,7 +45,38 @@ class DeploymentController extends Controller
                 ...$this->deploymentProps($deployment),
                 'log' => (string) $deployment->log,
             ],
+            'waiting_for' => $this->waitingFor($deployment),
         ]);
+    }
+
+    /**
+     * One builder runs one deployment at a time, so a queued deployment waits for the oldest running one.
+     *
+     * @return array{id: int, application: string, environment: string, queued_before: int}|null
+     */
+    private function waitingFor(Deployment $deployment): ?array
+    {
+        if ($deployment->status !== DeploymentStatus::Queued) {
+            return null;
+        }
+
+        $running = Deployment::query()
+            ->whereIn('status', [DeploymentStatus::Building, DeploymentStatus::Deploying])
+            ->where('id', '<', $deployment->id)
+            ->with('environment.application')
+            ->orderBy('id')
+            ->first();
+
+        if ($running === null) {
+            return null;
+        }
+
+        return [
+            'id' => $running->id,
+            'application' => $running->environment->application->name,
+            'environment' => $running->environment->name,
+            'queued_before' => Deployment::query()->where('status', DeploymentStatus::Queued)->where('id', '<', $deployment->id)->count(),
+        ];
     }
 
     public function store(Request $request, Environment $environment, StartDeployment $startDeployment): RedirectResponse
