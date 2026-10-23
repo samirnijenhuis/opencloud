@@ -122,3 +122,27 @@ The tests in `tests/e2e/` install opencloud on new Ubuntu machines. They need ma
 | `tests/e2e/fresh-machine.sh` | The installer works on a new machine and on a second run, the registry and the network policies work. |
 | `tests/e2e/curl-install.sh` | The `curl \| bash` install works from a release archive. |
 | `tests/e2e/release-test.sh` | The full flow: setup, a new application from a public repository, HTTPS, secrets, a deploy with no downtime, and a failed deploy that keeps the old version live. |
+
+## What is proven, and what is not
+
+Opencloud has no public release yet. This table shows how each part was checked. "Live" means a script installed opencloud on a new Ubuntu 24.04 machine and checked the real result. "Tests" means the dashboard test suite with fakes for Kubernetes, Git, BuildKit, and cloud APIs.
+
+| Part | Proof |
+|---|---|
+| Install, setup URL, second install run, `curl \| bash` install | Live (`fresh-machine.sh`, `curl-install.sh`) |
+| New application from a public repository, first deploy, HTTPS, HTTP redirect | Live (`release-test.sh`) |
+| Secrets in the pod but never in the dashboard page | Live (`release-test.sh`) |
+| A redeploy with no failed request, and a failed deploy that keeps the old version | Live (`release-test.sh`) |
+| MySQL, Postgres, Valkey, and RustFS with isolation between environments, dump and restore | Live, by the datastore unit on a real k3s cluster |
+| Pull request previews with their own database, created and removed by webhooks | Live with signed webhooks that the test sends. The GitHub App flow on github.com is tested with fakes only. |
+| Connected clusters, image copy to a registry near the cluster, pod restart while the dashboard server is down, autoscaling | Live with a stand-in image. A Laravel build on a connected cluster is not proven live. |
+| Full restore of a lost server from S3 | Live (`restore.sh`). The RustFS bucket copy-back is tested with fakes only. |
+| Provider key checks | Live against the real Cloudflare, DigitalOcean, and AWS APIs with fake keys |
+| Cloudflare DNS mode | Tests, and `caddy validate` of the config. Not proven with a real Cloudflare zone. |
+| Clusters and managed Postgres created with OpenTofu on DigitalOcean | Tests, `tofu validate`, and a plan that stops at DigitalOcean's authentication with a fake key. Nothing was created on DigitalOcean. |
+| Let's Encrypt certificates | Not proven. The live tests use the local Caddy CA, because Let's Encrypt cannot reach a private test machine. |
+
+Known limits:
+
+- Managed MySQL on DigitalOcean is not offered, because it needs a TLS CA that a stock Laravel app does not load. Managed Postgres is offered.
+- The first build of an application downloads all of its Composer and npm packages. On the test machines this took 10 to 12 minutes. Later builds use the BuildKit cache.
