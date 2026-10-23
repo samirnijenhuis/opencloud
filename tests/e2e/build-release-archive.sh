@@ -11,8 +11,8 @@ mkdir -p "$out"
 out=$(cd "$out" && pwd)
 name=opencloud-$version.tar.gz
 
-# COPYFILE_DISABLE stops macOS tar from adding AppleDouble files.
-COPYFILE_DISABLE=1 tar -C "$root" -czf "$out/$name" install.sh platform bin
+# COPYFILE_DISABLE stops macOS tar from adding AppleDouble files. --no-xattrs keeps macOS attributes out, so GNU tar prints no warnings.
+COPYFILE_DISABLE=1 tar --no-xattrs -C "$root" -czf "$out/$name" install.sh platform bin
 
 cd "$out"
 if command -v sha256sum >/dev/null; then
