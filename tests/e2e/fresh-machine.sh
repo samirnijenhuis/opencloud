@@ -6,7 +6,8 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 MACHINE=oc-e2e-$(date +%s)
 ARCH=$(docker version --format '{{.Server.Arch}}')
-VERSION=e2e
+# Each run gets its own tag, so a build from another checkout on this Mac cannot replace the image under test.
+VERSION=${E2E_VERSION:-e2e-$(date +%s)-$$}
 IMAGE=ghcr.io/opencloud-dev/opencloud:$VERSION
 CADDY_IMAGE=ghcr.io/opencloud-dev/opencloud-caddy:$VERSION
 TMP_ROOT=${TMPDIR:-/tmp}
