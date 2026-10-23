@@ -9,6 +9,8 @@ OPENCLOUD_IMAGE=${OPENCLOUD_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud:$OPEN
 OPENCLOUD_CADDY_IMAGE=${OPENCLOUD_CADDY_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud-caddy:$OPENCLOUD_VERSION}
 OPENCLOUD_TLS_ISSUER=${OPENCLOUD_TLS_ISSUER:-acme}
 STATE_DIR=/var/lib/opencloud
+# The output of k3s, ctr, and kubectl goes here, so the terminal shows only the installer's own steps.
+LOG=/var/log/opencloud-install.log
 # Restore mode: a file with the backup bucket settings and the saved APP_KEY. See "Restore a lost server" in README.md.
 RESTORE_FILE=${OPENCLOUD_RESTORE_FILE:-}
 # When bash reads the script from a pipe, no file backs it, so nothing sits beside it. The current folder does not count.
@@ -26,6 +28,11 @@ say() {
 fail() {
     printf 'Error: %s\n' "$*" >&2
     exit 1
+}
+
+# Usage: logged <command...>. Runs the command with its output in the install log.
+logged() {
+    "$@" >>"$LOG" 2>&1
 }
 
 kc() {
@@ -156,7 +163,8 @@ install_k3s() {
 
     if [[ $(k3s --version 2>/dev/null) != *"$K3S_VERSION"* ]]; then
         say "Installing k3s $K3S_VERSION"
-        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=$K3S_VERSION sh -
+        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=$K3S_VERSION sh - >>"$LOG" 2>&1 ||
+            fail "k3s did not install. The details are in $LOG."
     elif ((changed)); then
         say "Restarting k3s to apply the new k3s configuration"
         systemctl restart k3s
@@ -185,11 +193,11 @@ ensure_secrets() {
         [[ -s $STATE_DIR/APP_KEY ]] || printf 'base64:%s' "$(head -c 32 /dev/urandom | base64)" >"$STATE_DIR/APP_KEY"
         [[ -s $STATE_DIR/setup-token ]] || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$STATE_DIR/setup-token"
     )
-    kc apply -f "$PLATFORM_DIR/namespace.yaml"
+    logged kc apply -f "$PLATFORM_DIR/namespace.yaml" || fail "Cannot create the opencloud namespace. The details are in $LOG."
     kc -n opencloud create secret generic dashboard \
         --from-file=APP_KEY="$STATE_DIR/APP_KEY" \
         --from-file=OPENCLOUD_SETUP_TOKEN="$STATE_DIR/setup-token" \
-        --dry-run=client -o yaml | kc apply -f -
+        --dry-run=client -o yaml | logged kc apply -f - || fail "Cannot store the dashboard Secret. The details are in $LOG."
 }
 
 # Restore mode: a one-off Job with the dashboard image brings the database and the APP_KEY back from the bucket.
@@ -246,7 +254,7 @@ import_image() {
     local name=$1 archive=$2 image=$3 variable=$4
     [[ -n $archive ]] || return 0
     say "Importing the $name image from $archive"
-    k3s ctr images import "$archive"
+    logged k3s ctr images import "$archive" || fail "Cannot import $archive. The details are in $LOG."
     k3s ctr images ls -q | awk -v ref="$image" '$0 == ref || substr($0, length($0) - length(ref)) == "/" ref { found = 1 } END { exit !found }' ||
         fail "The archive $archive does not contain the image $image. Set $variable to the image name in the archive."
 }
@@ -258,20 +266,23 @@ load_images() {
 
 apply_platform() {
     say "Applying the opencloud manifests"
-    kc apply -f "$PLATFORM_DIR/rbac.yaml" -f "$PLATFORM_DIR/registry.yaml" -f "$PLATFORM_DIR/buildkitd.yaml" -f "$PLATFORM_DIR/networkpolicies.yaml"
-    sed -e "s|__CADDY_IMAGE__|$OPENCLOUD_CADDY_IMAGE|g" "$PLATFORM_DIR/caddy.yaml" | kc apply -f -
+    logged kc apply -f "$PLATFORM_DIR/rbac.yaml" -f "$PLATFORM_DIR/registry.yaml" -f "$PLATFORM_DIR/buildkitd.yaml" -f "$PLATFORM_DIR/networkpolicies.yaml" ||
+        fail "Cannot apply the opencloud manifests. The details are in $LOG."
+    sed -e "s|__CADDY_IMAGE__|$OPENCLOUD_CADDY_IMAGE|g" "$PLATFORM_DIR/caddy.yaml" | logged kc apply -f - ||
+        fail "Cannot apply the Caddy manifest. The details are in $LOG."
     sed -e "s|__DASHBOARD_IMAGE__|$OPENCLOUD_IMAGE|g" \
         -e "s|__APP_URL__|http://$SERVER_IP:8000|g" \
         -e "s|__OPENCLOUD_VERSION__|$OPENCLOUD_VERSION|g" \
         -e "s|__OPENCLOUD_REPO__|$OPENCLOUD_REPO|g" \
         -e "s|__TLS_ISSUER__|$OPENCLOUD_TLS_ISSUER|g" \
         -e "s|__PUBLIC_IP__|$SERVER_IP|g" \
-        "$PLATFORM_DIR/dashboard.yaml" | kc apply -f -
+        "$PLATFORM_DIR/dashboard.yaml" | logged kc apply -f - ||
+        fail "Cannot apply the dashboard manifest. The details are in $LOG."
 
     say "Waiting for the opencloud pods"
     local deployment
     for deployment in registry buildkitd caddy dashboard; do
-        kc -n opencloud rollout status "deployment/$deployment" --timeout=240s ||
+        logged kc -n opencloud rollout status "deployment/$deployment" --timeout=240s ||
             fail "The $deployment deployment is not ready. Check it with: opencloud status, and kubectl -n opencloud describe deployment/$deployment"
     done
 }
@@ -283,8 +294,8 @@ configure_caddy() {
     # Only an empty Caddy gets the bootstrap config. After setup the dashboard owns the full config.
     if [[ $current == null ]]; then
         say "Loading the bootstrap Caddy config"
-        kc -n opencloud exec -i deploy/caddy -- sh -c 'cat >/tmp/bootstrap.json && wget -q -O- --header "Content-Type: application/json" --post-file /tmp/bootstrap.json http://127.0.0.1:2019/load' \
-            <"$PLATFORM_DIR/caddy-bootstrap.json"
+        logged kc -n opencloud exec -i deploy/caddy -- sh -c 'cat >/tmp/bootstrap.json && wget -q -O- --header "Content-Type: application/json" --post-file /tmp/bootstrap.json http://127.0.0.1:2019/load' \
+            <"$PLATFORM_DIR/caddy-bootstrap.json" || fail "Caddy refused the bootstrap config. The details are in $LOG."
     fi
 
     local _
@@ -298,6 +309,8 @@ configure_caddy() {
 main() {
     bootstrap "$@"
     preflight
+    printf '\n===== %s: install of opencloud %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$OPENCLOUD_VERSION" >>"$LOG"
+    say "Installing opencloud $OPENCLOUD_VERSION. The detailed output goes to $LOG."
     install_k3s
     load_images
     restore_dashboard

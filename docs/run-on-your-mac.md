@@ -22,13 +22,21 @@ Expect about 3 to 10 minutes until the dashboard answers. In a test with a warm 
 
    The script builds the dashboard image and the Caddy image, creates the OrbStack machine `opencloud` with Ubuntu 24.04, and installs opencloud on it.
 
-3. Wait for the last lines. They look like this:
+3. Wait for the end. The script shows one line for each step, and the details go to a log file on the machine. The end looks like this:
 
    ```
+   Opencloud is running.
    Setup URL: http://192.168.139.51:8000/setup/77fdfaf7d493...
-   ==> Opencloud runs on opencloud
+
+   ────────────────────────────────────────────────────────────
+   Opencloud runs on the OrbStack machine opencloud.
+
+   Next steps
+     1. Open the setup URL above in your browser and create the owner account.
+     2. Go to Applications > New application and enter:
+          Repository  laravel/laravel   (leave the branch empty)
+          Domain      myapp.192.168.139.51.sslip.io
    ...
-     Domain       myapp.192.168.139.51.sslip.io
    ```
 
    Your IP address is different. Keep the terminal open, because you need the domain later.
@@ -94,7 +102,7 @@ In a test, the machine kept its IP address after `orb stop` and `orb start`. The
 
 | Problem | What to do |
 |---|---|
-| The script stops with an error | Read the message. The build logs are in `.try/build.log` and `.try/build-caddy.log`, and the installer output is in `.try/install.log`. |
+| The script stops with an error | Read the message. The build logs are in `.try/build.log` and `.try/build-caddy.log`. The installer output is in `.try/install.log`, and the details of k3s and kubectl are in `/var/log/opencloud-install.log` on the machine: `orb -m opencloud sudo cat /var/log/opencloud-install.log`. |
 | The dashboard does not answer | Run `orb -m opencloud sudo opencloud status` and check that all pods are `Running`. |
 | A part shows errors | Run `orb -m opencloud sudo opencloud logs web`. Replace `web` with `worker`, `builder`, `scheduler`, or `caddy`. |
 | The first build is slow | The build downloads every package once. A slow network makes npm wait and try again. Later builds use the cache and take seconds. |

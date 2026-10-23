@@ -10,7 +10,7 @@ WORK=$ROOT/.try
 IMAGE=ghcr.io/opencloud-dev/opencloud:$VERSION
 CADDY_IMAGE=ghcr.io/opencloud-dev/opencloud-caddy:$VERSION
 
-step() { printf '\n==> %s\n' "$1"; }
+step() { printf '==> %s\n' "$1"; }
 fail() {
     printf '\nError: %s\n' "$1" >&2
     exit 1
@@ -42,7 +42,7 @@ else
     orb create ubuntu:noble "$MACHINE" >/dev/null
 fi
 
-step "Installing opencloud $VERSION on $MACHINE"
+step "Copying the installer and the images to $MACHINE"
 target=/opt/opencloud-dev/$VERSION
 orb -m "$MACHINE" sudo mkdir -p "$target"
 # OrbStack machines see the Mac file system under /mnt/mac.
@@ -56,20 +56,31 @@ orb -m "$MACHINE" sudo env OPENCLOUD_VERSION="$VERSION" OPENCLOUD_TLS_ISSUER=int
 orb -m "$MACHINE" sudo rm -f "$target/opencloud.tar" "$target/caddy.tar"
 
 ip=$(sed -E -n 's#^(Setup URL|Dashboard): http://([0-9.]+):8000.*#\2#p' "$WORK/install.log" | tail -1)
+if grep -q '^Setup URL:' "$WORK/install.log"; then
+    first_step="Open the setup URL above in your browser and create the owner account."
+else
+    first_step="Open http://$ip:8000 in your browser and log in."
+fi
 
-step "Opencloud runs on $MACHINE"
 cat <<EOF
-Open the address above in your browser.
 
-For your first app, use these values in Applications > New application:
-  Repository   laravel/laravel   (leave the branch empty)
-  Domain       myapp.$ip.sslip.io
+────────────────────────────────────────────────────────────
+Opencloud runs on the OrbStack machine $MACHINE.
 
-Your browser warns about the certificate of the app, because Caddy uses a local CA here.
-docs/run-on-your-mac.md tells you how to trust that CA.
+Next steps
+  1. $first_step
+  2. Go to Applications > New application and enter:
+       Repository  laravel/laravel   (leave the branch empty)
+       Domain      myapp.$ip.sslip.io
+  3. Click "Create and deploy". The first build takes 10 to 20 minutes.
+  4. Open https://myapp.$ip.sslip.io. Your browser warns about the
+     certificate, because Caddy uses a local CA here.
+     docs/run-on-your-mac.md tells you how to trust that CA.
 
-Commands:
-  orb -m $MACHINE sudo opencloud status    Show the opencloud pods.
-  orb stop $MACHINE                        Stop the machine. orb start $MACHINE starts it again.
-  orb delete -f $MACHINE                   Delete the machine and all its data.
+Commands
+  Show the opencloud pods:   orb -m $MACHINE sudo opencloud status
+  Stop the machine:          orb stop $MACHINE
+  Start it again:            orb start $MACHINE
+  Delete it and its data:    orb delete -f $MACHINE
+────────────────────────────────────────────────────────────
 EOF
