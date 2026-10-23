@@ -100,6 +100,7 @@ roll_back() {
         rm -f "$DATABASE-wal" "$DATABASE-shm"
         cp "$copy" "$DATABASE" || return 1
         echo "Putting back the dashboard image $image"
+        # Undo leaves the last-applied annotation of the failed release. The next installer run applies the full manifests, so that does no harm.
         kc rollout undo deployment/dashboard --to-revision="$dashboard_revision" >/dev/null || return 1
         kc scale deployment/dashboard --replicas=1 >/dev/null || return 1
     fi
@@ -190,7 +191,7 @@ upgrade() {
     local reason
     reason=$(grep '^Error:' "$log" | tail -n 1 || true)
     [[ -z $reason ]] || echo "The installer said: $reason"
-    roll_back "$copy" "$dashboard_revision" "$image" "$caddy_revision" "$caddy_image" ||
+    roll_back "$copy" "$dashboard_revision" "$image" "$caddy_revision" "$caddy_image" 2>>"$log" ||
         fail "The way back to $from did not finish. Check the pods with: sudo opencloud status. The database copy is $copy. The log is $log."
     echo "Opencloud $from runs again with the database from before the upgrade. The log of the failed upgrade is $log."
     echo "Read the logs of the dashboard with: sudo opencloud logs web"
