@@ -33,6 +33,8 @@ The installer checks the server first and stops with a clear message if somethin
 
 The project has no published release yet, so this command does not work today. Until the first release, install from source.
 
+To try opencloud on a Mac with one command, follow [Run opencloud on your Mac](docs/run-on-your-mac.md).
+
 ### Install from source
 
 1. On a computer with Docker, build the two images for the CPU type of the server (`linux/amd64` or `linux/arm64`):
