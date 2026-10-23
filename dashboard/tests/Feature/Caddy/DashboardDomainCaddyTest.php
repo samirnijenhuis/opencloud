@@ -25,14 +25,14 @@ class DashboardDomainCaddyTest extends TestCase
     }
 
     private const WITHOUT = '{"apps":{"http":{"servers":{'.
-        '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}]}]}]},'.
+        '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]},'.
         '"apps":{"listen":[":443"],"routes":[]}}},'.
         '"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}';
 
     private const WITH = '{"apps":{"http":{"servers":{'.
-        '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}]}]}]},'.
+        '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]},'.
         '"apps":{"listen":[":443"],"routes":['.
-        '{"match":[{"host":["admin.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}]}]}'.
+        '{"match":[{"host":["admin.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}'.
         ']}}},"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}';
 
     public function test_a_verified_domain_gets_a_route_to_the_dashboard_on_the_local_cluster(): void

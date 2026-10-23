@@ -52,10 +52,10 @@ class SyncCaddyTest extends TestCase
                 'sh', '-c', 'cat > /tmp/caddy.json && wget -q -O- --header "Content-Type: application/json" --post-file /tmp/caddy.json http://127.0.0.1:2019/load',
             ],
             'stdin' => '{"apps":{"http":{"servers":{'.
-                '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}]}]}]},'.
+                '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]},'.
                 '"apps":{"listen":[":443"],"routes":['.
-                '{"match":[{"host":["cdn.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"'.$upstream.'"}]}]},'.
-                '{"match":[{"host":["shop.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"'.$upstream.'"}]}]}'.
+                '{"match":[{"host":["cdn.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"'.$upstream.'"}],"load_balancing":{"try_duration":"5s"}}]},'.
+                '{"match":[{"host":["shop.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"'.$upstream.'"}],"load_balancing":{"try_duration":"5s"}}]}'.
                 ']}}},"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}',
         ]], $fake->calls);
     }

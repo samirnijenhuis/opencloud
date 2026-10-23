@@ -135,6 +135,8 @@ final readonly class EnvironmentManifests
             container: [
                 'ports' => [['name' => 'http', 'containerPort' => $this->environment->application->port]],
                 'readinessProbe' => ['httpGet' => ['path' => $this->environment->health_path, 'port' => 'http']],
+                // The old pod keeps serving until the Service and Caddy stop sending it new connections.
+                'lifecycle' => ['preStop' => ['sleep' => ['seconds' => 10]]],
             ],
         );
     }

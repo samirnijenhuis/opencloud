@@ -79,6 +79,7 @@ class EnvironmentManifestsTest extends TestCase
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                         'ports' => [['name' => 'http', 'containerPort' => 8080]],
                         'readinessProbe' => ['httpGet' => ['path' => '/up', 'port' => 'http']],
+                        'lifecycle' => ['preStop' => ['sleep' => ['seconds' => 10]]],
                         'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                         'resources' => self::RESOURCES,
                     ]]],
@@ -98,6 +99,7 @@ class EnvironmentManifestsTest extends TestCase
             'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
             'ports' => [['name' => 'http', 'containerPort' => 3000]],
             'readinessProbe' => ['httpGet' => ['path' => '/health', 'port' => 'http']],
+            'lifecycle' => ['preStop' => ['sleep' => ['seconds' => 10]]],
             'envFrom' => [['secretRef' => ['name' => 'env-12']]],
             'resources' => [
                 'requests' => ['cpu' => '1000m', 'memory' => '1024Mi'],

@@ -121,6 +121,7 @@ final readonly class CaddyConfig
     /** @return array<string, mixed> */
     private static function proxy(string $upstream): array
     {
-        return ['handler' => 'reverse_proxy', 'upstreams' => [['dial' => $upstream]]];
+        // A dial that fails during a rollout is tried again for a few seconds instead of returning 502.
+        return ['handler' => 'reverse_proxy', 'upstreams' => [['dial' => $upstream]], 'load_balancing' => ['try_duration' => '5s']];
     }
 }
