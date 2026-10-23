@@ -21,9 +21,14 @@ export default function ClustersIndex({ clusters, canConnect }: { clusters: Clus
                 <div className="flex items-center justify-between gap-4">
                     <h1 className="text-2xl font-semibold tracking-tight">Clusters</h1>
                     {canConnect && (
-                        <Button asChild>
-                            <Link href={route('clusters.create')}>Connect a cluster</Link>
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button asChild variant="secondary">
+                                <Link href={route('clusters.digitalocean.create')}>Create on DigitalOcean</Link>
+                            </Button>
+                            <Button asChild>
+                                <Link href={route('clusters.create')}>Connect a cluster</Link>
+                            </Button>
+                        </div>
                     )}
                 </div>
 

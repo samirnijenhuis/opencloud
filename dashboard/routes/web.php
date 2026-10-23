@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\ClusterController;
+use App\Http\Controllers\CreatedClusterController;
 use App\Http\Controllers\DatastoreController;
 use App\Http\Controllers\DeploymentController;
 use App\Http\Controllers\DomainController;
@@ -63,6 +64,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('clusters', [ClusterController::class, 'index'])->name('clusters.index');
     Route::get('clusters/create', [ClusterController::class, 'create'])->name('clusters.create');
+    Route::get('clusters/create/digitalocean', [CreatedClusterController::class, 'create'])->name('clusters.digitalocean.create');
+    Route::post('clusters/digitalocean', [CreatedClusterController::class, 'store'])->name('clusters.digitalocean.store');
+    Route::delete('clusters/{cluster}/destroy', [CreatedClusterController::class, 'destroy'])->name('clusters.digitalocean.destroy');
     Route::post('clusters', [ClusterController::class, 'store'])->name('clusters.store');
     Route::get('clusters/{cluster}', [ClusterController::class, 'show'])->name('clusters.show');
     Route::post('clusters/{cluster}/reinstall', [ClusterController::class, 'reinstall'])->name('clusters.reinstall');
