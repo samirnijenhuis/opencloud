@@ -126,24 +126,29 @@ The tests in `tests/e2e/` install opencloud on new Ubuntu machines. They need ma
 
 ## What is proven, and what is not
 
-Opencloud has no public release yet. This table shows how each part was checked. "Live" means a script installed opencloud on a new Ubuntu 24.04 machine and checked the real result. "Tests" means the dashboard test suite with fakes for Kubernetes, Git, BuildKit, and cloud APIs.
+Opencloud has no public release yet. This table shows how each part was checked.
+
+"Live" means a script installed opencloud on a new Ubuntu 24.04 machine and checked the real result. All live checks ran on OrbStack machines on a Mac, not on a VPS from a cloud provider. They used the local Caddy CA for HTTPS, because Let's Encrypt cannot reach a private test machine, and the HTTPS checks do not validate the certificate. "Tests" means the dashboard test suite with fakes for Kubernetes, Git, BuildKit, and cloud APIs.
 
 | Part | Proof |
 |---|---|
 | Install, setup URL, second install run, `curl \| bash` install | Live (`fresh-machine.sh`, `curl-install.sh`) |
-| New application from a public repository, first deploy, HTTPS, HTTP redirect | Live (`release-test.sh`) |
+| New application from the public `laravel/laravel` repository with MySQL, first deploy, HTTPS, HTTP redirect | Live (`release-test.sh`) |
 | Secrets in the pod but never in the dashboard page | Live (`release-test.sh`) |
-| A redeploy with no failed request, and a failed deploy that keeps the old version | Live (`release-test.sh`) |
-| MySQL, Postgres, Valkey, and RustFS with isolation between environments, dump and restore | Live, by the datastore unit on a real k3s cluster |
+| A redeploy of the same commit with no failed request | Live (`release-test.sh`). A push of a new commit is tested with fakes only. |
+| A failed deploy command keeps the old version live | Live (`release-test.sh`, with a deploy command that exits 3, not a broken migration) |
+| MySQL, Postgres, Valkey, and RustFS with isolation between environments, dump and restore | Live, by the datastore unit with database clients on a real k3s cluster. The release test does not use Valkey or RustFS from the app. |
 | Pull request previews with their own database, created and removed by webhooks | Live with signed webhooks that the test sends. The GitHub App flow on github.com is tested with fakes only. |
-| Connected clusters, image copy to a registry near the cluster, pod restart while the dashboard server is down, autoscaling | Live with a stand-in image. A Laravel build on a connected cluster is not proven live. |
+| Connected clusters, image copy to a registry near the cluster, pod restart while the dashboard server is down, autoscaling | Live on a second k3s machine with a stand-in image. A Laravel build on a connected cluster and a managed Kubernetes cluster are not proven live. |
+| Upgrade to a newer release, and the rollback of a failed upgrade | Live (`upgrade.sh`) |
 | Full restore of a lost server from S3 | Live (`restore.sh`). The RustFS bucket copy-back is tested with fakes only. |
 | Provider key checks | Live against the real Cloudflare, DigitalOcean, and AWS APIs with fake keys |
 | Cloudflare DNS mode | Tests, and `caddy validate` of the config. Not proven with a real Cloudflare zone. |
 | Clusters and managed Postgres created with OpenTofu on DigitalOcean | Tests, `tofu validate`, and a plan that stops at DigitalOcean's authentication with a fake key. Nothing was created on DigitalOcean. |
-| Let's Encrypt certificates | Not proven. The live tests use the local Caddy CA, because Let's Encrypt cannot reach a private test machine. |
+| Let's Encrypt certificates, the default issuer | Not proven. |
+| The installer stop when `APP_KEY` is lost but the database exists | Syntax check only. |
 
 Known limits:
 
 - Managed MySQL on DigitalOcean is not offered, because it needs a TLS CA that a stock Laravel app does not load. Managed Postgres is offered.
-- The first build of an application downloads all of its Composer and npm packages. On the test machines this took 10 to 12 minutes. Later builds use the BuildKit cache.
+- The first build of an application downloads all of its Composer and npm packages. On the test machines this took between 2 and 12 minutes, and up to 30 minutes when several builds shared the network. Later builds use the BuildKit cache.
