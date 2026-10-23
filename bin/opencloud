@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+STATE_DIR=/var/lib/opencloud
+DATABASE=$STATE_DIR/data/database.sqlite
+
 usage() {
     cat <<'EOF'
 Usage: opencloud <command>
@@ -9,11 +12,189 @@ Commands:
   status                              Show the opencloud pods.
   logs [web|worker|builder|scheduler|caddy]  Show the logs of one part. Extra flags go to kubectl logs, for example -f.
   setup-url                           Print the URL that creates the owner account.
+  upgrade [version] [--force]         Upgrade to a release, by default the latest. Use --force to go to an older release.
 EOF
 }
 
 kc() {
     k3s kubectl -n opencloud "$@"
+}
+
+fail() {
+    printf 'Error: %s\n' "$*" >&2
+    exit 1
+}
+
+# Usage: dashboard_env <name>. Prints one env value of the web container.
+dashboard_env() {
+    kc get deployment dashboard -o "jsonpath={.spec.template.spec.containers[?(@.name==\"web\")].env[?(@.name==\"$1\")].value}"
+}
+
+# Usage: image_of <deployment> <container>
+image_of() {
+    kc get deployment "$1" -o "jsonpath={.spec.template.spec.containers[?(@.name==\"$2\")].image}"
+}
+
+revision_of() {
+    kc get deployment "$1" -o 'jsonpath={.metadata.annotations.deployment\.kubernetes\.io/revision}'
+}
+
+# Usage: latest_release <owner/repository>. Prints the tag of the newest release, for example v1.2.0.
+latest_release() {
+    local tag
+    tag=$(curl -fsSL --max-time 20 "https://api.github.com/repos/$1/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+    [[ -n $tag ]] && echo "$tag"
+}
+
+is_release() {
+    [[ $1 =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+}
+
+# Usage: older_than <a> <b>. Succeeds when release a is older than release b. A pre-release such as v1.2.0-rc.1 is older than v1.2.0.
+older_than() {
+    local a=${1#v} b=${2#v}
+    local a_core=${a%%-*} b_core=${b%%-*}
+    if [[ $a_core != "$b_core" ]]; then
+        [[ $(printf '%s\n' "$a_core" "$b_core" | sort -V | head -n 1) == "$a_core" ]]
+    elif [[ $a == "$b" || $a == "$a_core" ]]; then
+        return 1
+    elif [[ $b == "$b_core" ]]; then
+        return 0
+    else
+        [[ $(printf '%s\n' "$a" "$b" | sort -V | head -n 1) == "$a" ]]
+    fi
+}
+
+# Succeeds when Caddy and the dashboard rolled out and the dashboard answers /up through Caddy.
+opencloud_answers() {
+    local deployment _
+    for deployment in caddy dashboard; do
+        kc rollout status "deployment/$deployment" --timeout=300s >/dev/null 2>&1 || return 1
+    done
+    for _ in $(seq 1 60); do
+        curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:8000/up 2>/dev/null && return 0
+        sleep 2
+    done
+    return 1
+}
+
+dashboard_stopped() {
+    local _
+    for _ in $(seq 1 90); do
+        [[ -z $(kc get pods -l app.kubernetes.io/name=dashboard -o name) ]] && return 0
+        sleep 2
+    done
+    return 1
+}
+
+# Usage: roll_back <database copy> <dashboard revision> <dashboard image> <Caddy revision> <Caddy image>
+roll_back() {
+    local copy=$1 dashboard_revision=$2 image=$3 caddy_revision=$4 caddy_image=$5
+    if [[ $(revision_of dashboard) == "$dashboard_revision" ]]; then
+        echo "The dashboard did not change, so its database stays as it is."
+    else
+        echo "Stopping the dashboard"
+        kc scale deployment/dashboard --replicas=0 >/dev/null && dashboard_stopped || return 1
+        echo "Putting back the database copy $copy"
+        # The write-ahead log of the new version must not replay over the old database.
+        rm -f "$DATABASE-wal" "$DATABASE-shm"
+        cp "$copy" "$DATABASE" || return 1
+        echo "Putting back the dashboard image $image"
+        kc rollout undo deployment/dashboard --to-revision="$dashboard_revision" >/dev/null || return 1
+        kc scale deployment/dashboard --replicas=1 >/dev/null || return 1
+    fi
+    if [[ $(revision_of caddy) != "$caddy_revision" ]]; then
+        echo "Putting back the Caddy image $caddy_image"
+        kc rollout undo deployment/caddy --to-revision="$caddy_revision" >/dev/null || return 1
+    fi
+    echo "Checking that the dashboard answers through Caddy"
+    opencloud_answers && [[ $(image_of dashboard web) == "$image" && $(image_of caddy caddy) == "$caddy_image" ]]
+}
+
+upgrade() {
+    local target='' force=0 arg
+    for arg in "$@"; do
+        case $arg in
+        --force) force=1 ;;
+        -*)
+            usage >&2
+            exit 1
+            ;;
+        *) target=$arg ;;
+        esac
+    done
+
+    exec 9>/run/opencloud-upgrade.lock
+    flock -n 9 || fail "Another upgrade runs now. Wait until it ends."
+
+    local from repo
+    from=$(dashboard_env OPENCLOUD_VERSION 2>/dev/null) && [[ -n $from ]] || fail "Cannot read the running version. Install opencloud first."
+    repo=${OPENCLOUD_REPO:-$(dashboard_env OPENCLOUD_REPO)}
+    repo=${repo:-opencloud-dev/opencloud}
+
+    if [[ -z $target ]]; then
+        target=$(latest_release "$repo") || fail "Cannot find the latest release of $repo. Give the version, for example: sudo opencloud upgrade v1.2.0"
+    fi
+    [[ $target =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] || fail "The version $target is not valid."
+    echo "Opencloud $from runs now. The target is $target."
+    if [[ $target == "$from" && $force == 0 ]]; then
+        echo "Nothing to do. To install $target again, run: sudo opencloud upgrade $target --force"
+        return 0
+    fi
+    if [[ $force == 0 ]] && is_release "$from" && is_release "$target" && older_than "$target" "$from"; then
+        fail "$target is older than $from. To go back anyway, run: sudo opencloud upgrade $target --force"
+    fi
+
+    local base=${OPENCLOUD_RELEASE_URL:-https://github.com/$repo/releases/download/$target}
+    local name=opencloud-$target.tar.gz dir=/opt/opencloud/$target tmp
+    tmp=$(mktemp -d)
+    echo "Downloading $base/$name"
+    curl -fsSL -o "$tmp/$name" "$base/$name" || fail "Cannot download $base/$name. Check the version and the network."
+    curl -fsSL -o "$tmp/$name.sha256" "$base/$name.sha256" || fail "Cannot download $base/$name.sha256."
+    (cd "$tmp" && sha256sum -c "$name.sha256" >/dev/null) || fail "The checksum of $name does not match $name.sha256. Do not install this archive."
+    install -d -m 0755 "$dir"
+    tar -xzf "$tmp/$name" -C "$dir"
+    rm -f "$tmp/$name" "$tmp/$name.sha256"
+    rmdir "$tmp"
+
+    local stamp copy log
+    stamp=$(date -u +%Y%m%d-%H%M%S)
+    copy=$STATE_DIR/data/upgrade-${from//[^A-Za-z0-9._+-]/_}-to-$target-$stamp.sqlite
+    log=/var/log/opencloud/upgrade-${from//[^A-Za-z0-9._+-]/_}-to-$target-$stamp.log
+    echo "Copying the database to $copy"
+    kc exec deploy/dashboard -c web -- php artisan opencloud:copy-database "$copy" >/dev/null ||
+        fail "Cannot copy the database, so the upgrade stops before it changes anything. Check the dashboard with: sudo opencloud logs web"
+
+    local image caddy_image dashboard_revision caddy_revision
+    image=$(image_of dashboard web)
+    caddy_image=$(image_of caddy caddy)
+    dashboard_revision=$(revision_of dashboard)
+    caddy_revision=$(revision_of caddy)
+    echo "Recorded the dashboard image $image and the Caddy image $caddy_image."
+
+    local issuer public_ip
+    issuer=${OPENCLOUD_TLS_ISSUER:-$(dashboard_env OPENCLOUD_TLS_ISSUER)}
+    public_ip=${OPENCLOUD_PUBLIC_IP:-$(dashboard_env OPENCLOUD_PUBLIC_IP)}
+    install -d -m 0700 /var/log/opencloud
+    echo "Running the installer of $target. Its log is $log."
+    if OPENCLOUD_VERSION=$target OPENCLOUD_REPO=$repo OPENCLOUD_TLS_ISSUER=$issuer OPENCLOUD_PUBLIC_IP=$public_ip \
+        timeout 1200 bash "$dir/install.sh" >"$log" 2>&1; then
+        echo "Checking that the dashboard answers through Caddy"
+        if opencloud_answers; then
+            echo "Opencloud $target runs. The database copy from before the upgrade is $copy."
+            return 0
+        fi
+    fi
+
+    echo "The upgrade to $target failed. Going back to $from."
+    local reason
+    reason=$(grep '^Error:' "$log" | tail -n 1 || true)
+    [[ -z $reason ]] || echo "The installer said: $reason"
+    roll_back "$copy" "$dashboard_revision" "$image" "$caddy_revision" "$caddy_image" ||
+        fail "The way back to $from did not finish. Check the pods with: sudo opencloud status. The database copy is $copy. The log is $log."
+    echo "Opencloud $from runs again with the database from before the upgrade. The log of the failed upgrade is $log."
+    echo "Read the logs of the dashboard with: sudo opencloud logs web"
+    exit 1
 }
 
 if [[ $EUID -ne 0 ]]; then
@@ -45,6 +226,12 @@ setup-url)
     fi
     token=$(kc get secret dashboard -o 'jsonpath={.data.OPENCLOUD_SETUP_TOKEN}' | base64 -d)
     echo "Setup URL: $app_url/setup/$token"
+    ;;
+upgrade)
+    shift
+    upgrade "$@"
+    # The new installer replaces this file. Exit here, so bash reads nothing more from it.
+    exit
     ;;
 help | -h | --help)
     usage
