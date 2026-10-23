@@ -29,6 +29,19 @@ final class Git
         return $match[1];
     }
 
+    /** @throws RuntimeException when the repository has no default branch or cannot be reached */
+    public static function defaultBranch(string $url): string
+    {
+        [$remote, $masker] = self::remote($url);
+        $output = self::run(Process::env(self::ENV)->timeout(60), ['git', 'ls-remote', '--symref', $remote, 'HEAD'], $masker);
+
+        if (preg_match('#^ref: refs/heads/(\S+)\s+HEAD$#m', $output, $match) !== 1) {
+            throw new RuntimeException("The repository {$url} has no default branch.");
+        }
+
+        return $match[1];
+    }
+
     /** Fetches exactly one commit into an empty folder. The fetch names the URL directly, so .git never stores a token. */
     public static function checkout(string $url, string $sha, string $dir): void
     {

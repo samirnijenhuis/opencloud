@@ -44,12 +44,13 @@ class CreateApplication
     {
         $type = $data['type'] ?? ApplicationType::Laravel;
         $type = $type instanceof ApplicationType ? $type : ApplicationType::from($type);
-        $branch = $data['branch'] ?? 'main';
         $env = $data['env'] ?? [];
         $database = $data['database'] ?? ($type === ApplicationType::Laravel ? 'mysql' : 'none');
 
         // A wrong repository or branch fails here, before any record exists.
-        $commitSha = Git::head((new Application(['repository' => $data['repository']]))->cloneUrl(), $branch);
+        $cloneUrl = (new Application(['repository' => $data['repository']]))->cloneUrl();
+        $branch = ($data['branch'] ?? null) ?: Git::defaultBranch($cloneUrl);
+        $commitSha = Git::head($cloneUrl, $branch);
 
         [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database) {
             $application = Application::create([

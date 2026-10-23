@@ -52,7 +52,10 @@ class CreateApplicationTest extends TestCase
             'domains' => ['Shop.Example.com.'],
         ]);
 
-        $this->assertSame([['git', 'ls-remote', 'https://github.com/acme/shop.git', 'refs/heads/main']], $processes->commands());
+        $this->assertSame([
+            ['git', 'ls-remote', '--symref', 'https://github.com/acme/shop.git', 'HEAD'],
+            ['git', 'ls-remote', 'https://github.com/acme/shop.git', 'refs/heads/main'],
+        ], $processes->commands());
         $this->assertSame(['shop', 'acme/shop', ApplicationType::Laravel, 8080], [$application->name, $application->repository, $application->type, $application->fresh()->port]);
 
         $environments = $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => [
@@ -153,6 +156,27 @@ class CreateApplicationTest extends TestCase
             [$template->size->value, $template->min_instances, $template->max_instances, $template->cpu_target, $template->build_command, $template->deploy_commands, $template->worker_enabled, $template->scheduler_enabled],
         );
         Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->environment->is($production));
+    }
+
+    public function test_without_a_branch_the_repository_default_branch_is_used(): void
+    {
+        Queue::fake();
+        $processes = FakeProcesses::install();
+        $processes->symref = "ref: refs/heads/13.x\tHEAD\n".self::SHA."\tHEAD\n";
+        $processes->lsRemote = self::SHA."\trefs/heads/13.x\n";
+
+        $application = app(CreateApplication::class)->handle(User::factory()->create(), [
+            'name' => 'laravel',
+            'repository' => 'laravel/laravel',
+            'cluster_id' => Cluster::factory()->create()->id,
+            'database' => 'none',
+        ]);
+
+        $this->assertSame('13.x', $application->environments()->where('name', 'production')->sole()->branch);
+        $this->assertSame(
+            [['git', 'ls-remote', '--symref', 'https://github.com/laravel/laravel.git', 'HEAD'], ['git', 'ls-remote', 'https://github.com/laravel/laravel.git', 'refs/heads/13.x']],
+            array_slice(array_column($processes->ran, 'command'), 0, 2),
+        );
     }
 
     public function test_a_given_app_key_replaces_the_generated_one(): void

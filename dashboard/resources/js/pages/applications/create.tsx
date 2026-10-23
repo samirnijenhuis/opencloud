@@ -75,7 +75,7 @@ export default function ApplicationCreate({
 }) {
     const form = useForm<FormData>({
         repository: '',
-        branch: 'main',
+        branch: '',
         cluster_id: defaultClusterId ? String(defaultClusterId) : '',
         type: 'laravel',
         port: '8080',
@@ -158,7 +158,13 @@ export default function ApplicationCreate({
                                 onChange={(e) => setData('repository', e.target.value)}
                                 autoFocus
                             />
-                            <Input aria-label="Branch" className="w-32" value={data.branch} onChange={(e) => setData('branch', e.target.value)} />
+                            <Input
+                                aria-label="Branch"
+                                className="w-32"
+                                placeholder="default branch"
+                                value={data.branch}
+                                onChange={(e) => setData('branch', e.target.value)}
+                            />
                         </div>
                         <InputError message={errors.repository} />
                         <InputError message={errors.branch} />

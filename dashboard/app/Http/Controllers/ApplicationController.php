@@ -94,7 +94,7 @@ class ApplicationController extends Controller
                 'cluster_id' => $data['cluster_id'],
                 'type' => $type,
                 'port' => $laravel ? 8080 : $data['port'],
-                'branch' => $data['branch'] ?? 'main',
+                'branch' => $data['branch'] ?? null,
                 'env' => array_map(fn (array $row) => [
                     'key' => $row['key'],
                     'value' => $row['value'] ?? '',

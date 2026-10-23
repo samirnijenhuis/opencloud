@@ -24,6 +24,8 @@ final class FakeProcesses
 
     public string $lsRemote = '';
 
+    public string $symref = "ref: refs/heads/main\tHEAD\n";
+
     /** @var list<string> the Dockerfile text that each build saw */
     public array $dockerfiles = [];
 
@@ -65,6 +67,10 @@ final class FakeProcesses
             foreach ($this->repository as $path => $contents) {
                 file_put_contents("{$process->path}/{$path}", $contents);
             }
+        }
+
+        if ($command[0] === 'git' && $command[1] === 'ls-remote' && $command[2] === '--symref') {
+            return Process::result($this->symref);
         }
 
         if ($command[0] === 'git' && $command[1] === 'ls-remote') {
