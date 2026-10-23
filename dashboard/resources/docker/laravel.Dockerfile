@@ -10,13 +10,20 @@ COPY . .
 RUN --mount=type=cache,target=/tmp/composer-cache {{ secret_mounts }}composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
 {{#assets}}
 
-FROM node:22-alpine AS assets
-WORKDIR /app
+# Vite plugins such as Wayfinder run artisan during the asset build, so this stage has PHP and Node.
+FROM base AS assets
+COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
+    && echo 'memory_limit=-1' > "$PHP_INI_DIR/conf.d/zz-opencloud-build.ini"
 # A stalled download fails after 60 seconds and npm tries again, instead of waiting 5 minutes.
-ENV NPM_FLAGS="--no-audit --no-fund --fetch-timeout=60000 --fetch-retries=5 --fetch-retry-mintimeout=2000"
+# IPv6 goes first, because on some networks IPv4 downloads stall while IPv6 does not. Without IPv6, Node falls back to IPv4 at once.
+ENV NPM_FLAGS="--no-audit --no-fund --fetch-timeout=60000 --fetch-retries=5 --fetch-retry-mintimeout=2000" COREPACK_ENABLE_DOWNLOAD_PROMPT=0 NODE_OPTIONS=--dns-result-order=ipv6first
 COPY . .
 COPY --from=vendor /app/vendor ./vendor
-RUN --mount=type=cache,target=/root/.npm {{ secret_mounts }}if [ -f package-lock.json ]; then npm ci $NPM_FLAGS; else npm install $NPM_FLAGS; fi && npm run build
+RUN composer dump-autoload --no-dev --no-scripts && php artisan package:discover --ansi && if [ -d vendor/laravel/wayfinder ]; then php artisan wayfinder:generate; fi
+# The lock file picks the package manager.
+RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn {{ secret_mounts }}if [ -f pnpm-lock.yaml ]; then npm install -g $NPM_FLAGS "pnpm@{{ pnpm_version }}" && pnpm install --frozen-lockfile && pnpm run build; elif [ -f yarn.lock ]; then corepack enable && yarn install && yarn run build; elif [ -f package-lock.json ]; then npm ci $NPM_FLAGS && npm run build; else npm install $NPM_FLAGS && npm run build; fi
 {{/assets}}
 
 FROM base
