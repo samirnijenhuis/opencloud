@@ -32,6 +32,8 @@ final class DeploymentLog
         $block = '';
 
         foreach (preg_split('/\R/', $text) as $line) {
+            // Tools such as artisan print terminal colors, which the log page would show as raw codes.
+            $line = preg_replace('/\e\[[0-9;?]*[A-Za-z]/', '', $line);
             $block .= "{$time} {$this->masker->mask($line)}\n";
         }
 
