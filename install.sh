@@ -9,6 +9,8 @@ OPENCLOUD_IMAGE=${OPENCLOUD_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud:$OPEN
 OPENCLOUD_CADDY_IMAGE=${OPENCLOUD_CADDY_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud-caddy:$OPENCLOUD_VERSION}
 OPENCLOUD_TLS_ISSUER=${OPENCLOUD_TLS_ISSUER:-acme}
 STATE_DIR=/var/lib/opencloud
+# Restore mode: a file with the backup bucket settings and the saved APP_KEY. See "Restore a lost server" in README.md.
+RESTORE_FILE=${OPENCLOUD_RESTORE_FILE:-}
 # When bash reads the script from a pipe, no file backs it, so nothing sits beside it. The current folder does not count.
 if [[ -f ${BASH_SOURCE[0]:-} ]]; then
     SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -125,6 +127,15 @@ preflight() {
 
     SERVER_IP=$(server_ip)
     [[ -n $SERVER_IP ]] || fail "Cannot find the IP address of this server. Set OPENCLOUD_PUBLIC_IP to the public IP address."
+
+    if [[ -n $RESTORE_FILE ]]; then
+        [[ -f $RESTORE_FILE ]] || fail "OPENCLOUD_RESTORE_FILE points to $RESTORE_FILE, but that file does not exist."
+        RESTORE_FILE=$(realpath "$RESTORE_FILE")
+        # restore.json shows that the database came from an earlier run of this restore, so the run can go on.
+        if [[ -s $STATE_DIR/data/database.sqlite && ! -f $STATE_DIR/data/restore.json ]]; then
+            fail "This server already has a dashboard database in $STATE_DIR/data. Restore mode works only on a new server. To repair this install, run the installer without OPENCLOUD_RESTORE_FILE."
+        fi
+    fi
 }
 
 install_k3s() {
@@ -172,6 +183,50 @@ ensure_secrets() {
         --from-file=APP_KEY="$STATE_DIR/APP_KEY" \
         --from-file=OPENCLOUD_SETUP_TOKEN="$STATE_DIR/setup-token" \
         --dry-run=client -o yaml | kc apply -f -
+}
+
+# Restore mode: a one-off Job with the dashboard image brings the database and the APP_KEY back from the bucket.
+restore_dashboard() {
+    [[ -n $RESTORE_FILE ]] || return 0
+    if [[ -s $STATE_DIR/data/database.sqlite ]]; then
+        say "The dashboard database is already restored"
+        return
+    fi
+
+    say "Restoring the dashboard database from the backup bucket"
+    install -d -m 0700 "$STATE_DIR"
+    kc apply -f "$PLATFORM_DIR/namespace.yaml" >/dev/null
+    kc -n opencloud delete job restore --ignore-not-found --wait=true >/dev/null
+    sed -e "s|__DASHBOARD_IMAGE__|$OPENCLOUD_IMAGE|g" -e "s|__RESTORE_FILE__|$RESTORE_FILE|g" "$PLATFORM_DIR/restore.yaml" | kc apply -f - >/dev/null
+
+    local result=timeout _
+    for _ in $(seq 1 60); do
+        if kc -n opencloud wait --for=condition=complete job/restore --timeout=10s >/dev/null 2>&1; then
+            result=complete
+            break
+        fi
+        if kc -n opencloud wait --for=condition=failed job/restore --timeout=0s >/dev/null 2>&1; then
+            result=failed
+            break
+        fi
+    done
+    kc -n opencloud logs job/restore 2>/dev/null || true
+
+    case $result in
+    complete) kc -n opencloud delete job restore --wait=false >/dev/null ;;
+    failed) fail "The dashboard database was not restored. Read the message above, fix the restore file, and run the installer again." ;;
+    *) fail "The restore Job did not finish in 10 minutes. Check it with: k3s kubectl -n opencloud describe job/restore" ;;
+    esac
+}
+
+start_restore() {
+    kc -n opencloud exec deploy/dashboard -c web -- php artisan opencloud:restore ||
+        fail "The restore did not start. Check it with: opencloud logs web"
+    echo
+    echo "Opencloud runs on the restored dashboard database at http://$SERVER_IP:8000."
+    echo "The restore goes on in the background. Follow it with: opencloud restore-status"
+    echo "Point the DNS records of your domains at $SERVER_IP."
+    echo "The file $RESTORE_FILE holds the APP_KEY and the keys of the bucket. Delete it, or keep it in a safe place."
 }
 
 # Usage: import_image <name> <archive> <image> <variable that sets the image>
@@ -231,11 +286,17 @@ main() {
     bootstrap "$@"
     preflight
     install_k3s
-    ensure_secrets
     load_images
+    restore_dashboard
+    ensure_secrets
     apply_platform
     configure_caddy
     install -m 0755 "$SOURCE_DIR/bin/opencloud" /usr/local/bin/opencloud
+
+    if [[ -n $RESTORE_FILE ]]; then
+        start_restore
+        return
+    fi
 
     echo
     echo "Opencloud is running."

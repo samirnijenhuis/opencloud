@@ -9,6 +9,8 @@ Commands:
   status                              Show the opencloud pods.
   logs [web|worker|builder|scheduler|caddy]  Show the logs of one part. Extra flags go to kubectl logs, for example -f.
   setup-url                           Print the URL that creates the owner account.
+  restore-status                      Show the progress of a restore from the backup bucket.
+  restore                             Run the steps of a restore that are not done, for example after a failed step.
 EOF
 }
 
@@ -45,6 +47,12 @@ setup-url)
     fi
     token=$(kc get secret dashboard -o 'jsonpath={.data.OPENCLOUD_SETUP_TOKEN}' | base64 -d)
     echo "Setup URL: $app_url/setup/$token"
+    ;;
+restore-status)
+    kc exec deploy/dashboard -c web -- php artisan opencloud:restore-status
+    ;;
+restore)
+    kc exec deploy/dashboard -c web -- php artisan opencloud:restore
     ;;
 help | -h | --help)
     usage
