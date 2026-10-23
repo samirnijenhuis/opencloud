@@ -74,6 +74,17 @@ A domain in `cloudflare` DNS mode needs the Cloudflare key. Opencloud creates th
 
 `App\CloudProviders\Providers` is the one table of provider guides: DigitalOcean, Hetzner, AWS, and Cloudflare. Each `ProviderGuide` has the key page URL, the rights to select, an optional CLI command, and a check class. A check makes read-only API calls and returns a `CheckResult` with the status `ok`, `invalid`, or `missing_rights`. The AWS check signs its requests with `AwsSignatureV4`. The settings page "Provider keys" is for the owner only. The command `opencloud:check-provider-links` requests each key page, and a weekly workflow runs it.
 
+## OpenTofu
+
+`App\Tofu\Runner` is the only class that runs `tofu`. A `Stack` names a module under `tofu/`, a work folder `<data_path>/tofu/<kind>-<id>`, the module variables, and the provider credentials. Each run copies the module into the work folder and writes the variables to `opencloud.tfvars.json` with mode 600. The token goes into the process env only, for example `DIGITALOCEAN_TOKEN`. The state stays in the work folder, and `TF_ENCRYPTION` always turns on state and plan encryption with a PBKDF2 passphrase from `APP_KEY`. So the passphrase is never on disk, and a new `APP_KEY` cannot read the old state. Each output line goes through `SecretMasker` into the `tofu_log` column, which the owner sees in the UI. The outputs never go into the log. Tests swap `tofu` with `Process::fake()`. `StateEncryptionTest` runs the real binary when `OPENCLOUD_TEST_TOFU_BINARY` is set.
+
+The image holds a pinned `tofu` and the modules in `/opt/opencloud/tofu`. Build it with `--build-context tofu=tofu`. The `.terraform.lock.hcl` of each module pins the provider hashes.
+
+- `tofu/digitalocean/cluster` creates a DOKS cluster with one autoscaling node pool. It uses the registry of the account and creates one when the account has none. The registry has `destroy = false`, so a destroy leaves it for other clusters. The module outputs a kubeconfig with a service account token, because the kubeconfig of DigitalOcean expires after seven days, and a credential for the registry only.
+- `tofu/digitalocean/database` creates a managed MySQL or Postgres with one node, a database, and a user. Its firewall lets in only the Kubernetes cluster.
+
+`CreateCluster` stores a `created` cluster with the status `provisioning`. `ProvisionCluster` applies the cluster module, stores the kubeconfig and the registry, and dispatches `InstallClusterParts`. `DestroyCluster` refuses while applications or managed databases use the cluster, and `TearDownCluster` runs `tofu destroy` and removes the record. A managed attachment has a managed `Datastore` of its own. `ProvisionManagedDatabase` applies the database module and writes the same Laravel env values as the standard engine. Detach of a managed attachment runs `TearDownManagedDatabase`, which destroys the database and its data. The OpenTofu jobs run on the `builds` queue, because a cluster or a database takes minutes. A failed run keeps the record with the error, and the next run converges.
+
 ## Builds
 
 `App\Build\DockerfileTemplate` is a pure class. It reads `composer.json` and `package.json` and returns the Dockerfile text for a Laravel app. The template lives in `dashboard/resources/docker/laravel.Dockerfile`. The image runs FrankenPHP on port 8080 and serves `/app/public`. BuildKit cache mounts keep the Composer and npm downloads between builds. The web process runs `php artisan optimize` when it starts, because the config cache must see the runtime env.
@@ -105,8 +116,10 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `DeleteEnvVar` | `handle(EnvVar $envVar, User $by): void` | Deletes one user value. |
 | `AddDomain` | `handle(Environment $environment, User $by, string $hostname, bool $manageDns = false, bool $proxied = false): Domain` | Stores the domain and dispatches `CheckDomain`. With `$manageDns`, it first creates or updates the Cloudflare A record. |
 | `RemoveDomain` | `handle(Domain $domain, User $by): void` | Deletes the Cloudflare record that opencloud created, deletes the domain, and syncs Caddy. |
-| `AttachDatastore` | `handle(Environment $environment, ?User $by, DatastoreKind $kind): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment, and dispatches its provisioning. |
-| `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. |
+| `AttachDatastore` | `handle(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = Standard): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment, and dispatches its provisioning. With the managed source, it creates a managed datastore for the environment and dispatches `ProvisionManagedDatabase`. |
+| `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. For a managed attachment, it removes the env values and dispatches `TearDownManagedDatabase`. |
+| `CreateCluster` | `handle(User $by, array $data): Cluster` | Stores a `created` DigitalOcean cluster and dispatches `ProvisionCluster`. It needs a stored DigitalOcean key. |
+| `DestroyCluster` | `handle(Cluster $cluster, User $by): void` | Refuses while applications or managed databases use the cluster. Then it dispatches `TearDownCluster`. |
 | `StoreProviderCredential` | `handle(User $by, string $provider, string $token): CheckResult` | Checks the key with the provider. It stores the key encrypted when the check passes or only optional rights are missing. The audit event never holds the key. |
 | `DeleteProviderCredential` | `handle(ProviderCredential $credential, User $by): void` | Deletes the key. |
 | `ConnectGitHubApp` | `handle(User $by, string $code): GithubApp` | Exchanges the code of the manifest flow and stores the GitHub App. It replaces the old app. |
@@ -115,7 +128,7 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 
 ## Queues
 
-The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, and `RestoreDatabase`. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, `ProvisionDatastoreAttachment`, `DeployPush`, `SyncPreview`, and `PostPreviewComment`. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
+The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, `RestoreDatabase`, and the OpenTofu jobs `ProvisionCluster`, `TearDownCluster`, `ProvisionManagedDatabase`, and `TearDownManagedDatabase`. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, `ProvisionDatastoreAttachment`, `DeployPush`, `SyncPreview`, and `PostPreviewComment`. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
 
 ## Datastores
 
