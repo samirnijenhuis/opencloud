@@ -48,7 +48,7 @@ The NetworkPolicies in `platform/networkpolicies.yaml` let only the dashboard re
 
 A release is a tag `v*`. `.github/workflows/release.yml` publishes the dashboard image and the Caddy image (`opencloud-caddy`) for amd64 and arm64 and a release archive with `install.sh`, `platform/`, and `bin/`. `tests/e2e/build-release-archive.sh` builds the archive for the workflow and for the tests. When `install.sh` runs from `curl | bash`, it downloads that archive, checks its SHA-256 sum, extracts it to `/opt/opencloud/<version>`, and runs from there.
 
-The installer keeps its state in `/var/lib/opencloud`. The files `APP_KEY` and `setup-token` there have mode 600. The installer copies them into the Secret `dashboard` and never into a manifest file. The k3s options live in `/etc/rancher/k3s/config.yaml`. If `APP_KEY` is missing while the database exists, the installer stops, because a new key cannot read the stored secrets.
+The installer keeps its state in `/var/lib/opencloud`. The files `APP_KEY` and `setup-token` there have mode 600. The installer copies them into the Secret `dashboard` and never into a manifest file. The k3s options live in `/etc/rancher/k3s/config.yaml`. If `APP_KEY` is missing while the database exists, the installer stops, because a new key cannot read the stored secrets. In restore mode, the installer brings both back from the backup bucket. The section Restore describes it.
 
 The dashboard is at `http://<server-ip>:8000`. Caddy forwards port 8000 to the dashboard Service. The owner can also give the dashboard a domain in Settings. After its DNS check passes, Caddy serves the dashboard on that domain over HTTPS, and the dashboard uses the domain as its root URL. The queue workers restart then, because they read the root URL when they boot.
 
@@ -115,7 +115,7 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 
 ## Queues
 
-The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, and `RestoreDatabase`. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, `ProvisionDatastoreAttachment`, `DeployPush`, `SyncPreview`, and `PostPreviewComment`. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
+The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, `RestoreDatabase`, and `RunRestore`. `RunRestore` provisions the datastores itself and waits for no queued job, so it never blocks behind the deployments that it starts. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, `ProvisionDatastoreAttachment`, `DeployPush`, `SyncPreview`, and `PostPreviewComment`. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
 
 ## Datastores
 
@@ -124,6 +124,17 @@ Each kind has one engine in `app/Datastores`, and `Engines::for()` picks it. MyS
 Each deployment has its own env Secret, `env-<deployment-id>`. A failed deploy cannot change the env of the pods that still run. After a deployment goes live, the job keeps the live Secret and the two newest, and deletes the rest.
 
 Backups run every night at 03:00. A dump streams through `kubectl exec` into a gzip file under `<data_path>/backups`, or into the S3 backup target when one exists. The newest 7 dumps per attachment stay. A restore first backs up the current state, then empties the database and streams the dump back.
+
+## Restore
+
+A restore puts a lost install back on a new server. The code lives in `app/Restore`.
+
+1. The owner runs `install.sh` with `OPENCLOUD_RESTORE_FILE`. The file holds the settings of the backup bucket and the saved `APP_KEY`. The installer refuses restore mode when `database.sqlite` exists without `restore.json`.
+2. Before the dashboard starts, the installer runs the Job in `platform/restore.yaml` with the dashboard image. The Job reads the file from the host path, so its values never go into a manifest, a Secret, a command line, or a log. It runs `opencloud:fetch-dashboard-backup`. `DashboardBackup` takes the newest `backups/dashboard/*.sqlite.gz` and decrypts one encrypted column with the `APP_KEY`. Only then does it write the `APP_KEY` file and `database.sqlite`. It empties `jobs`, `cache`, and `cache_locks`, because no worker of the lost server lives on. Then `RestoreState::begin()` writes `restore.json` in the data folder with the start time.
+3. After the dashboard starts, the bootstrap command stores the new IP as the ingress IP of `local`. The installer runs `opencloud:restore`, which queues `RunRestore` on `builds`.
+4. `RestoreInstall` runs the steps of the enum `RestoreStep` in order: retire the old deployments of `local`, provision each attachment again with its stored names and passwords, restore each MySQL and Postgres database, copy the RustFS buckets back, deploy the live commit of each permanent environment, check each domain again, and sync Caddy. `restore.json` records the status of each step. A run skips the done steps, so `opencloud restore` resumes a failed restore.
+
+A database comes back from its newest dump file in the bucket from before the start time. A nightly backup on the new server can dump an empty database during the restore, so later dumps do not count. A connected cluster kept running, so the restore leaves its records alone.
 
 ## GitHub
 
