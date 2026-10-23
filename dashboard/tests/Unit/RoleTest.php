@@ -15,6 +15,7 @@ class RoleTest extends TestCase
         return [
             'owner manages credentials' => [Role::Owner, Ability::ManageCredentials, true],
             'owner manages members' => [Role::Owner, Ability::ManageMembers, true],
+            'owner upgrades opencloud' => [Role::Owner, Ability::UpgradeOpencloud, true],
             'owner manages applications' => [Role::Owner, Ability::ManageApplications, true],
             'owner changes protected environment' => [Role::Owner, Ability::ChangeProtectedEnvironment, true],
             'owner changes unprotected environment' => [Role::Owner, Ability::ChangeUnprotectedEnvironment, true],
@@ -23,6 +24,7 @@ class RoleTest extends TestCase
 
             'admin manages credentials' => [Role::Admin, Ability::ManageCredentials, false],
             'admin manages members' => [Role::Admin, Ability::ManageMembers, false],
+            'admin upgrades opencloud' => [Role::Admin, Ability::UpgradeOpencloud, false],
             'admin manages applications' => [Role::Admin, Ability::ManageApplications, true],
             'admin changes protected environment' => [Role::Admin, Ability::ChangeProtectedEnvironment, true],
             'admin changes unprotected environment' => [Role::Admin, Ability::ChangeUnprotectedEnvironment, true],
@@ -31,6 +33,7 @@ class RoleTest extends TestCase
 
             'developer manages credentials' => [Role::Developer, Ability::ManageCredentials, false],
             'developer manages members' => [Role::Developer, Ability::ManageMembers, false],
+            'developer upgrades opencloud' => [Role::Developer, Ability::UpgradeOpencloud, false],
             'developer manages applications' => [Role::Developer, Ability::ManageApplications, false],
             'developer changes protected environment' => [Role::Developer, Ability::ChangeProtectedEnvironment, false],
             'developer changes unprotected environment' => [Role::Developer, Ability::ChangeUnprotectedEnvironment, true],

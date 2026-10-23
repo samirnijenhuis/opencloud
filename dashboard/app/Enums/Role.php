@@ -12,7 +12,8 @@ enum Role: string
     {
         $roles = match ($ability) {
             Ability::ManageCredentials,
-            Ability::ManageMembers => [self::Owner],
+            Ability::ManageMembers,
+            Ability::UpgradeOpencloud => [self::Owner],
             Ability::ManageApplications,
             Ability::ChangeProtectedEnvironment => [self::Owner, self::Admin],
             Ability::ChangeUnprotectedEnvironment,

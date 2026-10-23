@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Enums\Ability;
+use App\Jobs\CheckLatestRelease;
 use App\Models\Application;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -51,6 +52,11 @@ class HandleInertiaRequests extends Middleware
                 'create_application' => $request->user()?->can('create', Application::class) ?? false,
                 'manage_credentials' => $request->user()?->role->allows(Ability::ManageCredentials) ?? false,
                 'view_audit_log' => $request->user()?->role->allows(Ability::ManageApplications) ?? false,
+            ],
+            // Guests do not learn the version, because it tells an attacker which known bugs apply.
+            'opencloud' => fn () => $request->user() === null ? null : [
+                'version' => config('opencloud.version'),
+                'update' => $request->user()->role->allows(Ability::UpgradeOpencloud) ? CheckLatestRelease::newerRelease() : null,
             ],
         ]);
     }
