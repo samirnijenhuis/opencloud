@@ -66,6 +66,8 @@ const statusLabels: Record<Status, string> = {
 };
 
 const managedKinds: Kind[] = ['mysql', 'postgres'];
+// DigitalOcean MySQL needs a TLS CA that apps do not load yet, so only Postgres is offered as managed.
+const offeredManagedKinds: Kind[] = ['postgres'];
 
 const backupStatusLabels = { running: 'Running', done: 'Done', failed: 'Failed' } as const;
 
@@ -254,7 +256,7 @@ export default function EnvironmentDatastores(props: Props) {
                         {managed.available && !hasDatabase && (
                             <div className="space-y-2 rounded-lg border p-4">
                                 <div className="flex flex-wrap gap-2">
-                                    {managedKinds.map((kind) => (
+                                    {offeredManagedKinds.map((kind) => (
                                         <Button key={kind} variant="secondary" disabled={busy} onClick={() => attach(kind, 'managed')}>
                                             Attach managed {kindLabels[kind]}
                                         </Button>

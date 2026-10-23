@@ -17,6 +17,12 @@ final class ManagedDatabase
 {
     public const KINDS = [DatastoreKind::Mysql, DatastoreKind::Postgres];
 
+    /**
+     * DigitalOcean MySQL needs TLS with DigitalOcean's own CA, and a stock Laravel app does not load that CA yet.
+     * Postgres connects with sslmode=prefer, so the dashboard offers only Postgres until the CA is handled.
+     */
+    public const OFFERED = [DatastoreKind::Postgres];
+
     /** @var array<string, string> kind => the major version on DigitalOcean */
     public const VERSIONS = ['mysql' => '8', 'postgres' => '17'];
 

@@ -65,12 +65,14 @@ class ManagedDatastoreControllerTest extends TestCase
     {
         $url = "/environments/{$this->environment->id}/datastores";
 
-        $this->actingAs(User::factory()->admin()->create())->post($url, ['kind' => 'mysql', 'source' => 'managed'])->assertForbidden();
+        $this->actingAs(User::factory()->admin()->create())->post($url, ['kind' => 'postgres', 'source' => 'managed'])->assertForbidden();
         $this->assertSame(0, Datastore::query()->count());
 
-        $this->actingAs(User::factory()->owner()->create())->post($url, ['kind' => 'mysql', 'source' => 'managed'])->assertRedirect();
+        $this->actingAs(User::factory()->owner()->create())->post($url, ['kind' => 'mysql', 'source' => 'managed'])->assertSessionHasErrors(['kind' => 'A managed database on DigitalOcean is Postgres only for now. Use managed Postgres, or MySQL in the cluster.']);
+        $this->assertSame(0, Datastore::count());
+        $this->actingAs(User::factory()->owner()->create())->post($url, ['kind' => 'postgres', 'source' => 'managed'])->assertRedirect();
 
-        $this->assertSame([DatastoreSource::Managed, DatastoreKind::Mysql], [Datastore::query()->sole()->source, Datastore::query()->sole()->kind]);
+        $this->assertSame([DatastoreSource::Managed, DatastoreKind::Postgres], [Datastore::query()->sole()->source, Datastore::query()->sole()->kind]);
         Queue::assertPushed(ProvisionManagedDatabase::class);
     }
 
