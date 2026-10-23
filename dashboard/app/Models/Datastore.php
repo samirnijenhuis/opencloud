@@ -14,9 +14,9 @@ class Datastore extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['cluster_id', 'kind', 'source', 'version', 'status', 'root_password', 'error'];
+    protected $fillable = ['cluster_id', 'kind', 'source', 'version', 'status', 'root_password', 'error', 'tofu_log'];
 
-    protected $hidden = ['root_password'];
+    protected $hidden = ['root_password', 'tofu_log'];
 
     protected $attributes = [
         'source' => DatastoreSource::Standard->value,

@@ -57,4 +57,16 @@ return [
      */
     'max_previews' => (int) env('OPENCLOUD_MAX_PREVIEWS', 5),
 
+    'tofu_binary' => env('OPENCLOUD_TOFU_BINARY', 'tofu'),
+
+    /*
+     * The OpenTofu modules of the repository. The image copies them to /opt/opencloud/tofu.
+     */
+    'tofu_modules' => env('OPENCLOUD_TOFU_MODULES', base_path('../tofu')),
+
+    /*
+     * The size of a managed database on DigitalOcean. https://www.digitalocean.com/pricing/managed-databases
+     */
+    'managed_database_size' => env('OPENCLOUD_MANAGED_DATABASE_SIZE', 'db-s-1vcpu-1gb'),
+
 ];
