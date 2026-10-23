@@ -224,6 +224,7 @@ status=$(wait_for_deployment "$first_id" 3600)
 ok=0
 [[ $status == live ]] && ok=1
 record "the first deployment goes live (status $status after $(($(date +%s) - start))s)" "$ok"
+[[ $ok == 1 ]] || props "/deployments/$first_id" | json 'data["deployment"]["log"]' >"$WORK/first-deployment.log"
 [[ $ok == 1 ]] || exit 1
 
 for _ in $(seq 1 60); do [[ $(site_code) == 200 ]] && break; sleep 5; done
