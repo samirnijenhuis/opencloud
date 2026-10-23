@@ -10,7 +10,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
 type Kind = 'mysql' | 'postgres' | 'valkey' | 'rustfs';
-type Status = 'pending' | 'provisioning' | 'ready' | 'failed';
+type Status = 'pending' | 'provisioning' | 'ready' | 'failed' | 'destroying';
 
 type BackupRow = {
     id: number;
@@ -32,7 +32,11 @@ type Attachment = {
     env_keys: string[];
     backups?: BackupRow[];
     restore?: Restore | null;
+    managed?: boolean;
+    tofu_log?: string | null;
 };
+
+type Managed = { available: boolean; pricing_url: string; size: string };
 
 type Props = EnvironmentPageProps & {
     can: EnvironmentPageProps['can'] & { restore: boolean; manage_backup_target: boolean };
@@ -40,6 +44,7 @@ type Props = EnvironmentPageProps & {
     available_kinds: Kind[];
     has_backup_target: boolean;
     polling: boolean;
+    managed: Managed;
 };
 
 const kindLabels: Record<Kind, string> = { mysql: 'MySQL', postgres: 'Postgres', valkey: 'Valkey', rustfs: 'RustFS' };
@@ -49,9 +54,18 @@ const statusStyles: Record<Status, string> = {
     provisioning: 'border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
     ready: 'border-transparent bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
     failed: 'border-transparent bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+    destroying: 'border-transparent bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
 };
 
-const statusLabels: Record<Status, string> = { pending: 'Pending', provisioning: 'Provisioning', ready: 'Ready', failed: 'Failed' };
+const statusLabels: Record<Status, string> = {
+    pending: 'Pending',
+    provisioning: 'Provisioning',
+    ready: 'Ready',
+    failed: 'Failed',
+    destroying: 'Destroying',
+};
+
+const managedKinds: Kind[] = ['mysql', 'postgres'];
 
 const backupStatusLabels = { running: 'Running', done: 'Done', failed: 'Failed' } as const;
 
@@ -65,7 +79,8 @@ function formatBytes(bytes: number | null): string {
 }
 
 export default function EnvironmentDatastores(props: Props) {
-    const { environment, attachments, available_kinds, has_backup_target, polling, can } = props;
+    const { environment, attachments, available_kinds, has_backup_target, polling, can, managed } = props;
+    const hasDatabase = attachments.some((attachment) => managedKinds.includes(attachment.kind));
     const errors = usePage().props.errors as Record<string, string>;
     const [busy, setBusy] = useState(false);
     const [detaching, setDetaching] = useState<Attachment | null>(null);
@@ -79,10 +94,10 @@ export default function EnvironmentDatastores(props: Props) {
         return () => clearInterval(timer);
     }, [polling]);
 
-    const attach = (kind: Kind) => {
+    const attach = (kind: Kind, source: 'standard' | 'managed' = 'standard') => {
         router.post(
             route('datastores.store', environment.id),
-            { kind },
+            { kind, source },
             { preserveScroll: true, onStart: () => setBusy(true), onFinish: () => setBusy(false) },
         );
     };
@@ -91,6 +106,7 @@ export default function EnvironmentDatastores(props: Props) {
         if (!detaching) return;
 
         router.delete(route('datastores.destroy', detaching.id), {
+            data: detaching.managed ? { confirm: true } : {},
             preserveScroll: true,
             onStart: () => setBusy(true),
             onFinish: () => {
@@ -160,12 +176,12 @@ export default function EnvironmentDatastores(props: Props) {
                                 <h2 className="font-medium">{kindLabels[attachment.kind]}</h2>
                                 <Badge className={cn(statusStyles[attachment.status])}>{statusLabels[attachment.status]}</Badge>
                                 <span className="ml-auto flex gap-1">
-                                    {attachment.status === 'failed' && can.update && (
+                                    {attachment.status === 'failed' && can.update && attachment.server.status !== 'destroying' && (
                                         <Button variant="secondary" size="sm" disabled={busy} onClick={() => attach(attachment.kind)}>
                                             Try again
                                         </Button>
                                     )}
-                                    {can.update && (
+                                    {can.update && attachment.server.status !== 'destroying' && (!attachment.managed || managed.available) && (
                                         <Button variant="ghost" size="sm" onClick={() => setDetaching(attachment)}>
                                             Detach
                                         </Button>
@@ -180,7 +196,8 @@ export default function EnvironmentDatastores(props: Props) {
                             <dl className="grid gap-2 text-sm sm:grid-cols-[8rem_1fr]">
                                 <dt className="text-muted-foreground">Server</dt>
                                 <dd>
-                                    {attachment.server.cluster}, {kindLabels[attachment.kind]} {attachment.server.version}{' '}
+                                    {attachment.managed ? 'DigitalOcean managed' : attachment.server.cluster}, {kindLabels[attachment.kind]}{' '}
+                                    {attachment.server.version}{' '}
                                     <span className="text-muted-foreground">({statusLabels[attachment.server.status].toLowerCase()})</span>
                                     {attachment.server.status === 'failed' && attachment.server.error && (
                                         <span className="block text-red-600 dark:text-red-400">{attachment.server.error}</span>
@@ -200,6 +217,15 @@ export default function EnvironmentDatastores(props: Props) {
                                 </dd>
                             </dl>
 
+                            {attachment.tofu_log && (
+                                <details className="border-t pt-3">
+                                    <summary className="cursor-pointer text-sm font-medium">OpenTofu log</summary>
+                                    <pre className="bg-muted mt-2 max-h-80 overflow-auto rounded p-3 font-mono text-xs whitespace-pre-wrap">
+                                        {attachment.tofu_log}
+                                    </pre>
+                                </details>
+                            )}
+
                             {attachment.backups && (
                                 <BackupsSection
                                     attachment={attachment}
@@ -217,12 +243,33 @@ export default function EnvironmentDatastores(props: Props) {
 
             {can.update ? (
                 available_kinds.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                        {available_kinds.map((kind) => (
-                            <Button key={kind} variant="secondary" disabled={busy} onClick={() => attach(kind)}>
-                                Attach {kindLabels[kind]}
-                            </Button>
-                        ))}
+                    <div className="space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                            {available_kinds.map((kind) => (
+                                <Button key={kind} variant="secondary" disabled={busy} onClick={() => attach(kind)}>
+                                    Attach {kindLabels[kind]}
+                                </Button>
+                            ))}
+                        </div>
+                        {managed.available && !hasDatabase && (
+                            <div className="space-y-2 rounded-lg border p-4">
+                                <div className="flex flex-wrap gap-2">
+                                    {managedKinds.map((kind) => (
+                                        <Button key={kind} variant="secondary" disabled={busy} onClick={() => attach(kind, 'managed')}>
+                                            Attach managed {kindLabels[kind]}
+                                        </Button>
+                                    ))}
+                                </div>
+                                <p className="text-muted-foreground text-sm">
+                                    OpenTofu creates a database cluster of size <span className="font-mono">{managed.size}</span> on DigitalOcean for
+                                    this environment. Only this Kubernetes cluster can connect. DigitalOcean charges for it and backs it up. Read the{' '}
+                                    <a href={managed.pricing_url} target="_blank" rel="noreferrer" className="underline">
+                                        database prices
+                                    </a>
+                                    .
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )
             ) : (
@@ -232,18 +279,22 @@ export default function EnvironmentDatastores(props: Props) {
             <Dialog open={detaching !== null} onOpenChange={(open) => !open && setDetaching(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Detach {detaching && kindLabels[detaching.kind]}?</DialogTitle>
+                        <DialogTitle>
+                            {detaching?.managed ? 'Destroy' : 'Detach'} {detaching && kindLabels[detaching.kind]}?
+                        </DialogTitle>
                         <DialogDescription>
-                            The application loses its access and the values listed above are removed. The data stays on the server. Attach the same
-                            kind again to use it.
+                            {detaching?.managed
+                                ? 'OpenTofu destroys the managed database on DigitalOcean. DigitalOcean deletes the data and its backups. You cannot undo this. The values listed above are removed now.'
+                                : 'The application loses its access and the values listed above are removed. The data stays on the server. Attach the same kind again to use it.'}
                         </DialogDescription>
                     </DialogHeader>
+                    {errors.confirm && <p className="text-sm text-red-600 dark:text-red-400">{errors.confirm}</p>}
                     <DialogFooter>
                         <Button variant="secondary" onClick={() => setDetaching(null)}>
                             Cancel
                         </Button>
                         <Button variant="destructive" disabled={busy} onClick={detach}>
-                            Detach
+                            {detaching?.managed ? 'Destroy the database' : 'Detach'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

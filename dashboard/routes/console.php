@@ -1,6 +1,8 @@
 <?php
 
+use App\Clusters\ClusterStatus;
 use App\Enums\DatastoreKind;
+use App\Enums\DatastoreSource;
 use App\Jobs\BackupDashboard;
 use App\Jobs\BackupDatastore;
 use App\Jobs\CopyBuckets;
@@ -17,14 +19,15 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // The full config every five minutes repairs any drift, for example after a Caddy restart without its saved config.
-Schedule::call(fn () => Cluster::query()->each(fn (Cluster $cluster) => SyncCaddy::dispatch($cluster)))
+// A cluster that OpenTofu creates or destroys has no Caddy to reach.
+Schedule::call(fn () => Cluster::query()->whereNotIn('status', [ClusterStatus::Provisioning, ClusterStatus::Destroying])->each(fn (Cluster $cluster) => SyncCaddy::dispatch($cluster)))
     ->name('sync-caddy')
     ->everyFiveMinutes();
 
 Schedule::job(new FailStuckDeployments)->everyMinute();
 
 Schedule::call(function () {
-    Datastore::query()->whereIn('kind', [DatastoreKind::Mysql, DatastoreKind::Postgres])->each(fn (Datastore $datastore) => BackupDatastore::dispatch($datastore));
+    Datastore::query()->where('source', DatastoreSource::Standard)->whereIn('kind', [DatastoreKind::Mysql, DatastoreKind::Postgres])->each(fn (Datastore $datastore) => BackupDatastore::dispatch($datastore));
     Datastore::query()->where('kind', DatastoreKind::Rustfs)->each(fn (Datastore $datastore) => CopyBuckets::dispatch($datastore));
     BackupDashboard::dispatch();
 })->name('nightly-backups')->dailyAt('03:00');
