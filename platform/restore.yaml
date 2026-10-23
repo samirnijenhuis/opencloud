@@ -9,7 +9,8 @@ metadata:
     app.kubernetes.io/name: restore
     app.kubernetes.io/part-of: opencloud
 spec:
-  backoffLimit: 0
+  # The command writes nothing until it succeeds, so a retry after a network error is safe.
+  backoffLimit: 2
   template:
     metadata:
       labels:

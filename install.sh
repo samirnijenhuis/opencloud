@@ -197,9 +197,14 @@ restore_dashboard() {
     install -d -m 0700 "$STATE_DIR"
     kc apply -f "$PLATFORM_DIR/namespace.yaml" >/dev/null
     kc -n opencloud delete job restore --ignore-not-found --wait=true >/dev/null
+    # The node is ready before the cluster DNS, and the Job must resolve the bucket endpoint.
+    local result=timeout _
+    for _ in $(seq 1 18); do
+        kc -n kube-system rollout status deployment/coredns --timeout=10s >/dev/null 2>&1 && break
+        sleep 2
+    done
     sed -e "s|__DASHBOARD_IMAGE__|$OPENCLOUD_IMAGE|g" -e "s|__RESTORE_FILE__|$RESTORE_FILE|g" "$PLATFORM_DIR/restore.yaml" | kc apply -f - >/dev/null
 
-    local result=timeout _
     for _ in $(seq 1 60); do
         if kc -n opencloud wait --for=condition=complete job/restore --timeout=10s >/dev/null 2>&1; then
             result=complete
@@ -210,7 +215,7 @@ restore_dashboard() {
             break
         fi
     done
-    kc -n opencloud logs job/restore 2>/dev/null || true
+    kc -n opencloud logs --selector=job-name=restore --tail=-1 2>/dev/null || true
 
     case $result in
     complete) kc -n opencloud delete job restore --wait=false >/dev/null ;;
