@@ -1,0 +1,52 @@
+# The installer runs this Job in restore mode, before the dashboard starts. It reads the restore file from the host,
+# so the keys in it never go into a manifest, a Secret, or a command line.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: restore
+    app.kubernetes.io/part-of: opencloud
+spec:
+  # The command writes nothing until it succeeds, so a retry after a network error is safe.
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: restore
+        app.kubernetes.io/part-of: opencloud
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: restore
+          image: "__DASHBOARD_IMAGE__"
+          imagePullPolicy: IfNotPresent
+          args: [php, artisan, "opencloud:fetch-dashboard-backup", /run/opencloud/restore.env]
+          env:
+            # The dashboard database does not exist yet, so Laravel boots on an empty one in memory.
+            - name: DB_DATABASE
+              value: ":memory:"
+            - name: CACHE_STORE
+              value: array
+            - name: SESSION_DRIVER
+              value: array
+            - name: QUEUE_CONNECTION
+              value: sync
+            - name: OPENCLOUD_DATA_PATH
+              value: /var/lib/opencloud/data
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/opencloud
+            - name: restore-file
+              mountPath: /run/opencloud/restore.env
+              readOnly: true
+      volumes:
+        - name: state
+          hostPath:
+            path: /var/lib/opencloud
+            type: DirectoryOrCreate
+        - name: restore-file
+          hostPath:
+            path: "__RESTORE_FILE__"
+            type: File

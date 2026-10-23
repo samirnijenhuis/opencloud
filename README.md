@@ -69,6 +69,38 @@ The installer keeps its state in `/var/lib/opencloud`. Keep a copy of `/var/lib/
 | `sudo opencloud status` | Shows the opencloud pods. |
 | `sudo opencloud logs [web\|worker\|builder\|scheduler\|caddy]` | Shows the logs of one part. |
 | `sudo opencloud setup-url` | Prints the setup URL, or the dashboard address after setup. |
+| `sudo opencloud restore-status` | Shows the progress of a restore. |
+| `sudo opencloud restore` | Runs the steps of a restore that are not done, for example after you fix a failed step. |
+
+## Restore a lost server
+
+You can restore the whole install on a new server when the old server is lost. You need an S3 backup target in **Settings > Backups** and the saved `APP_KEY`. The restore uses the newest dashboard copy and the newest dump of each database in the bucket.
+
+1. Start a new Ubuntu 24.04 server.
+2. Write the file `/root/opencloud-restore.env` with the settings of the backup target and the `APP_KEY`:
+
+   ```bash
+   BACKUP_ENDPOINT=https://s3.example.com
+   BACKUP_REGION=us-east-1
+   BACKUP_BUCKET=opencloud-backups
+   BACKUP_ACCESS_KEY=...
+   BACKUP_SECRET_KEY=...
+   BACKUP_PATH_STYLE=true
+   APP_KEY=base64:...
+   ```
+
+3. Make the file readable for root only: `chmod 600 /root/opencloud-restore.env`.
+4. Run the installer in restore mode:
+
+   ```bash
+   curl -fsSL https://github.com/opencloud-dev/opencloud/releases/latest/download/install.sh | sudo OPENCLOUD_RESTORE_FILE=/root/opencloud-restore.env bash
+   ```
+
+5. Follow the restore with `sudo opencloud restore-status`. The restore provisions the datastores again, restores the databases and the RustFS buckets, and deploys each environment that was live.
+6. Point the DNS records of your domains at the new server. A domain in Cloudflare DNS mode gets its new record from opencloud.
+7. Delete the restore file, or keep it in a safe place.
+
+The installer refuses restore mode on a server that already has a dashboard database. Connected clusters keep running during the loss, and the restored dashboard reconnects to them.
 
 ## How it works
 

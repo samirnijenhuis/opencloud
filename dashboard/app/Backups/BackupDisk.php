@@ -46,14 +46,20 @@ final class BackupDisk
 
     public static function s3(BackupTarget $target): Filesystem
     {
+        return self::bucket($target->endpoint, $target->bucket, $target->region, $target->path_style, $target->access_key, $target->secret_key);
+    }
+
+    /** A restore reads the bucket before the dashboard database exists, so it passes the settings without a BackupTarget row. */
+    public static function bucket(string $endpoint, string $bucket, ?string $region, ?bool $pathStyle, string $accessKey, string $secretKey): Filesystem
+    {
         return Storage::build([
             'driver' => 's3',
-            'key' => $target->access_key,
-            'secret' => $target->secret_key,
-            'region' => $target->region ?? 'us-east-1',
-            'bucket' => $target->bucket,
-            'endpoint' => $target->endpoint,
-            'use_path_style_endpoint' => $target->path_style ?? true,
+            'key' => $accessKey,
+            'secret' => $secretKey,
+            'region' => $region ?? 'us-east-1',
+            'bucket' => $bucket,
+            'endpoint' => $endpoint,
+            'use_path_style_endpoint' => $pathStyle ?? true,
             'throw' => true,
         ]);
     }
