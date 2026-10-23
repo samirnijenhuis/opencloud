@@ -23,6 +23,9 @@ final class FakeTofu
     /** The subcommand that fails, for example "apply". */
     public ?string $failOn = null;
 
+    /** How many calls of $failOn fail before one succeeds. */
+    public int $failTimes = PHP_INT_MAX;
+
     public string $error = 'Error: Error creating Kubernetes cluster: POST https://api.digitalocean.com/v2/kubernetes/clusters: 422 Region is not available';
 
     public static function install(): self
@@ -53,7 +56,7 @@ final class FakeTofu
             'variables' => is_file($varFile) ? json_decode(file_get_contents($varFile), true) : null,
         ];
 
-        if ($args[0] === $this->failOn) {
+        if ($args[0] === $this->failOn && $this->failTimes-- > 0) {
             return Process::describe()->output($this->lines[$args[0]] ?? [])->errorOutput($this->error)->exitCode(1);
         }
 

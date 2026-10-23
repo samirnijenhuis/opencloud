@@ -7,6 +7,7 @@ use App\Tofu\Runner;
 use App\Tofu\Stack;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Sleep;
 use InvalidArgumentException;
 use RuntimeException;
 use Tests\Fakes\FakeTofu;
@@ -139,6 +140,30 @@ class RunnerTest extends TestCase
         }
 
         $this->assertSame(['init', 'apply'], array_column($this->tofu->commands(), 0));
+    }
+
+    public function test_a_failed_init_runs_again_and_three_failures_stop_the_run(): void
+    {
+        Sleep::fake();
+        $this->tofu->failOn = 'init';
+        $this->tofu->failTimes = 1;
+        $this->tofu->error = 'Error: Failed to resolve provider packages: context deadline exceeded';
+
+        (new Runner)->apply($this->stack(), Cluster::factory()->create());
+
+        $this->assertSame(['init', 'init', 'apply', 'output'], array_column($this->tofu->commands(), 0));
+
+        $this->tofu->ran = [];
+        $this->tofu->failTimes = 3;
+
+        try {
+            (new Runner)->apply($this->stack(), Cluster::factory()->create());
+            $this->fail('The apply did not throw.');
+        } catch (RuntimeException $e) {
+            $this->assertSame('tofu init failed. Error: Failed to resolve provider packages: context deadline exceeded', $e->getMessage());
+        }
+
+        $this->assertSame(['init', 'init', 'init'], array_column($this->tofu->commands(), 0));
     }
 
     public function test_destroy_runs_init_and_destroy_then_removes_the_work_folder(): void

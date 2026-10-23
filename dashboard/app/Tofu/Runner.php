@@ -20,13 +20,15 @@ final class Runner
     /** Below the 3000 second timeout of the jobs that call it. */
     private const TIMEOUT_SECONDS = 2700;
 
+    private const INIT_TRIES = 3;
+
     /** @return array<string, mixed> the outputs of the module, name => value */
     public function apply(Stack $stack, Model $logTo): array
     {
         $log = $this->log($stack, $logTo);
         $dir = $this->prepare($stack);
 
-        $this->run($stack, $dir, ['init', '-input=false', '-no-color'], $log);
+        $this->init($stack, $dir, $log);
         $this->run($stack, $dir, ['apply', '-auto-approve', '-input=false', '-no-color', '-var-file='.self::VAR_FILE], $log);
 
         // The outputs hold the kubeconfig and the passwords, so they never go into the log.
@@ -45,7 +47,7 @@ final class Runner
         $log = $this->log($stack, $logTo);
         $dir = $this->prepare($stack);
 
-        $this->run($stack, $dir, ['init', '-input=false', '-no-color'], $log);
+        $this->init($stack, $dir, $log);
         $this->run($stack, $dir, ['destroy', '-auto-approve', '-input=false', '-no-color', '-suppress-forget-errors', '-var-file='.self::VAR_FILE], $log);
 
         File::deleteDirectory($dir);
@@ -119,6 +121,12 @@ final class Runner
         file_put_contents($vars, json_encode($stack->variables, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
         return $dir;
+    }
+
+    /** The provider registry sometimes times out. Init changes no infrastructure, so it can simply run again. */
+    private function init(Stack $stack, string $dir, TofuLog $log): void
+    {
+        retry(self::INIT_TRIES, fn () => $this->run($stack, $dir, ['init', '-input=false', '-no-color'], $log), 5000);
     }
 
     /** @param  list<string>  $args */
