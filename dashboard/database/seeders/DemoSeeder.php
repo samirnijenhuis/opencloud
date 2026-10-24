@@ -13,6 +13,7 @@ use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
 use App\Enums\EnvVarSource;
 use App\Enums\Size;
+use App\Environments\CommandRunStatus;
 use App\Models\Application;
 use App\Models\AuditEvent;
 use App\Models\Backup;
@@ -64,6 +65,7 @@ class DemoSeeder extends Seeder
         ]);
 
         $this->shopDeployments($production, $owner, $developer);
+        $this->commandRuns($production, $owner);
         $this->deployment($staging, DeploymentStatus::Queued, $developer, 'c0ffee1c0ffee1c0ffee1c0ffee1c0ffee1c0ffe', 4, null);
         $this->deployment($preview, DeploymentStatus::Deploying, $developer, '5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad', 1, $this->log('deploying'));
         $this->docsDeployments($docsProduction, $owner);
@@ -102,6 +104,29 @@ class DemoSeeder extends Seeder
         }
 
         return $environment;
+    }
+
+    private function commandRuns(Environment $production, User $owner): void
+    {
+        $live = $production->deployments()->where('status', DeploymentStatus::Live)->sole();
+        $runs = [
+            ['php artisan migrate:status', CommandRunStatus::Succeeded, 0, 90, 4, "  Migration name .......................... Batch / Status\n  0001_01_01_000000_create_users_table ......... [1] Ran\n  0001_01_01_000001_create_cache_table ......... [1] Ran\n  2026_10_02_101500_create_orders_table ........ [2] Ran\n"],
+            ['php artisan queue:retry all', CommandRunStatus::Failed, 1, 30, 2, "\n   ERROR  No failed jobs matched the given IDs.\n\n"],
+        ];
+
+        foreach ($runs as [$command, $status, $exitCode, $minutesAgo, $seconds, $output]) {
+            $run = $production->commandRuns()->create([
+                'user_id' => $owner->id,
+                'deployment_id' => $live->id,
+                'command' => $command,
+                'status' => $status,
+                'exit_code' => $exitCode,
+                'output' => $output,
+                'started_at' => now()->subMinutes($minutesAgo),
+                'finished_at' => now()->subMinutes($minutesAgo)->addSeconds($seconds),
+            ]);
+            $run->forceFill(['created_at' => now()->subMinutes($minutesAgo)])->save();
+        }
     }
 
     private function shopDeployments(Environment $production, User $owner, User $developer): void

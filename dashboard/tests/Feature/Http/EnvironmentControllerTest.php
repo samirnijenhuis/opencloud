@@ -74,6 +74,19 @@ class EnvironmentControllerTest extends TestCase
                 ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false, 'restore' => false, 'manage_credentials' => false]));
     }
 
+    public function test_the_commands_page_tells_who_may_run_and_read_commands(): void
+    {
+        $environment = $this->makeEnvironment();
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}/commands")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('environments/commands')
+                ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false, 'read_logs' => true]));
+        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$environment->id}/commands")
+            ->assertInertia(fn (Assert $page) => $page->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => true, 'read_logs' => true]));
+    }
+
     public function test_the_old_domains_and_datastores_pages_open_the_canvas(): void
     {
         $environment = $this->makeEnvironment();

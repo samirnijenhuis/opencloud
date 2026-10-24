@@ -18,6 +18,7 @@ import { Check, ChevronsUpDown, GitBranch } from 'lucide-react';
 const tabs = [
     { key: 'overview', title: 'Environment', route: 'environments.show' },
     { key: 'deployments', title: 'Deployments', route: 'environments.deployments' },
+    { key: 'commands', title: 'Commands', route: 'environments.commands' },
     { key: 'logs', title: 'Logs', route: 'environments.logs' },
     { key: 'env', title: 'Environment values', route: 'environments.env' },
     { key: 'settings', title: 'Settings', route: 'environments.settings' },

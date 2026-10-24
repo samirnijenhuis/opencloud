@@ -83,6 +83,19 @@ class EnvironmentController extends Controller
         ]);
     }
 
+    /** The runs load as JSON, so the page can poll them. A user without the right to read logs sees why the page is empty. */
+    public function commands(Request $request, Environment $environment): Response
+    {
+        Gate::authorize('view', $environment);
+
+        $props = $this->environmentProps($environment, $request->user());
+
+        return Inertia::render('environments/commands', [
+            ...$props,
+            'can' => [...$props['can'], 'read_logs' => $request->user()->role->allows(Ability::ReadLogs)],
+        ]);
+    }
+
     public function settings(Request $request, Environment $environment): Response
     {
         Gate::authorize('view', $environment);
