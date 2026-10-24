@@ -30,31 +30,23 @@ const sections = [
 
 const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
 
-/** The section nearest the top of the screen is the active one in the sub-nav. */
+/** The active section is the last one whose heading is above a line near the top of the screen, or the last one at the end of the page. */
 function useActiveSection(): string {
     const [active, setActive] = useState<string>(sections[0].id);
 
     useEffect(() => {
-        const observer = new IntersectionObserver(
-            (entries) => {
-                const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        const update = () => {
+            const line = window.innerHeight * 0.3;
+            const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+            const passed = sections.filter(({ id }) => (document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) <= line);
 
-                if (visible[0]) {
-                    setActive(visible[0].target.id);
-                }
-            },
-            { rootMargin: '0px 0px -60% 0px' },
-        );
+            setActive(atEnd ? sections[sections.length - 1].id : (passed[passed.length - 1] ?? sections[0]).id);
+        };
 
-        sections.forEach(({ id }) => {
-            const element = document.getElementById(id);
+        update();
+        window.addEventListener('scroll', update, { passive: true });
 
-            if (element) {
-                observer.observe(element);
-            }
-        });
-
-        return () => observer.disconnect();
+        return () => window.removeEventListener('scroll', update);
     }, []);
 
     return active;
