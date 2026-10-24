@@ -110,7 +110,7 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 
 | Action | Signature | What it does |
 |---|---|---|
-| `CreateApplication` | `handle(User $by, array $data): Application` | Creates the application, a protected `production` environment, the `preview_template` environment, the default MySQL attachment for a Laravel app unless `$data['database']` is `none`, the domains, and the env values. Then it starts the first deployment. |
+| `CreateApplication` | `handle(User $by, array $data): Application` | Creates the application, a protected `production` environment, the `preview_template` environment, the default MySQL attachment for a Laravel app unless `$data['database']` is `none`, the domains, the default domain, and the env values. Then it starts the first deployment. |
 | `StartDeployment` | `handle(Environment $environment, ?User $by, ?string $commitSha = null): Deployment` | Creates a `queued` deployment and dispatches `RunDeployment`. A null SHA means the head of the environment branch. |
 | `SetEnvVar` | `handle(Environment $environment, User $by, string $key, ?string $value, bool $isSecret, EnvVarAvailability $availableAt): EnvVar` | Creates or replaces one user value. A null value on an existing secret keeps the old secret value. |
 | `DeleteEnvVar` | `handle(EnvVar $envVar, User $by): void` | Deletes one user value. |
@@ -198,6 +198,12 @@ A `pull_request` queues `SyncPreview`. The actions `opened`, `reopened`, and `sy
 - `OpenPreview` skips the pull request when previews are off, or when it comes from a fork and `allow_forks` is off. At `opencloud.max_previews` previews, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings and the `user` env values of the preview template and runs one instance. It gets its own `APP_KEY` when the template has none, and it attaches the datastore kinds of production. Its domain is `pr-<number>.<preview_domain>`, or `pr-<number>-<application slug>.<ingress ip>.sslip.io` without a preview domain. Then it deploys the head commit.
 - `ClosePreview` waits while a deployment of the preview builds or rolls out. Then it deletes the namespace and calls `DetachDatastore::destroy()` for each attachment. It deletes the environment and its records, and it syncs Caddy.
 - `DeploymentObserver` queues `PostPreviewComment` when a preview deployment moves to `live`. The job creates one comment with the preview URL and keeps its id in `pr_comment_id`. Later deployments update that comment. A failed call only writes a warning to the log.
+
+## Default domains
+
+`App\Environments\DefaultDomain` gives each permanent environment a free address, `<application>-<environment>.<ingress ip>.sslip.io`. sslip.io resolves the IP in the name, so the address needs no DNS step. `CreateApplication` adds it to production when the cluster has an IPv4 ingress address. The command `opencloud:default-domains` adds it to each permanent environment that has no default domain. The domain has `generated` set. Otherwise it is a normal domain: `CheckDomain` checks it, Caddy serves it, and the user can remove it.
+
+Each name is lowercase letters, digits, and dashes. The first label holds at most 63 characters, so a long application name is cut. When another domain already has the name, the application id goes into it, for example `shop-7-production`. The bootstrap command does not run `opencloud:default-domains`, because then a removed default domain comes back after each restart.
 
 ## Roles
 

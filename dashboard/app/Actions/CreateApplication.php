@@ -7,6 +7,7 @@ use App\Enums\ApplicationType;
 use App\Enums\DatastoreKind;
 use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
+use App\Environments\DefaultDomain;
 use App\Models\Application;
 use App\Models\AuditEvent;
 use App\Models\User;
@@ -20,11 +21,12 @@ class CreateApplication
         private AddDomain $addDomain,
         private StartDeployment $startDeployment,
         private AttachDatastore $attachDatastore,
+        private DefaultDomain $defaultDomain,
     ) {}
 
     /**
      * Creates the application, its protected production environment, the preview template, the env values,
-     * the database, and the domains. Then it starts the first deployment of production.
+     * the database, the domains, and the free sslip.io domain. Then it starts the first deployment of production.
      * A Laravel app gets a MySQL database unless `database` is `none`. Other apps get one only when `database` asks.
      *
      * @param array{
@@ -109,6 +111,8 @@ class CreateApplication
             foreach ($data['domains'] ?? [] as $hostname) {
                 $this->addDomain->handle($production, $by, $hostname);
             }
+
+            $this->defaultDomain->add($production, $by);
 
             return [$application, $production];
         });
