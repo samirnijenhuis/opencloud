@@ -26,8 +26,9 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
   - `none` attaches no cache.
   - `valkey` adds Valkey with "Add resource" after the first deploy, the way a user does. Laravel also gets `CACHE_STORE=redis`.
 - **Sets.**
-  - `smoke` is 8 cells that cover each value at least once. It takes about 25 minutes on a new machine.
-  - `full` is all 30 cells. It takes about 60 to 90 minutes.
+  - `smoke` is 8 cells that cover each value at least once. It took 11 minutes in a measured run.
+  - `full` is all 30 cells. It took 41 minutes in a measured run.
+  - A new machine adds about 4 minutes, and the first build of each fixture on it adds a few more.
 
 Each cell does three deploys:
 
