@@ -5,6 +5,7 @@ use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
 use App\Jobs\BackupDashboard;
 use App\Jobs\BackupDatastore;
+use App\Jobs\CheckCertificates;
 use App\Jobs\CheckLatestRelease;
 use App\Jobs\CopyBuckets;
 use App\Jobs\FailStuckDeployments;
@@ -25,6 +26,8 @@ Schedule::call(fn () => Cluster::query()->where('status', ClusterStatus::Ready)-
     ->everyFiveMinutes();
 
 Schedule::job(new FailStuckDeployments)->everyMinute();
+
+Schedule::job(new CheckCertificates)->everyMinute();
 
 Schedule::job(new CheckLatestRelease)->daily();
 
