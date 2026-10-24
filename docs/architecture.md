@@ -206,9 +206,9 @@ A `pull_request` queues `SyncPreview`. The actions `opened`, `reopened`, and `sy
 
 ## Commands
 
-A user runs a one-off command, for example `php artisan migrate:status`, on an environment. `RunCommand` stores a `CommandRun` with the live deployment. `App\Environments\CommandRunStatus` is its state machine: `queued` to `running` or `failed`, and `running` to `succeeded`, `failed`, or `timed_out`.
+A user runs a one-off command, for example `php artisan migrate:status`, on an environment. `RunCommand` stores a `CommandRun` with the live deployment. `App\Environments\CommandRunStatus` is its state machine. A run moves from `queued` to `running` or `failed`, and from `running` to `succeeded`, `failed`, or `timed_out`.
 
-`ExecuteCommandRun` applies the Job `cmd-<run id>` from `App\Kube\Manifests\CommandManifests` in the environment namespace. The Job runs `sh -c <command>` with the image and the env Secret of that deployment, the label `opencloud.dev/process=command`, `backoffLimit` 0, and `activeDeadlineSeconds` 900. Each check reads the Job and copies the pod logs into `output`, with terminal colors removed and secrets masked. So the UI can show the output while the command runs. `Complete` gives `succeeded` with exit code 0. `Failed` gives `failed` with the exit code of the container, or `timed_out` when the reason is `DeadlineExceeded`. A Job that no condition ends 960 seconds after the start is deleted and becomes `timed_out`. Running a command needs `EnvironmentPolicy::update`. Reading the runs needs the right to read logs.
+`ExecuteCommandRun` applies the Job `cmd-<run id>` from `App\Kube\Manifests\CommandManifests` in the environment namespace. The Job runs `sh -c <command>` with the image and the env Secret of that deployment, the label `opencloud.dev/process=command`, `backoffLimit` 0, and `activeDeadlineSeconds` 900. Each check reads the Job and copies the pod logs into `output`, with terminal colors removed and secrets masked. So the UI can show the output while the command runs. `Complete` gives `succeeded` with exit code 0. `Failed` gives `failed` with the exit code of the container, or `timed_out` when the reason is `DeadlineExceeded`. When the Job has no end condition 960 seconds after the start, `ExecuteCommandRun` deletes it, and the run becomes `timed_out`. Running a command needs `EnvironmentPolicy::update`. Reading the runs needs the right to read logs.
 
 ## Live status
 
@@ -220,7 +220,7 @@ A deploy hook is a secret URL, `POST /hooks/deploy/<token>`, that starts a deplo
 
 ## Default domains
 
-`App\Environments\DefaultDomain` gives each permanent environment a free address, `<application>-<environment>.<ingress ip>.sslip.io`. sslip.io resolves the IP in the name, so the address needs no DNS step. `CreateApplication` adds it to production when the cluster has an IPv4 ingress address. The command `opencloud:default-domains` adds it to each permanent environment that has no default domain. The domain has `generated` set. Otherwise it is a normal domain: `CheckDomain` checks it, Caddy serves it, and the user can remove it.
+`App\Environments\DefaultDomain` gives each permanent environment a free address, `<application>-<environment>.<ingress ip>.sslip.io`. sslip.io resolves the IP in the name, so the address needs no DNS step. `CreateApplication` adds it to production when the cluster has an IPv4 ingress address. The command `opencloud:default-domains` adds it to each permanent environment that has no default domain. The domain has `generated` set. Otherwise it is a normal domain. `CheckDomain` checks it, Caddy serves it, and the user can remove it.
 
 Each name is lowercase letters, digits, and dashes. The first label holds at most 63 characters, so a long application name is cut. When another domain already has the name, the application id goes into it, for example `shop-7-production`. The bootstrap command does not run `opencloud:default-domains`, because then a removed default domain comes back after each restart.
 
