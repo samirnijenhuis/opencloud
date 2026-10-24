@@ -2,3 +2,5 @@
 .audit/
 .DS_Store
 .try/
+.verify/
+__pycache__/

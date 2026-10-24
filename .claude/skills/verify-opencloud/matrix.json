@@ -1,0 +1,64 @@
+{
+  "fixture_repository": "samirnijenhuis/opencloud-verify-fixtures",
+  "fixtures": {
+    "static": {
+      "branch": "static",
+      "type": "dockerfile",
+      "port": 8080,
+      "verify_path": "/verify",
+      "reports": { "db": false, "cache": "never", "secret": false },
+      "build_command": {},
+      "deploy_commands": { "always": ["echo deploy-marker-{cell}"] },
+      "env": {}
+    },
+    "php": {
+      "branch": "php",
+      "type": "dockerfile",
+      "port": 8080,
+      "verify_path": "/verify.php",
+      "reports": { "db": true, "cache": "valkey", "secret": true },
+      "build_command": {},
+      "deploy_commands": { "always": ["php /var/www/deploy.php {cell}"] },
+      "env": {
+        "sqlite": { "DB_CONNECTION": "sqlite", "DB_DATABASE": "/var/www/data/app.sqlite" }
+      }
+    },
+    "laravel": {
+      "branch": "laravel",
+      "base": {
+        "repository": "https://github.com/laravel/laravel.git",
+        "commit": "9ffef3bc4241e3cc333ef267258a404d0d95f194"
+      },
+      "type": "laravel",
+      "verify_path": "/verify",
+      "reports": { "db": true, "cache": "always", "secret": true },
+      "build_command": {
+        "sqlite": "touch database/database.sqlite && php artisan migrate --force && echo {cell} > storage/app/build-marker",
+        "always": "echo {cell} > storage/app/build-marker"
+      },
+      "deploy_commands": {
+        "sql": ["php artisan migrate --force", "php artisan verify:mark-deploy {cell}"],
+        "always": ["php artisan verify:mark-deploy {cell}"]
+      },
+      "env": {
+        "sqlite": { "DB_CONNECTION": "sqlite" },
+        "no-sql": { "SESSION_DRIVER": "cookie", "CACHE_STORE": "file" },
+        "valkey": { "CACHE_STORE": "redis" }
+      }
+    }
+  },
+  "databases": ["none", "mysql", "postgres", "mysqlpostgres", "sqlite"],
+  "caches": ["none", "valkey"],
+  "sets": {
+    "smoke": [
+      "static-none-none",
+      "php-mysql-valkey",
+      "php-postgres-none",
+      "php-sqlite-none",
+      "laravel-mysql-none",
+      "laravel-postgres-valkey",
+      "laravel-sqlite-valkey",
+      "laravel-mysqlpostgres-none"
+    ]
+  }
+}
