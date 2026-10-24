@@ -1,4 +1,5 @@
 import { LucideIcon } from 'lucide-react';
+import { type ReactNode } from 'react';
 
 export interface Auth {
     user: User;
@@ -7,6 +8,8 @@ export interface Auth {
 export interface BreadcrumbItem {
     title: string;
     href: string;
+    /** Shown in place of the link, for example a menu. */
+    node?: ReactNode;
 }
 
 export interface NavGroup {
@@ -52,6 +55,10 @@ export type DnsStatus = 'pending' | 'ok' | 'proxied' | 'wrong' | 'missing';
 
 export type EnvironmentKind = 'permanent' | 'preview' | 'preview_template';
 
+export type EnvironmentColor = 'blue' | 'green' | 'orange' | 'purple' | 'red' | 'yellow' | 'sky' | 'gray';
+
+export type EnvironmentLink = { id: number; name: string; kind: EnvironmentKind; color: EnvironmentColor };
+
 export type Availability = 'runtime' | 'build' | 'both';
 
 export type Size = 'xs' | 's' | 'm' | 'l';
@@ -75,11 +82,12 @@ export interface Deployment {
 }
 
 export interface EnvironmentPageProps {
-    application: { id: number; name: string; repository: string; type: 'laravel' | 'dockerfile' };
+    application: { id: number; name: string; repository: string; type: 'laravel' | 'dockerfile'; environments: EnvironmentLink[] };
     environment: {
         id: number;
         name: string;
         kind: EnvironmentKind;
+        color: EnvironmentColor;
         is_protected: boolean;
         branch: string | null;
         auto_deploy: boolean;

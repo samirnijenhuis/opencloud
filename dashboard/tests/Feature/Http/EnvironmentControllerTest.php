@@ -4,10 +4,13 @@ namespace Tests\Feature\Http;
 
 use App\Actions\UpdateEnvironmentSettings;
 use App\Enums\DeploymentStatus;
+use App\Enums\EnvironmentKind;
 use App\Enums\Size;
+use App\Environments\EnvironmentColor;
 use App\Models\AuditEvent;
 use App\Models\Deployment;
 use App\Models\Domain;
+use App\Models\Environment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -53,6 +56,25 @@ class EnvironmentControllerTest extends TestCase
                 ->where('environment.is_protected', true)
                 ->where('latestDeployment.triggered_by', 'Dev')
                 ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false]));
+    }
+
+    public function test_the_switcher_lists_the_environments_and_the_open_previews_but_not_the_template(): void
+    {
+        $production = $this->makeEnvironment();
+        $application = $production->application;
+        $staging = Environment::factory()->for($application)->create(['name' => 'staging', 'color' => EnvironmentColor::Green]);
+        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate]);
+        $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::Preview, 'color' => EnvironmentColor::Gray]);
+        $this->makeEnvironment(false, 'other-application');
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$staging->id}/deployments")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('environment.color', 'green')
+                ->where('application.environments', [
+                    ['id' => $production->id, 'name' => 'production', 'kind' => 'permanent', 'color' => 'blue'],
+                    ['id' => $staging->id, 'name' => 'staging', 'kind' => 'permanent', 'color' => 'green'],
+                    ['id' => $preview->id, 'name' => 'pr-12', 'kind' => 'preview', 'color' => 'gray'],
+                ]));
     }
 
     public function test_the_rights_follow_the_role_and_the_protection_of_the_environment(): void
