@@ -1,91 +1,25 @@
 import InputError from '@/components/input-error';
-import ProcessFields from '@/components/process-fields';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import EnvironmentLayout from '@/layouts/environment-layout';
-import { sizeLabel, sizeText } from '@/lib/format';
-import { cn } from '@/lib/utils';
-import { type EnvironmentPageProps, type Process, type ProcessValues, type Size, type SizeOption } from '@/types';
-import { router, useForm } from '@inertiajs/react';
+import { type EnvironmentPageProps } from '@/types';
+import { useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 type Settings = {
     branch: string;
     auto_deploy: boolean;
-    size: Size;
-    min_instances: number;
-    max_instances: number;
-    cpu_target: number;
-    health_path: string;
     build_command: string | null;
     deploy_commands: string[];
 };
 
-type Props = EnvironmentPageProps & { settings: Settings; sizes: SizeOption[]; processes: Process[] };
-
-function ProcessRow({ process, locked }: { process: Process; locked: boolean }) {
-    const form = useForm<ProcessValues>({ name: process.name, command: process.command, instances: process.instances, exclusive: process.exclusive });
-
-    const save: FormEventHandler = (e) => {
-        e.preventDefault();
-        form.patch(route('processes.update', process.id), { preserveScroll: true, onSuccess: () => form.setDefaults() });
-    };
-
-    const remove = () => {
-        if (confirm(`Remove ${process.name}? Its pods stop on the next deploy.`)) {
-            router.delete(route('processes.destroy', process.id), { preserveScroll: true });
-        }
-    };
-
-    return (
-        <li>
-            <form onSubmit={save}>
-                <ProcessFields
-                    value={form.data}
-                    onChange={(change) => form.setData({ ...form.data, ...change })}
-                    errors={form.errors}
-                    disabled={locked}
-                >
-                    {!locked && (
-                        <>
-                            <Button size="sm" variant="secondary" disabled={!form.isDirty || form.processing}>
-                                Save
-                            </Button>
-                            <Button type="button" size="sm" variant="ghost" onClick={remove}>
-                                Remove
-                            </Button>
-                        </>
-                    )}
-                </ProcessFields>
-            </form>
-        </li>
-    );
-}
-
-function NewProcess({ environmentId }: { environmentId: number }) {
-    const form = useForm<ProcessValues>({ name: '', command: '', instances: 1, exclusive: false });
-
-    const add: FormEventHandler = (e) => {
-        e.preventDefault();
-        form.post(route('processes.store', environmentId), { preserveScroll: true, onSuccess: () => form.reset() });
-    };
-
-    return (
-        <form onSubmit={add}>
-            <ProcessFields value={form.data} onChange={(change) => form.setData({ ...form.data, ...change })} errors={form.errors}>
-                <Button size="sm" disabled={form.processing}>
-                    Add process
-                </Button>
-            </ProcessFields>
-        </form>
-    );
-}
+type Props = EnvironmentPageProps & { settings: Settings };
 
 export default function EnvironmentSettings(props: Props) {
-    const { environment, settings, sizes, processes, can } = props;
+    const { environment, settings, can } = props;
     const form = useForm({
         ...settings,
         build_command: settings.build_command ?? '',
@@ -117,77 +51,6 @@ export default function EnvironmentSettings(props: Props) {
                         <Checkbox checked={data.auto_deploy} onCheckedChange={(checked) => setData('auto_deploy', checked === true)} />
                         Deploy automatically when the branch changes
                     </Label>
-
-                    <div className="grid gap-2">
-                        <Label>Size per instance</Label>
-                        <div className="flex flex-wrap gap-2">
-                            {sizes.map((size) => (
-                                <button
-                                    key={size.value}
-                                    type="button"
-                                    aria-pressed={data.size === size.value}
-                                    onClick={() => setData('size', size.value)}
-                                    className={cn(
-                                        'rounded-md border px-3 py-2 text-left text-sm disabled:opacity-60',
-                                        data.size === size.value ? 'border-primary bg-primary/5 ring-primary ring-1' : 'enabled:hover:bg-muted',
-                                    )}
-                                    disabled={locked}
-                                >
-                                    <span className="font-medium">{sizeLabel(size.value)}</span>
-                                    <span className="text-muted-foreground block text-xs">{sizeText(size)}</span>
-                                </button>
-                            ))}
-                        </div>
-                        <InputError message={errors.size} />
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-3">
-                        <div className="grid gap-2">
-                            <Label htmlFor="min_instances">Minimum instances</Label>
-                            <Input
-                                id="min_instances"
-                                type="number"
-                                min={1}
-                                value={data.min_instances}
-                                onChange={(e) => setData('min_instances', Number(e.target.value))}
-                            />
-                            <InputError message={errors.min_instances} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="max_instances">Maximum instances</Label>
-                            <Input
-                                id="max_instances"
-                                type="number"
-                                min={1}
-                                value={data.max_instances}
-                                onChange={(e) => setData('max_instances', Number(e.target.value))}
-                            />
-                            <InputError message={errors.max_instances} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="cpu_target">CPU target (%)</Label>
-                            <Input
-                                id="cpu_target"
-                                type="number"
-                                min={10}
-                                max={95}
-                                value={data.cpu_target}
-                                onChange={(e) => setData('cpu_target', Number(e.target.value))}
-                            />
-                            <InputError message={errors.cpu_target} />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                        <Label htmlFor="health_path">Health path</Label>
-                        <Input
-                            id="health_path"
-                            className="max-w-xs font-mono"
-                            value={data.health_path}
-                            onChange={(e) => setData('health_path', e.target.value)}
-                        />
-                        <InputError message={errors.health_path} />
-                    </div>
 
                     <div className="grid gap-2">
                         <Label htmlFor="build_command">Build command</Label>
@@ -223,23 +86,6 @@ export default function EnvironmentSettings(props: Props) {
                     </div>
                 )}
             </form>
-
-            <section className="mt-10 max-w-3xl space-y-3">
-                <h2 className="text-base font-medium">Processes</h2>
-                <p className="text-muted-foreground text-sm">
-                    Web serves HTTP. Each process here runs next to web with the same image, env, and size. An exclusive process runs exactly one
-                    copy, for example the scheduler. Changes apply on the next deploy.
-                </p>
-                {processes.length === 0 && <p className="text-sm">Only web runs.</p>}
-                {processes.length > 0 && (
-                    <ul className="space-y-2">
-                        {processes.map((process) => (
-                            <ProcessRow key={process.id} process={process} locked={locked} />
-                        ))}
-                    </ul>
-                )}
-                {!locked && <NewProcess environmentId={environment.id} />}
-            </section>
         </EnvironmentLayout>
     );
 }

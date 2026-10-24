@@ -74,7 +74,7 @@ class DemoSeeder extends Seeder
 
         AuditEvent::record($owner, 'application.created', $shop, ['repository' => $shop->repository, 'type' => 'laravel']);
         AuditEvent::record($owner, 'application.created', $docs, ['repository' => $docs->repository, 'type' => 'dockerfile']);
-        AuditEvent::record($owner, 'domain.added', Domain::first(), ['hostname' => 'shop.example.com']);
+        AuditEvent::record($owner, 'domain.added', Domain::where('hostname', 'shop.example.com')->sole(), ['hostname' => 'shop.example.com']);
         AuditEvent::record($developer, 'deployment.started', Deployment::first(), ['commit_sha' => Deployment::first()->commit_sha]);
     }
 
@@ -273,6 +273,15 @@ class DemoSeeder extends Seeder
 
     private function domains(Environment $production, Environment $staging, Environment $docsProduction): void
     {
+        $production->domains()->create([
+            'hostname' => 'shop-production.203.0.113.10.sslip.io',
+            'generated' => true,
+            'dns_status' => DnsStatus::Ok,
+            'certificate_status' => 'issued',
+            'dns_found' => ['203.0.113.10'],
+            'dns_checked_at' => now()->subMinutes(3),
+        ]);
+
         $rows = [
             [$production, 'shop.example.com', DnsStatus::Ok, 'issued', ['203.0.113.10']],
             [$production, 'www.shop.example.com', DnsStatus::Wrong, 'pending', ['198.51.100.7']],

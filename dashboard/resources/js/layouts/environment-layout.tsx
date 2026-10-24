@@ -16,12 +16,10 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react';
 
 const tabs = [
-    { key: 'overview', title: 'Overview', route: 'environments.show' },
+    { key: 'overview', title: 'Environment', route: 'environments.show' },
     { key: 'deployments', title: 'Deployments', route: 'environments.deployments' },
     { key: 'logs', title: 'Logs', route: 'environments.logs' },
     { key: 'env', title: 'Environment values', route: 'environments.env' },
-    { key: 'domains', title: 'Domains', route: 'environments.domains' },
-    { key: 'datastores', title: 'Datastores', route: 'environments.datastores' },
     { key: 'settings', title: 'Settings', route: 'environments.settings' },
 ] as const;
 

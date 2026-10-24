@@ -1,30 +1,19 @@
 import InputError from '@/components/input-error';
 import { DnsBadge } from '@/components/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import EnvironmentLayout from '@/layouts/environment-layout';
 import { timeAgo } from '@/lib/format';
-import { type DnsStatus, type EnvironmentPageProps } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
-
-type Domain = {
-    id: number;
-    hostname: string;
-    dns_status: DnsStatus;
-    dns_mode: 'manual' | 'cloudflare';
-    dns_found: string[];
-    certificate_status: string;
-    dns_checked_at: string | null;
-};
-
-type Props = EnvironmentPageProps & { domains: Domain[]; ingressIp: string | null; cloudflareZones: string[] };
+import { FormEventHandler, useEffect, useRef } from 'react';
+import { EditorSheet } from './editor-sheet';
+import { type Domain } from './types';
 
 const inZone = (hostname: string, zones: string[]) => zones.some((zone) => hostname === zone || hostname.endsWith(`.${zone}`));
 
-const certificateLabels: Record<string, string> = {
+export const certificateLabels: Record<string, string> = {
     pending: 'Certificate pending',
     issued: 'Certificate issued',
     failed: 'Certificate failed',
@@ -32,6 +21,10 @@ const certificateLabels: Record<string, string> = {
 
 function Guidance({ domain, ingressIp }: { domain: Domain; ingressIp: string | null }) {
     const address = ingressIp ?? 'the cluster address';
+
+    if (domain.generated) {
+        return <p className="text-muted-foreground text-sm">sslip.io sends this name to {address}, so it needs no DNS record.</p>;
+    }
 
     if (domain.dns_mode === 'cloudflare' && domain.dns_status !== 'ok' && domain.dns_status !== 'proxied') {
         return (
@@ -43,17 +36,17 @@ function Guidance({ domain, ingressIp }: { domain: Domain; ingressIp: string | n
     }
 
     if (domain.dns_status === 'ok') {
-        return <p className="text-sm">The A record points at {address}.</p>;
+        return <p className="text-muted-foreground text-sm">The A record points at {address}.</p>;
     }
 
     if (domain.dns_status === 'proxied') {
-        return <p className="text-sm">The domain goes through Cloudflare. Cloudflare sends traffic to the cluster.</p>;
+        return <p className="text-muted-foreground text-sm">The domain goes through Cloudflare. Cloudflare sends traffic to the cluster.</p>;
     }
 
     return (
         <div className="space-y-1 text-sm">
             <p>
-                Add an A record for <strong className="font-mono">{domain.hostname}</strong> that points to{' '}
+                Add an A record for <strong className="font-mono break-all">{domain.hostname}</strong> that points to{' '}
                 <strong className="font-mono">{address}</strong>.
             </p>
             {!ingressIp && <p className="text-muted-foreground">The cluster has no ingress address yet. Open the clusters page to see its state.</p>}
@@ -70,15 +63,40 @@ function Guidance({ domain, ingressIp }: { domain: Domain; ingressIp: string | n
     );
 }
 
-export default function EnvironmentDomains(props: Props) {
-    const { environment, domains, ingressIp, cloudflareZones, can } = props;
+export function DomainsSheet({
+    open,
+    onClose,
+    focusAdd,
+    environmentId,
+    domains,
+    ingressIp,
+    cloudflareZones,
+    canManage,
+}: {
+    open: boolean;
+    onClose: () => void;
+    focusAdd: boolean;
+    environmentId: number;
+    domains: Domain[];
+    ingressIp: string | null;
+    cloudflareZones: string[];
+    canManage: boolean;
+}) {
     const { errors } = usePage().props as { errors: Record<string, string> };
     const form = useForm<{ hostname: string; manage_dns: boolean; proxied: boolean }>({ hostname: '', manage_dns: false, proxied: false });
     const offerCloudflare = inZone(form.data.hostname.trim().toLowerCase(), cloudflareZones);
+    const input = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (open && focusAdd) {
+            // The sheet moves focus to itself when it opens, so the input takes it one frame later.
+            requestAnimationFrame(() => input.current?.focus());
+        }
+    }, [open, focusAdd]);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        form.post(route('domains.store', environment.id), { preserveScroll: true, onSuccess: () => form.reset() });
+        form.post(route('domains.store', environmentId), { preserveScroll: true, onSuccess: () => form.reset() });
     };
 
     const check = (domain: Domain) => router.post(route('domains.check', domain.id), {}, { preserveScroll: true });
@@ -90,7 +108,12 @@ export default function EnvironmentDomains(props: Props) {
     };
 
     return (
-        <EnvironmentLayout page={props} tab="domains" title="Domains">
+        <EditorSheet
+            open={open}
+            onClose={onClose}
+            title="Domains"
+            description="Caddy serves each domain and gets its certificate as soon as the DNS record points to the cluster. No deploy is necessary."
+        >
             {errors.domain && <p className="text-sm text-red-700 dark:text-red-400">{errors.domain}</p>}
 
             {domains.length === 0 ? (
@@ -98,14 +121,24 @@ export default function EnvironmentDomains(props: Props) {
             ) : (
                 <ul className="divide-y rounded-lg border">
                     {domains.map((domain) => (
-                        <li key={domain.id} className="space-y-3 p-4">
-                            <div className="flex flex-wrap items-center gap-3">
-                                <span className="font-mono font-medium">{domain.hostname}</span>
+                        <li key={domain.id} className="space-y-2 p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="min-w-0 font-mono text-sm font-medium break-all">{domain.hostname}</span>
+                                {domain.generated && <Badge variant="outline">Free address</Badge>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-sm">
                                 <DnsBadge status={domain.dns_status} />
-                                <span className="text-muted-foreground text-sm">
+                                <span className="text-muted-foreground">
                                     {certificateLabels[domain.certificate_status] ?? domain.certificate_status}
                                 </span>
-                                {can.manage_domains && (
+                                {domain.dns_mode === 'cloudflare' && <span className="text-muted-foreground">DNS in Cloudflare</span>}
+                            </div>
+                            <Guidance domain={domain} ingressIp={ingressIp} />
+                            <div className="flex flex-wrap items-center gap-2">
+                                {domain.dns_checked_at && (
+                                    <span className="text-muted-foreground text-xs">Last check {timeAgo(domain.dns_checked_at)}</span>
+                                )}
+                                {canManage && (
                                     <span className="ml-auto flex gap-1">
                                         <Button variant="secondary" size="sm" onClick={() => check(domain)}>
                                             Check again
@@ -116,18 +149,17 @@ export default function EnvironmentDomains(props: Props) {
                                     </span>
                                 )}
                             </div>
-                            <Guidance domain={domain} ingressIp={ingressIp} />
-                            {domain.dns_checked_at && <p className="text-muted-foreground text-xs">Last check {timeAgo(domain.dns_checked_at)}</p>}
                         </li>
                     ))}
                 </ul>
             )}
 
-            {can.manage_domains ? (
-                <form onSubmit={submit} className="space-y-3 rounded-lg border p-4">
+            {canManage ? (
+                <form onSubmit={submit} className="space-y-3">
                     <Label htmlFor="hostname">Add a domain</Label>
                     <div className="flex gap-2">
                         <Input
+                            ref={input}
                             id="hostname"
                             placeholder="shop.example.com"
                             value={form.data.hostname}
@@ -163,6 +195,6 @@ export default function EnvironmentDomains(props: Props) {
             ) : (
                 <p className="text-muted-foreground text-sm">Only an admin or an owner can add or remove domains.</p>
             )}
-        </EnvironmentLayout>
+        </EditorSheet>
     );
 }
