@@ -394,7 +394,7 @@ export default function EnvironmentShow(props: CanvasProps) {
                                 >
                                     <DeploymentBadge status={deployment.status} />
                                     <code className="text-muted-foreground font-mono text-xs">{shortSha(deployment.commit_sha)}</code>
-                                    <span>{deployment.triggered_by ?? 'Push'}</span>
+                                    <span>{deployment.triggered_by ?? 'Automatic'}</span>
                                     <span className="text-muted-foreground ml-auto">
                                         {isRunning(deployment.status) ? 'Running' : duration(deployment.started_at, deployment.finished_at)},{' '}
                                         {timeAgo(deployment.created_at)}
