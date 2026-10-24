@@ -128,6 +128,7 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `ConnectGitHubApp` | `handle(User $by, string $code): GithubApp` | Exchanges the code of the manifest flow and stores the GitHub App. It replaces the old app. |
 | `UpdatePreviewSettings` | `handle(Application $application, User $by, array $settings): void` | Stores `previews_enabled`, `allow_forks`, and `preview_domain`. |
 | `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
+| `RunCommand` | `handle(Environment $environment, User $by, string $command): CommandRun` | Stores a `queued` run with the live deployment and dispatches `ExecuteCommandRun`. The audit event holds the command with secrets masked. It refuses an empty command and an environment without a live deployment. |
 | `SetEnvironmentColor` | `handle(Environment $environment, User $by, EnvironmentColor $color): Environment` | Stores one of the eight colors of `App\Environments\EnvironmentColor`. A permanent environment starts blue, and a preview starts gray. |
 | `EnableDeployHook` | `handle(Environment $environment, User $by): Environment` | Turns on the deploy hook. It creates a 48-character random token when the environment has none, and it keeps an old token. It refuses the preview template. |
 | `DisableDeployHook` | `handle(Environment $environment, User $by): Environment` | Turns off the deploy hook and keeps the token. |
@@ -164,7 +165,7 @@ The scheduler runs `CheckLatestRelease` once a day. It caches the tag of the lat
 
 ## Queues
 
-The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, `RestoreDatabase`, `RunRestore`, and the OpenTofu jobs `ProvisionCluster`, `TearDownCluster`, `ProvisionManagedDatabase`, and `TearDownManagedDatabase`. `RunRestore` provisions the datastores itself and waits for no queued job, so it never blocks behind the deployments that it starts. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, `ProvisionDatastoreAttachment`, `DeployPush`, `SyncPreview`, and `PostPreviewComment`. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
+The dashboard pod runs two queue workers. The `worker` container serves the `default` queue with a 600 second timeout. The `builder` container serves the `builds` queue with a 3600 second timeout. Long jobs go on `builds`: `RunDeployment`, `BackupDatabase`, `RestoreDatabase`, `RunRestore`, and the OpenTofu jobs `ProvisionCluster`, `TearDownCluster`, `ProvisionManagedDatabase`, and `TearDownManagedDatabase`. `RunRestore` provisions the datastores itself and waits for no queued job, so it never blocks behind the deployments that it starts. Short jobs stay on `default`: `SyncCaddy`, `CheckDomain`, `ProvisionDatastoreAttachment`, `DeployPush`, `SyncPreview`, `PostPreviewComment`, and `ExecuteCommandRun`. A command can run for 15 minutes, so `ExecuteCommandRun` never waits in the worker. It checks the Job once and releases itself for 3 seconds. A deployment waits for its datastores, so datastore provisioning must never queue behind a deployment.
 
 ## Datastores
 
@@ -202,6 +203,12 @@ A `pull_request` queues `SyncPreview`. The actions `opened`, `reopened`, and `sy
 - `OpenPreview` skips the pull request when previews are off, or when it comes from a fork and `allow_forks` is off. At `opencloud.max_previews` previews, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings and the `user` env values of the preview template and runs one instance. It gets its own `APP_KEY` when the template has none, and it attaches the datastore kinds of production. Its domain is `pr-<number>.<preview_domain>`, or `pr-<number>-<application slug>.<ingress ip>.sslip.io` without a preview domain. Then it deploys the head commit.
 - `ClosePreview` waits while a deployment of the preview builds or rolls out. Then it deletes the namespace and calls `DetachDatastore::destroy()` for each attachment. It deletes the environment and its records, and it syncs Caddy.
 - `DeploymentObserver` queues `PostPreviewComment` when a preview deployment moves to `live`. The job creates one comment with the preview URL and keeps its id in `pr_comment_id`. Later deployments update that comment. A failed call only writes a warning to the log.
+
+## Commands
+
+A user runs a one-off command, for example `php artisan migrate:status`, on an environment. `RunCommand` stores a `CommandRun` with the live deployment. `App\Environments\CommandRunStatus` is its state machine: `queued` to `running` or `failed`, and `running` to `succeeded`, `failed`, or `timed_out`.
+
+`ExecuteCommandRun` applies the Job `cmd-<run id>` from `App\Kube\Manifests\CommandManifests` in the environment namespace. The Job runs `sh -c <command>` with the image and the env Secret of that deployment, the label `opencloud.dev/process=command`, `backoffLimit` 0, and `activeDeadlineSeconds` 900. Each check reads the Job and copies the pod logs into `output`, with terminal colors removed and secrets masked. So the UI can show the output while the command runs. `Complete` gives `succeeded` with exit code 0. `Failed` gives `failed` with the exit code of the container, or `timed_out` when the reason is `DeadlineExceeded`. A Job that no condition ends 960 seconds after the start is deleted and becomes `timed_out`. Running a command needs `EnvironmentPolicy::update`. Reading the runs needs the right to read logs.
 
 ## Deploy hooks
 

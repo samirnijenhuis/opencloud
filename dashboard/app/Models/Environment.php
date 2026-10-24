@@ -103,6 +103,12 @@ class Environment extends Model
         return $this->hasMany(Deployment::class);
     }
 
+    /** @return HasMany<CommandRun, $this> */
+    public function commandRuns(): HasMany
+    {
+        return $this->hasMany(CommandRun::class);
+    }
+
     /** @return HasMany<Domain, $this> */
     public function domains(): HasMany
     {

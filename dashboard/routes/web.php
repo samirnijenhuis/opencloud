@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\ClusterController;
+use App\Http\Controllers\CommandRunController;
 use App\Http\Controllers\CreatedClusterController;
 use App\Http\Controllers\DatastoreController;
 use App\Http\Controllers\DeployHookController;
@@ -45,6 +46,10 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/logs', [EnvironmentLogController::class, 'show'])->name('environments.logs');
     Route::get('environments/{environment}/logs/read', [EnvironmentLogController::class, 'read'])->name('environments.logs.read');
+
+    Route::get('environments/{environment}/command-runs', [CommandRunController::class, 'index'])->name('environments.command-runs');
+    Route::post('environments/{environment}/command-runs', [CommandRunController::class, 'store'])->name('command-runs.store');
+    Route::get('command-runs/{commandRun}', [CommandRunController::class, 'show'])->name('command-runs.show');
 
     Route::get('environments/{environment}/env', [EnvVarController::class, 'index'])->name('environments.env');
     Route::post('environments/{environment}/env', [EnvVarController::class, 'store'])->name('env-vars.store');
