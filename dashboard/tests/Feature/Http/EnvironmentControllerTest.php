@@ -30,8 +30,6 @@ class EnvironmentControllerTest extends TestCase
             'health_path' => '/healthz',
             'build_command' => 'npm run build',
             'deploy_commands' => ['php artisan migrate --force', '', '  php artisan optimize  '],
-            'worker_enabled' => false,
-            'scheduler_enabled' => true,
             ...$overrides,
         ];
     }
@@ -111,8 +109,6 @@ class EnvironmentControllerTest extends TestCase
                 'health_path' => '/healthz',
                 'build_command' => 'npm run build',
                 'deploy_commands' => ['php artisan migrate --force', 'php artisan optimize'],
-                'worker_enabled' => false,
-                'scheduler_enabled' => true,
             ])
             ->andReturn($environment);
 
@@ -132,7 +128,6 @@ class EnvironmentControllerTest extends TestCase
             $environment->max_instances, $environment->cpu_target, $environment->health_path, $environment->build_command,
         ]);
         $this->assertSame(['php artisan migrate --force', 'php artisan optimize'], $environment->deploy_commands);
-        $this->assertFalse($environment->worker_enabled);
 
         $event = AuditEvent::sole();
         $this->assertSame(['environment.updated', $admin->id, $environment->id], [$event->action, $event->user_id, $event->subject_id]);

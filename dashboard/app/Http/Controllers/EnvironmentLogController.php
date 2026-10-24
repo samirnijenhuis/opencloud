@@ -10,6 +10,7 @@ use App\Models\Environment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,11 +25,7 @@ class EnvironmentLogController extends Controller
 
         return Inertia::render('environments/logs', [
             ...$this->environmentProps($environment, $request->user()),
-            'processes' => array_values(array_filter([
-                'web',
-                $environment->worker_enabled ? 'worker' : null,
-                $environment->scheduler_enabled ? 'scheduler' : null,
-            ])),
+            'processes' => $environment->processNames(),
         ]);
     }
 
@@ -37,7 +34,7 @@ class EnvironmentLogController extends Controller
         Gate::authorize('view', $environment);
         $this->authorizeLogs($request);
 
-        $validated = $request->validate(['process' => ['required', 'in:web,worker,scheduler']]);
+        $validated = $request->validate(['process' => ['required', 'string', Rule::in($environment->processNames())]]);
 
         try {
             return response()->json(['log' => $readLogs->handle($environment, $validated['process']), 'error' => null]);

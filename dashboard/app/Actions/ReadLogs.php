@@ -4,24 +4,23 @@ namespace App\Actions;
 
 use App\Kube\Kubectl;
 use App\Kube\Manifests\Labels;
-use App\Kube\Manifests\Process;
 use App\Models\Environment;
 use App\Support\SecretMasker;
 use InvalidArgumentException;
 
 class ReadLogs
 {
-    /** @throws InvalidArgumentException when $process is not web, worker, or scheduler */
+    /** @throws InvalidArgumentException when $process is not web or a process of the environment */
     public function handle(Environment $environment, string $process, int $lines = 200): string
     {
-        $name = Process::tryFrom($process);
+        $names = $environment->processNames();
 
-        if (! in_array($name, [Process::Web, Process::Worker, Process::Scheduler], true)) {
-            throw new InvalidArgumentException("{$process} is not a process. Use web, worker, or scheduler.");
+        if (! in_array($process, $names, true)) {
+            throw new InvalidArgumentException("{$process} is not a process of this environment. Use one of: ".implode(', ', $names).'.');
         }
 
         $output = Kubectl::for($environment->application->cluster)
-            ->logs($environment->kubeNamespace(), Labels::process($environment, $name), $lines);
+            ->logs($environment->kubeNamespace(), Labels::process($environment, $process), $lines);
 
         return SecretMasker::forEnvironment($environment)->mask($output);
     }

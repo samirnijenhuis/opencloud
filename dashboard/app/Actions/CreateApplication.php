@@ -10,6 +10,7 @@ use App\Enums\EnvVarAvailability;
 use App\Environments\DefaultDomain;
 use App\Models\Application;
 use App\Models\AuditEvent;
+use App\Models\Process;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -21,13 +22,15 @@ class CreateApplication
         private AddDomain $addDomain,
         private StartDeployment $startDeployment,
         private AttachDatastore $attachDatastore,
+        private AddProcess $addProcess,
         private DefaultDomain $defaultDomain,
     ) {}
 
     /**
      * Creates the application, its protected production environment, the preview template, the env values,
-     * the database, the domains, and the free sslip.io domain. Then it starts the first deployment of production.
+     * the processes, the database, the domains, and the free sslip.io domain. Then it starts the first deployment of production.
      * A Laravel app gets a MySQL database unless `database` is `none`. Other apps get one only when `database` asks.
+     * Without `processes`, the environments get the defaults of the type: a worker and a scheduler for Laravel, none for a Dockerfile app.
      *
      * @param array{
      *     name: string,
@@ -39,6 +42,7 @@ class CreateApplication
      *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
      *     domains?: list<string>,
      *     database?: 'mysql'|'postgres'|'none',
+     *     processes?: list<array{name: string, command: string, instances?: int, exclusive?: bool}>,
      *     settings?: array<string, mixed>,
      * } $data
      */
@@ -48,13 +52,14 @@ class CreateApplication
         $type = $type instanceof ApplicationType ? $type : ApplicationType::from($type);
         $env = $data['env'] ?? [];
         $database = $data['database'] ?? ($type === ApplicationType::Laravel ? 'mysql' : 'none');
+        $processes = $data['processes'] ?? Process::defaultsFor($type);
 
         // A wrong repository or branch fails here, before any record exists.
         $cloneUrl = (new Application(['repository' => $data['repository']]))->cloneUrl();
         $branch = ($data['branch'] ?? null) ?: Git::defaultBranch($cloneUrl);
         $commitSha = Git::head($cloneUrl, $branch);
 
-        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database) {
+        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database, $processes) {
             $application = Application::create([
                 'name' => $data['name'],
                 'repository' => $data['repository'],
@@ -77,7 +82,7 @@ class CreateApplication
             ]);
 
             // Previews run as one small instance, so the template takes the commands but not the size.
-            $application->environments()->create([
+            $template = $application->environments()->create([
                 'name' => 'preview-template',
                 'kind' => EnvironmentKind::PreviewTemplate,
                 'is_protected' => false,
@@ -86,6 +91,12 @@ class CreateApplication
             ]);
 
             AuditEvent::record($by, 'application.created', $application, ['repository' => $application->repository, 'type' => $type->value]);
+
+            foreach ($processes as $process) {
+                $exclusive = $process['exclusive'] ?? false;
+                $this->addProcess->handle($production, $by, $process['name'], $process['command'], $process['instances'] ?? 1, $exclusive);
+                $this->addProcess->handle($template, $by, $process['name'], $process['command'], 1, $exclusive);
+            }
 
             if ($type === ApplicationType::Laravel && ! in_array('APP_KEY', array_column($env, 'key'), true)) {
                 $this->setEnvVar->handle($production, $by, 'APP_KEY', 'base64:'.base64_encode(random_bytes(32)), true, EnvVarAvailability::Runtime);

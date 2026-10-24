@@ -19,6 +19,7 @@ use App\Models\AuditEvent;
 use App\Models\Cluster;
 use App\Models\Environment;
 use App\Models\EnvVar;
+use App\Models\Process;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -67,6 +68,12 @@ class CreateApplicationTest extends TestCase
         ], $environments);
 
         $production = $application->environments()->where('name', 'production')->sole();
+        $defaults = [
+            ['worker', 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 1, false],
+            ['scheduler', 'php artisan schedule:work', 1, true],
+        ];
+        $this->assertSame([$defaults, $defaults], $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => self::processes($e))->all());
+
         $env = $production->envVars()->where('source', EnvVarSource::User)->orderBy('key')->get()->map(fn (EnvVar $v) => [$v->key, $v->is_secret, $v->available_at, $v->source])->all();
         $this->assertSame([
             ['APP_KEY', true, EnvVarAvailability::Runtime, EnvVarSource::User],
@@ -94,7 +101,10 @@ class CreateApplicationTest extends TestCase
         Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->is($deployment));
 
         $this->assertSame(
-            ['application.created', 'env_var.created', 'env_var.created', 'env_var.created', 'env_var.created', 'datastore.attached', 'domain.added', 'deployment.started'],
+            [
+                'application.created', 'process.added', 'process.added', 'process.added', 'process.added',
+                'env_var.created', 'env_var.created', 'env_var.created', 'env_var.created', 'datastore.attached', 'domain.added', 'deployment.started',
+            ],
             AuditEvent::orderBy('id')->pluck('action')->all(),
         );
         $audit = AuditEvent::all()->toJson();
@@ -123,7 +133,7 @@ class CreateApplicationTest extends TestCase
         $this->assertSame(['APP_KEY'], $none->envVars()->pluck('key')->all());
     }
 
-    public function test_the_settings_apply_before_the_first_deployment_and_the_preview_template_keeps_its_size(): void
+    public function test_the_settings_and_processes_apply_before_the_first_deployment_and_the_preview_template_keeps_its_size(): void
     {
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
@@ -133,6 +143,10 @@ class CreateApplicationTest extends TestCase
             'repository' => 'acme/shop',
             'cluster_id' => Cluster::factory()->create()->id,
             'database' => 'none',
+            'processes' => [
+                ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
+                ['name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 3],
+            ],
             'settings' => [
                 'size' => 'l',
                 'min_instances' => 2,
@@ -140,20 +154,26 @@ class CreateApplicationTest extends TestCase
                 'cpu_target' => 60,
                 'build_command' => 'php artisan icons:cache',
                 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force'],
-                'worker_enabled' => false,
-                'scheduler_enabled' => true,
             ],
         ]);
         $production = $application->environments()->where('name', 'production')->sole();
         $template = $application->environments()->where('name', 'preview-template')->sole();
 
         $this->assertSame(
-            ['l', 2, 6, 60, 'php artisan icons:cache', ['php artisan migrate --force', 'php artisan db:seed --force'], false, true],
-            [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->build_command, $production->deploy_commands, $production->worker_enabled, $production->scheduler_enabled],
+            ['l', 2, 6, 60, 'php artisan icons:cache', ['php artisan migrate --force', 'php artisan db:seed --force']],
+            [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->build_command, $production->deploy_commands],
         );
         $this->assertSame(
-            ['s', 1, 1, 70, 'php artisan icons:cache', ['php artisan migrate --force', 'php artisan db:seed --force'], false, true],
-            [$template->size->value, $template->min_instances, $template->max_instances, $template->cpu_target, $template->build_command, $template->deploy_commands, $template->worker_enabled, $template->scheduler_enabled],
+            [['scheduler', 'php artisan schedule:work', 1, true], ['horizon', 'php artisan horizon', 3, false]],
+            self::processes($production),
+        );
+        $this->assertSame(
+            ['s', 1, 1, 70, 'php artisan icons:cache', ['php artisan migrate --force', 'php artisan db:seed --force']],
+            [$template->size->value, $template->min_instances, $template->max_instances, $template->cpu_target, $template->build_command, $template->deploy_commands],
+        );
+        $this->assertSame(
+            [['scheduler', 'php artisan schedule:work', 1, true], ['horizon', 'php artisan horizon', 1, false]],
+            self::processes($template),
         );
         Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->environment->is($production));
     }
@@ -198,23 +218,29 @@ class CreateApplicationTest extends TestCase
         $this->assertSame('production', $production->branch);
     }
 
-    public function test_a_dockerfile_app_gets_no_app_key_and_no_deploy_commands(): void
+    public function test_a_dockerfile_app_gets_no_app_key_no_deploy_commands_and_only_the_processes_it_asks_for(): void
     {
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
-
-        $application = app(CreateApplication::class)->handle(User::factory()->create(), [
-            'name' => 'site',
-            'repository' => 'acme/site',
-            'cluster_id' => Cluster::factory()->create()->id,
+        $cluster = Cluster::factory()->create();
+        $create = fn (string $name, array $extra) => app(CreateApplication::class)->handle(User::factory()->create(), [
+            'name' => $name,
+            'repository' => "acme/{$name}",
+            'cluster_id' => $cluster->id,
             'type' => 'dockerfile',
             'port' => 3000,
+            ...$extra,
         ]);
+
+        $application = $create('site', []);
+        $worker = $create('jobs', ['processes' => [['name' => 'queue', 'command' => 'node queue.js', 'instances' => 2]]]);
 
         $production = $application->environments()->where('name', 'production')->sole();
         $this->assertSame([ApplicationType::Dockerfile, 3000], [$application->type, $application->port]);
         $this->assertSame([[], '/'], [$production->deploy_commands, $production->health_path]);
         $this->assertSame(0, $production->envVars()->count());
+        $this->assertSame([], self::processes($production));
+        $this->assertSame([['queue', 'node queue.js', 2, false]], self::processes($worker->environments()->where('name', 'production')->sole()));
     }
 
     public function test_a_missing_branch_creates_nothing(): void
@@ -236,5 +262,11 @@ class CreateApplicationTest extends TestCase
 
         $this->assertSame(0, Application::count());
         Queue::assertNothingPushed();
+    }
+
+    /** @return list<array{0: string, 1: string, 2: int, 3: bool}> */
+    private static function processes(Environment $environment): array
+    {
+        return $environment->processes->map(fn (Process $p) => [$p->name, $p->command, $p->instances, $p->exclusive])->all();
     }
 }

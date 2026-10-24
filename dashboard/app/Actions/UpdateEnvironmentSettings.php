@@ -22,8 +22,6 @@ class UpdateEnvironmentSettings
         'health_path',
         'build_command',
         'deploy_commands',
-        'worker_enabled',
-        'scheduler_enabled',
     ];
 
     /**

@@ -16,6 +16,7 @@ use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\InviteAcceptController;
 use App\Http\Controllers\LiveStatusController;
 use App\Http\Controllers\PreviewSettingsController;
+use App\Http\Controllers\ProcessController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 
@@ -65,6 +66,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/settings', [EnvironmentController::class, 'settings'])->name('environments.settings');
     Route::patch('environments/{environment}/settings', [EnvironmentController::class, 'update'])->name('environments.update');
+    Route::post('environments/{environment}/processes', [ProcessController::class, 'store'])->name('processes.store');
+    Route::patch('processes/{process}', [ProcessController::class, 'update'])->name('processes.update');
+    Route::delete('processes/{process}', [ProcessController::class, 'destroy'])->name('processes.destroy');
 
     Route::patch('environments/{environment}/color', [EnvironmentColorController::class, 'update'])->name('environments.color.update');
 

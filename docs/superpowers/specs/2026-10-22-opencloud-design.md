@@ -170,15 +170,19 @@ Runtime secrets are never part of the build or the image [C]. Some apps need a c
 
 An app on a cluster other than `local` must start new pods while the dashboard VPS is down. So that cluster must not pull images from the dashboard VPS [C]. The builder decides how. Lean: push each image to a registry near the cluster, for example the registry of the cloud provider.
 
-### Run a Laravel app as three processes
+### Run a Laravel app as a list of processes
 
-Each environment of a Laravel app runs up to three processes [C].
+Each environment runs web and a list of other processes [C-new]. Web serves HTTP and autoscales between the minimum and the maximum instance count. Each other process has a name, a command, an instance count, and an exclusive flag. An exclusive process runs exactly one instance, and its old pod stops before the new pod starts.
+
+A new Laravel app gets two processes by default. The user can change them, remove them, and add more.
 
 | Process | Command | Scaling |
 |---|---|---|
 | web | the HTTP server | autoscales between the minimum and the maximum instance count |
-| worker | `php artisan queue:work` | fixed count, on by default, can be switched off |
-| scheduler | `php artisan schedule:work` | exactly one instance, on by default, can be switched off |
+| worker | `php artisan queue:work --sleep=3 --tries=3 --max-time=3600` | 1 instance by default |
+| scheduler | `php artisan schedule:work` | exclusive, so exactly one instance |
+
+Other examples are `horizon` with `php artisan horizon`, `reverb` with `php artisan reverb:start`, and `ssr` with `php artisan inertia:start-ssr`. This one list replaces the worker clusters, managed queues, WebSockets clusters, and SSR switches of Laravel Cloud. A Dockerfile app gets no processes by default, but it can have its own.
 
 Autoscaling adds web instances when the CPU use goes above a target, for example 70% [C]. On `local`, autoscaling adds pods but not machines. On managed Kubernetes, the provider adds machines.
 
@@ -327,7 +331,8 @@ These are the records in the SQLite database of the dashboard [C-new]. The build
 | `ProviderCredential` | `provider` (for example `digitalocean`, `aws`, `hetzner`, `cloudflare`), token (encrypted), checked_at, missing_rights | Owner only. Opencloud fills `missing_rights` from the check on paste. |
 | `Cluster` | name, `kind` (`local`, `connected`, `created`), provider, kubeconfig (encrypted), ingress_ip, parts_version, status | `parts_version` shows which release the parts on this cluster come from. |
 | `App` | name, repository, cluster_id, `type` (`laravel`, `dockerfile`) | |
-| `Environment` | app_id, name, `kind` (`permanent`, `preview`, `preview_template`), is_protected, branch, auto_deploy, pr_number, size, min_instances, max_instances, cpu_target, build_command, deploy_commands, health_path, worker_enabled, scheduler_enabled | The `preview_template` environment is never deployed. It holds the settings and the env that new previews copy. |
+| `Environment` | app_id, name, `kind` (`permanent`, `preview`, `preview_template`), is_protected, branch, auto_deploy, pr_number, size, min_instances, max_instances, cpu_target, build_command, deploy_commands, health_path | The `preview_template` environment is never deployed. It holds the settings, the processes, and the env that new previews copy. |
+| `Process` | environment_id, name, command, instances, exclusive | One long-running command next to web. `web`, `deploy`, and `command` are reserved names. An exclusive process has exactly one instance. |
 | `EnvVar` | environment_id, key, value (encrypted), is_secret, `available_at` (`runtime`, `build`, `both`), `source` (`user`, `service`) | A `user` value wins over a `service` value with the same key. |
 | `Deployment` | environment_id, commit_sha, image, `status` (`queued`, `building`, `deploying`, `live`, `failed`, `superseded`), triggered_by, started_at, finished_at | Exactly one `live` deployment per environment. |
 | `Domain` | environment_id, hostname, dns_status, `dns_mode` (`manual`, `cloudflare`), certificate_status | |

@@ -58,6 +58,11 @@ export type Size = 'xs' | 's' | 'm' | 'l';
 
 export type SizeOption = { value: Size; cpu_millicores: number; memory_mib: number };
 
+/** A long-running command next to web. An exclusive process runs exactly one instance. */
+export type ProcessValues = { name: string; command: string; instances: number; exclusive: boolean };
+
+export type Process = ProcessValues & { id: number };
+
 export interface Deployment {
     id: number;
     status: DeploymentStatus;

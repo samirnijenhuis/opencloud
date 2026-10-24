@@ -35,8 +35,6 @@ class UpdateEnvironmentSettingsRequest extends FormRequest
             'build_command' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'deploy_commands' => ['sometimes', 'array', 'max:20'],
             'deploy_commands.*' => ['string', 'max:1000'],
-            'worker_enabled' => ['sometimes', 'boolean'],
-            'scheduler_enabled' => ['sometimes', 'boolean'],
         ];
     }
 

@@ -40,8 +40,6 @@ class PreviewCommentTest extends TestCase
             'kind' => EnvironmentKind::Preview,
             'pr_number' => 12,
             'branch' => 'feature/login',
-            'worker_enabled' => false,
-            'scheduler_enabled' => false,
         ]);
         $this->preview->domains()->create(['hostname' => 'pr-12.preview.example.com']);
         $this->makeGitHubApp();

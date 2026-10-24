@@ -3,6 +3,7 @@
 namespace App\Kube\Manifests;
 
 use App\Models\CommandRun;
+use App\Models\Process;
 
 /**
  * Builds the Kubernetes Job of one command run. Pure: models in, a manifest array out.
@@ -10,7 +11,7 @@ use App\Models\CommandRun;
  */
 final readonly class CommandManifests
 {
-    public const PROCESS = 'command';
+    public const PROCESS = Process::COMMAND;
 
     public const DEADLINE_SECONDS = 900;
 

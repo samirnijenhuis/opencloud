@@ -40,8 +40,7 @@ class ApplicationControllerTest extends TestCase
             'max_instances' => 3,
             'cpu_target' => 70,
             'deploy_commands' => ['php artisan migrate --force'],
-            'worker_enabled' => true,
-            'scheduler_enabled' => false,
+            'processes' => [['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 2, 'exclusive' => false]],
             'env' => [],
             'database' => 'mysql',
             ...$overrides,
@@ -106,7 +105,14 @@ class ApplicationControllerTest extends TestCase
                 ->where('defaultClusterId', $this->cluster->id)
                 ->where('clusters.0.ingress_ip', '203.0.113.10')
                 ->where('sizes.1', ['value' => 's', 'cpu_millicores' => 500, 'memory_mib' => 512])
-                ->has('sizes', 4));
+                ->has('sizes', 4)
+                ->where('defaultProcesses', [
+                    'laravel' => [
+                        ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
+                        ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
+                    ],
+                    'dockerfile' => [],
+                ]));
     }
 
     public function test_a_developer_cannot_open_or_submit_the_create_form(): void
@@ -140,6 +146,7 @@ class ApplicationControllerTest extends TestCase
                 ],
                 'domains' => ['shop.example.com'],
                 'database' => 'postgres',
+                'processes' => [['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 2, 'exclusive' => false]],
                 'settings' => [
                     'size' => 's',
                     'min_instances' => 1,
@@ -147,8 +154,6 @@ class ApplicationControllerTest extends TestCase
                     'cpu_target' => 70,
                     'build_command' => null,
                     'deploy_commands' => ['php artisan migrate --force'],
-                    'worker_enabled' => true,
-                    'scheduler_enabled' => false,
                 ],
             ])
             ->andReturn($created);
@@ -186,7 +191,7 @@ class ApplicationControllerTest extends TestCase
         $production = $application->environments()->where('name', 'production')->sole();
         $response->assertRedirect("/environments/{$production->id}");
         $this->assertSame(['shop', ApplicationType::Dockerfile, 3000, EnvironmentKind::Permanent], [$application->name, $application->type, $application->port, $production->kind]);
-        $this->assertSame(['m', 2, 4, 60, false, false], [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->worker_enabled, $production->scheduler_enabled]);
+        $this->assertSame(['m', 2, 4, 60, []], [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->processes->all()]);
         $this->assertSame(0, AuditEvent::where('action', 'environment.updated')->count());
     }
 
@@ -219,10 +224,31 @@ class ApplicationControllerTest extends TestCase
             'a duplicate env key' => [['env' => [['key' => 'A', 'value' => '1'], ['key' => 'A', 'value' => '2']]], 'env.0.key'],
             'a domain that is not a host name' => [['domain' => 'not a domain'], 'domain'],
             'an unknown database' => [['database' => 'oracle'], 'database'],
+            'a process list that is not a list' => [['processes' => 'worker'], 'processes'],
         ];
 
         foreach ($cases as [$overrides, $field]) {
             $this->actingAs($owner)->post('/applications', $this->validForm($overrides))->assertSessionHasErrors($field);
+        }
+    }
+
+    public function test_each_process_row_is_validated_with_a_plain_message(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $this->mock(CreateApplication::class)->shouldNotReceive('handle');
+        $row = fn (array $values) => ['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 1, 'exclusive' => false, ...$values];
+
+        $cases = [
+            [[$row(['name' => 'web'])], ['processes.0.name' => 'Opencloud uses the names web, deploy, and command. Use a different name.']],
+            [[$row(['name' => 'Queue Worker'])], ['processes.0.name' => 'Use 1 to 30 lowercase letters, digits, and dashes. Start and end with a letter or a digit.']],
+            [[$row([]), $row(['command' => 'php artisan horizon'])], ['processes.1.name' => 'Two processes have this name. Give each process its own name.']],
+            [[$row(['command' => ''])], ['processes.0.command' => 'Enter the command that starts the process.']],
+            [[$row(['instances' => 21])], ['processes.0.instances' => 'Use 1 to 20 instances.']],
+            [[$row([]), $row(['name' => 'scheduler', 'instances' => 2, 'exclusive' => true])], ['processes.1.instances' => 'An exclusive process runs exactly one instance.']],
+        ];
+
+        foreach ($cases as [$processes, $errors]) {
+            $this->actingAs($owner)->post('/applications', $this->validForm(['processes' => $processes]))->assertSessionHasErrors($errors);
         }
     }
 
