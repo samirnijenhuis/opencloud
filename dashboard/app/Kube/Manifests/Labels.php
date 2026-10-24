@@ -29,13 +29,13 @@ final class Labels
     }
 
     /** @return array<string, string> */
-    public static function process(Environment $environment, Process $process): array
+    public static function process(Environment $environment, string $process): array
     {
-        return [...self::environment($environment), self::PROCESS => $process->value];
+        return [...self::environment($environment), self::PROCESS => $process];
     }
 
     /** @return array<string, string> */
-    public static function deployment(Environment $environment, Process $process, Deployment $deployment): array
+    public static function deployment(Environment $environment, string $process, Deployment $deployment): array
     {
         return [...self::process($environment, $process), self::DEPLOYMENT => (string) $deployment->id];
     }

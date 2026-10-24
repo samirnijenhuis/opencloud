@@ -21,14 +21,12 @@ type Settings = {
     health_path: string;
     build_command: string | null;
     deploy_commands: string[];
-    worker_enabled: boolean;
-    scheduler_enabled: boolean;
 };
 
 type Props = EnvironmentPageProps & { settings: Settings; sizes: SizeOption[] };
 
 export default function EnvironmentSettings(props: Props) {
-    const { environment, application, settings, sizes, can } = props;
+    const { environment, settings, sizes, can } = props;
     const form = useForm({
         ...settings,
         build_command: settings.build_command ?? '',
@@ -155,22 +153,6 @@ export default function EnvironmentSettings(props: Props) {
                         <p className="text-muted-foreground text-xs">One command per line.</p>
                         <InputError message={errors.deploy_commands} />
                     </div>
-
-                    {application.type === 'laravel' && (
-                        <div className="flex flex-wrap gap-6">
-                            <Label className="flex items-center gap-2 font-normal">
-                                <Checkbox checked={data.worker_enabled} onCheckedChange={(checked) => setData('worker_enabled', checked === true)} />
-                                Queue worker
-                            </Label>
-                            <Label className="flex items-center gap-2 font-normal">
-                                <Checkbox
-                                    checked={data.scheduler_enabled}
-                                    onCheckedChange={(checked) => setData('scheduler_enabled', checked === true)}
-                                />
-                                Scheduler
-                            </Label>
-                        </div>
-                    )}
                 </fieldset>
 
                 {!locked && (

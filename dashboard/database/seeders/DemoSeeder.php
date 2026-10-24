@@ -22,6 +22,7 @@ use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
+use App\Models\Process;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -60,8 +61,6 @@ class DemoSeeder extends Seeder
         $docsProduction = $this->environment($docs, 'production', EnvironmentKind::Permanent, protected: true, attributes: [
             'deploy_commands' => [],
             'health_path' => '/',
-            'worker_enabled' => false,
-            'scheduler_enabled' => false,
         ]);
 
         $this->shopDeployments($production, $owner, $developer);
@@ -90,8 +89,16 @@ class DemoSeeder extends Seeder
             ...$attributes,
         ]);
 
+        $environments = [$environment];
+
         if ($name === 'production') {
-            $application->environments()->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate, 'auto_deploy' => false]);
+            $environments[] = $application->environments()->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate, 'auto_deploy' => false]);
+        }
+
+        foreach ($environments as $each) {
+            foreach (Process::defaultsFor($application->type) as $process) {
+                $each->processes()->create($process);
+            }
         }
 
         return $environment;

@@ -14,6 +14,7 @@ use App\Models\Cluster;
 use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
+use App\Models\Process;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -77,6 +78,7 @@ class ApplicationController extends Controller
                 'cpu_millicores' => $size->cpuMillicores(),
                 'memory_mib' => $size->memoryMib(),
             ], Size::cases()),
+            'defaultProcesses' => collect(ApplicationType::cases())->mapWithKeys(fn (ApplicationType $type) => [$type->value => Process::defaultsFor($type)]),
         ]);
     }
 
@@ -103,6 +105,12 @@ class ApplicationController extends Controller
                 ], $data['env'] ?? []),
                 'domains' => isset($data['domain']) ? [$data['domain']] : [],
                 'database' => $laravel ? $data['database'] : 'none',
+                ...(isset($data['processes']) ? ['processes' => array_map(fn (array $row) => [
+                    'name' => $row['name'],
+                    'command' => $row['command'],
+                    'instances' => (int) $row['instances'],
+                    'exclusive' => (bool) $row['exclusive'],
+                ], $data['processes'])] : []),
                 'settings' => [
                     'size' => $data['size'],
                     'min_instances' => $data['min_instances'],
@@ -110,8 +118,6 @@ class ApplicationController extends Controller
                     'cpu_target' => $data['cpu_target'],
                     'build_command' => $data['build_command'] ?? null,
                     'deploy_commands' => $data['deploy_commands'] ?? [],
-                    'worker_enabled' => $laravel && ($data['worker_enabled'] ?? false),
-                    'scheduler_enabled' => $laravel && ($data['scheduler_enabled'] ?? false),
                 ],
             ]);
         } catch (RuntimeException) {

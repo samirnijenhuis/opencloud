@@ -46,8 +46,6 @@ class EnvironmentController extends Controller
                 'health_path' => $environment->health_path,
                 'build_command' => $environment->build_command,
                 'deploy_commands' => $environment->deploy_commands,
-                'worker_enabled' => $environment->worker_enabled,
-                'scheduler_enabled' => $environment->scheduler_enabled,
             ],
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,

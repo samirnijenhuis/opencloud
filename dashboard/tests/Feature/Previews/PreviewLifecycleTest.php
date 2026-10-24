@@ -24,6 +24,7 @@ use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\EnvVar;
+use App\Models\Process;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -65,7 +66,9 @@ class PreviewLifecycleTest extends TestCase
         app(AttachDatastore::class)->handle($this->environment('production'), $owner, DatastoreKind::Valkey);
 
         $template = $this->environment('preview-template');
-        $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force'], 'worker_enabled' => false]);
+        $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force']]);
+        $template->processes()->where('name', 'worker')->delete();
+        $template->processes()->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 2, 'exclusive' => false]);
         $setEnvVar = app(SetEnvVar::class);
         $setEnvVar->handle($template, $owner, 'MAIL_MAILER', 'log', false, EnvVarAvailability::Runtime);
         $setEnvVar->handle($template, $owner, 'STRIPE_SECRET', 'sk_test_preview', true, EnvVarAvailability::Runtime);
@@ -82,8 +85,16 @@ class PreviewLifecycleTest extends TestCase
 
         $preview = $this->environment('pr-12');
         $this->assertSame(
-            [EnvironmentKind::Preview, 12, 'feature/login', false, 's', 1, 1, '/health', ['php artisan migrate --force', 'php artisan db:seed --force'], false, true],
-            [$preview->kind, $preview->pr_number, $preview->branch, $preview->is_protected, $preview->size->value, $preview->min_instances, $preview->max_instances, $preview->health_path, $preview->deploy_commands, $preview->worker_enabled, $preview->scheduler_enabled],
+            [EnvironmentKind::Preview, 12, 'feature/login', false, 's', 1, 1, '/health', ['php artisan migrate --force', 'php artisan db:seed --force']],
+            [$preview->kind, $preview->pr_number, $preview->branch, $preview->is_protected, $preview->size->value, $preview->min_instances, $preview->max_instances, $preview->health_path, $preview->deploy_commands],
+        );
+        $this->assertSame(
+            [['scheduler', 'php artisan schedule:work', 1, true], ['horizon', 'php artisan horizon', 2, false]],
+            $preview->processes->map(fn (Process $p) => [$p->name, $p->command, $p->instances, $p->exclusive])->all(),
+        );
+        $this->assertSame(
+            ['pr_number' => 12, 'branch' => 'feature/login', 'from_fork' => false, 'processes' => ['scheduler', 'horizon']],
+            AuditEvent::where('action', 'preview.created')->sole()->context,
         );
 
         $userEnv = $preview->envVars()->where('source', EnvVarSource::User)->orderBy('key')->get()
@@ -137,7 +148,8 @@ class PreviewLifecycleTest extends TestCase
         $this->assertSame("DROP USER IF EXISTS 'env_{$preview->id}'@'%';\nDROP DATABASE IF EXISTS `env_{$preview->id}`;\n", $this->kubectl->calls[1]['stdin']);
 
         $this->assertNull(Environment::find($preview->id));
-        $this->assertSame([0, 0, 0, 0], [
+        $this->assertSame([0, 0, 0, 0, 0], [
+            Process::where('environment_id', $preview->id)->count(),
             EnvVar::where('environment_id', $preview->id)->count(),
             DatastoreAttachment::where('environment_id', $preview->id)->count(),
             Domain::where('environment_id', $preview->id)->count(),

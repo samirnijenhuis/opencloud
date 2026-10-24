@@ -111,7 +111,11 @@ class RunDeployment implements ShouldQueue
 
         $log->write('Starting the new version.');
         $kubectl->apply($manifests->workloads($deployment));
-        $this->waitForRollout($kubectl, $manifests, $environment->kubeNamespace(), $log);
+        $this->waitForRollout($kubectl, $environment, $log);
+
+        $kubectl->run([
+            'delete', 'deployment', '--selector='.$manifests->removedProcessesSelector(), "--namespace={$environment->kubeNamespace()}", '--ignore-not-found', '--wait=false',
+        ])->throw();
 
         foreach ($manifests->absent() as [$kind, $name]) {
             $kubectl->delete($kind, $name, $environment->kubeNamespace());
@@ -203,10 +207,12 @@ class RunDeployment implements ShouldQueue
         }
     }
 
-    private function waitForRollout(Kubectl $kubectl, EnvironmentManifests $manifests, string $namespace, DeploymentLog $log): void
+    private function waitForRollout(Kubectl $kubectl, Environment $environment, DeploymentLog $log): void
     {
-        foreach ($manifests->processes() as $process) {
-            $result = $kubectl->rolloutStatus($namespace, 'deployment', $process->value, self::ROLLOUT_TIMEOUT_SECONDS);
+        $namespace = $environment->kubeNamespace();
+
+        foreach ($environment->processNames() as $process) {
+            $result = $kubectl->rolloutStatus($namespace, 'deployment', $process, self::ROLLOUT_TIMEOUT_SECONDS);
 
             if ($result->ok()) {
                 continue;
@@ -214,11 +220,11 @@ class RunDeployment implements ShouldQueue
 
             $log->write($result->error ?: $result->output);
 
-            foreach ($manifests->processes() as $undo) {
-                $kubectl->run(['rollout', 'undo', "deployment/{$undo->value}", "--namespace={$namespace}"]);
+            foreach ($environment->processNames() as $undo) {
+                $kubectl->run(['rollout', 'undo', "deployment/{$undo}", "--namespace={$namespace}"]);
             }
 
-            throw new RuntimeException("The new {$process->value} pods did not become ready. Opencloud rolled the processes back.");
+            throw new RuntimeException("The new {$process} pods did not become ready. Opencloud rolled the processes back.");
         }
     }
 

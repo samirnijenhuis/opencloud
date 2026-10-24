@@ -28,8 +28,6 @@ class Environment extends Model
         'build_command',
         'deploy_commands',
         'health_path',
-        'worker_enabled',
-        'scheduler_enabled',
         'pr_comment_id',
     ];
 
@@ -42,8 +40,6 @@ class Environment extends Model
         'cpu_target' => 70,
         'deploy_commands' => '[]',
         'health_path' => '/up',
-        'worker_enabled' => true,
-        'scheduler_enabled' => true,
     ];
 
     protected function casts(): array
@@ -59,14 +55,18 @@ class Environment extends Model
             'max_instances' => 'integer',
             'cpu_target' => 'integer',
             'deploy_commands' => 'array',
-            'worker_enabled' => 'boolean',
-            'scheduler_enabled' => 'boolean',
         ];
     }
 
     public function kubeNamespace(): string
     {
         return "oc-env-{$this->id}";
+    }
+
+    /** @return list<string> web and the names of the other processes, each one a Kubernetes Deployment */
+    public function processNames(): array
+    {
+        return [Process::WEB, ...$this->processes->pluck('name')];
     }
 
     /** @return BelongsTo<Application, $this> */

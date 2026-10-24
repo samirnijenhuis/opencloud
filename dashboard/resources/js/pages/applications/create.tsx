@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import ProcessFields from '@/components/process-fields';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -8,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { parseDotenv, sizeLabel, sizeText } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { type Size, type SizeOption } from '@/types';
+import { type ProcessValues, type Size, type SizeOption } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
@@ -27,8 +28,7 @@ type FormData = {
     cpu_target: number;
     build_command: string;
     deploy_commands: string;
-    worker_enabled: boolean;
-    scheduler_enabled: boolean;
+    processes: ProcessValues[];
     env: EnvRow[];
     domain: string;
     database: 'mysql' | 'postgres' | 'none';
@@ -68,10 +68,12 @@ export default function ApplicationCreate({
     clusters,
     defaultClusterId,
     sizes,
+    defaultProcesses,
 }: {
     clusters: Cluster[];
     defaultClusterId: number | null;
     sizes: SizeOption[];
+    defaultProcesses: Record<FormData['type'], ProcessValues[]>;
 }) {
     const form = useForm<FormData>({
         repository: '',
@@ -85,8 +87,7 @@ export default function ApplicationCreate({
         cpu_target: 70,
         build_command: '',
         deploy_commands: 'php artisan migrate --force',
-        worker_enabled: true,
-        scheduler_enabled: true,
+        processes: defaultProcesses.laravel,
         env: [],
         domain: '',
         database: 'mysql',
@@ -102,8 +103,23 @@ export default function ApplicationCreate({
             type,
             deploy_commands: type === 'laravel' ? 'php artisan migrate --force' : '',
             database: type === 'laravel' ? 'mysql' : 'none',
+            processes: defaultProcesses[type],
         }));
     };
+
+    const setProcess = (index: number, change: Partial<ProcessValues>) => {
+        setData(
+            'processes',
+            data.processes.map((row, i) => (i === index ? { ...row, ...change } : row)),
+        );
+    };
+
+    const processErrors = (index: number) => ({
+        name: errors[`processes.${index}.name` as keyof typeof errors],
+        command: errors[`processes.${index}.command` as keyof typeof errors],
+        instances: errors[`processes.${index}.instances` as keyof typeof errors],
+        exclusive: errors[`processes.${index}.exclusive` as keyof typeof errors],
+    });
 
     const setEnv = (index: number, change: Partial<EnvRow>) => {
         setData(
@@ -128,8 +144,6 @@ export default function ApplicationCreate({
             port: laravel ? null : current.port,
             deploy_commands: current.deploy_commands.split('\n'),
             env: current.env.filter((row) => row.key.trim() !== ''),
-            worker_enabled: laravel && current.worker_enabled,
-            scheduler_enabled: laravel && current.scheduler_enabled,
         }));
         form.post(route('applications.store'));
     };
@@ -278,26 +292,40 @@ export default function ApplicationCreate({
                         <InputError message={errors.deploy_commands} />
                     </Row>
 
-                    {laravel && (
-                        <Row label="Processes">
-                            <div className="flex flex-wrap gap-6">
-                                <Label className="flex items-center gap-2 font-normal">
-                                    <Checkbox
-                                        checked={data.worker_enabled}
-                                        onCheckedChange={(checked) => setData('worker_enabled', checked === true)}
-                                    />
-                                    Queue worker
-                                </Label>
-                                <Label className="flex items-center gap-2 font-normal">
-                                    <Checkbox
-                                        checked={data.scheduler_enabled}
-                                        onCheckedChange={(checked) => setData('scheduler_enabled', checked === true)}
-                                    />
-                                    Scheduler
-                                </Label>
-                            </div>
-                        </Row>
-                    )}
+                    <Row label="Processes" hint="Each runs next to web with the same image and env. An exclusive process runs exactly one copy.">
+                        {data.processes.length > 0 && (
+                            <ul className="space-y-2">
+                                {data.processes.map((row, index) => (
+                                    <li key={index}>
+                                        <ProcessFields value={row} onChange={(change) => setProcess(index, change)} errors={processErrors(index)}>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setData(
+                                                        'processes',
+                                                        data.processes.filter((_, i) => i !== index),
+                                                    )
+                                                }
+                                            >
+                                                Remove
+                                            </Button>
+                                        </ProcessFields>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setData('processes', [...data.processes, { name: '', command: '', instances: 1, exclusive: false }])}
+                        >
+                            Add a process
+                        </Button>
+                        <InputError message={errors.processes} />
+                    </Row>
 
                     <Row label="Environment values" hint="A secret is hidden after you save it.">
                         {data.env.length > 0 && (

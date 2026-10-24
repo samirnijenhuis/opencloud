@@ -27,8 +27,8 @@ use Throwable;
  */
 class OpenPreview
 {
-    /** The settings that a preview takes from the preview template. A preview always runs one instance. */
-    private const TEMPLATE_SETTINGS = ['size', 'cpu_target', 'build_command', 'deploy_commands', 'health_path', 'worker_enabled', 'scheduler_enabled'];
+    /** The settings that a preview takes from the preview template, next to its processes. Web always runs one instance. */
+    private const TEMPLATE_SETTINGS = ['size', 'cpu_target', 'build_command', 'deploy_commands', 'health_path'];
 
     public function __construct(
         private AttachDatastore $attachDatastore,
@@ -92,10 +92,15 @@ class OpenPreview
                 'max_instances' => 1,
             ]);
 
+            foreach ($template->processes as $process) {
+                $preview->processes()->create($process->only(['name', 'command', 'instances', 'exclusive']));
+            }
+
             AuditEvent::record(null, 'preview.created', $preview, [
                 'pr_number' => $pullRequest->number,
                 'branch' => $pullRequest->headRef,
                 'from_fork' => $pullRequest->fromFork,
+                'processes' => $template->processes->pluck('name')->all(),
             ]);
 
             $this->copyEnv($application, $template, $preview);

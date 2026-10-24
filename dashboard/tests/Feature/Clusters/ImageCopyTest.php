@@ -110,7 +110,7 @@ class ImageCopyTest extends TestCase
         ]);
         $application = Application::factory()->for($cluster)->create(['type' => ApplicationType::Laravel]);
         $environment = Environment::factory()->for($application)->create([
-            'deploy_commands' => [], 'worker_enabled' => false, 'scheduler_enabled' => false, 'min_instances' => 1, 'max_instances' => 1,
+            'deploy_commands' => [], 'min_instances' => 1, 'max_instances' => 1,
         ]);
 
         return Deployment::factory()->for($environment)->create(['commit_sha' => self::SHA]);

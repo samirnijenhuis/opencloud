@@ -15,9 +15,10 @@ class EnvironmentLogControllerTest extends TestCase
 {
     use BuildsEnvironments, RefreshDatabase;
 
-    public function test_the_page_offers_only_the_processes_that_are_enabled(): void
+    public function test_the_page_offers_web_and_the_processes_of_the_environment(): void
     {
-        $environment = $this->makeEnvironment(attributes: ['worker_enabled' => true, 'scheduler_enabled' => false]);
+        $environment = $this->makeEnvironment();
+        $environment->processes()->create(['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 1, 'exclusive' => false]);
 
         $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}/logs")
             ->assertOk()
@@ -29,13 +30,14 @@ class EnvironmentLogControllerTest extends TestCase
         $kubectl = FakeKubectl::install();
         $kubectl->respond('logs', new KubectlResult(0, "[pod/web-1/web] password is hunter22\n"));
         $environment = $this->makeEnvironment();
+        $environment->processes()->create(['name' => 'reverb', 'command' => 'php artisan reverb:start', 'instances' => 1, 'exclusive' => false]);
         EnvVar::factory()->for($environment)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);
 
-        $this->actingAs(User::factory()->create())->getJson("/environments/{$environment->id}/logs/read?process=worker")
+        $this->actingAs(User::factory()->create())->getJson("/environments/{$environment->id}/logs/read?process=reverb")
             ->assertOk()
             ->assertExactJson(['log' => "[pod/web-1/web] password is ********\n", 'error' => null]);
 
-        $this->assertStringContainsString('opencloud.dev/process=worker', $kubectl->calls[0]['args'][2]);
+        $this->assertStringEndsWith('opencloud.dev/process=reverb', $kubectl->calls[0]['args'][2]);
     }
 
     public function test_an_unknown_process_is_refused(): void
@@ -43,6 +45,7 @@ class EnvironmentLogControllerTest extends TestCase
         $environment = $this->makeEnvironment();
 
         $this->actingAs(User::factory()->create())->getJson("/environments/{$environment->id}/logs/read?process=deploy")->assertUnprocessable()->assertJsonValidationErrors('process');
+        $this->actingAs(User::factory()->create())->getJson("/environments/{$environment->id}/logs/read?process=worker")->assertUnprocessable()->assertJsonValidationErrors('process');
         $this->actingAs(User::factory()->create())->getJson("/environments/{$environment->id}/logs/read")->assertUnprocessable();
     }
 

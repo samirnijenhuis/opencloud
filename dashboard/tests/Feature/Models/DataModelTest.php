@@ -44,8 +44,6 @@ class DataModelTest extends TestCase
         $this->assertSame(70, $environment->cpu_target);
         $this->assertSame('/up', $environment->health_path);
         $this->assertSame([], $environment->deploy_commands);
-        $this->assertTrue($environment->worker_enabled);
-        $this->assertTrue($environment->scheduler_enabled);
         $this->assertTrue($environment->auto_deploy);
         $this->assertFalse($environment->is_protected);
     }

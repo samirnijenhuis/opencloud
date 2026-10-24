@@ -15,6 +15,7 @@ use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Environment;
 use App\Models\EnvVar;
+use App\Models\Process;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Sleep;
@@ -56,6 +57,7 @@ class RunDeploymentTest extends TestCase
         $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
         $application = Application::factory()->for($cluster)->create(['repository' => 'acme/shop', 'type' => ApplicationType::Laravel]);
         $this->environment = Environment::factory()->for($application)->create(['deploy_commands' => ['php artisan migrate --force']]);
+        $this->environment->processes()->createMany(Process::defaultsFor(ApplicationType::Laravel));
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);
         $this->old = Deployment::factory()->for($this->environment)->create(['status' => DeploymentStatus::Live, 'image' => 'old-image']);
         $this->new = Deployment::factory()->for($this->environment)->create(['commit_sha' => self::SHA]);
@@ -89,6 +91,10 @@ class RunDeploymentTest extends TestCase
             ['rollout', 'status', 'deployment/web', "--namespace={$namespace}", '--timeout=300s'],
             ['rollout', 'status', 'deployment/worker', "--namespace={$namespace}", '--timeout=300s'],
             ['rollout', 'status', 'deployment/scheduler', "--namespace={$namespace}", '--timeout=300s'],
+            [
+                'delete', 'deployment', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process,opencloud.dev/process notin (web,worker,scheduler)",
+                "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
+            ],
             ['delete', 'horizontalpodautoscaler', 'web', "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
             ['exec', '-i', 'deploy/caddy', '--namespace=opencloud', '--', 'sh', '-c', 'cat > /tmp/caddy.json && wget -q -O- --header "Content-Type: application/json" --post-file /tmp/caddy.json http://127.0.0.1:2019/load'],
             ['get', 'secrets', "--selector=opencloud.dev/application={$this->environment->application_id},opencloud.dev/environment={$this->environment->id}", "--namespace={$namespace}", '--ignore-not-found', '-o', 'json'],
@@ -127,6 +133,31 @@ class RunDeploymentTest extends TestCase
             "2026-10-23T12:00:00Z Starting the new version.\n".
             "2026-10-23T12:00:00Z The deployment is live.\n",
             $new->log,
+        );
+    }
+
+    public function test_the_processes_in_the_list_roll_out_and_the_deployments_of_removed_ones_are_deleted(): void
+    {
+        $this->environment->processes()->delete();
+        $this->environment->processes()->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 2, 'exclusive' => false]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        $namespace = "oc-env-{$this->environment->id}";
+        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertSame([
+            ['rollout', 'status', 'deployment/web', "--namespace={$namespace}", '--timeout=300s'],
+            ['rollout', 'status', 'deployment/horizon', "--namespace={$namespace}", '--timeout=300s'],
+        ], array_column($this->kubectl->callsStartingWith('rollout'), 'args'));
+        $this->assertSame([[
+            'delete', 'deployment', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process,opencloud.dev/process notin (web,horizon)",
+            "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
+        ]], array_column($this->kubectl->callsStartingWith('delete deployment'), 'args'));
+
+        $horizon = collect($this->kubectl->appliedManifests())->firstWhere('metadata.name', 'horizon');
+        $this->assertSame(
+            [2, ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]], ['sh', '-c', 'php artisan horizon']],
+            [$horizon['spec']['replicas'], $horizon['spec']['strategy'], $horizon['spec']['template']['spec']['containers'][0]['command']],
         );
     }
 

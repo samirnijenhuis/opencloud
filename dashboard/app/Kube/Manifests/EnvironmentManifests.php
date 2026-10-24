@@ -3,9 +3,9 @@
 namespace App\Kube\Manifests;
 
 use App\Clusters\ClusterRegistry;
-use App\Enums\ApplicationType;
 use App\Models\Deployment;
 use App\Models\Environment;
+use App\Models\Process;
 use stdClass;
 
 /**
@@ -21,18 +21,6 @@ final readonly class EnvironmentManifests
 
     public function __construct(private Environment $environment) {}
 
-    /** @return list<Process> the processes that run as Kubernetes Deployments, web first */
-    public function processes(): array
-    {
-        $laravel = $this->environment->application->type === ApplicationType::Laravel;
-
-        return array_values(array_filter([
-            Process::Web,
-            $laravel && $this->environment->worker_enabled ? Process::Worker : null,
-            $laravel && $this->environment->scheduler_enabled ? Process::Scheduler : null,
-        ]));
-    }
-
     public function autoscales(): bool
     {
         return $this->environment->max_instances > $this->environment->min_instances;
@@ -42,37 +30,30 @@ final readonly class EnvironmentManifests
     public function workloads(Deployment $deployment): array
     {
         return [
-            ...array_map(fn (Process $process) => match ($process) {
-                Process::Web => $this->web($deployment),
-                Process::Worker => $this->worker($deployment),
-                Process::Scheduler => $this->scheduler($deployment),
-            }, $this->processes()),
+            $this->web($deployment),
+            ...$this->environment->processes->map(fn (Process $process) => $this->process($process, $deployment)),
             $this->service(),
             ...($this->autoscales() ? [$this->autoscaler()] : []),
         ];
     }
 
     /**
-     * Server-side apply never removes objects, so a switched-off process must be deleted.
+     * Server-side apply never removes objects, so the autoscaler of a web with a fixed count must be deleted.
      *
      * @return list<array{0: string, 1: string}> kind and name pairs
      */
     public function absent(): array
     {
-        $running = $this->processes();
-        $absent = [];
+        return $this->autoscales() ? [] : [['horizontalpodautoscaler', Process::WEB]];
+    }
 
-        foreach ([Process::Worker, Process::Scheduler] as $process) {
-            if (! in_array($process, $running, true)) {
-                $absent[] = ['deployment', $process->value];
-            }
-        }
-
-        if (! $this->autoscales()) {
-            $absent[] = ['horizontalpodautoscaler', 'web'];
-        }
-
-        return $absent;
+    /**
+     * Selects the Deployment of each process that left the list. Server-side apply never removes objects,
+     * and the dashboard keeps no record of a removed process, so the selector matches each name that is not in the list.
+     */
+    public function removedProcessesSelector(): string
+    {
+        return Labels::ENVIRONMENT.'='.$this->environment->id.','.Labels::PROCESS.','.Labels::PROCESS.' notin ('.implode(',', $this->environment->processNames()).')';
     }
 
     /** @return array<string, mixed> */
@@ -128,7 +109,7 @@ final readonly class EnvironmentManifests
     public function web(Deployment $deployment): array
     {
         return $this->processDeployment(
-            Process::Web,
+            Process::WEB,
             $deployment,
             replicas: $this->autoscales() ? null : $this->environment->min_instances,
             strategy: self::ROLLING,
@@ -141,27 +122,19 @@ final readonly class EnvironmentManifests
         );
     }
 
-    /** @return array<string, mixed> */
-    public function worker(Deployment $deployment): array
+    /**
+     * The command runs in a shell, so a process can use a normal command line.
+     *
+     * @return array<string, mixed>
+     */
+    public function process(Process $process, Deployment $deployment): array
     {
         return $this->processDeployment(
-            Process::Worker,
+            $process->name,
             $deployment,
-            replicas: 1,
-            strategy: self::ROLLING,
-            container: ['command' => ['php', 'artisan', 'queue:work', '--sleep=3', '--tries=3', '--max-time=3600']],
-        );
-    }
-
-    /** @return array<string, mixed> */
-    public function scheduler(Deployment $deployment): array
-    {
-        return $this->processDeployment(
-            Process::Scheduler,
-            $deployment,
-            replicas: 1,
-            strategy: ['type' => 'Recreate'],
-            container: ['command' => ['php', 'artisan', 'schedule:work']],
+            replicas: $process->instances,
+            strategy: $process->exclusive ? ['type' => 'Recreate'] : self::ROLLING,
+            container: ['command' => ['sh', '-c', $process->command]],
         );
     }
 
@@ -171,9 +144,9 @@ final readonly class EnvironmentManifests
         return [
             'apiVersion' => 'v1',
             'kind' => 'Service',
-            'metadata' => $this->metadata('web', Labels::process($this->environment, Process::Web)),
+            'metadata' => $this->metadata(Process::WEB, Labels::process($this->environment, Process::WEB)),
             'spec' => [
-                'selector' => Labels::process($this->environment, Process::Web),
+                'selector' => Labels::process($this->environment, Process::WEB),
                 'ports' => [['name' => 'http', 'port' => self::SERVICE_PORT, 'targetPort' => 'http']],
             ],
         ];
@@ -185,9 +158,9 @@ final readonly class EnvironmentManifests
         return [
             'apiVersion' => 'autoscaling/v2',
             'kind' => 'HorizontalPodAutoscaler',
-            'metadata' => $this->metadata('web', Labels::process($this->environment, Process::Web)),
+            'metadata' => $this->metadata(Process::WEB, Labels::process($this->environment, Process::WEB)),
             'spec' => [
-                'scaleTargetRef' => ['apiVersion' => 'apps/v1', 'kind' => 'Deployment', 'name' => 'web'],
+                'scaleTargetRef' => ['apiVersion' => 'apps/v1', 'kind' => 'Deployment', 'name' => Process::WEB],
                 'minReplicas' => $this->environment->min_instances,
                 'maxReplicas' => $this->environment->max_instances,
                 'metrics' => [[
@@ -204,7 +177,7 @@ final readonly class EnvironmentManifests
     /** @return array<string, mixed> */
     public function deployJob(Deployment $deployment): array
     {
-        $labels = Labels::deployment($this->environment, Process::Deploy, $deployment);
+        $labels = Labels::deployment($this->environment, Process::DEPLOY, $deployment);
 
         return [
             'apiVersion' => 'batch/v1',
@@ -219,7 +192,7 @@ final readonly class EnvironmentManifests
                     'spec' => [
                         'restartPolicy' => 'Never',
                         ...$this->imagePullSecrets(),
-                        'containers' => [$this->container(Process::Deploy, $deployment, [
+                        'containers' => [$this->container(Process::DEPLOY, $deployment, [
                             'command' => ['sh', '-c', implode(' && ', $this->environment->deploy_commands)],
                         ])],
                     ],
@@ -243,12 +216,12 @@ final readonly class EnvironmentManifests
      * @param  array<string, mixed>  $container
      * @return array<string, mixed>
      */
-    private function processDeployment(Process $process, Deployment $deployment, ?int $replicas, array $strategy, array $container): array
+    private function processDeployment(string $process, Deployment $deployment, ?int $replicas, array $strategy, array $container): array
     {
         return [
             'apiVersion' => 'apps/v1',
             'kind' => 'Deployment',
-            'metadata' => $this->metadata($process->value, Labels::process($this->environment, $process)),
+            'metadata' => $this->metadata($process, Labels::process($this->environment, $process)),
             'spec' => [
                 ...($replicas !== null ? ['replicas' => $replicas] : []),
                 'selector' => ['matchLabels' => Labels::process($this->environment, $process)],
@@ -271,13 +244,13 @@ final readonly class EnvironmentManifests
      * @param  array<string, mixed>  $extra
      * @return array<string, mixed>
      */
-    private function container(Process $process, Deployment $deployment, array $extra): array
+    private function container(string $process, Deployment $deployment, array $extra): array
     {
         $size = $this->environment->size;
         $resources = ['cpu' => $size->cpuMillicores().'m', 'memory' => $size->memoryMib().'Mi'];
 
         return [
-            'name' => $process->value,
+            'name' => $process,
             'image' => $deployment->image,
             ...$extra,
             'envFrom' => [['secretRef' => ['name' => self::secretName($deployment)]]],
