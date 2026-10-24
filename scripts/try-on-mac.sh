@@ -70,11 +70,10 @@ Opencloud runs on the OrbStack machine $MACHINE.
 Next steps
   1. $first_step
   2. Go to Applications > New application and enter:
-       Repository  laravel/laravel   (leave the branch empty)
-       Domain      myapp.$ip.sslip.io
+       Repository  laravel/laravel   (leave the branch and the domain empty)
   3. Click "Create and deploy". The first build takes 10 to 20 minutes.
-  4. Open https://myapp.$ip.sslip.io. Your browser warns about the
-     certificate, because Caddy uses a local CA here.
+  4. Open https://laravel-production.$ip.sslip.io, the free address of the app.
+     Your browser warns about the certificate, because Caddy uses a local CA here.
      docs/run-on-your-mac.md tells you how to trust that CA.
 
 Commands

@@ -34,12 +34,11 @@ Expect about 3 to 10 minutes until the dashboard answers. In a test with a warm 
    Next steps
      1. Open the setup URL above in your browser and create the owner account.
      2. Go to Applications > New application and enter:
-          Repository  laravel/laravel   (leave the branch empty)
-          Domain      myapp.192.168.139.51.sslip.io
+          Repository  laravel/laravel   (leave the branch and the domain empty)
    ...
    ```
 
-   Your IP address is different. Keep the terminal open, because you need the domain later.
+   Your IP address is different.
 
 To use another machine name, set `OPENCLOUD_MACHINE`, for example `OPENCLOUD_MACHINE=opencloud-test ./scripts/try-on-mac.sh`.
 
@@ -55,18 +54,18 @@ You see the dashboard. The setup URL now gives "404", because only one person ca
 
 1. Click **Applications**, then **New application**.
 2. In **Repository**, type `laravel/laravel`. Leave the branch empty. Opencloud then uses the default branch of the repository.
-3. In **Domain**, type the domain that the script printed, for example `myapp.192.168.139.51.sslip.io`.
+3. Leave **Domain** empty. Opencloud gives each app a free address, for example `laravel-production.192.168.139.51.sslip.io`.
 4. Keep all other fields. **Database** stays on MySQL.
 5. Click **Create and deploy**.
 6. Open the **Deployments** tab and click the deployment. The log follows the build.
 
    The first build downloads all packages. When the log shows "The deployment is live.", the app runs.
 
-7. Open `https://myapp.<your ip>.sslip.io` in your browser.
+7. Open the **Environment** tab. The **Domains** block shows the free address with the label "Free". Open that address in your browser, for example `https://laravel-production.192.168.139.51.sslip.io`.
 
 Your browser warns that the certificate is not trusted. Let's Encrypt cannot reach a machine on your Mac, so Caddy signs the certificate with its own local CA. Accept the warning for this site, or trust the CA as the section "Trust the local certificate" describes. You then see the Laravel welcome page.
 
-`sslip.io` is a public DNS service that resolves `myapp.192.168.139.51.sslip.io` to `192.168.139.51`. So you need no DNS record for local tests.
+`sslip.io` is a public DNS service that resolves `laravel-production.192.168.139.51.sslip.io` to `192.168.139.51`. So you need no DNS record for local tests.
 
 ## Try more
 
@@ -108,7 +107,7 @@ In a test, the machine kept its IP address after `orb stop` and `orb start`. The
 | A part shows errors | Run `orb -m opencloud sudo opencloud logs web`. Replace `web` with `worker`, `builder`, `scheduler`, or `caddy`. |
 | The first build is slow | The build downloads every package once. A slow network makes npm wait and try again. Later builds use the cache and take seconds. |
 | "We could not find this repository and branch" | Check the repository name. Leave the branch empty, or type a branch that exists. |
-| The domain shows "Wrong address" | Use the exact domain that the script printed. It contains the IP address of the machine. |
+| A domain shows "Wrong address" | A domain that you add must contain the IP address of the machine, for example `shop.192.168.139.51.sslip.io`. The free address always has the correct IP address. |
 
 ## Trust the local certificate
 
