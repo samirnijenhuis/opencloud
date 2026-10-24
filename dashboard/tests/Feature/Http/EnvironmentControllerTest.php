@@ -55,8 +55,6 @@ class EnvironmentControllerTest extends TestCase
                 ->component('environments/show')
                 ->where('application.name', 'shop')
                 ->where('environment.status', 'building')
-                ->where('environment.live_commit', str_repeat('a', 40))
-                ->where('environment.urls', ['https://shop-production.203.0.113.10.sslip.io', 'https://shop.example.com'])
                 ->where('cluster', ['id' => $this->cluster->id, 'name' => 'local', 'kind' => 'local', 'ingress_ip' => '203.0.113.10'])
                 ->where('tls_issuer', 'acme')
                 ->where('compute', ['size' => 'm', 'min_instances' => 2, 'max_instances' => 5, 'cpu_target' => 60, 'health_path' => '/healthz'])

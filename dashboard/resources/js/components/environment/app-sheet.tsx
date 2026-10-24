@@ -16,7 +16,7 @@ const tabFields: Record<Exclude<AppTab, 'processes'>, (keyof Compute)[]> = {
     autoscaling: ['min_instances', 'max_instances', 'cpu_target'],
 };
 
-export const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
+const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
 
 function ProcessRow({ process, locked }: { process: Process; locked: boolean }) {
     const form = useForm<ProcessValues>({ name: process.name, command: process.command, instances: process.instances, exclusive: process.exclusive });

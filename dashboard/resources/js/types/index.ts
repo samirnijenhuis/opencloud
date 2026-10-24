@@ -92,8 +92,6 @@ export interface EnvironmentPageProps {
         branch: string | null;
         auto_deploy: boolean;
         status: DeploymentStatus | null;
-        live_commit: string | null;
-        urls: string[];
     };
     can: { update: boolean; deploy: boolean; manage_domains: boolean };
     [key: string]: unknown;

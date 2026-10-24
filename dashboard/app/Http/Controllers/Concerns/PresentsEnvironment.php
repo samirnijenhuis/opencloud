@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Concerns;
 
-use App\Enums\DeploymentStatus;
 use App\Enums\EnvironmentKind;
 use App\Models\Deployment;
 use App\Models\Environment;
@@ -19,8 +18,6 @@ trait PresentsEnvironment
     {
         $application = $environment->application;
         $latest = $environment->deployments()->latest('id')->first();
-        $live = $environment->deployments()->where('status', DeploymentStatus::Live)->first();
-        $hostnames = $environment->domains()->orderBy('id')->pluck('hostname');
 
         return [
             'application' => [
@@ -45,8 +42,6 @@ trait PresentsEnvironment
                 'branch' => $environment->branch,
                 'auto_deploy' => $environment->auto_deploy,
                 'status' => $latest?->status,
-                'live_commit' => $live?->commit_sha,
-                'urls' => $hostnames->map(fn (string $hostname) => "https://{$hostname}")->all(),
             ],
             'can' => [
                 'update' => $user->can('update', $environment),

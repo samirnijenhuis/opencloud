@@ -13,7 +13,7 @@ import { type Domain } from './types';
 
 const inZone = (hostname: string, zones: string[]) => zones.some((zone) => hostname === zone || hostname.endsWith(`.${zone}`));
 
-export const certificateLabels: Record<string, string> = {
+const certificateLabels: Record<string, string> = {
     pending: 'Certificate pending',
     issued: 'Certificate issued',
     failed: 'Certificate failed',
