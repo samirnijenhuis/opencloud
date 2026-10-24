@@ -128,6 +128,7 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `ConnectGitHubApp` | `handle(User $by, string $code): GithubApp` | Exchanges the code of the manifest flow and stores the GitHub App. It replaces the old app. |
 | `UpdatePreviewSettings` | `handle(Application $application, User $by, array $settings): void` | Stores `previews_enabled`, `allow_forks`, and `preview_domain`. |
 | `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
+| `SetEnvironmentColor` | `handle(Environment $environment, User $by, EnvironmentColor $color): Environment` | Stores one of the eight colors of `App\Environments\EnvironmentColor`. A permanent environment starts blue, and a preview starts gray. |
 
 ## Connected clusters
 

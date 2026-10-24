@@ -7,6 +7,7 @@ use App\Http\Controllers\CreatedClusterController;
 use App\Http\Controllers\DatastoreController;
 use App\Http\Controllers\DeploymentController;
 use App\Http\Controllers\DomainController;
+use App\Http\Controllers\EnvironmentColorController;
 use App\Http\Controllers\EnvironmentController;
 use App\Http\Controllers\EnvironmentLogController;
 use App\Http\Controllers\EnvVarController;
@@ -55,6 +56,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/settings', [EnvironmentController::class, 'settings'])->name('environments.settings');
     Route::patch('environments/{environment}/settings', [EnvironmentController::class, 'update'])->name('environments.update');
+
+    Route::patch('environments/{environment}/color', [EnvironmentColorController::class, 'update'])->name('environments.color.update');
 
     Route::get('environments/{environment}/datastores', [DatastoreController::class, 'index'])->name('environments.datastores');
     Route::post('environments/{environment}/datastores', [DatastoreController::class, 'store'])->name('datastores.store');

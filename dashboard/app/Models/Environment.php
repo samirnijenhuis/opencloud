@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\EnvironmentKind;
 use App\Enums\Size;
+use App\Environments\EnvironmentColor;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,7 @@ class Environment extends Model
         'name',
         'kind',
         'is_protected',
+        'color',
         'branch',
         'auto_deploy',
         'pr_number',
@@ -46,11 +48,19 @@ class Environment extends Model
         'scheduler_enabled' => true,
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Environment $environment) {
+            $environment->color ??= EnvironmentColor::defaultFor($environment->kind);
+        });
+    }
+
     protected function casts(): array
     {
         return [
             'kind' => EnvironmentKind::class,
             'is_protected' => 'boolean',
+            'color' => EnvironmentColor::class,
             'auto_deploy' => 'boolean',
             'pr_number' => 'integer',
             'pr_comment_id' => 'integer',
