@@ -4,6 +4,7 @@ namespace App\Deploy;
 
 use App\Models\Deployment;
 use App\Support\SecretMasker;
+use App\Support\TerminalText;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -32,9 +33,7 @@ final class DeploymentLog
         $block = '';
 
         foreach (preg_split('/\R/', $text) as $line) {
-            // Tools such as artisan print terminal colors, which the log page would show as raw codes.
-            $line = preg_replace('/\e\[[0-9;?]*[A-Za-z]/', '', $line);
-            $block .= "{$time} {$this->masker->mask($line)}\n";
+            $block .= "{$time} {$this->masker->mask(TerminalText::plain($line))}\n";
         }
 
         // Appending in SQL keeps a long build log from being rewritten on every line.

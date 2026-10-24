@@ -84,9 +84,9 @@ class ExecuteCommandRunTest extends TestCase
         $this->assertSame([
             self::APPLY,
             ['get', 'job', $this->job, "--namespace={$this->namespace}", '--ignore-not-found', '-o', 'json'],
-            ['logs', "job/{$this->job}", "--namespace={$this->namespace}"],
+            ['logs', "job/{$this->job}", "--namespace={$this->namespace}", '--tail=2000'],
             ['get', 'job', $this->job, "--namespace={$this->namespace}", '--ignore-not-found', '-o', 'json'],
-            ['logs', "job/{$this->job}", "--namespace={$this->namespace}"],
+            ['logs', "job/{$this->job}", "--namespace={$this->namespace}", '--tail=2000'],
         ], array_column($this->kubectl->calls, 'args'));
         $this->assertSame(['Job'], array_column($this->kubectl->appliedManifests(), 'kind'));
         $this->assertSame(['sh', '-c', 'php artisan --version'], $this->kubectl->appliedManifests()[0]['spec']['template']['spec']['containers'][0]['command']);
@@ -111,6 +111,16 @@ class ExecuteCommandRunTest extends TestCase
             ['get', 'pods', "--selector=job-name={$this->job}", "--namespace={$this->namespace}", '--ignore-not-found', '-o', 'json'],
             $this->kubectl->callsStartingWith('get pods')[0]['args'],
         );
+    }
+
+    public function test_a_command_with_a_long_output_keeps_the_last_2000_lines_and_says_so(): void
+    {
+        $this->jobState([['type' => 'Complete', 'status' => 'True']]);
+        $this->logs(str_repeat("row\n", 2000));
+
+        ExecuteCommandRun::dispatchSync($this->run);
+
+        $this->assertSame("Opencloud keeps the last 2000 lines of the output.\n".str_repeat("row\n", 2000), $this->run->fresh()->output);
     }
 
     public function test_a_command_past_the_kubernetes_deadline_times_out_and_keeps_the_output_it_printed(): void

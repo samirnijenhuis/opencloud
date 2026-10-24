@@ -7,6 +7,7 @@ use App\Kube\Kubectl;
 use App\Kube\Manifests\CommandManifests;
 use App\Models\CommandRun;
 use App\Support\SecretMasker;
+use App\Support\TerminalText;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -21,6 +22,9 @@ class ExecuteCommandRun implements ShouldQueue
     use Queueable;
 
     private const CHECK_SECONDS = 3;
+
+    /** Each check reads the output again, so a chatty command must not grow it without end. */
+    public const OUTPUT_LINES = 2000;
 
     /** Kubernetes stops the Job at its deadline. The margin covers a cluster that does not report it. */
     private const DEADLINE_SECONDS = CommandManifests::DEADLINE_SECONDS + 60;
@@ -138,14 +142,18 @@ class ExecuteCommandRun implements ShouldQueue
     /** The logs exist only after the container starts, so a failed read keeps the output that the run has. */
     private function copyOutput(Kubectl $kubectl, CommandRun $run, string $namespace, string $name): void
     {
-        $result = $kubectl->run(['logs', "job/{$name}", "--namespace={$namespace}"]);
+        $result = $kubectl->run(['logs', "job/{$name}", "--namespace={$namespace}", '--tail='.self::OUTPUT_LINES]);
 
         if (! $result->ok()) {
             return;
         }
 
-        // Tools such as artisan print terminal colors, which the UI would show as raw codes.
-        $output = preg_replace('/\e\[[0-9;?]*[A-Za-z]/', '', $result->output);
+        $output = TerminalText::plain($result->output);
+
+        if (substr_count($output, "\n") >= self::OUTPUT_LINES) {
+            $output = 'Opencloud keeps the last '.self::OUTPUT_LINES." lines of the output.\n{$output}";
+        }
+
         $run->output = SecretMasker::forEnvironment($run->environment)->mask($output);
         $run->save();
     }
