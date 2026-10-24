@@ -23,6 +23,7 @@ Use these names everywhere: in PHP, in the UI, in Kubernetes labels, and in docs
 |---|---|---|
 | `Application` | One GitHub repository that opencloud deploys. The model is `App\Models\Application`. | `App`, because `App\` is the PHP root namespace. |
 | `Environment` | One running copy of an application, for example production or a preview. | |
+| `Process` | One long-running command of an environment next to web, for example a queue worker. The model is `App\Models\Process`. | `Worker`, because a queue worker is only one kind of process. |
 | `Deployment` | One attempt to put one commit live in one environment. | |
 | `Datastore` | A database, Valkey, or RustFS server that opencloud runs. | `Service`, because a Kubernetes `Service` is a different thing. |
 | `DatastoreAttachment` | One environment's database, user, bucket, or key on a datastore. | |
@@ -104,13 +105,33 @@ The image holds a pinned `tofu` and the modules in `/opt/opencloud/tofu`. Build 
 
 `App\Jobs\RunDeployment` runs one deployment from start to end. It builds, runs the deploy commands in a Kubernetes Job, applies the manifests, waits for the rollout, and syncs Caddy. If a step fails, the deployment becomes `failed`, and the old live deployment stays live.
 
+## Processes
+
+Each environment runs `web` and a list of other processes. Web is special, because it serves HTTP. The environment holds its settings: size, minimum and maximum instances, CPU target, and health path. Each other process is one row in the table `processes`.
+
+| Column | Meaning |
+|---|---|
+| `environment_id` | The environment. The row goes when the environment goes. |
+| `name` | 1 to 30 lowercase letters, digits, and dashes. It starts and ends with a letter or a digit. It is unique in the environment. `web` and `deploy` are reserved. |
+| `command` | A normal command line, for example `php artisan horizon`. |
+| `instances` | 1 to 20. |
+| `exclusive` | Only one copy may ever run. An exclusive process has exactly 1 instance. |
+
+`Process::rules()` holds the rules in one place. The actions and the create form use them.
+
+A new Laravel app gets two rows: `worker` with `php artisan queue:work --sleep=3 --tries=3 --max-time=3600`, and `scheduler` with `php artisan schedule:work`, exclusive. `Process::defaultsFor()` returns them. A Dockerfile app gets no rows, because opencloud does not know its commands. Both types can have their own processes, for example `horizon`, `reverb` with `php artisan reverb:start`, or `ssr` with `php artisan inertia:start-ssr`.
+
+`EnvironmentManifests` gives each process a Deployment with the name of the process and the label `opencloud.dev/process=<name>`. It has the image, the env Secret, and the size of web. The container runs `sh -c <command>`. The replicas are the instances. An exclusive process uses the strategy `Recreate`, so the old pod stops before the new pod starts. Other processes use a rolling update.
+
+`RunDeployment` waits for the rollout of web and of each process. Then it deletes each Deployment in the namespace that has an `opencloud.dev/process` label that is not `web` and not in the list. It uses a label selector, so it touches nothing else. So a removed or renamed process stops on the next deploy.
+
 ## Actions are the seam between the UI and the engine
 
 Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the request, check the policy, and call one action class in `app/Actions`. Each action writes the database records, records an audit event, and dispatches jobs. The engine code in `app/Kube`, `app/Caddy`, `app/Build`, `app/Datastores`, and `app/Jobs` runs behind the actions.
 
 | Action | Signature | What it does |
 |---|---|---|
-| `CreateApplication` | `handle(User $by, array $data): Application` | Creates the application, a protected `production` environment, the `preview_template` environment, the default MySQL attachment for a Laravel app unless `$data['database']` is `none`, the domains, and the env values. Then it starts the first deployment. |
+| `CreateApplication` | `handle(User $by, array $data): Application` | Creates the application, a protected `production` environment, the `preview_template` environment, the processes, the default MySQL attachment for a Laravel app unless `$data['database']` is `none`, the domains, and the env values. Without `$data['processes']`, both environments get the defaults of the type. The template gets each process with 1 instance. Then it starts the first deployment. |
 | `StartDeployment` | `handle(Environment $environment, ?User $by, ?string $commitSha = null): Deployment` | Creates a `queued` deployment and dispatches `RunDeployment`. A null SHA means the head of the environment branch. |
 | `SetEnvVar` | `handle(Environment $environment, User $by, string $key, ?string $value, bool $isSecret, EnvVarAvailability $availableAt): EnvVar` | Creates or replaces one user value. A null value on an existing secret keeps the old secret value. |
 | `DeleteEnvVar` | `handle(EnvVar $envVar, User $by): void` | Deletes one user value. |
@@ -126,8 +147,11 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `ReinstallClusterParts` | `handle(Cluster $cluster, ?User $by): void` | Applies the opencloud parts on a connected cluster again. A null user means opencloud itself, after an upgrade. |
 | `DisconnectCluster` | `handle(Cluster $cluster, User $by, bool $removeParts): void` | Refuses while applications or datastores use the cluster. It can remove the opencloud namespaces. |
 | `ConnectGitHubApp` | `handle(User $by, string $code): GithubApp` | Exchanges the code of the manifest flow and stores the GitHub App. It replaces the old app. |
+| `AddProcess` | `handle(Environment $environment, User $by, string $name, string $command, int $instances = 1, bool $exclusive = false): Process` | Validates the values and adds the process. It starts on the next deploy. A bad value throws a `ValidationException` with a plain message. |
+| `UpdateProcess` | `handle(Process $process, User $by, string $name, string $command, int $instances, bool $exclusive): Process` | Validates and replaces the values. It records only the fields that changed. |
+| `RemoveProcess` | `handle(Process $process, User $by): void` | Deletes the process. The next deploy deletes its Deployment. |
 | `UpdatePreviewSettings` | `handle(Application $application, User $by, array $settings): void` | Stores `previews_enabled`, `allow_forks`, and `preview_domain`. |
-| `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
+| `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web` or of one process of the environment, with secrets masked. It records no audit event, because the UI polls it. |
 
 ## Connected clusters
 
@@ -194,7 +218,7 @@ A `push` queues `DeployPush`. It deploys the pushed commit to each `permanent` e
 
 A `pull_request` queues `SyncPreview`. The actions `opened`, `reopened`, and `synchronize` run `App\Previews\OpenPreview`. The action `closed` runs `App\Previews\ClosePreview`.
 
-- `OpenPreview` skips the pull request when previews are off, or when it comes from a fork and `allow_forks` is off. At `opencloud.max_previews` previews, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings and the `user` env values of the preview template and runs one instance. It gets its own `APP_KEY` when the template has none, and it attaches the datastore kinds of production. Its domain is `pr-<number>.<preview_domain>`, or `pr-<number>-<application slug>.<ingress ip>.sslip.io` without a preview domain. Then it deploys the head commit.
+- `OpenPreview` skips the pull request when previews are off, or when it comes from a fork and `allow_forks` is off. At `opencloud.max_previews` previews, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings, the processes, and the `user` env values of the preview template, and web runs one instance. It gets its own `APP_KEY` when the template has none, and it attaches the datastore kinds of production. Its domain is `pr-<number>.<preview_domain>`, or `pr-<number>-<application slug>.<ingress ip>.sslip.io` without a preview domain. Then it deploys the head commit.
 - `ClosePreview` waits while a deployment of the preview builds or rolls out. Then it deletes the namespace and calls `DetachDatastore::destroy()` for each attachment. It deletes the environment and its records, and it syncs Caddy.
 - `DeploymentObserver` queues `PostPreviewComment` when a preview deployment moves to `live`. The job creates one comment with the preview URL and keeps its id in `pr_comment_id`. Later deployments update that comment. A failed call only writes a warning to the log.
 
