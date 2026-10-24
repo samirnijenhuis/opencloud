@@ -60,6 +60,18 @@ function useActiveSection(): string {
     return active;
 }
 
+/** On a first load Inertia scrolls to the top after the page renders, so the page goes to the hash after that, once. */
+function useScrollToHash() {
+    useEffect(() => {
+        const stop = router.on('navigate', () => {
+            stop();
+            document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+        });
+
+        return stop;
+    }, []);
+}
+
 function Section({ id, title, description, children }: { id: string; title: string; description: string; children: ReactNode }) {
     return (
         <section id={id} className="scroll-mt-6 space-y-4">
@@ -198,6 +210,7 @@ export default function EnvironmentSettings(props: Props) {
     const { environment, settings, envVars, can } = props;
     const locked = !can.update;
     const active = useActiveSection();
+    useScrollToHash();
 
     return (
         <EnvironmentLayout page={props} tab="settings" title="Settings">

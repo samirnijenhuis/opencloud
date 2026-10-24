@@ -336,7 +336,7 @@ export default function EnvironmentShow(props: CanvasProps) {
                         {datastores.attachments.length === 0 && (
                             <p className="text-muted-foreground px-1.5 text-sm">No database, cache, or storage yet.</p>
                         )}
-                        {can.update ? (
+                        {can.update && (
                             <AddResourceMenu environmentId={environment.id} datastores={datastores}>
                                 <button
                                     type="button"
@@ -347,14 +347,15 @@ export default function EnvironmentShow(props: CanvasProps) {
                                     <span className="ml-auto text-xs">Database, cache, storage</span>
                                 </button>
                             </AddResourceMenu>
-                        ) : (
-                            <p className="text-muted-foreground px-1.5 text-xs">
-                                Only an admin or an owner can add resources to a protected environment.
-                            </p>
                         )}
                     </Group>
                 </div>
 
+                {!can.manage_domains && !can.update && (
+                    <p className="text-muted-foreground absolute inset-x-4 bottom-6 text-center text-xs">
+                        Only an admin or an owner can change a protected environment. You can open each block to read it.
+                    </p>
+                )}
                 {(can.manage_domains || can.update) && (
                     <div className="bg-background absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1 rounded-lg border p-1 shadow-sm">
                         {can.manage_domains && (
