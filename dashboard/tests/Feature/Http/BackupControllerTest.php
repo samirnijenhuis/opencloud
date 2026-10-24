@@ -50,17 +50,17 @@ class BackupControllerTest extends TestCase
         AuditEvent::record(User::factory()->create(), 'backup.restored', $old, ['database_name' => 'shop_production']);
         AuditEvent::record(User::factory()->create(), 'backup.restore_failed', $new, ['database_name' => 'shop_production', 'error' => 'The dump is damaged.']);
 
-        $this->actingAs(User::factory()->create())->get('/environments/'.$this->attachment->environment_id.'/datastores')
+        $this->actingAs(User::factory()->create())->get('/environments/'.$this->attachment->environment_id)
             ->assertInertia(fn (Assert $page) => $page
-                ->has('attachments.0.backups', 3)
-                ->where('attachments.0.backups.0.status', 'running')
-                ->where('attachments.0.backups.1.location', 's3')
-                ->where('attachments.0.backups.1.size', 4096)
-                ->where('attachments.0.backups.2.location', 'local')
-                ->where('attachments.0.restore.status', 'failed')
-                ->where('attachments.0.restore.error', 'The dump is damaged.')
+                ->has('datastores.attachments.0.backups', 3)
+                ->where('datastores.attachments.0.backups.0.status', 'running')
+                ->where('datastores.attachments.0.backups.1.location', 's3')
+                ->where('datastores.attachments.0.backups.1.size', 4096)
+                ->where('datastores.attachments.0.backups.2.location', 'local')
+                ->where('datastores.attachments.0.restore.status', 'failed')
+                ->where('datastores.attachments.0.restore.error', 'The dump is damaged.')
                 ->where('can.restore', false)
-                ->where('polling', true));
+                ->where('datastores.polling', true));
     }
 
     public function test_a_restore_in_progress_makes_the_page_poll(): void
@@ -68,8 +68,8 @@ class BackupControllerTest extends TestCase
         $backup = $this->backup();
         AuditEvent::record(User::factory()->create(), 'backup.restore_requested', $backup, ['database_name' => 'shop_production']);
 
-        $this->actingAs(User::factory()->owner()->create())->get('/environments/'.$this->attachment->environment_id.'/datastores')
-            ->assertInertia(fn (Assert $page) => $page->where('attachments.0.restore.status', 'running')->where('polling', true)->where('can.restore', true));
+        $this->actingAs(User::factory()->owner()->create())->get('/environments/'.$this->attachment->environment_id)
+            ->assertInertia(fn (Assert $page) => $page->where('datastores.attachments.0.restore.status', 'running')->where('datastores.polling', true)->where('can.restore', true));
     }
 
     public function test_a_developer_cannot_back_up_or_restore_in_a_protected_environment(): void

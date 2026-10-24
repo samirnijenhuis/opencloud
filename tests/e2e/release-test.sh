@@ -141,7 +141,7 @@ ok=0
 record "the domain answers 200 on HTTPS and 308 on HTTP (got $code and $redirect)" "$ok"
 
 # The secret never reaches the browser, and the app gets it at runtime.
-env_page=$(curl -s -b "$JAR" "$BASE/environments/$ENVIRONMENT/env")
+env_page=$(curl -s -b "$JAR" "$BASE/environments/$ENVIRONMENT/settings")
 in_pod=$(kc -n "oc-env-$ENVIRONMENT" exec deploy/web -- printenv RELEASE_SECRET 2>/dev/null)
 ok=0
 [[ $env_page != *release-secret-value-4711* && $in_pod == release-secret-value-4711 ]] && ok=1

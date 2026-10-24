@@ -50,15 +50,15 @@ class ManagedDatastoreControllerTest extends TestCase
 
     public function test_only_the_owner_gets_the_managed_choice_on_a_digitalocean_cluster(): void
     {
-        $url = "/environments/{$this->environment->id}/datastores";
+        $url = "/environments/{$this->environment->id}";
 
         $this->actingAs(User::factory()->owner()->create())->get($url)->assertInertia(fn (Assert $page) => $page
-            ->where('managed', ['available' => true, 'pricing_url' => 'https://www.digitalocean.com/pricing/managed-databases', 'size' => 'db-s-1vcpu-1gb']));
-        $this->actingAs(User::factory()->admin()->create())->get($url)->assertInertia(fn (Assert $page) => $page->where('managed.available', false));
+            ->where('datastores.managed', ['available' => true, 'pricing_url' => 'https://www.digitalocean.com/pricing/managed-databases', 'size' => 'db-s-1vcpu-1gb']));
+        $this->actingAs(User::factory()->admin()->create())->get($url)->assertInertia(fn (Assert $page) => $page->where('datastores.managed.available', false));
 
         $local = Environment::factory()->for(Application::factory()->for(Cluster::factory()->create(['kind' => ClusterKind::Local])))->create();
-        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$local->id}/datastores")
-            ->assertInertia(fn (Assert $page) => $page->where('managed.available', false));
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$local->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('datastores.managed.available', false));
     }
 
     public function test_only_the_owner_attaches_a_managed_database(): void
@@ -106,13 +106,13 @@ class ManagedDatastoreControllerTest extends TestCase
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'DO_GENERATED_PASSWORD_SECRET', 'is_secret' => true, 'source' => EnvVarSource::Datastore, 'datastore_attachment_id' => $attachment->id]);
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'value' => 'private-db.example.ondigitalocean.com', 'source' => EnvVarSource::Datastore, 'datastore_attachment_id' => $attachment->id]);
 
-        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}/datastores")->assertOk();
+        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}")->assertOk();
 
         $response->assertInertia(fn (Assert $page) => $page
-            ->where('attachments.0.managed', true)
-            ->where('attachments.0.env_keys', ['DB_HOST', 'DB_PASSWORD'])
-            ->where('attachments.0.tofu_log', "2026-10-23T00:00:00Z digitalocean_database_cluster.this: Creation complete\n")
-            ->missing('attachments.0.backups'));
+            ->where('datastores.attachments.0.managed', true)
+            ->where('datastores.attachments.0.env_keys', ['DB_HOST', 'DB_PASSWORD'])
+            ->where('datastores.attachments.0.tofu_log', "2026-10-23T00:00:00Z digitalocean_database_cluster.this: Creation complete\n")
+            ->missing('datastores.attachments.0.backups'));
 
         foreach (['DO_GENERATED_PASSWORD_SECRET', self::TOKEN, 'private-db.example.ondigitalocean.com'] as $secret) {
             $this->assertStringNotContainsString($secret, $response->getContent());
@@ -124,8 +124,8 @@ class ManagedDatastoreControllerTest extends TestCase
         $attachment = $this->managedAttachment();
         $attachment->datastore->update(['status' => DatastoreStatus::Destroying]);
 
-        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}/datastores")
-            ->assertInertia(fn (Assert $page) => $page->where('polling', true)->where('attachments.0.server.status', 'destroying'));
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('datastores.polling', true)->where('datastores.attachments.0.server.status', 'destroying'));
     }
 
     private function managedAttachment(): DatastoreAttachment

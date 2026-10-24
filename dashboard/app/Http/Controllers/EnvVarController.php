@@ -5,38 +5,20 @@ namespace App\Http\Controllers;
 use App\Actions\DeleteEnvVar;
 use App\Actions\SetEnvVar;
 use App\Enums\EnvVarAvailability;
-use App\Enums\EnvVarSource;
-use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Http\Requests\EnvVarRequest;
 use App\Models\Environment;
 use App\Models\EnvVar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Inertia\Inertia;
-use Inertia\Response;
 use InvalidArgumentException;
 
 class EnvVarController extends Controller
 {
-    use PresentsEnvironment;
-
-    public function index(Request $request, Environment $environment): Response
+    /** The settings page shows the values now. Old links still work. */
+    public function index(Environment $environment): RedirectResponse
     {
-        Gate::authorize('view', $environment);
-
-        return Inertia::render('environments/env', [
-            ...$this->environmentProps($environment, $request->user()),
-            // Only a plain user value goes to the browser. A secret and a datastore value never do.
-            'envVars' => $environment->envVars()->orderBy('key')->get()->map(fn (EnvVar $envVar) => [
-                'id' => $envVar->id,
-                'key' => $envVar->key,
-                'source' => $envVar->source,
-                'is_secret' => $envVar->is_secret,
-                'available_at' => $envVar->available_at,
-                'value' => $envVar->source === EnvVarSource::User && ! $envVar->is_secret ? $envVar->value : null,
-            ]),
-        ]);
+        return redirect(route('environments.settings', $environment).'#environment-values');
     }
 
     public function store(EnvVarRequest $request, Environment $environment, SetEnvVar $setEnvVar): RedirectResponse

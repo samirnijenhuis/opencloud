@@ -13,11 +13,12 @@ export function Breadcrumbs({ breadcrumbs }: { breadcrumbs: BreadcrumbItemType[]
                             return (
                                 <Fragment key={index}>
                                     <BreadcrumbItem>
-                                        {isLast ? (
-                                            <BreadcrumbPage>{item.title}</BreadcrumbPage>
-                                        ) : (
-                                            <BreadcrumbLink href={item.href}>{item.title}</BreadcrumbLink>
-                                        )}
+                                        {item.node ??
+                                            (isLast ? (
+                                                <BreadcrumbPage>{item.title}</BreadcrumbPage>
+                                            ) : (
+                                                <BreadcrumbLink href={item.href}>{item.title}</BreadcrumbLink>
+                                            ))}
                                     </BreadcrumbItem>
                                     {!isLast && <BreadcrumbSeparator />}
                                 </Fragment>

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Concerns;
 
-use App\Enums\DeploymentStatus;
+use App\Enums\EnvironmentKind;
 use App\Models\Deployment;
 use App\Models\Environment;
 use App\Models\User;
@@ -18,8 +18,6 @@ trait PresentsEnvironment
     {
         $application = $environment->application;
         $latest = $environment->deployments()->latest('id')->first();
-        $live = $environment->deployments()->where('status', DeploymentStatus::Live)->first();
-        $hostnames = $environment->domains()->orderBy('id')->pluck('hostname');
 
         return [
             'application' => [
@@ -27,6 +25,13 @@ trait PresentsEnvironment
                 'name' => $application->name,
                 'repository' => $application->repository,
                 'type' => $application->type,
+                // The preview template is not a place to switch to. Its page opens from the application.
+                'environments' => $application->environments()
+                    ->where('kind', '!=', EnvironmentKind::PreviewTemplate)
+                    ->orderBy('id')
+                    ->get()
+                    ->map(fn (Environment $each) => ['id' => $each->id, 'name' => $each->name, 'kind' => $each->kind, 'color' => $each->color])
+                    ->all(),
             ],
             'environment' => [
                 'id' => $environment->id,
@@ -37,8 +42,6 @@ trait PresentsEnvironment
                 'branch' => $environment->branch,
                 'auto_deploy' => $environment->auto_deploy,
                 'status' => $latest?->status,
-                'live_commit' => $live?->commit_sha,
-                'urls' => $hostnames->map(fn (string $hostname) => "https://{$hostname}")->all(),
             ],
             'can' => [
                 'update' => $user->can('update', $environment),

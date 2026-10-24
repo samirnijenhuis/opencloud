@@ -194,9 +194,9 @@ class CloudflareDnsModeTest extends TestCase
 
         $this->actingAs($owner)->post("/environments/{$environment->id}/domains", ['hostname' => 'app.example.com', 'manage_dns' => true, 'proxied' => false])->assertRedirect();
 
-        $response = $this->actingAs($owner)->get("/environments/{$environment->id}/domains");
+        $response = $this->actingAs($owner)->get("/environments/{$environment->id}");
         $response->assertInertia(fn (Assert $page) => $page
-            ->where('cloudflareZones', ['example.com', 'shop.example.com'])
+            ->where('cloudflare_zones', ['example.com', 'shop.example.com'])
             ->where('domains.0.dns_mode', 'cloudflare')
             ->where('domains.0.dns_status', DnsStatus::Pending->value));
         $this->assertStringNotContainsString(self::TOKEN, $response->getContent());
@@ -207,7 +207,7 @@ class CloudflareDnsModeTest extends TestCase
         ProviderCredential::query()->delete();
         $environment = $this->makeEnvironment();
 
-        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/domains")
-            ->assertInertia(fn (Assert $page) => $page->where('cloudflareZones', []));
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('cloudflare_zones', []));
     }
 }

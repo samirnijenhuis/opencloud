@@ -26,7 +26,7 @@ class EnvVarControllerTest extends TestCase
         EnvVar::factory()->for($environment)->create(['key' => 'DB_PASSWORD', 'value' => 'datastore-password-123', 'source' => EnvVarSource::Datastore, 'is_secret' => true]);
         EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'value' => 'mysql.internal', 'source' => EnvVarSource::Datastore]);
 
-        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/env")->assertOk();
+        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/settings")->assertOk();
 
         $raw = $response->getContent();
         $this->assertStringNotContainsString('sk_live_TOP_SECRET_VALUE', $raw);
@@ -35,7 +35,7 @@ class EnvVarControllerTest extends TestCase
         $this->assertStringContainsString('production', $raw);
 
         $response->assertInertia(fn (Assert $page) => $page
-            ->component('environments/env')
+            ->component('environments/settings')
             ->has('envVars', 4)
             ->where('envVars.0', ['id' => $environment->envVars()->where('key', 'APP_ENV')->value('id'), 'key' => 'APP_ENV', 'source' => 'user', 'is_secret' => false, 'available_at' => 'runtime', 'value' => 'production'])
             ->where('envVars.3.key', 'STRIPE_SECRET')
@@ -51,11 +51,19 @@ class EnvVarControllerTest extends TestCase
         EnvVar::factory()->for($environment)->create(['key' => 'STRIPE_SECRET', 'value' => 'sk_live_TOP_SECRET_VALUE', 'is_secret' => true]);
 
         $response = $this->actingAs(User::factory()->owner()->create())
-            ->get("/environments/{$environment->id}/env", ['X-Inertia' => 'true', 'X-Inertia-Version' => $this->inertiaVersion()])
+            ->get("/environments/{$environment->id}/settings", ['X-Inertia' => 'true', 'X-Inertia-Version' => $this->inertiaVersion()])
             ->assertOk();
 
         $this->assertStringNotContainsString('sk_live_TOP_SECRET_VALUE', $response->getContent());
         $this->assertStringNotContainsString('kubeconfig', $response->getContent());
+    }
+
+    public function test_the_old_env_page_opens_the_values_in_the_settings(): void
+    {
+        $environment = $this->makeEnvironment();
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}/env")
+            ->assertRedirect("/environments/{$environment->id}/settings#environment-values");
     }
 
     private function inertiaVersion(): string

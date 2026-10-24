@@ -51,6 +51,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/status', [LiveStatusController::class, 'environment'])->name('environments.status');
 
+    Route::get('environments/{environment}/commands', [EnvironmentController::class, 'commands'])->name('environments.commands');
     Route::get('environments/{environment}/command-runs', [CommandRunController::class, 'index'])->name('environments.command-runs');
     Route::post('environments/{environment}/command-runs', [CommandRunController::class, 'store'])->name('command-runs.store');
     Route::get('command-runs/{commandRun}', [CommandRunController::class, 'show'])->name('command-runs.show');

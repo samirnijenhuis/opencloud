@@ -13,13 +13,13 @@ class ProcessControllerTest extends TestCase
 {
     use BuildsEnvironments, RefreshDatabase;
 
-    public function test_the_settings_page_lists_the_processes_in_the_order_they_were_added(): void
+    public function test_the_canvas_lists_the_processes_in_the_order_they_were_added(): void
     {
         $environment = $this->makeEnvironment();
         $worker = $environment->processes()->create(['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 2, 'exclusive' => false]);
         $scheduler = $environment->processes()->create(['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true]);
 
-        $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}/settings")
+        $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('processes', [
                 ['id' => $worker->id, 'name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 2, 'exclusive' => false],

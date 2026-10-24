@@ -3,11 +3,15 @@
 namespace Tests\Feature\Http;
 
 use App\Actions\UpdateEnvironmentSettings;
+use App\Domains\DnsStatus;
 use App\Enums\DeploymentStatus;
+use App\Enums\EnvironmentKind;
 use App\Enums\Size;
+use App\Environments\EnvironmentColor;
 use App\Models\AuditEvent;
 use App\Models\Deployment;
 use App\Models\Domain;
+use App\Models\Environment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -34,12 +38,15 @@ class EnvironmentControllerTest extends TestCase
         ];
     }
 
-    public function test_the_overview_shows_the_status_the_live_commit_the_urls_and_the_rights(): void
+    public function test_the_canvas_shows_the_network_the_app_and_the_latest_deployments(): void
     {
-        $environment = $this->makeEnvironment();
+        $environment = $this->makeEnvironment(attributes: ['size' => Size::M, 'min_instances' => 2, 'max_instances' => 5, 'cpu_target' => 60, 'health_path' => '/healthz']);
         $author = User::factory()->create(['name' => 'Dev']);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Superseded, 'commit_sha' => str_repeat('1', 40)]);
         Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Live, 'commit_sha' => str_repeat('a', 40)]);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Failed, 'commit_sha' => str_repeat('c', 40)]);
         Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Building, 'commit_sha' => str_repeat('b', 40), 'triggered_by' => $author->id]);
+        $free = Domain::factory()->for($environment)->create(['hostname' => 'shop-production.203.0.113.10.sslip.io', 'generated' => true, 'dns_status' => DnsStatus::Ok, 'certificate_status' => 'issued']);
         Domain::factory()->for($environment)->create(['hostname' => 'shop.example.com']);
 
         $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}")
@@ -48,11 +55,62 @@ class EnvironmentControllerTest extends TestCase
                 ->component('environments/show')
                 ->where('application.name', 'shop')
                 ->where('environment.status', 'building')
-                ->where('environment.live_commit', str_repeat('a', 40))
-                ->where('environment.urls', ['https://shop.example.com'])
-                ->where('environment.is_protected', true)
-                ->where('latestDeployment.triggered_by', 'Dev')
-                ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false]));
+                ->where('cluster', ['id' => $this->cluster->id, 'name' => 'local', 'kind' => 'local', 'ingress_ip' => '203.0.113.10'])
+                ->where('tls_issuer', 'acme')
+                ->where('compute', ['size' => 'm', 'min_instances' => 2, 'max_instances' => 5, 'cpu_target' => 60, 'health_path' => '/healthz'])
+                ->where('sizes.2', ['value' => 'm', 'cpu_millicores' => 1000, 'memory_mib' => 1024])
+                ->where('domains.0.id', $free->id)
+                ->where('domains.0.generated', true)
+                ->where('domains.0.dns_status', 'ok')
+                ->where('domains.1.generated', false)
+                ->where('cloudflare_zones', [])
+                ->where('deployments.0.commit_sha', str_repeat('b', 40))
+                ->where('deployments.0.triggered_by', 'Dev')
+                ->where('deployments.1.status', 'failed')
+                ->where('deployments.2.status', 'live')
+                ->has('deployments', 3)
+                ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false, 'restore' => false, 'manage_credentials' => false]));
+    }
+
+    public function test_the_commands_page_tells_who_may_run_and_read_commands(): void
+    {
+        $environment = $this->makeEnvironment();
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}/commands")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('environments/commands')
+                ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false, 'read_logs' => true]));
+        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$environment->id}/commands")
+            ->assertInertia(fn (Assert $page) => $page->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => true, 'read_logs' => true]));
+    }
+
+    public function test_the_old_domains_and_datastores_pages_open_the_canvas(): void
+    {
+        $environment = $this->makeEnvironment();
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get("/environments/{$environment->id}/domains")->assertRedirect("/environments/{$environment->id}");
+        $this->actingAs($user)->get("/environments/{$environment->id}/datastores")->assertRedirect("/environments/{$environment->id}");
+    }
+
+    public function test_the_switcher_lists_the_environments_and_the_open_previews_but_not_the_template(): void
+    {
+        $production = $this->makeEnvironment();
+        $application = $production->application;
+        $staging = Environment::factory()->for($application)->create(['name' => 'staging', 'color' => EnvironmentColor::Green]);
+        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate]);
+        $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::Preview, 'color' => EnvironmentColor::Gray]);
+        $this->makeEnvironment(false, 'other-application');
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$staging->id}/deployments")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('environment.color', 'green')
+                ->where('application.environments', [
+                    ['id' => $production->id, 'name' => 'production', 'kind' => 'permanent', 'color' => 'blue'],
+                    ['id' => $staging->id, 'name' => 'staging', 'kind' => 'permanent', 'color' => 'green'],
+                    ['id' => $preview->id, 'name' => 'pr-12', 'kind' => 'preview', 'color' => 'gray'],
+                ]));
     }
 
     public function test_the_rights_follow_the_role_and_the_protection_of_the_environment(): void
@@ -60,9 +118,9 @@ class EnvironmentControllerTest extends TestCase
         $protected = $this->makeEnvironment(true, 'production');
         $open = $this->makeEnvironment(false, 'staging');
 
-        $this->actingAs(User::factory()->create())->get("/environments/{$open->id}")
+        $this->actingAs(User::factory()->create())->get("/environments/{$open->id}/deployments")
             ->assertInertia(fn (Assert $page) => $page->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => false]));
-        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$protected->id}")
+        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$protected->id}/deployments")
             ->assertInertia(fn (Assert $page) => $page->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => true]));
     }
 
@@ -74,11 +132,7 @@ class EnvironmentControllerTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('environments/settings')
-                ->where('settings.size', 'm')
-                ->where('settings.branch', 'main')
-                ->where('settings.health_path', '/up')
-                ->where('settings.deploy_commands', ['php artisan migrate --force'])
-                ->has('sizes', 4));
+                ->where('settings', ['branch' => 'main', 'auto_deploy' => true, 'build_command' => null, 'deploy_commands' => ['php artisan migrate --force']]));
     }
 
     public function test_a_developer_cannot_change_a_protected_environment(): void

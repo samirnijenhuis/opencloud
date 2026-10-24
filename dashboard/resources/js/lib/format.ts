@@ -27,12 +27,12 @@ export function duration(start: string | null, end: string | null, now: number =
     return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
 }
 
-export function sizeText(size: SizeOption): string {
-    const cpu = size.cpu_millicores / 1000;
-    const memory = size.memory_mib >= 1024 ? `${size.memory_mib / 1024} GB` : `${size.memory_mib} MB`;
+/** 1250 millicores give "1.25". */
+export const vcpu = (millicores: number) => String(Math.round(millicores / 10) / 100);
 
-    return `${cpu} vCPU, ${memory}`;
-}
+export const memoryText = (mib: number) => (mib >= 1024 ? `${Math.round((mib / 1024) * 10) / 10} GB` : `${mib} MB`);
+
+export const sizeText = (size: SizeOption) => `${vcpu(size.cpu_millicores)} vCPU, ${memoryText(size.memory_mib)}`;
 
 export const sizeLabel = (value: Size) => value.toUpperCase();
 

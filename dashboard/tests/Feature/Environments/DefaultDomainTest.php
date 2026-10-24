@@ -50,7 +50,7 @@ class DefaultDomainTest extends TestCase
             AuditEvent::where('action', 'domain.added')->orderByDesc('id')->first()->context,
         );
         $this->assertSame(0, $application->environments()->where('kind', EnvironmentKind::PreviewTemplate)->sole()->domains()->count());
-        $this->actingAs($owner)->get("/environments/{$production->id}/domains")
+        $this->actingAs($owner)->get("/environments/{$production->id}")
             ->assertInertia(fn (Assert $page) => $page->where('domains.0.generated', false)->where('domains.1.generated', true));
     }
 

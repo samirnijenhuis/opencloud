@@ -43,19 +43,19 @@ class DatastoreControllerTest extends TestCase
         EnvVar::factory()->for($environment)->create(['key' => 'REDIS_PASSWORD', 'value' => 'attachment-password-abc', 'source' => EnvVarSource::Datastore, 'is_secret' => true, 'datastore_attachment_id' => $failed->id]);
         EnvVar::factory()->for($environment)->create(['key' => 'REDIS_HOST', 'value' => 'valkey.internal.example', 'source' => EnvVarSource::Datastore, 'datastore_attachment_id' => $failed->id]);
 
-        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/datastores")->assertOk();
+        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")->assertOk();
 
         $response->assertInertia(fn (Assert $page) => $page
-            ->component('environments/datastores')
-            ->has('attachments', 1)
-            ->where('attachments.0.kind', 'valkey')
-            ->where('attachments.0.status', 'failed')
-            ->where('attachments.0.error', 'The pod did not start.')
-            ->where('attachments.0.server.cluster', 'local')
-            ->where('attachments.0.env_keys', ['REDIS_HOST', 'REDIS_PASSWORD'])
-            ->where('available_kinds', ['mysql', 'postgres', 'rustfs'])
-            ->where('has_backup_target', false)
-            ->where('polling', false)
+            ->component('environments/show')
+            ->has('datastores.attachments', 1)
+            ->where('datastores.attachments.0.kind', 'valkey')
+            ->where('datastores.attachments.0.status', 'failed')
+            ->where('datastores.attachments.0.error', 'The pod did not start.')
+            ->where('datastores.attachments.0.server.cluster', 'local')
+            ->where('datastores.attachments.0.env_keys', ['REDIS_HOST', 'REDIS_PASSWORD'])
+            ->where('datastores.available_kinds', ['mysql', 'postgres', 'rustfs'])
+            ->where('datastores.has_backup_target', false)
+            ->where('datastores.polling', false)
             ->where('can.update', true));
 
         $raw = $response->getContent();
@@ -72,7 +72,7 @@ class DatastoreControllerTest extends TestCase
         BackupTarget::factory()->create(['access_key' => 'AKIATARGETACCESS', 'secret_key' => 'target-secret-key-123']);
 
         $response = $this->actingAs(User::factory()->owner()->create())
-            ->get("/environments/{$environment->id}/datastores", ['X-Inertia' => 'true', 'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request())])
+            ->get("/environments/{$environment->id}", ['X-Inertia' => 'true', 'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request())])
             ->assertOk();
 
         foreach (['attachment-password-abc', 'root-password-xyz', 'AKIATARGETACCESS', 'target-secret-key-123'] as $secret) {
@@ -89,12 +89,12 @@ class DatastoreControllerTest extends TestCase
 
         foreach ([DatastoreStatus::Pending, DatastoreStatus::Provisioning] as $status) {
             $attachment->update(['status' => $status]);
-            $this->actingAs($owner)->get("/environments/{$environment->id}/datastores")->assertInertia(fn (Assert $page) => $page->where('polling', true));
+            $this->actingAs($owner)->get("/environments/{$environment->id}")->assertInertia(fn (Assert $page) => $page->where('datastores.polling', true));
         }
 
         foreach ([DatastoreStatus::Ready, DatastoreStatus::Failed] as $status) {
             $attachment->update(['status' => $status]);
-            $this->actingAs($owner)->get("/environments/{$environment->id}/datastores")->assertInertia(fn (Assert $page) => $page->where('polling', false));
+            $this->actingAs($owner)->get("/environments/{$environment->id}")->assertInertia(fn (Assert $page) => $page->where('datastores.polling', false));
         }
     }
 
@@ -103,8 +103,8 @@ class DatastoreControllerTest extends TestCase
         $environment = $this->makeEnvironment();
         BackupTarget::factory()->create();
 
-        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$environment->id}/datastores")
-            ->assertInertia(fn (Assert $page) => $page->where('has_backup_target', true)->where('can.manage_backup_target', false));
+        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$environment->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('datastores.has_backup_target', true)->where('can.manage_credentials', false));
     }
 
     public function test_a_developer_can_view_but_not_change_a_protected_environment(): void
@@ -113,7 +113,7 @@ class DatastoreControllerTest extends TestCase
         $attachment = $this->attach($environment, DatastoreKind::Mysql);
         $developer = User::factory()->create();
 
-        $this->actingAs($developer)->get("/environments/{$environment->id}/datastores")->assertOk()
+        $this->actingAs($developer)->get("/environments/{$environment->id}")->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('can.update', false));
 
         $this->mock(AttachDatastore::class)->shouldNotReceive('handle');

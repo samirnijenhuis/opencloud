@@ -5,12 +5,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import EnvironmentLayout from '@/layouts/environment-layout';
-import { type Availability, type EnvironmentPageProps } from '@/types';
+import { type Availability } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
-type EnvVar = {
+export type EnvVar = {
     id: number;
     key: string;
     source: 'user' | 'datastore';
@@ -25,8 +24,7 @@ const availabilityLabels: Record<Availability, string> = {
     both: 'Build and runtime',
 };
 
-export default function EnvironmentEnv(props: EnvironmentPageProps & { envVars: EnvVar[] }) {
-    const { environment, envVars, can } = props;
+export function EnvValues({ environmentId, envVars, canUpdate }: { environmentId: number; envVars: EnvVar[]; canUpdate: boolean }) {
     const form = useForm<{ key: string; value: string; is_secret: boolean; available_at: Availability }>({
         key: '',
         value: '',
@@ -38,7 +36,7 @@ export default function EnvironmentEnv(props: EnvironmentPageProps & { envVars: 
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        form.post(route('env-vars.store', environment.id), { preserveScroll: true, onSuccess: () => form.reset('key', 'value', 'is_secret') });
+        form.post(route('env-vars.store', environmentId), { preserveScroll: true, onSuccess: () => form.reset('key', 'value', 'is_secret') });
     };
 
     const replace = (envVar: EnvVar) => {
@@ -55,14 +53,12 @@ export default function EnvironmentEnv(props: EnvironmentPageProps & { envVars: 
     const existing = envVars.find((envVar) => envVar.source === 'user' && envVar.key === data.key);
 
     return (
-        <EnvironmentLayout page={props} tab="env" title="Environment values">
-            <p className="text-muted-foreground text-sm">Changes apply on the next deploy.</p>
-
+        <div className="space-y-4">
             {envVars.length === 0 ? (
                 <p className="text-sm">This environment has no values yet.</p>
             ) : (
                 <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[36rem] text-sm">
                         <thead className="text-muted-foreground border-b text-left">
                             <tr>
                                 <th className="p-3 font-medium">Key</th>
@@ -77,7 +73,7 @@ export default function EnvironmentEnv(props: EnvironmentPageProps & { envVars: 
                                     <td className="p-3 font-mono">{envVar.key}</td>
                                     <td className="p-3">
                                         {envVar.source === 'datastore' ? (
-                                            <span className="text-muted-foreground">Set by a datastore. Read only.</span>
+                                            <span className="text-muted-foreground">Set by a resource. Read only.</span>
                                         ) : envVar.is_secret ? (
                                             <Badge variant="secondary">Secret, set</Badge>
                                         ) : (
@@ -86,7 +82,7 @@ export default function EnvironmentEnv(props: EnvironmentPageProps & { envVars: 
                                     </td>
                                     <td className="text-muted-foreground p-3">{availabilityLabels[envVar.available_at]}</td>
                                     <td className="p-3 text-right whitespace-nowrap">
-                                        {envVar.source === 'user' && can.update && (
+                                        {envVar.source === 'user' && canUpdate && (
                                             <>
                                                 <Button variant="ghost" size="sm" onClick={() => replace(envVar)}>
                                                     {envVar.is_secret ? 'Replace' : 'Edit'}
@@ -105,9 +101,9 @@ export default function EnvironmentEnv(props: EnvironmentPageProps & { envVars: 
             )}
             {!errors.key && <InputError message={pageErrors.key} />}
 
-            {can.update ? (
+            {canUpdate ? (
                 <form onSubmit={submit} className="space-y-4 rounded-lg border p-4">
-                    <h2 className="text-sm font-medium">{existing ? `Replace ${existing.key}` : 'Add or replace a value'}</h2>
+                    <h3 className="text-sm font-medium">{existing ? `Replace ${existing.key}` : 'Add or replace a value'}</h3>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="env-key">Key</Label>
@@ -160,6 +156,6 @@ export default function EnvironmentEnv(props: EnvironmentPageProps & { envVars: 
             ) : (
                 <p className="text-muted-foreground text-sm">Only an admin or an owner can change the values of a protected environment.</p>
             )}
-        </EnvironmentLayout>
+        </div>
     );
 }

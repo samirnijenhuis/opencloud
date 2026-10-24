@@ -24,11 +24,11 @@ class DomainControllerTest extends TestCase
         Domain::factory()->for($environment)->create(['hostname' => 'a.example.com', 'dns_status' => DnsStatus::Wrong, 'dns_found' => ['198.51.100.7']]);
         Domain::factory()->for($environment)->create(['hostname' => 'b.example.com', 'dns_status' => DnsStatus::Ok, 'certificate_status' => 'issued']);
 
-        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/domains")
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('environments/domains')
-                ->where('ingressIp', '203.0.113.10')
+                ->component('environments/show')
+                ->where('cluster.ingress_ip', '203.0.113.10')
                 ->where('can.manage_domains', true)
                 ->where('domains.0.hostname', 'a.example.com')
                 ->where('domains.0.dns_status', 'wrong')
@@ -45,7 +45,7 @@ class DomainControllerTest extends TestCase
         $domain = Domain::factory()->for($environment)->create();
         $developer = User::factory()->create();
 
-        $this->actingAs($developer)->get("/environments/{$environment->id}/domains")->assertInertia(fn (Assert $page) => $page->where('can.manage_domains', false));
+        $this->actingAs($developer)->get("/environments/{$environment->id}")->assertInertia(fn (Assert $page) => $page->where('can.manage_domains', false));
         $this->actingAs($developer)->post("/environments/{$environment->id}/domains", ['hostname' => 'x.example.com'])->assertForbidden();
         $this->actingAs($developer)->post("/domains/{$domain->id}/check")->assertForbidden();
         $this->actingAs($developer)->delete("/domains/{$domain->id}")->assertForbidden();
