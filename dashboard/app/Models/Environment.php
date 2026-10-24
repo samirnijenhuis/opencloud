@@ -98,4 +98,10 @@ class Environment extends Model
     {
         return $this->hasMany(DatastoreAttachment::class);
     }
+
+    /** @return HasMany<Process, $this> the processes next to web, in the order they were added */
+    public function processes(): HasMany
+    {
+        return $this->hasMany(Process::class)->orderBy('id');
+    }
 }
