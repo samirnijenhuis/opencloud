@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 /**
  * Reads JSON from the URL now and again every interval, but only while the tab is visible.
  * A null URL reads nothing. The poll stops when `keepPolling` returns false, and `refresh` reads once more.
+ * A failed read tries again after the interval.
  */
 export function usePoll<T>(url: string | null, intervalMs: number, keepPolling: (data: T) => boolean = () => true): [T | null, () => void] {
     const [result, setResult] = useState<{ url: string; data: T } | null>(null);

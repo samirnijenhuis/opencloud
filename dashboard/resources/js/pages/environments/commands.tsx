@@ -119,7 +119,7 @@ function Output({ runId }: { runId: number }) {
                 <RunStatusText status={run.status} />
                 {run.exit_code !== null && <span className="text-muted-foreground">Exit code {run.exit_code}</span>}
                 {run.commit_sha && <code className="text-muted-foreground font-mono text-xs">{shortSha(run.commit_sha)}</code>}
-                <span className="text-muted-foreground">{duration(run.started_at, run.finished_at)}</span>
+                {run.started_at && <span className="text-muted-foreground">{duration(run.started_at, run.finished_at)}</span>}
             </div>
             <code className="block font-mono text-sm break-all">{run.command}</code>
             <pre

@@ -12,7 +12,7 @@ type Hook = { enabled: boolean; url: string | null };
 const masked = (url: string) => url.replace(/[^/]+$/, '•'.repeat(16));
 
 export function DeployHook({ environmentId, canUpdate }: { environmentId: number; canUpdate: boolean }) {
-    const [hook, reload] = usePoll<Hook>(route('environments.deploy-hook', environmentId), 0, () => false);
+    const [hook, reload] = usePoll<Hook>(route('environments.deploy-hook', environmentId), 10_000, () => false);
     const errors = usePage().props.errors as Record<string, string>;
     const [revealed, setRevealed] = useState(false);
     const [copied, setCopied] = useState(false);
