@@ -39,6 +39,9 @@ class RunDeployment implements ShouldQueue
 
     private const DATASTORE_WAIT_SECONDS = 600;
 
+    /** An old pod sleeps 10 seconds in preStop and then stops, so a minute leaves room for a slow app. */
+    private const OLD_PODS_WAIT_SECONDS = 60;
+
     public function __construct(public Deployment $deployment) {}
 
     /** @return list<object> */
@@ -121,6 +124,8 @@ class RunDeployment implements ShouldQueue
             $kubectl->delete($kind, $name, $environment->kubeNamespace());
         }
 
+        $this->waitForOldPods($kubectl, $environment, $deployment, $log);
+
         DB::transaction(function () use ($deployment) {
             // The database allows one live deployment per environment, so the old one moves first.
             Deployment::query()
@@ -134,6 +139,32 @@ class RunDeployment implements ShouldQueue
         });
 
         $log->write('The deployment is live.');
+    }
+
+    /**
+     * A rollout ends when the old pods start to stop. Each old pod still answers during its preStop sleep, and Caddy reuses
+     * its pooled connections to that pod. Live means that only the new version answers, so the deployment waits for the old pods.
+     */
+    private function waitForOldPods(Kubectl $kubectl, Environment $environment, Deployment $deployment, DeploymentLog $log): void
+    {
+        $selector = Labels::ENVIRONMENT."={$environment->id},".Labels::PROCESS.' in ('.implode(',', $environment->processNames()).'),'.Labels::DEPLOYMENT."!={$deployment->id}";
+        $deadline = now()->addSeconds(self::OLD_PODS_WAIT_SECONDS);
+        $waiting = false;
+
+        while (trim($kubectl->run(['get', 'pods', "--selector={$selector}", "--namespace={$environment->kubeNamespace()}", '-o', 'name'])->throw()->output) !== '') {
+            if (now()->greaterThan($deadline)) {
+                $log->write('The old pods did not stop within '.self::OLD_PODS_WAIT_SECONDS.' seconds. Kubernetes stops them later.');
+
+                return;
+            }
+
+            if (! $waiting) {
+                $log->write('Waiting for the old pods to stop.');
+                $waiting = true;
+            }
+
+            Sleep::for(2)->seconds();
+        }
     }
 
     /** The env Secret holds the datastore credentials, and the deploy commands migrate, so both wait for the datastores. */

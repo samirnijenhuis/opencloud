@@ -195,6 +195,8 @@ The dashboard pod runs two queue workers. The `worker` container serves the `def
 
 Each kind has one engine in `app/Datastores`, and `Engines::for()` picks it. MySQL and Postgres run one server per cluster. Each environment gets its own database and user with rights on that database only. RustFS runs one server per cluster with a sidecar container `rc`. Each environment gets a bucket, an IAM user, and a policy that allows only that bucket. Valkey runs one small instance per attachment. Attach writes the Laravel env values with source `datastore`. Detach removes the user or key and keeps the data. `DetachDatastore::destroy()` also removes the data, for previews.
 
+A rollout ends when the old pods start to stop, but each old pod still answers during its 10 second `preStop` sleep, and Caddy reuses its pooled connections to it. So `RunDeployment` waits up to 60 seconds until the pods of older deployments are gone, and only then marks the deployment live. When a deployment is live, only the new version answers.
+
 Each deployment has its own env Secret, `env-<deployment-id>`. A failed deploy cannot change the env of the pods that still run. After a deployment goes live, the job keeps the live Secret and the two newest, and deletes the rest.
 
 Backups run every night at 03:00. A dump streams through `kubectl exec` into a gzip file under `<data_path>/backups`, or into the S3 backup target when one exists. The newest 7 dumps per attachment stay. A restore first backs up the current state, then empties the database and streams the dump back.

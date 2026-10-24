@@ -96,6 +96,7 @@ class RunDeploymentTest extends TestCase
                 "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
             ],
             ['delete', 'horizontalpodautoscaler', 'web', "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
+            ['get', 'pods', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process in (web,worker,scheduler),opencloud.dev/deployment!={$this->new->id}", "--namespace={$namespace}", '-o', 'name'],
             ['exec', '-i', 'deploy/caddy', '--namespace=opencloud', '--', 'sh', '-c', 'cat > /tmp/caddy.json && wget -q -O- --header "Content-Type: application/json" --post-file /tmp/caddy.json http://127.0.0.1:2019/load'],
             ['get', 'secrets', "--selector=opencloud.dev/application={$this->environment->application_id},opencloud.dev/environment={$this->environment->id}", "--namespace={$namespace}", '--ignore-not-found', '-o', 'json'],
             ['delete', 'secret', 'env', "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
@@ -134,6 +135,33 @@ class RunDeploymentTest extends TestCase
             "2026-10-23T12:00:00Z The deployment is live.\n",
             $new->log,
         );
+    }
+
+    public function test_the_deployment_goes_live_only_after_the_old_pods_stopped(): void
+    {
+        Sleep::fake(syncWithCarbon: true);
+        $checks = 0;
+        $this->kubectl->respond('get pods --selector=opencloud.dev/environment', function () use (&$checks) {
+            return new KubectlResult(0, ++$checks < 3 ? "pod/web-old-abc12\n" : '');
+        });
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame(3, $checks);
+        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertSame('2026-10-23 12:00:04', $this->new->fresh()->finished_at->toDateTimeString());
+        $this->assertStringContainsString("2026-10-23T12:00:00Z Waiting for the old pods to stop.\n2026-10-23T12:00:04Z The deployment is live.\n", $this->new->fresh()->log);
+    }
+
+    public function test_old_pods_that_do_not_stop_in_a_minute_do_not_keep_the_deployment_from_going_live(): void
+    {
+        Sleep::fake(syncWithCarbon: true);
+        $this->kubectl->respond('get pods --selector=opencloud.dev/environment', new KubectlResult(0, "pod/web-old-abc12\n"));
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertStringContainsString("The old pods did not stop within 60 seconds. Kubernetes stops them later.\n", $this->new->fresh()->log);
     }
 
     public function test_the_processes_in_the_list_roll_out_and_the_deployments_of_removed_ones_are_deleted(): void
