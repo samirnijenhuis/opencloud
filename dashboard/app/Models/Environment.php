@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\EnvironmentKind;
 use App\Enums\Size;
+use App\Environments\EnvironmentColor;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,6 +19,8 @@ class Environment extends Model
         'name',
         'kind',
         'is_protected',
+        'color',
+        'deploy_hook_enabled',
         'branch',
         'auto_deploy',
         'pr_number',
@@ -33,8 +36,11 @@ class Environment extends Model
         'pr_comment_id',
     ];
 
+    protected $hidden = ['deploy_hook_token'];
+
     protected $attributes = [
         'is_protected' => false,
+        'deploy_hook_enabled' => false,
         'auto_deploy' => true,
         'size' => Size::S->value,
         'min_instances' => 1,
@@ -46,11 +52,21 @@ class Environment extends Model
         'scheduler_enabled' => true,
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Environment $environment) {
+            $environment->color ??= EnvironmentColor::defaultFor($environment->kind);
+        });
+    }
+
     protected function casts(): array
     {
         return [
             'kind' => EnvironmentKind::class,
             'is_protected' => 'boolean',
+            'color' => EnvironmentColor::class,
+            'deploy_hook_token' => 'encrypted',
+            'deploy_hook_enabled' => 'boolean',
             'auto_deploy' => 'boolean',
             'pr_number' => 'integer',
             'pr_comment_id' => 'integer',
@@ -85,6 +101,12 @@ class Environment extends Model
     public function deployments(): HasMany
     {
         return $this->hasMany(Deployment::class);
+    }
+
+    /** @return HasMany<CommandRun, $this> */
+    public function commandRuns(): HasMany
+    {
+        return $this->hasMany(CommandRun::class);
     }
 
     /** @return HasMany<Domain, $this> */

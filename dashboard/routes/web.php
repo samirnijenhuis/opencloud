@@ -3,14 +3,18 @@
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\ClusterController;
+use App\Http\Controllers\CommandRunController;
 use App\Http\Controllers\CreatedClusterController;
 use App\Http\Controllers\DatastoreController;
+use App\Http\Controllers\DeployHookController;
 use App\Http\Controllers\DeploymentController;
 use App\Http\Controllers\DomainController;
+use App\Http\Controllers\EnvironmentColorController;
 use App\Http\Controllers\EnvironmentController;
 use App\Http\Controllers\EnvironmentLogController;
 use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\InviteAcceptController;
+use App\Http\Controllers\LiveStatusController;
 use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
@@ -44,6 +48,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('environments/{environment}/logs', [EnvironmentLogController::class, 'show'])->name('environments.logs');
     Route::get('environments/{environment}/logs/read', [EnvironmentLogController::class, 'read'])->name('environments.logs.read');
 
+    Route::get('environments/{environment}/status', [LiveStatusController::class, 'environment'])->name('environments.status');
+
+    Route::get('environments/{environment}/command-runs', [CommandRunController::class, 'index'])->name('environments.command-runs');
+    Route::post('environments/{environment}/command-runs', [CommandRunController::class, 'store'])->name('command-runs.store');
+    Route::get('command-runs/{commandRun}', [CommandRunController::class, 'show'])->name('command-runs.show');
+
     Route::get('environments/{environment}/env', [EnvVarController::class, 'index'])->name('environments.env');
     Route::post('environments/{environment}/env', [EnvVarController::class, 'store'])->name('env-vars.store');
     Route::delete('env-vars/{envVar}', [EnvVarController::class, 'destroy'])->name('env-vars.destroy');
@@ -55,6 +65,13 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/settings', [EnvironmentController::class, 'settings'])->name('environments.settings');
     Route::patch('environments/{environment}/settings', [EnvironmentController::class, 'update'])->name('environments.update');
+
+    Route::patch('environments/{environment}/color', [EnvironmentColorController::class, 'update'])->name('environments.color.update');
+
+    Route::get('environments/{environment}/deploy-hook', [DeployHookController::class, 'show'])->name('environments.deploy-hook');
+    Route::post('environments/{environment}/deploy-hook', [DeployHookController::class, 'store'])->name('environments.deploy-hook.enable');
+    Route::post('environments/{environment}/deploy-hook/regenerate', [DeployHookController::class, 'regenerate'])->name('environments.deploy-hook.regenerate');
+    Route::delete('environments/{environment}/deploy-hook', [DeployHookController::class, 'destroy'])->name('environments.deploy-hook.disable');
 
     Route::get('environments/{environment}/datastores', [DatastoreController::class, 'index'])->name('environments.datastores');
     Route::post('environments/{environment}/datastores', [DatastoreController::class, 'store'])->name('datastores.store');
@@ -70,6 +87,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('clusters', [ClusterController::class, 'store'])->name('clusters.store');
     Route::get('clusters/{cluster}', [ClusterController::class, 'show'])->name('clusters.show');
     Route::post('clusters/{cluster}/reinstall', [ClusterController::class, 'reinstall'])->name('clusters.reinstall');
+    Route::get('clusters/{cluster}/capacity', [LiveStatusController::class, 'cluster'])->name('clusters.capacity');
     Route::delete('clusters/{cluster}', [ClusterController::class, 'destroy'])->name('clusters.destroy');
 });
 

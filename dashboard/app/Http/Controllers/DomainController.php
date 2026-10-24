@@ -31,6 +31,7 @@ class DomainController extends Controller
             'domains' => $environment->domains()->orderBy('id')->get()->map(fn (Domain $domain) => [
                 'id' => $domain->id,
                 'hostname' => $domain->hostname,
+                'generated' => $domain->generated,
                 'dns_status' => $domain->dns_status,
                 'dns_mode' => $domain->dns_mode,
                 'dns_found' => $domain->dns_found ?? [],
