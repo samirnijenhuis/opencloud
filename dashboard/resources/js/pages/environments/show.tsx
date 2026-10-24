@@ -235,7 +235,7 @@ export default function EnvironmentShow(props: CanvasProps) {
     );
 
     return (
-        <EnvironmentLayout page={props} tab="overview" title="Environment">
+        <EnvironmentLayout page={props} tab="environment" title="Environment">
             <div className="@container relative rounded-xl border bg-neutral-50/70 bg-[radial-gradient(var(--color-neutral-300)_1px,transparent_1px)] bg-[size:14px_14px] p-4 pb-20 sm:p-6 sm:pb-20 dark:bg-neutral-950 dark:bg-[radial-gradient(var(--color-neutral-800)_1px,transparent_1px)]">
                 <div className="mx-auto grid max-w-md grid-cols-1 gap-6 @4xl:max-w-none @4xl:grid-cols-[minmax(0,1fr)_1.75rem_minmax(0,1.1fr)_1.75rem_minmax(0,1fr)] @4xl:items-start @4xl:gap-0">
                     <Group label="Network" aside="Caddy">

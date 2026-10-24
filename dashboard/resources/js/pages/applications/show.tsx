@@ -165,7 +165,10 @@ export default function ApplicationShow({ application, environments, previews, c
                     {previews.template_id && (
                         <p className="text-sm">
                             Previews copy the settings and the environment values of the{' '}
-                            <Link href={route('environments.env', previews.template_id)} className="font-medium hover:underline">
+                            <Link
+                                href={`${route('environments.settings', previews.template_id)}#environment-values`}
+                                className="font-medium hover:underline"
+                            >
                                 preview template
                             </Link>
                             . Production values never go to a preview.

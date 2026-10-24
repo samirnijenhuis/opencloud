@@ -12,6 +12,7 @@ use App\Domains\CloudflareDns;
 use App\Enums\Ability;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
+use App\Enums\EnvVarSource;
 use App\Enums\Role;
 use App\Enums\Size;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
@@ -23,6 +24,7 @@ use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
+use App\Models\EnvVar;
 use App\Models\Process;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -108,6 +110,15 @@ class EnvironmentController extends Controller
                 'build_command' => $environment->build_command,
                 'deploy_commands' => $environment->deploy_commands,
             ],
+            // Only a plain user value goes to the browser. A secret and a datastore value never do.
+            'envVars' => $environment->envVars()->orderBy('key')->get()->map(fn (EnvVar $envVar) => [
+                'id' => $envVar->id,
+                'key' => $envVar->key,
+                'source' => $envVar->source,
+                'is_secret' => $envVar->is_secret,
+                'available_at' => $envVar->available_at,
+                'value' => $envVar->source === EnvVarSource::User && ! $envVar->is_secret ? $envVar->value : null,
+            ]),
         ]);
     }
 
