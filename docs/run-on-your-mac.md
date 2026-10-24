@@ -70,8 +70,9 @@ Your browser warns that the certificate is not trusted. Let's Encrypt cannot rea
 
 ## Try more
 
-- **Environment values.** Open the **Environment values** tab. Add a value, and mark it as secret. After you save it, nobody can read it in the dashboard. Click **Deploy** to apply it.
-- **Datastores.** Open the **Datastores** tab. Attach Valkey, then deploy again. The app gets the `REDIS_*` values.
+- **Environment values.** Open the **Settings** tab, then **Environment values**. Add a value, and mark it as secret. After you save it, nobody can read it in the dashboard. Click **Deploy** to apply it.
+- **Resources.** On the **Environment** tab, click **Add resource** and select Valkey. Then deploy again. The app gets the `REDIS_*` values.
+- **Commands.** Open the **Commands** tab and run `php artisan about`. The output shows while the command runs.
 - **Logs.** Open the **Logs** tab to read the web, worker, and scheduler logs.
 - **Team.** Open **Settings > Members** and create an invite link with a role.
 - **Your own repository.** Use any public repository with a Laravel app or a Dockerfile.
