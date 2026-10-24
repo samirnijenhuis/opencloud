@@ -6,12 +6,15 @@ ENV COMPOSER_CACHE_DIR=/tmp/composer-cache
 WORKDIR /app
 
 FROM base AS vendor
+# Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
+ARG OPENCLOUD_BUILD_ENV
 COPY . .
 RUN --mount=type=cache,target=/tmp/composer-cache {{ secret_mounts }}composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
 {{#assets}}
 
 # Vite plugins such as Wayfinder run artisan during the asset build, so this stage has PHP and Node.
 FROM base AS assets
+ARG OPENCLOUD_BUILD_ENV
 COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \

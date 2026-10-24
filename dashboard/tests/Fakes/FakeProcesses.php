@@ -29,6 +29,9 @@ final class FakeProcesses
     /** @var list<string> the Dockerfile text that each build saw */
     public array $dockerfiles = [];
 
+    /** @var list<string|null> the "<dockerfile>.dockerignore" that each build saw, or null */
+    public array $dockerignores = [];
+
     /** @var list<string> the config.json that crane found in DOCKER_CONFIG for each copy */
     public array $craneConfigs = [];
 
@@ -80,6 +83,7 @@ final class FakeProcesses
         if ($command[0] === 'buildctl') {
             $filename = substr(collect($command)->first(fn (string $arg) => str_starts_with($arg, 'filename=')), strlen('filename='));
             $this->dockerfiles[] = file_get_contents("{$process->path}/{$filename}");
+            $this->dockerignores[] = is_file("{$process->path}/{$filename}.dockerignore") ? file_get_contents("{$process->path}/{$filename}.dockerignore") : null;
 
             return (new FakeProcessDescription)->output($this->buildOutput)->exitCode($this->buildExitCode);
         }

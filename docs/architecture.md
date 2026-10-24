@@ -90,7 +90,7 @@ The image holds a pinned `tofu` and the modules in `/opt/opencloud/tofu`. Build 
 
 `App\Build\DockerfileTemplate` is a pure class. It reads `composer.json` and `package.json` and returns the Dockerfile text for a Laravel app. The template lives in `dashboard/resources/docker/laravel.Dockerfile`. The image runs FrankenPHP on port 8080 and serves `/app/public`. BuildKit cache mounts keep the Composer and npm downloads between builds. The web process runs `php artisan optimize` when it starts, because the config cache must see the runtime env.
 
-`App\Build\Builder` clones the commit into a temporary folder, writes the Dockerfile, and runs `buildctl` against BuildKit. Build-time env values go in as BuildKit secrets, never as build arguments.
+`App\Build\Builder` clones the commit into a temporary folder, writes the Dockerfile, and runs `buildctl` against BuildKit. Build-time env values go in as BuildKit secrets, never as build arguments. BuildKit leaves secret values out of its cache key, so two builds of one commit with other build values would share each layer that read a secret, also between apps and between a preview and production. The builder therefore passes the build argument `OPENCLOUD_BUILD_ENV`, an HMAC of the build values with the app key. The Laravel template declares it in the stages that mount secrets. For a Dockerfile app with build values, the builder builds a copy of the Dockerfile with `ARG OPENCLOUD_BUILD_ENV` after each `FROM`.
 
 `App\Support\SecretMasker` replaces each secret value with `********` in each log line before the line goes into the database.
 
