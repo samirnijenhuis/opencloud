@@ -5,6 +5,7 @@ use App\Http\Controllers\BackupController;
 use App\Http\Controllers\ClusterController;
 use App\Http\Controllers\CreatedClusterController;
 use App\Http\Controllers\DatastoreController;
+use App\Http\Controllers\DeployHookController;
 use App\Http\Controllers\DeploymentController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EnvironmentColorController;
@@ -58,6 +59,11 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('environments/{environment}/settings', [EnvironmentController::class, 'update'])->name('environments.update');
 
     Route::patch('environments/{environment}/color', [EnvironmentColorController::class, 'update'])->name('environments.color.update');
+
+    Route::get('environments/{environment}/deploy-hook', [DeployHookController::class, 'show'])->name('environments.deploy-hook');
+    Route::post('environments/{environment}/deploy-hook', [DeployHookController::class, 'store'])->name('environments.deploy-hook.enable');
+    Route::post('environments/{environment}/deploy-hook/regenerate', [DeployHookController::class, 'regenerate'])->name('environments.deploy-hook.regenerate');
+    Route::delete('environments/{environment}/deploy-hook', [DeployHookController::class, 'destroy'])->name('environments.deploy-hook.disable');
 
     Route::get('environments/{environment}/datastores', [DatastoreController::class, 'index'])->name('environments.datastores');
     Route::post('environments/{environment}/datastores', [DatastoreController::class, 'store'])->name('datastores.store');

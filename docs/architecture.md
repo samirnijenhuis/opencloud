@@ -129,6 +129,10 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `UpdatePreviewSettings` | `handle(Application $application, User $by, array $settings): void` | Stores `previews_enabled`, `allow_forks`, and `preview_domain`. |
 | `ReadLogs` | `handle(Environment $environment, string $process, int $lines = 200): string` | Returns recent log lines of `web`, `worker`, or `scheduler`, with secrets masked. It records no audit event, because the UI polls it. |
 | `SetEnvironmentColor` | `handle(Environment $environment, User $by, EnvironmentColor $color): Environment` | Stores one of the eight colors of `App\Environments\EnvironmentColor`. A permanent environment starts blue, and a preview starts gray. |
+| `EnableDeployHook` | `handle(Environment $environment, User $by): Environment` | Turns on the deploy hook. It creates a 48-character random token when the environment has none, and it keeps an old token. It refuses the preview template. |
+| `DisableDeployHook` | `handle(Environment $environment, User $by): Environment` | Turns off the deploy hook and keeps the token. |
+| `RegenerateDeployHook` | `handle(Environment $environment, User $by): Environment` | Replaces the token, so the old URL stops working. |
+| `TriggerDeployHook` | `handle(string $token, ?string $ip): ?Deployment` | Finds the environment with an enabled hook and this token and starts a deployment of the branch head with no user. It returns null when no hook matches. |
 
 ## Connected clusters
 
@@ -198,6 +202,10 @@ A `pull_request` queues `SyncPreview`. The actions `opened`, `reopened`, and `sy
 - `OpenPreview` skips the pull request when previews are off, or when it comes from a fork and `allow_forks` is off. At `opencloud.max_previews` previews, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings and the `user` env values of the preview template and runs one instance. It gets its own `APP_KEY` when the template has none, and it attaches the datastore kinds of production. Its domain is `pr-<number>.<preview_domain>`, or `pr-<number>-<application slug>.<ingress ip>.sslip.io` without a preview domain. Then it deploys the head commit.
 - `ClosePreview` waits while a deployment of the preview builds or rolls out. Then it deletes the namespace and calls `DetachDatastore::destroy()` for each attachment. It deletes the environment and its records, and it syncs Caddy.
 - `DeploymentObserver` queues `PostPreviewComment` when a preview deployment moves to `live`. The job creates one comment with the preview URL and keeps its id in `pr_comment_id`. Later deployments update that comment. A failed call only writes a warning to the log.
+
+## Deploy hooks
+
+A deploy hook is a secret URL, `POST /hooks/deploy/<token>`, that starts a deployment of the branch head, for CI. The route is in `routes/webhooks.php`, so it has no session and no CSRF check. It allows 10 requests per minute from one IP address. The token is encrypted in `environments.deploy_hook_token`, so the database cannot look it up. `App\Environments\DeployHook::find()` compares the token of each enabled hook with `hash_equals`. A wrong token and a disabled hook both get 404. Only a user who can change the environment sees the URL.
 
 ## Default domains
 
