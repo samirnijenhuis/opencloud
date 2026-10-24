@@ -128,7 +128,7 @@ class EnvironmentManifestsTest extends TestCase
                     'spec' => ['containers' => [[
                         'name' => 'reverb',
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
-                        'command' => ['sh', '-c', 'php artisan reverb:start --host=0.0.0.0 --port=8080'],
+                        'command' => ['sh', '-c', 'exec php artisan reverb:start --host=0.0.0.0 --port=8080'],
                         'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                         'resources' => self::RESOURCES,
                     ]]],
@@ -155,7 +155,7 @@ class EnvironmentManifestsTest extends TestCase
                     'spec' => ['containers' => [[
                         'name' => 'scheduler',
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
-                        'command' => ['sh', '-c', 'php artisan schedule:work'],
+                        'command' => ['sh', '-c', 'exec php artisan schedule:work'],
                         'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                         'resources' => self::RESOURCES,
                     ]]],
@@ -304,7 +304,28 @@ class EnvironmentManifestsTest extends TestCase
             [['Deployment', 'web'], ['Deployment', 'queue'], ['Service', 'web']],
             array_map(fn (array $m) => [$m['kind'], $m['metadata']['name']], $workloads),
         );
-        $this->assertSame(['sh', '-c', 'node queue.js'], $workloads[1]['spec']['template']['spec']['containers'][0]['command']);
+        $this->assertSame(['sh', '-c', 'exec node queue.js'], $workloads[1]['spec']['template']['spec']['containers'][0]['command']);
+    }
+
+    public function test_a_single_command_replaces_the_shell_and_a_shell_construct_runs_as_it_is(): void
+    {
+        $this->assertSame([
+            ['sh', '-c', 'exec php artisan queue:work --queue="high,default" --tries=3'],
+            ['sh', '-c', 'exec node server.js > /dev/stdout'],
+            ['sh', '-c', 'exec php artisan horizon'],
+            ['sh', '-c', 'php artisan migrate --force && php artisan horizon'],
+            ['sh', '-c', 'php artisan inertia:start-ssr 2>&1 | tee ssr.log'],
+            ['sh', '-c', 'QUEUE=high php artisan queue:work'],
+            ['sh', '-c', 'node $(cat entry.txt)'],
+        ], array_map(EnvironmentManifests::shellCommand(...), [
+            'php artisan queue:work --queue="high,default" --tries=3',
+            'node server.js > /dev/stdout',
+            'exec php artisan horizon',
+            'php artisan migrate --force && php artisan horizon',
+            'php artisan inertia:start-ssr 2>&1 | tee ssr.log',
+            'QUEUE=high php artisan queue:work',
+            'node $(cat entry.txt)',
+        ]));
     }
 
     /**

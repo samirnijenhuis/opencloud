@@ -156,7 +156,7 @@ class RunDeploymentTest extends TestCase
 
         $horizon = collect($this->kubectl->appliedManifests())->firstWhere('metadata.name', 'horizon');
         $this->assertSame(
-            [2, ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]], ['sh', '-c', 'php artisan horizon']],
+            [2, ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]], ['sh', '-c', 'exec php artisan horizon']],
             [$horizon['spec']['replicas'], $horizon['spec']['strategy'], $horizon['spec']['template']['spec']['containers'][0]['command']],
         );
     }

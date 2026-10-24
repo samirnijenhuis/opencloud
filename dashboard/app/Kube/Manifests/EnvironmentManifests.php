@@ -134,8 +134,22 @@ final readonly class EnvironmentManifests
             $deployment,
             replicas: $process->instances,
             strategy: $process->exclusive ? ['type' => 'Recreate'] : self::ROLLING,
-            container: ['command' => ['sh', '-c', $process->command]],
+            container: ['command' => self::shellCommand($process->command)],
         );
+    }
+
+    /**
+     * Dash, the sh of Debian images, stays PID 1 under `sh -c`, and PID 1 drops a SIGTERM that it has no handler for.
+     * So a single command replaces the shell with exec, and a queue worker gets the SIGTERM and finishes its job.
+     * A list, a pipe, a subshell, or a leading assignment cannot follow exec, so such a command runs as it is.
+     *
+     * @return list<string>
+     */
+    public static function shellCommand(string $command): array
+    {
+        $single = preg_match('/^(?!exec\s)(?![A-Za-z_][A-Za-z0-9_]*=)[^;&|`()\n]+$/', $command) === 1;
+
+        return ['sh', '-c', $single ? "exec {$command}" : $command];
     }
 
     /** @return array<string, mixed> */
