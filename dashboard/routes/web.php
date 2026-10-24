@@ -14,6 +14,7 @@ use App\Http\Controllers\EnvironmentController;
 use App\Http\Controllers\EnvironmentLogController;
 use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\InviteAcceptController;
+use App\Http\Controllers\LiveStatusController;
 use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
@@ -46,6 +47,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/logs', [EnvironmentLogController::class, 'show'])->name('environments.logs');
     Route::get('environments/{environment}/logs/read', [EnvironmentLogController::class, 'read'])->name('environments.logs.read');
+
+    Route::get('environments/{environment}/status', [LiveStatusController::class, 'environment'])->name('environments.status');
 
     Route::get('environments/{environment}/command-runs', [CommandRunController::class, 'index'])->name('environments.command-runs');
     Route::post('environments/{environment}/command-runs', [CommandRunController::class, 'store'])->name('command-runs.store');
@@ -84,6 +87,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('clusters', [ClusterController::class, 'store'])->name('clusters.store');
     Route::get('clusters/{cluster}', [ClusterController::class, 'show'])->name('clusters.show');
     Route::post('clusters/{cluster}/reinstall', [ClusterController::class, 'reinstall'])->name('clusters.reinstall');
+    Route::get('clusters/{cluster}/capacity', [LiveStatusController::class, 'cluster'])->name('clusters.capacity');
     Route::delete('clusters/{cluster}', [ClusterController::class, 'destroy'])->name('clusters.destroy');
 });
 
