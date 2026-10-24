@@ -9,6 +9,7 @@ use App\Models\AuditEvent;
 use App\Models\Environment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Feature\Http\BuildsEnvironments;
 use Tests\TestCase;
 
@@ -53,5 +54,7 @@ class EnvironmentColorTest extends TestCase
         $this->actingAs($developer)->patch("/environments/{$staging->id}/color", ['color' => 'pink'])->assertSessionHasErrors('color');
 
         $this->assertSame([EnvironmentColor::Green, EnvironmentColor::Sky], [$production->fresh()->color, $staging->fresh()->color]);
+        $this->actingAs($developer)->get("/environments/{$staging->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('environment.color', 'sky'));
     }
 }
