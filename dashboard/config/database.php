@@ -41,6 +41,10 @@ return [
             'busy_timeout' => 10000,
             'journal_mode' => 'wal',
             'synchronous' => 'normal',
+            // The four dashboard containers write to one file. A deferred transaction that reads and then writes gets
+            // "database is locked" at once when another container writes in between, and the busy timeout does not apply.
+            // The queue then fails the job that it was about to reserve. IMMEDIATE takes the write lock at the start, so it waits.
+            'transaction_mode' => 'IMMEDIATE',
         ],
 
         'mysql' => [
