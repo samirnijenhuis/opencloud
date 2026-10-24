@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import ProcessFields from '@/components/process-fields';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -7,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import EnvironmentLayout from '@/layouts/environment-layout';
 import { sizeLabel, sizeText } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { type EnvironmentPageProps, type Size, type SizeOption } from '@/types';
-import { useForm } from '@inertiajs/react';
+import { type EnvironmentPageProps, type Process, type ProcessValues, type Size, type SizeOption } from '@/types';
+import { router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 type Settings = {
@@ -23,10 +24,68 @@ type Settings = {
     deploy_commands: string[];
 };
 
-type Props = EnvironmentPageProps & { settings: Settings; sizes: SizeOption[] };
+type Props = EnvironmentPageProps & { settings: Settings; sizes: SizeOption[]; processes: Process[] };
+
+function ProcessRow({ process, locked }: { process: Process; locked: boolean }) {
+    const form = useForm<ProcessValues>({ name: process.name, command: process.command, instances: process.instances, exclusive: process.exclusive });
+
+    const save: FormEventHandler = (e) => {
+        e.preventDefault();
+        form.patch(route('processes.update', process.id), { preserveScroll: true, onSuccess: () => form.setDefaults() });
+    };
+
+    const remove = () => {
+        if (confirm(`Remove ${process.name}? Its pods stop on the next deploy.`)) {
+            router.delete(route('processes.destroy', process.id), { preserveScroll: true });
+        }
+    };
+
+    return (
+        <li>
+            <form onSubmit={save}>
+                <ProcessFields
+                    value={form.data}
+                    onChange={(change) => form.setData({ ...form.data, ...change })}
+                    errors={form.errors}
+                    disabled={locked}
+                >
+                    {!locked && (
+                        <>
+                            <Button size="sm" variant="secondary" disabled={!form.isDirty || form.processing}>
+                                Save
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" onClick={remove}>
+                                Remove
+                            </Button>
+                        </>
+                    )}
+                </ProcessFields>
+            </form>
+        </li>
+    );
+}
+
+function NewProcess({ environmentId }: { environmentId: number }) {
+    const form = useForm<ProcessValues>({ name: '', command: '', instances: 1, exclusive: false });
+
+    const add: FormEventHandler = (e) => {
+        e.preventDefault();
+        form.post(route('processes.store', environmentId), { preserveScroll: true, onSuccess: () => form.reset() });
+    };
+
+    return (
+        <form onSubmit={add}>
+            <ProcessFields value={form.data} onChange={(change) => form.setData({ ...form.data, ...change })} errors={form.errors}>
+                <Button size="sm" disabled={form.processing}>
+                    Add process
+                </Button>
+            </ProcessFields>
+        </form>
+    );
+}
 
 export default function EnvironmentSettings(props: Props) {
-    const { environment, settings, sizes, can } = props;
+    const { environment, settings, sizes, processes, can } = props;
     const form = useForm({
         ...settings,
         build_command: settings.build_command ?? '',
@@ -164,6 +223,23 @@ export default function EnvironmentSettings(props: Props) {
                     </div>
                 )}
             </form>
+
+            <section className="mt-10 max-w-3xl space-y-3">
+                <h2 className="text-base font-medium">Processes</h2>
+                <p className="text-muted-foreground text-sm">
+                    Web serves HTTP. Each process here runs next to web with the same image, env, and size. An exclusive process runs exactly one
+                    copy, for example the scheduler. Changes apply on the next deploy.
+                </p>
+                {processes.length === 0 && <p className="text-sm">Only web runs.</p>}
+                {processes.length > 0 && (
+                    <ul className="space-y-2">
+                        {processes.map((process) => (
+                            <ProcessRow key={process.id} process={process} locked={locked} />
+                        ))}
+                    </ul>
+                )}
+                {!locked && <NewProcess environmentId={environment.id} />}
+            </section>
         </EnvironmentLayout>
     );
 }

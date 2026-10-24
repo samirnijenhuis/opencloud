@@ -7,6 +7,7 @@ use App\Enums\Size;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Http\Requests\UpdateEnvironmentSettingsRequest;
 use App\Models\Environment;
+use App\Models\Process;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -47,6 +48,7 @@ class EnvironmentController extends Controller
                 'build_command' => $environment->build_command,
                 'deploy_commands' => $environment->deploy_commands,
             ],
+            'processes' => $environment->processes->map(fn (Process $process) => $process->only(['id', 'name', 'command', 'instances', 'exclusive'])),
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,
                 'cpu_millicores' => $size->cpuMillicores(),
