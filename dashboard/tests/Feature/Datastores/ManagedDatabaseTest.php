@@ -4,6 +4,7 @@ namespace Tests\Feature\Datastores;
 
 use App\Actions\AttachDatastore;
 use App\Actions\DetachDatastore;
+use App\Actions\SetDefaultDatabase;
 use App\Clusters\ClusterStatus;
 use App\Datastores\DatastoreStatus;
 use App\Enums\ClusterKind;
@@ -149,6 +150,45 @@ class ManagedDatabaseTest extends TestCase
             'REPORTS_DB_URL' => ["postgres://env_{$environment->id}_0b7ec688:DO%2Fpass%2Bword@private-ams3-prod-mysql-1-do-user-1.db.ondigitalocean.com:25060/env_{$environment->id}_reports", true],
         ], $this->envOf($environment));
         $this->assertSame(['private-ams3-prod-mysql-1-do-user-1.db.ondigitalocean.com', 25060], [$reports->fresh()->host, $reports->fresh()->port]);
+    }
+
+    public function test_a_managed_database_that_becomes_the_default_during_its_apply_writes_the_db_values(): void
+    {
+        $environment = $this->environment();
+        $owner = User::factory()->owner()->create();
+        $main = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres);
+        $reports = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed, 'reports');
+        $job = new ProvisionManagedDatabase($reports->fresh());
+
+        app(SetDefaultDatabase::class)->handle($reports, $owner);
+        $this->assertSame(['MAIN_DB_URL'], array_keys($this->envOf($environment)));
+
+        $job->handle(app(Runner::class));
+
+        $id = $environment->id;
+        $this->assertSame([
+            'DB_CONNECTION' => ['pgsql', false],
+            'DB_DATABASE' => ["env_{$id}_reports", false],
+            'DB_HOST' => ['private-ams3-prod-mysql-1-do-user-1.db.ondigitalocean.com', false],
+            'DB_PASSWORD' => ['DO_GENERATED_PASSWORD_SECRET', true],
+            'DB_PORT' => ['25060', false],
+            'DB_USERNAME' => ["env_{$id}_0b7ec688", false],
+            'MAIN_DB_URL' => ["postgres://env_{$id}:{$main->password}@postgres-{$main->datastore_id}.oc-datastores.svc.cluster.local:5432/env_{$id}", true],
+        ], $this->envOf($environment));
+    }
+
+    public function test_destroying_the_managed_default_frees_its_name_and_the_default_at_once(): void
+    {
+        $environment = $this->environment();
+        $owner = User::factory()->owner()->create();
+        $managed = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed);
+        (new ProvisionManagedDatabase($managed))->handle(app(Runner::class));
+
+        app(DetachDatastore::class)->handle($managed->fresh(), $owner);
+        $standard = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres);
+
+        $this->assertSame([null, false, DatastoreStatus::Destroying], [$managed->fresh()->name, $managed->fresh()->is_default, $managed->datastore->fresh()->status]);
+        $this->assertSame(['main', true], [$standard->name, $standard->is_default]);
     }
 
     public function test_postgres_uses_the_pg_engine_and_the_pgsql_connection(): void

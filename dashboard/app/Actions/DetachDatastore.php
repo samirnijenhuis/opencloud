@@ -11,23 +11,30 @@ use App\Models\DatastoreAttachment;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class DetachDatastore
 {
     /**
      * Removes the attachment, its env values, and its database user, access key, or Valkey server.
-     * The database, the bucket, and the Valkey volume stay, so a later attach of the same kind finds the data again.
+     * The database, the bucket, and the Valkey volume stay, so a later attach of the same kind and name finds the data again.
      * A managed database is destroyed with OpenTofu instead, see destroyManaged().
+     *
+     * @throws InvalidArgumentException for the default database while the environment has other databases
      */
     public function handle(DatastoreAttachment $attachment, User $by): void
     {
-        if ($attachment->datastore->source === DatastoreSource::Managed) {
-            $this->destroyManaged($attachment, $by);
+        DB::transaction(function () use ($attachment, $by) {
+            $attachment->refresh();
 
-            return;
-        }
+            if ($attachment->is_default && $attachment->environment->datastoreAttachments()->whereKeyNot($attachment->id)->whereNotNull('name')->exists()) {
+                throw new InvalidArgumentException('Make another database the default first.');
+            }
 
-        $this->remove($attachment, $by, destroyData: false);
+            $attachment->datastore->source === DatastoreSource::Managed
+                ? $this->destroyManaged($attachment, $by)
+                : $this->remove($attachment, $by, destroyData: false);
+        });
     }
 
     /** Also removes the database, the bucket, or the Valkey volume. For a preview environment that goes away. */
@@ -44,7 +51,8 @@ class DetachDatastore
 
     /**
      * A managed database belongs to this environment only, so detach destroys it and its data on DigitalOcean.
-     * The env values go now. The records stay until the destroy succeeds, so a failed destroy shows its error.
+     * The env values, the name, and the default go now, so a new database can take the name. The records stay until
+     * the destroy succeeds, so a failed destroy shows its error.
      */
     private function destroyManaged(DatastoreAttachment $attachment, ?User $by): void
     {
@@ -52,6 +60,7 @@ class DetachDatastore
 
         DB::transaction(function () use ($attachment, $by, $datastore) {
             $attachment->envVars()->delete();
+            $attachment->update(['name' => null, 'is_default' => false]);
             $datastore->update(['status' => DatastoreStatus::Destroying, 'error' => null]);
 
             AuditEvent::record($by, 'datastore.destroy_requested', $attachment->environment, [

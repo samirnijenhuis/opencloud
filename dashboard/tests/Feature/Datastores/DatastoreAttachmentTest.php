@@ -4,6 +4,7 @@ namespace Tests\Feature\Datastores;
 
 use App\Actions\AttachDatastore;
 use App\Actions\DetachDatastore;
+use App\Actions\SetDefaultDatabase;
 use App\Actions\SetEnvVar;
 use App\Datastores\DatastoreStatus;
 use App\Deploy\EnvironmentVariables;
@@ -308,6 +309,63 @@ class DatastoreAttachmentTest extends TestCase
 
         $this->assertSame(1, DatastoreAttachment::count());
         $this->assertSame(str_repeat('a', 30), $this->attach(DatastoreKind::Postgres, str_repeat('a', 30))->name);
+    }
+
+    public function test_make_default_swaps_the_env_values_of_the_old_and_the_new_default(): void
+    {
+        $main = $this->attach(DatastoreKind::Mysql);
+        $reports = $this->attach(DatastoreKind::Postgres, 'reports');
+        $env = $this->environment->id;
+
+        app(SetDefaultDatabase::class)->handle($reports, $this->owner);
+        app(SetDefaultDatabase::class)->handle($reports->fresh(), $this->owner);
+
+        $this->assertSame([false, true], [$main->fresh()->is_default, $reports->fresh()->is_default]);
+        $this->assertSame([
+            'DB_CONNECTION' => ['pgsql', false],
+            'DB_DATABASE' => ["env_{$env}_reports", false],
+            'DB_HOST' => ["postgres-{$reports->datastore_id}.oc-datastores.svc.cluster.local", false],
+            'DB_PASSWORD' => ['pass3', true],
+            'DB_PORT' => ['5432', false],
+            'DB_USERNAME' => ["env_{$env}_0b7ec688", false],
+            'MAIN_DB_URL' => ["mysql://env_{$env}:pass0@mysql-{$main->datastore_id}.oc-datastores.svc.cluster.local:3306/env_{$env}", true],
+        ], $this->environmentEnv());
+        $this->assertSame(
+            [['datastore.default_changed', ['environment_id' => $env, 'name' => 'reports', 'previous' => 'main']]],
+            AuditEvent::query()->where('action', 'datastore.default_changed')->get()->map(fn (AuditEvent $event) => [$event->action, $event->context])->all(),
+        );
+    }
+
+    public function test_only_a_database_can_be_the_default(): void
+    {
+        $valkey = $this->attach(DatastoreKind::Valkey);
+
+        $this->expectExceptionObject(new InvalidArgumentException('Only a MySQL or Postgres database can be the default.'));
+
+        app(SetDefaultDatabase::class)->handle($valkey, $this->owner);
+    }
+
+    public function test_the_default_is_detached_only_as_the_last_database(): void
+    {
+        $main = $this->attach(DatastoreKind::Mysql);
+        $reports = $this->attach(DatastoreKind::Postgres, 'reports');
+        $this->attach(DatastoreKind::Valkey);
+
+        try {
+            app(DetachDatastore::class)->handle($main, $this->owner);
+            $this->fail('The default was detached.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertSame('Make another database the default first.', $e->getMessage());
+        }
+
+        app(DetachDatastore::class)->handle($reports, $this->owner);
+        $this->assertSame(['CACHE_STORE', 'DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME', 'REDIS_CLIENT', 'REDIS_HOST', 'REDIS_PASSWORD', 'REDIS_PORT'], array_keys($this->environmentEnv()));
+
+        app(DetachDatastore::class)->handle($main->fresh(), $this->owner);
+        $this->assertSame(['CACHE_STORE', 'REDIS_CLIENT', 'REDIS_HOST', 'REDIS_PASSWORD', 'REDIS_PORT'], array_keys($this->environmentEnv()));
+
+        $again = $this->attach(DatastoreKind::Postgres);
+        $this->assertSame(['main', true], [$again->name, $again->is_default]);
     }
 
     public function test_environments_share_the_server_of_a_kind(): void
