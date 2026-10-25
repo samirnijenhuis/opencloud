@@ -34,11 +34,19 @@ final readonly class SecretMasker
         $this->secrets = $values;
     }
 
+    /**
+     * A database that is not the default has its password only inside a URL value, URL-encoded. A command can print
+     * that password alone, so the passwords of the attachments count too, plain and URL-encoded.
+     */
     public static function forEnvironment(Environment $environment): self
     {
-        return new self(
-            $environment->envVars()->where('is_secret', true)->get()->map(fn (EnvVar $var) => (string) $var->value),
-        );
+        $passwords = $environment->datastoreAttachments()->get()->pluck('password')->filter();
+
+        return new self([
+            ...$environment->envVars()->where('is_secret', true)->get()->map(fn (EnvVar $var) => (string) $var->value),
+            ...$passwords,
+            ...$passwords->map(rawurlencode(...)),
+        ]);
     }
 
     public function mask(string $text): string
