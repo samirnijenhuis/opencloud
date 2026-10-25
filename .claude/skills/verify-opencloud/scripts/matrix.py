@@ -10,20 +10,16 @@ import argparse
 import fnmatch
 import hashlib
 import html
-import http.cookiejar
 import json
 import re
 import secrets
 import shutil
-import ssl
 import subprocess
 import sys
 import tempfile
 import threading
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parent.parent
@@ -34,10 +30,6 @@ MATRIX = json.loads((SKILL / 'matrix.json').read_text())
 DRIVER = {'mysql': 'mysql', 'postgres': 'pgsql', 'mysqlpostgres': 'mysql', 'sqlite': 'sqlite'}
 # The most specific condition wins when a fixture gives a value for more than one.
 PRIORITY = ['valkey', 'sqlite', 'server-sql', 'sql', 'no-sql', 'always']
-INSECURE = ssl.create_default_context()
-# The test machines use the local Caddy CA, which this Mac does not trust.
-INSECURE.check_hostname = False
-INSECURE.verify_mode = ssl.CERT_NONE
 
 
 def repository_url():
@@ -109,9 +101,26 @@ def cells_for(set_name, patterns):
     return [c for c in cells if not patterns or any(fnmatch.fnmatch(c, p) for p in patterns)]
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        return None
+def curl(method, url, body=None, headers=(), jar=None, timeout=120, follow=False):
+    """
+    Every request goes through curl. macOS Local Network privacy can block the sockets of Python to an OrbStack machine
+    with "No route to host", but it allows curl, which is a system binary. -k because the machines use the local Caddy CA.
+
+    Returns (status, redirect URL or None, body). The status is 0 when the connection failed.
+    """
+    args = ['curl', '-s', '-k', '--max-time', str(timeout), '-X', method, url, '-o', '-', '-w', '\n%{http_code} %{redirect_url}']
+    if follow:
+        args.append('-L')
+    if jar is not None:
+        args += ['-b', str(jar), '-c', str(jar)]
+    for header in headers:
+        args += ['-H', header]
+    if body is not None:
+        args += ['-H', 'Content-Type: application/json', '--data-binary', json.dumps(body)]
+    out = subprocess.run(args, capture_output=True, text=True, errors='replace').stdout
+    text, _, meta = out.rpartition('\n')
+    code, _, location = meta.partition(' ')
+    return int(code or 0), location or None, text
 
 
 class Dashboard:
@@ -120,34 +129,24 @@ class Dashboard:
     def __init__(self, base):
         self.base = base
         STATE.mkdir(parents=True, exist_ok=True)
-        self.jar = http.cookiejar.MozillaCookieJar(str(STATE / 'cookies.txt'))
-        if (STATE / 'cookies.txt').exists():
-            self.jar.load(ignore_discard=True, ignore_expires=True)
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar), NoRedirect)
+        self.jar = STATE / 'cookies.txt'
 
     def request(self, method, path, body=None):
-        headers = {'Accept': 'text/html'}
-        data = None
-        if body is not None:
-            data = json.dumps(body).encode()
-            headers['Content-Type'] = 'application/json'
+        headers = ['Accept: text/html']
         if method != 'GET':
-            headers['X-XSRF-TOKEN'] = self.xsrf()
-        request = urllib.request.Request(self.base + path, data=data, method=method, headers=headers)
-        try:
-            with self.opener.open(request, timeout=120) as response:
-                result = response.status, response.headers.get('Location'), response.read().decode(errors='replace')
-        except urllib.error.HTTPError as error:
-            result = error.code, error.headers.get('Location'), error.read().decode(errors='replace')
-        self.jar.save(ignore_discard=True, ignore_expires=True)
-        return result
+            headers.append(f'X-XSRF-TOKEN: {self.xsrf()}')
+        return curl(method, self.base + path, body=body, headers=headers, jar=self.jar)
 
     def xsrf(self):
-        token = next((c.value for c in self.jar if c.name == 'XSRF-TOKEN'), None)
+        token = self.cookie('XSRF-TOKEN')
         if token is None:
             self.request('GET', '/login')
-            token = next(c.value for c in self.jar if c.name == 'XSRF-TOKEN')
+            token = self.cookie('XSRF-TOKEN')
         return urllib.parse.unquote(token)
+
+    def cookie(self, name):
+        lines = self.jar.read_text().splitlines() if self.jar.exists() else []
+        return next((parts[6] for parts in (line.split('\t') for line in lines) if len(parts) == 7 and parts[5] == name), None)
 
     def props(self, path):
         status, _, text = self.request('GET', path)
@@ -190,13 +189,8 @@ class Dashboard:
 
 
 def fetch(url, timeout=10):
-    try:
-        with urllib.request.urlopen(url, timeout=timeout, context=INSECURE) as response:
-            return response.status, response.read().decode(errors='replace')
-    except urllib.error.HTTPError as error:
-        return error.code, error.read().decode(errors='replace')
-    except Exception as error:  # noqa: BLE001 - a refused or reset connection is a failed request, not a crash
-        return 0, str(error)
+    status, _, body = curl('GET', url, timeout=timeout, follow=True)
+    return status, body
 
 
 class Poller(threading.Thread):

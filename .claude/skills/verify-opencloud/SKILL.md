@@ -120,6 +120,7 @@ Proof standards:
 
 - Never use the machine `opencloud`. It holds the user's own apps, and `machine.sh` refuses that name.
 - `scripts/try-on-mac.sh` keeps its build output in `.try/`. Do not run two `machine.sh up` commands, or `up` next to another `try-on-mac.sh`, at the same time.
+- The runner sends every request through `curl`. macOS Local Network privacy can block the sockets of Python, including Homebrew's and Apple's, to the OrbStack address with "No route to host". It allows `curl`, which is a system binary. Do not change the runner back to `urllib`. If a quick check from Python fails with that error, use `curl` instead.
 - A second run on the same machine reuses the app names. The free address then gets the app id in its name. The runner reads the address from the page props, so this is harmless.
 - A Dockerfile app ignores the build command. Only the Laravel template runs it. Fixtures read build env values with `RUN --mount=type=secret,id=<KEY>`.
 - The first build of each fixture on a new machine downloads every package and can take several minutes. Later builds use the BuildKit cache and take seconds.
