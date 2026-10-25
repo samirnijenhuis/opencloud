@@ -31,6 +31,12 @@ export type Restore = { status: 'running' | 'restored' | 'failed'; at: string; e
 export type Attachment = {
     id: number;
     kind: DatastoreKind;
+    /** The connection name of a MySQL or Postgres database. Valkey, RustFS, and a database that DigitalOcean destroys have none. */
+    name: string | null;
+    /** The default database sets the DB_* values. Each other database sets <NAME>_DB_URL. */
+    is_default: boolean;
+    /** The line for config/database.php, for a database that is not the default. */
+    config_line: string | null;
     status: DatastoreStatus;
     error: string | null;
     server: { cluster: string; version: string; status: DatastoreStatus; error: string | null };
