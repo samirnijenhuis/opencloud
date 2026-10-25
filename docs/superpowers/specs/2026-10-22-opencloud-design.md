@@ -235,14 +235,16 @@ The standards are these [S], [C].
 
 | Service | Software | How environments share it |
 |---|---|---|
-| MySQL | MySQL | one server, one database and one user per environment |
-| Postgres | Postgres | one server, one database and one user per environment |
+| MySQL | MySQL | one server, one database and one user per named database of an environment |
+| Postgres | Postgres | one server, one database and one user per named database of an environment |
 | Redis | Valkey | builder decides |
 | S3 storage | RustFS, pinned version | one bucket and one access key per environment |
 
 Each standard runs as one instance on a cluster disk [C].
 
 When a user attaches a standard service to an environment, opencloud sets the Laravel env keys [C]. Examples are `DB_CONNECTION`, `DB_HOST`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_HOST`, `AWS_ACCESS_KEY_ID`, `AWS_BUCKET`, and `AWS_ENDPOINT`. A value that the user types always wins over a value that opencloud sets.
+
+An environment can have more than one MySQL or Postgres database [C-new]. Each database has a connection name, and one database is the default. The first database is the default and has the name `main`. The default sets the `DB_*` keys, so a Laravel app needs no config. Each other database sets one secret key `<NAME>_DB_URL`. The app adds one line for it to `config/database.php` and uses `DB::connection('<name>')`. The user can make another database the default. The keys change on the next deploy. Laravel Cloud names its buckets but not its databases. Opencloud names its databases, because an app with a second database needs a name for it in its config.
 
 ### Back up and restore by default
 

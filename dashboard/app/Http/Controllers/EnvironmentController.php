@@ -4,10 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Actions\UpdateEnvironmentSettings;
 use App\Backups\BackupStatus;
+use App\Datastores\DatabaseConnection;
 use App\Datastores\DatastoreStatus;
-use App\Datastores\Engines;
 use App\Datastores\ManagedDatabase;
-use App\Datastores\SqlEngine;
 use App\Domains\CloudflareDns;
 use App\Enums\Ability;
 use App\Enums\DatastoreKind;
@@ -142,7 +141,7 @@ class EnvironmentController extends Controller
         return [
             'attachments' => $rows,
             'available_kinds' => collect(DatastoreKind::cases())
-                ->reject(fn (DatastoreKind $kind) => $rows->contains('kind', $kind))
+                ->reject(fn (DatastoreKind $kind) => ! $kind->isSql() && $rows->contains('kind', $kind))
                 ->values(),
             'has_backup_target' => BackupTarget::query()->exists(),
             'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::Pending, DatastoreStatus::Provisioning], true)
@@ -164,6 +163,10 @@ class EnvironmentController extends Controller
         $row = [
             'id' => $attachment->id,
             'kind' => $datastore->kind,
+            'name' => $attachment->name,
+            'is_default' => $attachment->is_default,
+            // The default sets the DB_* values that Laravel reads by itself. Each other database needs this line.
+            'config_line' => $attachment->name !== null && ! $attachment->is_default ? DatabaseConnection::configLine($datastore->kind, $attachment->name) : null,
             'status' => $attachment->status,
             'error' => $attachment->error,
             'server' => [
@@ -180,7 +183,7 @@ class EnvironmentController extends Controller
             return [...$row, 'managed' => true, 'tofu_log' => $datastore->tofu_log];
         }
 
-        if (! Engines::for($datastore->kind) instanceof SqlEngine) {
+        if (! $datastore->kind->isSql()) {
             return $row;
         }
 

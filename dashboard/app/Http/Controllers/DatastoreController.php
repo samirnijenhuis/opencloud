@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\AttachDatastore;
 use App\Actions\DetachDatastore;
+use App\Actions\SetDefaultDatabase;
 use App\Enums\Ability;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
@@ -26,7 +27,7 @@ class DatastoreController extends Controller
     public function store(AttachDatastoreRequest $request, Environment $environment, AttachDatastore $attachDatastore): RedirectResponse
     {
         try {
-            $attachDatastore->handle($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source());
+            $attachDatastore->handle($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source(), $request->validated('name'));
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['kind' => $e->getMessage()]);
         }
@@ -43,7 +44,24 @@ class DatastoreController extends Controller
             $request->validate(['confirm' => ['accepted']], ['confirm.accepted' => 'Confirm that DigitalOcean deletes the database and its data.']);
         }
 
-        $detachDatastore->handle($attachment, $request->user());
+        try {
+            $detachDatastore->handle($attachment, $request->user());
+        } catch (InvalidArgumentException $e) {
+            return back()->withErrors(['detach' => $e->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function makeDefault(Request $request, DatastoreAttachment $attachment, SetDefaultDatabase $setDefaultDatabase): RedirectResponse
+    {
+        Gate::authorize('update', $attachment->environment);
+
+        try {
+            $setDefaultDatabase->handle($attachment, $request->user());
+        } catch (InvalidArgumentException $e) {
+            return back()->withErrors(['default' => $e->getMessage()]);
+        }
 
         return back();
     }

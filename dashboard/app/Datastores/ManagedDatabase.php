@@ -56,22 +56,4 @@ final class ManagedDatabase
             'user' => $attachment->username,
         ], ['DIGITALOCEAN_TOKEN' => $token]);
     }
-
-    /**
-     * The same Laravel env keys as the standard engines of the kind.
-     *
-     * @param  array<string, mixed>  $outputs  the outputs of tofu/digitalocean/database
-     * @return array<string, array{0: string, 1: bool}> key => [value, is secret]
-     */
-    public static function env(DatastoreKind $kind, array $outputs): array
-    {
-        return [
-            'DB_CONNECTION' => [$kind === DatastoreKind::Postgres ? 'pgsql' : 'mysql', false],
-            'DB_HOST' => [(string) $outputs['host'], false],
-            'DB_PORT' => [(string) $outputs['port'], false],
-            'DB_DATABASE' => [(string) $outputs['database'], false],
-            'DB_USERNAME' => [(string) $outputs['user'], false],
-            'DB_PASSWORD' => [(string) $outputs['password'], true],
-        ];
-    }
 }

@@ -81,6 +81,27 @@ class DatabaseBackupsTest extends TestCase
         ]], array_column($this->kubectl->calls, 'args'));
     }
 
+    public function test_two_databases_of_one_environment_on_one_server_keep_their_dumps_apart(): void
+    {
+        $this->kubectl->respond('exec', new KubectlResult(0, gzencode('-- dump')));
+        $env = $this->attachment->environment_id;
+        $this->attachment->update(['name' => 'main', 'is_default' => true]);
+        $reports = DatastoreAttachment::factory()->for($this->mysql)->for($this->attachment->environment)->create([
+            'name' => 'reports',
+            'database_name' => "env_{$env}_reports",
+            'status' => DatastoreStatus::Ready,
+        ]);
+
+        $main = app(DatabaseBackups::class)->backup($this->attachment);
+        $named = app(DatabaseBackups::class)->backup($reports);
+
+        $this->assertSame(
+            ["backups/{$this->mysql->id}/{$env}/20261023-030000.sql.gz", "backups/{$this->mysql->id}/{$env}/reports/20261023-030000.sql.gz"],
+            [$main->location, $named->location],
+        );
+        $this->assertSame(["backups/{$this->mysql->id}/{$env}/20261023-030000.sql.gz"], $this->data->files("backups/{$this->mysql->id}/{$env}"));
+    }
+
     public function test_postgres_dumps_without_owners_and_grants(): void
     {
         $this->mysql->update(['kind' => DatastoreKind::Postgres]);

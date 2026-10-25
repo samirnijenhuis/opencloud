@@ -14,6 +14,7 @@ import {
     kindLabels,
 } from '@/components/environment/types';
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePoll } from '@/hooks/use-poll';
 import EnvironmentLayout from '@/layouts/environment-layout';
@@ -191,6 +192,18 @@ function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: 
             aside={<Status tone={statusTones[attachment.status]}>{statusLabels[attachment.status]}</Status>}
             onOpen={onOpen}
         >
+            {attachment.name && (
+                <Row label="Connection">
+                    <span className="inline-flex max-w-full items-center gap-1.5">
+                        <code className="truncate font-mono text-xs">{attachment.name}</code>
+                        {attachment.is_default && (
+                            <Badge variant="outline" className="px-1.5 py-0 font-medium">
+                                Default
+                            </Badge>
+                        )}
+                    </span>
+                </Row>
+            )}
             <Row label="Runs on">{attachment.managed ? 'DigitalOcean' : attachment.server.cluster}</Row>
             <Row label="Env values">{attachment.env_keys.length}</Row>
             {attachment.backups && <Row label="Last backup">{lastBackup ? timeAgo(lastBackup.created_at) : 'None yet'}</Row>}

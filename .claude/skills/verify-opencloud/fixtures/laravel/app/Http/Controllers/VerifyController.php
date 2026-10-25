@@ -20,7 +20,33 @@ class VerifyController
             'secret_sha' => config('verify.secret_sha'),
             'db' => config('verify.database') ? $this->database() : null,
             'cache' => $this->cache(),
+            'extra' => $this->extra(),
         ]);
+    }
+
+    /**
+     * Connects to each database that is not the default, the way an app does with one line in config/database.php.
+     *
+     * @return array<string, array<string, mixed>> the name in lowercase => driver, ok, and the error of a failed connect
+     */
+    private function extra(): array
+    {
+        $extra = [];
+
+        foreach (config('verify.database_urls') as $key => $url) {
+            $name = strtolower(substr($key, 0, -strlen('_DB_URL')));
+            $connection = "verify_{$name}";
+            config(["database.connections.{$connection}" => ['url' => $url]]);
+
+            try {
+                DB::connection($connection)->select('SELECT 1');
+                $extra[$name] = ['driver' => DB::connection($connection)->getDriverName(), 'ok' => true];
+            } catch (Throwable $e) {
+                $extra[$name] = ['driver' => parse_url($url, PHP_URL_SCHEME), 'ok' => false, 'error' => $e->getMessage()];
+            }
+        }
+
+        return $extra;
     }
 
     /** @return array<string, mixed> */

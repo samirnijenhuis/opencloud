@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Support;
 
+use App\Enums\EnvVarSource;
+use App\Models\DatastoreAttachment;
 use App\Models\Environment;
 use App\Models\EnvVar;
 use App\Support\SecretMasker;
@@ -24,6 +26,25 @@ class SecretMaskerTest extends TestCase
         $this->assertSame(
             'connect Shop as root:******** (other-secret stays)',
             $masker->mask('connect Shop as root:hunter22 (other-secret stays)'),
+        );
+    }
+
+    public function test_it_masks_a_database_password_alone_and_url_encoded_when_only_a_url_value_holds_it(): void
+    {
+        $environment = Environment::factory()->create();
+        DatastoreAttachment::factory()->for($environment)->create(['name' => 'reports', 'password' => 'p@ss/word-xyz']);
+        EnvVar::factory()->for($environment)->create([
+            'key' => 'REPORTS_DB_URL',
+            'value' => 'postgres://env_1_0b7ec688:p%40ss%2Fword-xyz@postgres-1.oc-datastores.svc.cluster.local:5432/env_1_reports',
+            'is_secret' => true,
+            'source' => EnvVarSource::Datastore,
+        ]);
+
+        $masker = SecretMasker::forEnvironment($environment);
+
+        $this->assertSame(
+            'url ******** password ******** encoded postgres://env_1_0b7ec688:********@postgres-1',
+            $masker->mask('url postgres://env_1_0b7ec688:p%40ss%2Fword-xyz@postgres-1.oc-datastores.svc.cluster.local:5432/env_1_reports password p@ss/word-xyz encoded postgres://env_1_0b7ec688:p%40ss%2Fword-xyz@postgres-1'),
         );
     }
 

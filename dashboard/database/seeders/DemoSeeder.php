@@ -229,12 +229,14 @@ class DemoSeeder extends Seeder
 
     private function datastores(Cluster $cluster, Environment $production, Environment $staging, User $owner): void
     {
-        $mysql = $this->attachment($cluster, $production, DatastoreKind::Mysql, DatastoreStatus::Ready, 'shop_production');
+        $mysql = $this->attachment($cluster, $production, DatastoreKind::Mysql, DatastoreStatus::Ready, 'shop_production', name: 'main');
+        $reports = $this->attachment($cluster, $production, DatastoreKind::Postgres, DatastoreStatus::Ready, 'shop_production_reports', name: 'reports');
         $this->attachment($cluster, $production, DatastoreKind::Valkey, DatastoreStatus::Provisioning, null);
         $this->attachment($cluster, $production, DatastoreKind::Rustfs, DatastoreStatus::Failed, 'shop-production', 'The bucket could not be created. The storage server did not answer.');
-        $this->attachment($cluster, $staging, DatastoreKind::Postgres, DatastoreStatus::Pending, 'shop_staging');
+        $this->attachment($cluster, $staging, DatastoreKind::Postgres, DatastoreStatus::Pending, 'shop_staging', name: 'main');
 
         $this->envKeys($mysql, ['DB_CONNECTION' => 'mysql', 'DB_HOST' => 'mysql.shop.svc', 'DB_PASSWORD' => 'demo-database-password']);
+        $this->envKeys($reports, ['REPORTS_DB_URL' => 'postgres://shop_production_reports:demo-database-password@postgres.shop.svc:5432/shop_production_reports']);
         $this->envKeys($production->datastoreAttachments()->whereHas('datastore', fn ($query) => $query->where('kind', DatastoreKind::Valkey))->sole(), ['REDIS_HOST' => 'valkey.shop.svc', 'REDIS_PASSWORD' => 'demo-valkey-password']);
 
         $backups = [
@@ -265,7 +267,8 @@ class DemoSeeder extends Seeder
         AuditEvent::record($owner, 'backup.restore_failed', $restored, ['datastore_id' => $restored->datastore_id, 'database_name' => $restored->database_name, 'error' => 'The dump is not a valid gzip file.']);
     }
 
-    private function attachment(Cluster $cluster, Environment $environment, DatastoreKind $kind, DatastoreStatus $status, ?string $name, ?string $error = null): DatastoreAttachment
+    /** The first database of an environment with a connection name is the default. */
+    private function attachment(Cluster $cluster, Environment $environment, DatastoreKind $kind, DatastoreStatus $status, ?string $databaseName, ?string $error = null, ?string $name = null): DatastoreAttachment
     {
         $datastore = Datastore::firstOrCreate(
             ['cluster_id' => $cluster->id, 'kind' => $kind],
@@ -274,8 +277,12 @@ class DemoSeeder extends Seeder
 
         return $environment->datastoreAttachments()->create([
             'datastore_id' => $datastore->id,
-            'database_name' => $name,
-            'username' => $name,
+            'name' => $name,
+            'is_default' => $name !== null && ! $environment->datastoreAttachments()->where('is_default', true)->exists(),
+            'host' => $kind->isSql() ? "{$kind->value}.shop.svc" : null,
+            'port' => ['mysql' => 3306, 'postgres' => 5432][$kind->value] ?? null,
+            'database_name' => $databaseName,
+            'username' => $databaseName,
             'password' => 'demo-attachment-password',
             'status' => $status,
             'error' => $error,
@@ -289,7 +296,7 @@ class DemoSeeder extends Seeder
             $attachment->environment->envVars()->create([
                 'key' => $key,
                 'value' => $value,
-                'is_secret' => str_ends_with($key, 'PASSWORD'),
+                'is_secret' => str_ends_with($key, 'PASSWORD') || str_ends_with($key, '_URL'),
                 'source' => EnvVarSource::Datastore,
                 'datastore_attachment_id' => $attachment->id,
             ]);

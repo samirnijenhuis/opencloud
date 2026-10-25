@@ -21,9 +21,9 @@ final class PostgresEngine implements SqlEngine
         return DatastoreManifests::postgres($datastore);
     }
 
-    public function names(Environment $environment): array
+    public function names(Environment $environment, ?string $name): array
     {
-        return ['database_name' => "env_{$environment->id}", 'username' => "env_{$environment->id}"];
+        return DatabaseConnection::names($environment, $name ?? DatabaseConnection::FIRST_NAME);
     }
 
     /** Every role can connect to a new database by default, so the attach revokes that from PUBLIC. */
@@ -61,14 +61,7 @@ final class PostgresEngine implements SqlEngine
 
     public function env(DatastoreAttachment $attachment): array
     {
-        return [
-            'DB_CONNECTION' => ['pgsql', false],
-            'DB_HOST' => [DatastoreManifests::host(DatastoreManifests::serverName($attachment->datastore)), false],
-            'DB_PORT' => ['5432', false],
-            'DB_DATABASE' => [$attachment->database_name, false],
-            'DB_USERNAME' => [$attachment->username, false],
-            'DB_PASSWORD' => [$attachment->password, true],
-        ];
+        return DatabaseConnection::env($attachment);
     }
 
     /** Without owners and grants in the dump, the restore can run as the role of the environment. */

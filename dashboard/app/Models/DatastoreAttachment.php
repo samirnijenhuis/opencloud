@@ -12,7 +12,7 @@ class DatastoreAttachment extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['datastore_id', 'environment_id', 'database_name', 'username', 'password', 'status', 'error'];
+    protected $fillable = ['datastore_id', 'environment_id', 'name', 'is_default', 'host', 'port', 'database_name', 'username', 'password', 'status', 'error'];
 
     protected $hidden = ['password'];
 
@@ -23,6 +23,8 @@ class DatastoreAttachment extends Model
     protected function casts(): array
     {
         return [
+            'is_default' => 'boolean',
+            'port' => 'integer',
             'password' => 'encrypted',
             'status' => DatastoreStatus::class,
         ];

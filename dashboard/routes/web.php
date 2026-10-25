@@ -81,6 +81,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('environments/{environment}/datastores', [DatastoreController::class, 'index'])->name('environments.datastores');
     Route::post('environments/{environment}/datastores', [DatastoreController::class, 'store'])->name('datastores.store');
     Route::delete('datastore-attachments/{attachment}', [DatastoreController::class, 'destroy'])->name('datastores.destroy');
+    Route::post('datastore-attachments/{attachment}/default', [DatastoreController::class, 'makeDefault'])->name('datastores.default');
     Route::post('datastore-attachments/{attachment}/backups', [BackupController::class, 'store'])->name('backups.store');
     Route::post('backups/{backup}/restore', [BackupController::class, 'restore'])->name('backups.restore');
 

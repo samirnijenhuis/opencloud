@@ -27,6 +27,8 @@ Use these names everywhere: in PHP, in the UI, in Kubernetes labels, and in docs
 | `Deployment` | One attempt to put one commit live in one environment. | |
 | `Datastore` | A database, Valkey, or RustFS server that opencloud runs. | `Service`, because a Kubernetes `Service` is a different thing. |
 | `DatastoreAttachment` | One environment's database, user, bucket, or key on a datastore. | |
+| Connection name | The name of one MySQL or Postgres attachment, for example `main` or `reports`. The app uses it as the name of a Laravel connection. | |
+| Default database | The one MySQL or Postgres attachment of an environment that sets the `DB_*` values. | |
 | `Cluster` | A Kubernetes cluster that runs environments and datastores. | |
 | `ProviderCredential` | An API key for a cloud provider or Cloudflare. | |
 
@@ -137,8 +139,9 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `DeleteEnvVar` | `handle(EnvVar $envVar, User $by): void` | Deletes one user value. |
 | `AddDomain` | `handle(Environment $environment, User $by, string $hostname, bool $manageDns = false, bool $proxied = false): Domain` | Stores the domain and dispatches `CheckDomain`. With `$manageDns`, it first creates or updates the Cloudflare A record. |
 | `RemoveDomain` | `handle(Domain $domain, User $by): void` | Deletes the Cloudflare record that opencloud created, deletes the domain, and syncs Caddy. |
-| `AttachDatastore` | `handle(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = Standard): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment, and dispatches its provisioning. With the managed source, it creates a managed datastore for the environment and dispatches `ProvisionManagedDatabase`. |
-| `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. For a managed attachment, it removes the env values and dispatches `TearDownManagedDatabase`. |
+| `AttachDatastore` | `handle(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = Standard, ?string $name = null): DatastoreAttachment` | Finds or creates the standard datastore of that kind on the cluster, creates the attachment and its env values, and dispatches its provisioning. With the managed source, it creates a managed datastore for the environment and dispatches `ProvisionManagedDatabase`. A MySQL or Postgres database gets the connection name `$name`. The first database of an environment is the default and gets the name `main` without `$name`. A later database needs a name. It refuses a name that is not valid or that the environment has. A failed attachment with the same kind and name is provisioned again. |
+| `SetDefaultDatabase` | `handle(DatastoreAttachment $attachment, User $by): void` | Makes a MySQL or Postgres database the default of its environment. It writes the `DB_*` values for the new default and `<NAME>_DB_URL` for the old default in one transaction. The app reads them on the next deploy. |
+| `DetachDatastore` | `handle(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. For a managed attachment, it removes the env values, the name, and the default, and dispatches `TearDownManagedDatabase`. It refuses the default database while the environment has another database. |
 | `CreateCluster` | `handle(User $by, array $data): Cluster` | Stores a `created` DigitalOcean cluster and dispatches `ProvisionCluster`. It needs a stored DigitalOcean key. |
 | `DestroyCluster` | `handle(Cluster $cluster, User $by): void` | Refuses while applications or managed databases use the cluster. Then it dispatches `TearDownCluster`. |
 | `StoreProviderCredential` | `handle(User $by, string $provider, string $token): CheckResult` | Checks the key with the provider. It stores the key encrypted when the check passes or only optional rights are missing. The audit event never holds the key. |
@@ -195,6 +198,17 @@ The dashboard pod runs two queue workers. The `worker` container serves the `def
 
 Each kind has one engine in `app/Datastores`, and `Engines::for()` picks it. MySQL and Postgres run one server per cluster. Each environment gets its own database and user with rights on that database only. RustFS runs one server per cluster with a sidecar container `rc`. Each environment gets a bucket, an IAM user, and a policy that allows only that bucket. Valkey runs one small instance per attachment. Attach writes the Laravel env values with source `datastore`. Detach removes the user or key and keeps the data. `DetachDatastore::destroy()` also removes the data, for previews.
 
+An environment has at most one Valkey and one RustFS attachment. It can have more than one MySQL or Postgres database, also two of one kind. Each database has a connection name of 1 to 30 lowercase letters, digits, and underscores. The name starts with a letter and is unique in the environment. It cannot be a Laravel stock connection (`mysql`, `mariadb`, `pgsql`, `sqlite`, `sqlsrv`), because the line in `config/database.php` would replace that connection. `App\Datastores\DatabaseConnection` holds these rules, the names on the server, and the env values. One database of an environment is the default. A unique index on `environment_id` where `is_default` is true keeps it at one.
+
+| Database | Env values |
+|---|---|
+| The default | `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD`, as before. A Laravel app needs no config. |
+| Each other database | One secret value `<NAME>_DB_URL`, for example `REPORTS_DB_URL=postgres://user:password@host:5432/database`. The scheme is `mysql` or `postgres`, because libpq and Node accept only `postgres`. Laravel maps `postgres` to `pgsql`. The user and the password are URL-encoded. |
+
+A Laravel app uses another database with one line in the `connections` of `config/database.php`, for example `'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],`. Then it calls `DB::connection('reports')`. The resource sheet shows this line with a copy button.
+
+The database `main` has the database and the user `env_<environment id>`, as each database had before names. Another database has the database `env_<environment id>_<name>`. Its user is `env_<environment id>_` and 8 characters of the SHA-1 of the name, because MySQL allows 32 characters in a user name. A later attach with the same name finds the data again. The attachment keeps its host and its port, so `AttachmentEnv::write()` can write the env values of any attachment again from its row. Attach, the managed apply, and `SetDefaultDatabase` write through it. The masker of an environment masks each attachment password, plain and URL-encoded, because a database that is not the default has its password only inside its URL.
+
 A rollout ends when the old pods start to stop, but each old pod still answers during its 10 second `preStop` sleep, and Caddy reuses its pooled connections to it. So `RunDeployment` waits up to 60 seconds until the pods of older deployments are gone, and only then marks the deployment live. When a deployment is live, only the new version answers.
 
 Each deployment has its own env Secret, `env-<deployment-id>`. A failed deploy cannot change the env of the pods that still run. After a deployment goes live, the job keeps the live Secret and the two newest, and deletes the rest.
@@ -210,7 +224,7 @@ A restore puts a lost install back on a new server. The code lives in `app/Resto
 3. After the dashboard starts, the bootstrap command stores the new IP as the ingress IP of `local`. The installer runs `opencloud:restore`, which queues `RunRestore` on `builds`.
 4. `RestoreInstall` runs the steps of the enum `RestoreStep` in order: retire the old deployments of `local`, provision each attachment again with its stored names and passwords, restore each MySQL and Postgres database, copy the RustFS buckets back, deploy the live commit of each permanent environment, check each domain again, and sync Caddy. `restore.json` records the status of each step. A run skips the done steps, so `opencloud restore` resumes a failed restore.
 
-A database comes back from its newest dump file in the bucket from before the start time. A nightly backup on the new server can dump an empty database during the restore, so later dumps do not count. A connected cluster kept running, so the restore leaves its records alone.
+A database comes back from its newest dump file in the bucket from before the start time. A nightly backup on the new server can dump an empty database during the restore, so later dumps do not count. The dumps of the database `main` are in `backups/<datastore id>/<environment id>`. The dumps of another database are in a subfolder with its connection name, because two databases of one kind share a server. A connected cluster kept running, so the restore leaves its records alone.
 
 ## GitHub
 
@@ -226,7 +240,7 @@ A `push` queues `DeployPush`. It deploys the pushed commit to each `permanent` e
 
 A `pull_request` queues `SyncPreview`. The actions `opened`, `reopened`, and `synchronize` run `App\Previews\OpenPreview`. The action `closed` runs `App\Previews\ClosePreview`.
 
-- `OpenPreview` skips the pull request when previews are off, or when it comes from a fork and `allow_forks` is off. At `opencloud.max_previews` previews, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings, the processes, and the `user` env values of the preview template, and web runs one instance. It gets its own `APP_KEY` when the template has none, and it attaches the datastore kinds of production. Its domain is `pr-<number>.<preview_domain>`, or `pr-<number>-<application slug>.<ingress ip>.sslip.io` without a preview domain. Then it deploys the head commit.
+- `OpenPreview` skips the pull request when previews are off, or when it comes from a fork and `allow_forks` is off. At `opencloud.max_previews` previews, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings, the processes, and the `user` env values of the preview template, and web runs one instance. It gets its own `APP_KEY` when the template has none, and it attaches the datastores of production. Each MySQL or Postgres database keeps its connection name. The default comes first, so it is also the default of the preview. Its domain is `pr-<number>.<preview_domain>`, or `pr-<number>-<application slug>.<ingress ip>.sslip.io` without a preview domain. Then it deploys the head commit.
 - `ClosePreview` waits while a deployment of the preview builds or rolls out. Then it deletes the namespace and calls `DetachDatastore::destroy()` for each attachment. It deletes the environment and its records, and it syncs Caddy.
 - `DeploymentObserver` queues `PostPreviewComment` when a preview deployment moves to `live`. The job creates one comment with the preview URL and keeps its id in `pr_comment_id`. Later deployments update that comment. A failed call only writes a warning to the log.
 

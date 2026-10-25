@@ -31,7 +31,6 @@ ROOT = Path(subprocess.check_output(['git', '-C', str(SKILL), 'rev-parse', '--sh
 STATE = ROOT / '.verify' / 'state'
 RUNS = ROOT / '.verify' / 'runs'
 MATRIX = json.loads((SKILL / 'matrix.json').read_text())
-REFUSAL = 'This environment already has a database. Detach it first.'
 DRIVER = {'mysql': 'mysql', 'postgres': 'pgsql', 'mysqlpostgres': 'mysql', 'sqlite': 'sqlite'}
 # The most specific condition wins when a fixture gives a value for more than one.
 PRIORITY = ['valkey', 'sqlite', 'server-sql', 'sql', 'no-sql', 'always']
@@ -318,7 +317,7 @@ class CellRun:
         return ok
 
     def change_step(self):
-        """The second deploy gets a new env value, a refused second SQL database, and Valkey when the cell has it."""
+        """The second deploy gets a new env value, a second SQL database named reports, and Valkey when the cell has them."""
         cell = self.cell
         changes = {'VERIFY_MARKER': f'{cell.id}-v2', **{k: v for k, v in cell.env(2).items() if cell.env(1).get(k) != v}}
         for key, value in changes.items():
@@ -329,23 +328,23 @@ class CellRun:
         if cell.db_step() == 2:
             self.attach('postgres' if cell.db == 'postgres' else 'mysql')
         if cell.db == 'mysqlpostgres':
-            self.dash.request('POST', f'/environments/{self.env_id}/datastores', {'kind': 'postgres'})
-            errors = self.dash.props(f'/environments/{self.env_id}').get('errors', {})
-            self.check('a second SQL database is refused', errors.get('kind') == REFUSAL, errors.get('kind'))
+            self.attach('postgres', name='reports')
         if cell.cache == 'valkey':
             self.attach('valkey')
 
-    def attach(self, kind):
-        status, _, _ = self.dash.request('POST', f'/environments/{self.env_id}/datastores', {'kind': kind})
-        self.check(f'Add resource attaches {kind}', status == 302, status)
+    def attach(self, kind, name=None):
+        label = f'{kind} {name}' if name else kind
+        status, _, _ = self.dash.request('POST', f'/environments/{self.env_id}/datastores', {'kind': kind, **({'name': name} if name else {})})
+        errors = self.dash.props(f'/environments/{self.env_id}').get('errors', {})
+        self.check(f'Add resource attaches {label}', status == 302 and not errors, errors or status)
         start, state = time.time(), None
         while time.time() - start < 300:
             attachments = self.dash.props(f'/environments/{self.env_id}')['datastores']['attachments']
-            state = next((a['status'] for a in attachments if a['kind'] == kind), None)
+            state = next((a['status'] for a in attachments if a['kind'] == kind and (name is None or a['name'] == name)), None)
             if state in ('ready', 'failed'):
                 break
             time.sleep(5)
-        self.check(f'{kind} becomes ready', state == 'ready', f'{state} after {round(time.time() - start)}s')
+        self.check(f'{label} becomes ready', state == 'ready', f'{state} after {round(time.time() - start)}s')
 
     def verify_step(self, step):
         cell, fixture = self.cell, self.cell.fixture
@@ -382,6 +381,10 @@ class CellRun:
                 if self.hits is not None:
                     self.check(f'step {step}: the rows of earlier steps are still there', db.get('hits', 0) > self.hits, f"{db.get('hits')} > {self.hits}")
             self.hits = db.get('hits')
+
+        if fixture['reports']['db'] and cell.db == 'mysqlpostgres' and step >= 2:
+            reports = (report.get('extra') or {}).get('reports') or {}
+            self.check(f'step {step}: the pgsql database answers through REPORTS_DB_URL', reports.get('ok') is True and reports.get('driver') == 'pgsql', json.dumps(report.get('extra')))
 
         expected = cell.expected_cache(step)
         cache = report.get('cache')
