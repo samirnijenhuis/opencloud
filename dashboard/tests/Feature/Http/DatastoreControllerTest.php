@@ -15,6 +15,7 @@ use App\Models\Environment;
 use App\Models\EnvVar;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -167,6 +168,86 @@ class DatastoreControllerTest extends TestCase
             ->assertSessionHasErrors(['kind' => 'This environment already has a database. Give the new database a name.']);
 
         $this->assertSame(1, DatastoreAttachment::count());
+    }
+
+    public function test_the_form_attaches_a_database_with_its_name_and_shows_a_name_refusal(): void
+    {
+        Queue::fake();
+        $environment = $this->makeEnvironment();
+        $owner = User::factory()->owner()->create();
+
+        $this->actingAs($owner)->post("/environments/{$environment->id}/datastores", ['kind' => 'mysql', 'name' => ''])->assertRedirect()->assertSessionHasNoErrors();
+        $this->actingAs($owner)->post("/environments/{$environment->id}/datastores", ['kind' => 'postgres', 'name' => 'reports'])->assertRedirect()->assertSessionHasNoErrors();
+        $this->actingAs($owner)->post("/environments/{$environment->id}/datastores", ['kind' => 'postgres', 'name' => 'Reports'])
+            ->assertSessionHasErrors(['kind' => 'Use 1 to 30 lowercase letters, digits, and underscores. Start with a letter.']);
+        $this->actingAs($owner)->post("/environments/{$environment->id}/datastores", ['kind' => 'valkey', 'name' => 'cache'])->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            [['mysql', 'main', true], ['postgres', 'reports', false], ['valkey', null, false]],
+            DatastoreAttachment::query()->with('datastore')->orderBy('id')->get()->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->name, $a->is_default])->all(),
+        );
+    }
+
+    public function test_make_default_needs_the_right_to_change_the_environment_and_goes_through_the_action(): void
+    {
+        $environment = $this->makeEnvironment();
+        $main = $this->attach($environment, DatastoreKind::Mysql, attributes: ['name' => 'main', 'is_default' => true]);
+        $reports = $this->attach($environment, DatastoreKind::Postgres, attributes: ['name' => 'reports', 'host' => 'postgres-2.oc-datastores.svc.cluster.local', 'port' => 5432]);
+        $valkey = $this->attach($environment, DatastoreKind::Valkey);
+
+        $this->actingAs(User::factory()->create())->post("/datastore-attachments/{$reports->id}/default")->assertForbidden();
+        $this->assertTrue($main->fresh()->is_default);
+
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin)->post("/datastore-attachments/{$reports->id}/default")->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame([false, true], [$main->fresh()->is_default, $reports->fresh()->is_default]);
+        $this->assertSame(['DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME'], $reports->envVars()->orderBy('key')->pluck('key')->all());
+
+        $this->actingAs($admin)->post("/datastore-attachments/{$valkey->id}/default")
+            ->assertSessionHasErrors(['default' => 'Only a MySQL or Postgres database can be the default.']);
+    }
+
+    public function test_a_developer_makes_a_database_the_default_on_an_unprotected_environment(): void
+    {
+        $environment = $this->makeEnvironment(false, 'staging');
+        $this->attach($environment, DatastoreKind::Mysql, attributes: ['name' => 'main', 'is_default' => true]);
+        $reports = $this->attach($environment, DatastoreKind::Postgres, attributes: ['name' => 'reports']);
+
+        $this->actingAs(User::factory()->create())->post("/datastore-attachments/{$reports->id}/default")->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertTrue($reports->fresh()->is_default);
+    }
+
+    public function test_detaching_the_default_while_another_database_exists_shows_the_refusal(): void
+    {
+        $environment = $this->makeEnvironment();
+        $main = $this->attach($environment, DatastoreKind::Mysql, attributes: ['name' => 'main', 'is_default' => true]);
+        $this->attach($environment, DatastoreKind::Postgres, attributes: ['name' => 'reports']);
+
+        $this->actingAs(User::factory()->owner()->create())->delete("/datastore-attachments/{$main->id}")
+            ->assertSessionHasErrors(['detach' => 'Make another database the default first.']);
+
+        $this->assertSame(2, DatastoreAttachment::count());
+    }
+
+    public function test_the_page_shows_each_database_name_the_default_and_the_config_line_of_the_others(): void
+    {
+        $environment = $this->makeEnvironment();
+        $this->attach($environment, DatastoreKind::Mysql, attributes: ['name' => 'main', 'is_default' => true]);
+        $this->attach($environment, DatastoreKind::Postgres, attributes: ['name' => 'reports']);
+        $this->attach($environment, DatastoreKind::Valkey);
+
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('datastores.attachments.0.name', 'main')
+                ->where('datastores.attachments.0.is_default', true)
+                ->where('datastores.attachments.0.config_line', null)
+                ->where('datastores.attachments.1.name', 'reports')
+                ->where('datastores.attachments.1.is_default', false)
+                ->where('datastores.attachments.1.config_line', "'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],")
+                ->where('datastores.attachments.2.name', null)
+                ->where('datastores.attachments.2.config_line', null)
+                ->where('datastores.available_kinds', ['mysql', 'postgres', 'rustfs']));
     }
 
     public function test_the_action_message_is_shown_on_a_refusal(): void
