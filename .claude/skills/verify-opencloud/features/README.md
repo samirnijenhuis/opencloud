@@ -37,7 +37,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 ## Features
 
 - [Create an application](./create-application.md) covers the create form, the first deploy, and the free HTTPS address.
-- [Datastores](./datastores.md) covers MySQL, Postgres, SQLite, Valkey, and the refused second SQL database.
+- [Datastores](./datastores.md) covers MySQL, Postgres, SQLite, Valkey, and a second SQL database with a connection name.
 - [Environment values](./env-values.md) covers runtime values, build values, and write-only secrets.
 - [Build and deploy commands](./build-and-deploy-commands.md) covers the Laravel build command, Dockerfile builds, and deploy commands.
 - [Redeploy](./redeploy.md) covers a redeploy after a change, data that stays, and a redeploy with no failed request.

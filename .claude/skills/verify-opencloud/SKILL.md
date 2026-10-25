@@ -20,7 +20,7 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 - **Databases.**
   - `none` attaches no database.
   - `mysql` and `postgres` use the database option of the create form for a Laravel app. The form offers no database for a Dockerfile app, so the cell adds it with "Add resource" before the second deploy, the way a user does.
-  - `mysqlpostgres` creates the app with MySQL and then adds Postgres. Opencloud refuses that by design: one SQL database per environment. The cell checks the refusal and keeps working on MySQL.
+  - `mysqlpostgres` creates the app with MySQL, the default database `main`. In step 2 it adds Postgres with Add resource and the connection name `reports`. The app gets `REPORTS_DB_URL`, and the verify endpoint connects with it. From step 2 on, `extra.reports` must report `ok` with the driver `pgsql`. The static fixture reports no `extra`, so its cell skips the check.
   - `sqlite` sets `DB_CONNECTION=sqlite`. Laravel bakes a migrated file into the image with its build command. PHP writes to a file in the pod. Each pod has its own copy, and a redeploy starts empty, so the matrix checks no persistence for SQLite.
 - **Caches.**
   - `none` attaches no cache.
@@ -33,7 +33,7 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 Each cell does three deploys:
 
 1. **Create.** The cell posts the create form with its build command, deploy commands, env values, a secret, a build env value, and `processes: []`. The first deploy must go live. Then the page and the verify endpoint must report the runtime env value, the build marker, the hash of the secret, the database, and the cache.
-2. **Change and redeploy.** The cell changes `VERIFY_MARKER` to `-v2`, adds Valkey when the cell has it, and clicks Deploy. The new value must show. The MySQL and Postgres rows from step 1 must still be there.
+2. **Change and redeploy.** The cell changes `VERIFY_MARKER` to `-v2`, adds the database `reports` and Valkey when the cell has them, and clicks Deploy. The new value must show. The MySQL and Postgres rows from step 1 must still be there.
 3. **Redeploy under traffic.** The cell polls the verify endpoint four times a second during a third deploy. No request may fail.
 
 Each deploy log must contain `deploy-marker-<cell>`, which proves that the deploy commands ran. At the end, the settings page must not contain the secret value.
@@ -79,12 +79,12 @@ The runner posts JSON to the same routes as the dashboard forms, with the sessio
 
 - `POST /applications` is the create form.
 - `POST /environments/{id}/env` is Settings, then Environment values.
-- `POST /environments/{id}/datastores` with `{"kind": "valkey"}` is Add resource.
+- `POST /environments/{id}/datastores` with `{"kind": "valkey"}` is Add resource. A database can have a connection name, for example `{"kind": "postgres", "name": "reports"}`.
 - `POST /environments/{id}/deployments` is the Deploy button.
 
 It reads the page props from the `data-page` attribute of `GET /environments/{id}`, `/deployments/{id}`, and `/applications/create`. It checks the sites with HTTPS requests to the free address. The test machines use Caddy's local CA, so the runner does not check the certificate chain.
 
-To add a cell, add a value to `databases` or `caches` in `matrix.json` and teach `Cell` in `matrix.py` what it means. To add a fixture, add a folder in `fixtures/`, an entry in `fixtures` of `matrix.json`, and run `matrix.py fixtures sync`. A fixture must answer `/` with a `<title>`. Its verify endpoint must return JSON with `marker`, `build`, and, when it reports them, `secret_sha`, `db`, and `cache`.
+To add a cell, add a value to `databases` or `caches` in `matrix.json` and teach `Cell` in `matrix.py` what it means. To add a fixture, add a folder in `fixtures/`, an entry in `fixtures` of `matrix.json`, and run `matrix.py fixtures sync`. A fixture must answer `/` with a `<title>`. Its verify endpoint must return JSON with `marker`, `build`, and, when it reports them, `secret_sha`, `db`, `cache`, and `extra`. `extra` has one entry for each `<NAME>_DB_URL` value, keyed by the name in lowercase, with `driver`, `ok`, and `error` when the connect fails.
 
 ## Evidence
 

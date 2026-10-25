@@ -56,6 +56,42 @@ function verify_redis(): ?Redis
     return $redis;
 }
 
+/**
+ * Connects to each database that is not the default. Opencloud sets one <NAME>_DB_URL value for each.
+ *
+ * @return array<string, array<string, mixed>> the name in lowercase => driver, ok, and the error of a failed connect
+ */
+function verify_extra(): array
+{
+    $extra = [];
+
+    foreach (getenv() as $key => $url) {
+        if (! str_ends_with($key, '_DB_URL')) {
+            continue;
+        }
+
+        $name = strtolower(substr($key, 0, -strlen('_DB_URL')));
+        $url = parse_url($url) ?: [];
+        $driver = ['mysql' => 'mysql', 'postgres' => 'pgsql'][$url['scheme'] ?? ''] ?? null;
+
+        try {
+            $pdo = new PDO(
+                sprintf('%s:host=%s;port=%d;dbname=%s', $driver ?? throw new RuntimeException("{$key} has no mysql:// or postgres:// URL."), $url['host'], $url['port'], ltrim($url['path'], '/')),
+                rawurldecode($url['user']),
+                rawurldecode($url['pass']),
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5],
+            );
+            $extra[$name] = ['driver' => $driver, 'ok' => (int) $pdo->query('SELECT 1')->fetchColumn() === 1];
+        } catch (Throwable $e) {
+            $extra[$name] = ['driver' => $driver, 'ok' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    ksort($extra);
+
+    return $extra;
+}
+
 /** @return array<string, mixed> */
 function verify_report(): array
 {
@@ -66,6 +102,7 @@ function verify_report(): array
         'secret_sha' => verify_env('VERIFY_SECRET') === null ? null : sha1(verify_env('VERIFY_SECRET')),
         'db' => null,
         'cache' => null,
+        'extra' => verify_extra(),
     ];
 
     try {
