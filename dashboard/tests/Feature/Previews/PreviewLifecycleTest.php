@@ -4,6 +4,7 @@ namespace Tests\Feature\Previews;
 
 use App\Actions\AttachDatastore;
 use App\Actions\CreateApplication;
+use App\Actions\SetDefaultDatabase;
 use App\Actions\SetEnvVar;
 use App\Enums\ClusterKind;
 use App\Enums\DatastoreKind;
@@ -166,6 +167,28 @@ class PreviewLifecycleTest extends TestCase
         $audit = AuditEvent::all()->toJson();
         $this->assertStringNotContainsString('sk_test_preview', $audit);
         $this->assertStringNotContainsString(substr($appKey, 7), $audit);
+    }
+
+    public function test_a_preview_copies_the_database_names_and_the_default_of_production(): void
+    {
+        $production = $this->environment('production');
+        $owner = User::factory()->owner()->create();
+        $reports = app(AttachDatastore::class)->handle($production, $owner, DatastoreKind::Postgres, name: 'reports');
+        app(SetDefaultDatabase::class)->handle($reports, $owner);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+
+        $preview = $this->environment('pr-12');
+        $this->assertSame(
+            [['postgres', 'reports', true, "env_{$preview->id}_reports"], ['mysql', 'main', false, "env_{$preview->id}"], ['valkey', null, false, null]],
+            $preview->datastoreAttachments()->with('datastore')->orderBy('id')->get()
+                ->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->name, $a->is_default, $a->database_name])->all(),
+        );
+        $this->assertSame(
+            ['pgsql', "env_{$preview->id}_reports"],
+            [$preview->envVars()->where('key', 'DB_CONNECTION')->sole()->value, $preview->envVars()->where('key', 'DB_DATABASE')->sole()->value],
+        );
+        $this->assertStringEndsWith(":3306/env_{$preview->id}", $preview->envVars()->where('key', 'MAIN_DB_URL')->sole()->value);
     }
 
     public function test_a_preview_domain_gives_each_preview_a_subdomain(): void

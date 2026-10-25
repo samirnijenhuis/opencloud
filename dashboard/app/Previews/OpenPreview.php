@@ -78,9 +78,11 @@ class OpenPreview
 
         $template = $application->environments()->where('kind', EnvironmentKind::PreviewTemplate)->firstOrFail();
         $production = $application->environments()->where('name', 'production')->first();
-        $kinds = $production?->datastoreAttachments()->with('datastore')->orderBy('id')->get()->map(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind) ?? collect();
+        // The default comes first, so it is the default of the preview too. A database that DigitalOcean destroys has no name.
+        $attachments = $production?->datastoreAttachments()->with('datastore')->orderByDesc('is_default')->orderBy('id')->get()
+            ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->isSql() && $attachment->name === null) ?? collect();
 
-        return DB::transaction(function () use ($application, $pullRequest, $template, $kinds) {
+        return DB::transaction(function () use ($application, $pullRequest, $template, $attachments) {
             $preview = $application->environments()->create([
                 ...$template->only(self::TEMPLATE_SETTINGS),
                 'name' => "pr-{$pullRequest->number}",
@@ -105,8 +107,8 @@ class OpenPreview
 
             $this->copyEnv($application, $template, $preview);
 
-            foreach ($kinds as $kind) {
-                $this->attachDatastore->handle($preview, null, $kind);
+            foreach ($attachments as $attachment) {
+                $this->attachDatastore->handle($preview, null, $attachment->datastore->kind, name: $attachment->name);
             }
 
             $hostname = $this->hostname($application, $pullRequest->number);
