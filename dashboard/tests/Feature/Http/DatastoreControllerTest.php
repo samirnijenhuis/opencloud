@@ -157,14 +157,14 @@ class DatastoreControllerTest extends TestCase
         $this->actingAs(User::factory()->owner()->create())->post("/environments/{$environment->id}/datastores", ['kind' => 'oracle'])->assertSessionHasErrors('kind');
     }
 
-    public function test_the_other_database_refusal_is_shown(): void
+    public function test_a_second_database_without_a_name_is_refused(): void
     {
         $environment = $this->makeEnvironment();
-        $this->attach($environment, DatastoreKind::Mysql);
+        $this->attach($environment, DatastoreKind::Mysql, attributes: ['name' => 'main', 'is_default' => true]);
 
         $this->actingAs(User::factory()->owner()->create())
             ->post("/environments/{$environment->id}/datastores", ['kind' => 'postgres'])
-            ->assertSessionHasErrors(['kind' => 'This environment already has a database. Detach it first.']);
+            ->assertSessionHasErrors(['kind' => 'This environment already has a database. Give the new database a name.']);
 
         $this->assertSame(1, DatastoreAttachment::count());
     }

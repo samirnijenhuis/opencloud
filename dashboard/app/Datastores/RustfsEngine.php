@@ -24,7 +24,7 @@ final class RustfsEngine implements Engine
         return DatastoreManifests::rustfs($datastore);
     }
 
-    public function names(Environment $environment): array
+    public function names(Environment $environment, ?string $name): array
     {
         return ['database_name' => "env-{$environment->id}", 'username' => "env-{$environment->id}"];
     }

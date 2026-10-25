@@ -21,9 +21,9 @@ final class MysqlEngine implements SqlEngine
         return DatastoreManifests::mysql($datastore);
     }
 
-    public function names(Environment $environment): array
+    public function names(Environment $environment, ?string $name): array
     {
-        return ['database_name' => "env_{$environment->id}", 'username' => "env_{$environment->id}"];
+        return DatabaseConnection::names($environment, $name ?? DatabaseConnection::FIRST_NAME);
     }
 
     public function attach(Kubectl $kubectl, DatastoreAttachment $attachment): void
@@ -50,14 +50,7 @@ final class MysqlEngine implements SqlEngine
 
     public function env(DatastoreAttachment $attachment): array
     {
-        return [
-            'DB_CONNECTION' => ['mysql', false],
-            'DB_HOST' => [DatastoreManifests::host(DatastoreManifests::serverName($attachment->datastore)), false],
-            'DB_PORT' => ['3306', false],
-            'DB_DATABASE' => [$attachment->database_name, false],
-            'DB_USERNAME' => [$attachment->username, false],
-            'DB_PASSWORD' => [$attachment->password, true],
-        ];
+        return DatabaseConnection::env($attachment);
     }
 
     public function dump(Kubectl $kubectl, DatastoreAttachment $attachment, mixed $sink): void

@@ -2,6 +2,7 @@
 
 namespace App\Backups;
 
+use App\Datastores\DatabaseConnection;
 use App\Datastores\Engines;
 use App\Datastores\SqlEngine;
 use App\Kube\Kubectl;
@@ -23,9 +24,12 @@ final class DatabaseBackups
     /** The name of a dump file is its time in this format, so the names sort by time. */
     public const TIME_FORMAT = 'Ymd-His';
 
+    /** Two databases of one environment can share a server. The database "main" keeps the folder from before names. */
     public static function folder(DatastoreAttachment $attachment): string
     {
-        return "backups/{$attachment->datastore_id}/{$attachment->environment_id}";
+        $folder = "backups/{$attachment->datastore_id}/{$attachment->environment_id}";
+
+        return in_array($attachment->name, [null, DatabaseConnection::FIRST_NAME], true) ? $folder : "{$folder}/{$attachment->name}";
     }
 
     /** A failed dump returns a failed backup with the error, so the nightly run goes on with the next database. */

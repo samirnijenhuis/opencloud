@@ -20,6 +20,7 @@ use App\Models\Environment;
 use App\Models\EnvVar;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\ConfigurationUrlParser;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -162,7 +163,7 @@ class DatastoreAttachmentTest extends TestCase
         $name = "valkey-{$attachment->id}";
 
         $this->assertNull($attachment->datastore->fresh()->root_password);
-        $this->assertSame([null, null, DatastoreStatus::Ready], [$attachment->database_name, $attachment->username, $attachment->fresh()->status]);
+        $this->assertSame([null, null, null, false, DatastoreStatus::Ready], [$attachment->name, $attachment->database_name, $attachment->username, $attachment->is_default, $attachment->fresh()->status]);
         $this->assertSame([
             self::APPLY,
             self::APPLY,
@@ -192,7 +193,7 @@ class DatastoreAttachmentTest extends TestCase
         );
 
         $this->kubectl->respond('exec', new KubectlResult(0));
-        $again = $this->attach(DatastoreKind::Postgres);
+        $again = $this->attach(DatastoreKind::Postgres, 'main');
 
         $this->assertTrue($again->is($attachment));
         $this->assertSame(['provisioning', 'failed', 'provisioning', 'ready'], $this->statuses);
@@ -211,18 +212,109 @@ class DatastoreAttachmentTest extends TestCase
         $this->assertSame([], $this->kubectl->callsStartingWith('exec'));
     }
 
-    public function test_an_environment_gets_one_database_and_environments_share_the_server(): void
+    public function test_the_first_database_is_the_default_main_and_a_later_one_gets_one_url_value(): void
     {
-        $first = $this->attach(DatastoreKind::Mysql);
+        $main = $this->attach(DatastoreKind::Mysql);
+        $reports = $this->attach(DatastoreKind::Postgres, 'reports');
+        $analytics = $this->attach(DatastoreKind::Mysql, 'analytics');
+        $env = $this->environment->id;
+        $mysql = $main->datastore_id;
+        $postgres = $reports->datastore_id;
 
-        try {
-            $this->attach(DatastoreKind::Postgres);
-            $this->fail('No exception.');
-        } catch (InvalidArgumentException $e) {
-            $this->assertSame('This environment already has a database. Detach it first.', $e->getMessage());
+        $this->assertSame([
+            ['main', true, "env_{$env}", "env_{$env}"],
+            ['reports', false, "env_{$env}_reports", "env_{$env}_0b7ec688"],
+            ['analytics', false, "env_{$env}_analytics", "env_{$env}_66d9b558"],
+        ], DatastoreAttachment::query()->orderBy('id')->get()->map(fn (DatastoreAttachment $a) => [$a->name, $a->is_default, $a->database_name, $a->username])->all());
+        $this->assertSame($mysql, $analytics->datastore_id);
+        $this->assertSame([
+            'ANALYTICS_DB_URL' => ["mysql://env_{$env}_66d9b558:pass6@mysql-{$mysql}.oc-datastores.svc.cluster.local:3306/env_{$env}_analytics", true],
+            'DB_CONNECTION' => ['mysql', false],
+            'DB_DATABASE' => ["env_{$env}", false],
+            'DB_HOST' => ["mysql-{$mysql}.oc-datastores.svc.cluster.local", false],
+            'DB_PASSWORD' => ['pass0', true],
+            'DB_PORT' => ['3306', false],
+            'DB_USERNAME' => ["env_{$env}", false],
+            'REPORTS_DB_URL' => ["postgres://env_{$env}_0b7ec688:pass3@postgres-{$postgres}.oc-datastores.svc.cluster.local:5432/env_{$env}_reports", true],
+        ], $this->environmentEnv());
+        $this->assertSame(
+            "CREATE DATABASE IF NOT EXISTS `env_{$env}_analytics`;\n".
+            "CREATE USER IF NOT EXISTS 'env_{$env}_66d9b558'@'%' IDENTIFIED BY 'pass6';\n".
+            "ALTER USER 'env_{$env}_66d9b558'@'%' IDENTIFIED BY 'pass6';\n".
+            "GRANT ALL PRIVILEGES ON `env_{$env}_analytics`.* TO 'env_{$env}_66d9b558'@'%';\n",
+            $this->kubectl->calls[8]['stdin'],
+        );
+        $this->assertSame(
+            ['environment_id' => $env, 'kind' => 'postgres', 'name' => 'reports'],
+            AuditEvent::query()->where('subject_id', $reports->id)->sole()->context,
+        );
+    }
+
+    public function test_the_url_encodes_the_user_and_the_password_and_laravel_reads_them_back(): void
+    {
+        $this->attach(DatastoreKind::Mysql);
+        Str::createRandomStringsUsing(fn () => 'p@ss:w/rd?#%&+ é');
+
+        $reports = $this->attach(DatastoreKind::Mysql, 'reports');
+
+        $env = $this->environment->id;
+        $url = $this->environmentEnv()['REPORTS_DB_URL'][0];
+        $this->assertSame("mysql://env_{$env}_0b7ec688:p%40ss%3Aw%2Frd%3F%23%25%26%2B%20%C3%A9@mysql-{$reports->datastore_id}.oc-datastores.svc.cluster.local:3306/env_{$env}_reports", $url);
+
+        $config = (new ConfigurationUrlParser)->parseConfiguration(['driver' => 'mysql', 'url' => $url]);
+        $this->assertSame(
+            ['mysql', "mysql-{$reports->datastore_id}.oc-datastores.svc.cluster.local", 3306, "env_{$env}_reports", "env_{$env}_0b7ec688", 'p@ss:w/rd?#%&+ é'],
+            [$config['driver'], $config['host'], $config['port'], $config['database'], $config['username'], $config['password']],
+        );
+    }
+
+    public function test_a_first_database_with_a_name_of_its_own_is_the_default(): void
+    {
+        $reports = $this->attach(DatastoreKind::Postgres, 'reports');
+        $env = $this->environment->id;
+
+        $this->assertSame(['reports', true], [$reports->name, $reports->is_default]);
+        $this->assertSame(
+            ['DB_CONNECTION' => 'pgsql', 'DB_DATABASE' => "env_{$env}_reports", 'DB_USERNAME' => "env_{$env}_0b7ec688"],
+            array_map(fn (array $value) => $value[0], array_intersect_key($this->environmentEnv(), array_flip(['DB_CONNECTION', 'DB_DATABASE', 'DB_USERNAME']))),
+        );
+    }
+
+    public function test_the_name_rules_refuse_a_missing_bad_reserved_or_taken_name(): void
+    {
+        $this->attach(DatastoreKind::Mysql);
+        $format = 'Use 1 to 30 lowercase letters, digits, and underscores. Start with a letter.';
+
+        foreach ([
+            [DatastoreKind::Postgres, null, 'This environment already has a database. Give the new database a name.'],
+            [DatastoreKind::Postgres, 'Reports', $format],
+            [DatastoreKind::Postgres, '1reports', $format],
+            [DatastoreKind::Postgres, 'my-reports', $format],
+            [DatastoreKind::Postgres, "reports\n", $format],
+            [DatastoreKind::Postgres, '', $format],
+            [DatastoreKind::Postgres, str_repeat('a', 31), $format],
+            [DatastoreKind::Postgres, 'pgsql', 'Laravel already has a connection with the name pgsql. Use a different name.'],
+            [DatastoreKind::Mysql, 'mariadb', 'Laravel already has a connection with the name mariadb. Use a different name.'],
+            [DatastoreKind::Postgres, 'main', 'This environment already has a database with the name main.'],
+            [DatastoreKind::Mysql, 'main', 'This environment already has a database with the name main.'],
+        ] as [$kind, $name, $message]) {
+            try {
+                $this->attach($kind, $name);
+                $this->fail("No refusal for {$kind->value} ".json_encode($name).'.');
+            } catch (InvalidArgumentException $e) {
+                $this->assertSame($message, $e->getMessage());
+            }
         }
 
+        $this->assertSame(1, DatastoreAttachment::count());
+        $this->assertSame(str_repeat('a', 30), $this->attach(DatastoreKind::Postgres, str_repeat('a', 30))->name);
+    }
+
+    public function test_environments_share_the_server_of_a_kind(): void
+    {
+        $first = $this->attach(DatastoreKind::Mysql);
         $other = Environment::factory()->for($this->environment->application)->create();
+
         $second = app(AttachDatastore::class)->handle($other, $this->owner, DatastoreKind::Mysql);
 
         $this->assertSame($first->datastore_id, $second->datastore_id);
@@ -354,9 +446,17 @@ class DatastoreAttachmentTest extends TestCase
         );
     }
 
-    private function attach(DatastoreKind $kind): DatastoreAttachment
+    private function attach(DatastoreKind $kind, ?string $name = null): DatastoreAttachment
     {
-        return app(AttachDatastore::class)->handle($this->environment, $this->owner, $kind);
+        return app(AttachDatastore::class)->handle($this->environment, $this->owner, $kind, name: $name);
+    }
+
+    /** @return array<string, array{0: string, 1: bool}> */
+    private function environmentEnv(): array
+    {
+        return $this->environment->envVars()->orderBy('key')->get()
+            ->mapWithKeys(fn (EnvVar $var) => [$var->key => [$var->value, $var->is_secret]])
+            ->all();
     }
 
     /** @return list<string> */

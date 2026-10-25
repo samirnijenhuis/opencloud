@@ -3,10 +3,9 @@
 namespace App\Jobs;
 
 use App\Clusters\DigitalOceanCluster;
+use App\Datastores\AttachmentEnv;
 use App\Datastores\DatastoreStatus;
 use App\Datastores\ManagedDatabase;
-use App\Enums\EnvVarAvailability;
-use App\Enums\EnvVarSource;
 use App\Models\DatastoreAttachment;
 use App\Tofu\Runner;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -17,7 +16,7 @@ use Throwable;
 
 /**
  * Applies tofu/digitalocean/database for one attachment and writes its Laravel env values. DigitalOcean generates the
- * password, so the env values exist only after the apply. A second run converges.
+ * host and the password, so the env values exist only after the apply. A second run converges.
  */
 class ProvisionManagedDatabase implements ShouldQueue
 {
@@ -59,16 +58,10 @@ class ProvisionManagedDatabase implements ShouldQueue
         }
 
         DB::transaction(function () use ($attachment, $datastore, $outputs) {
-            $attachment->update(['password' => $outputs['password']]);
-
-            foreach (ManagedDatabase::env($datastore->kind, $outputs) as $key => [$value, $isSecret]) {
-                $attachment->environment->envVars()->updateOrCreate(['key' => $key, 'source' => EnvVarSource::Datastore], [
-                    'value' => $value,
-                    'is_secret' => $isSecret,
-                    'available_at' => EnvVarAvailability::Runtime,
-                    'datastore_attachment_id' => $attachment->id,
-                ]);
-            }
+            // The default can change during the apply, so the env form comes from the row as it is now.
+            $attachment->refresh();
+            $attachment->update(['host' => (string) $outputs['host'], 'port' => (int) $outputs['port'], 'password' => (string) $outputs['password']]);
+            AttachmentEnv::write($attachment);
 
             $datastore->update(['status' => DatastoreStatus::Ready]);
             $attachment->update(['status' => DatastoreStatus::Ready]);

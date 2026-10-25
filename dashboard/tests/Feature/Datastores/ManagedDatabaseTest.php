@@ -94,7 +94,8 @@ class ManagedDatabaseTest extends TestCase
         $job = Queue::pushed(ProvisionManagedDatabase::class)->sole();
         $this->assertSame([$attachment->id, 'builds'], [$job->attachment->id, $job->queue]);
         Queue::assertNotPushed(ProvisionDatastoreAttachment::class);
-        $this->assertSame(['environment_id' => $environment->id, 'kind' => 'mysql', 'source' => 'managed'], AuditEvent::query()->sole()->context);
+        $this->assertSame(['main', true], [$attachment->name, $attachment->is_default]);
+        $this->assertSame(['environment_id' => $environment->id, 'kind' => 'mysql', 'name' => 'main', 'source' => 'managed'], AuditEvent::query()->sole()->context);
     }
 
     public function test_the_apply_writes_the_same_laravel_env_values_as_the_standard_engine(): void
@@ -131,6 +132,25 @@ class ManagedDatabaseTest extends TestCase
         $this->assertSame('DO_GENERATED_PASSWORD_SECRET', $attachment->fresh()->password);
     }
 
+    public function test_a_managed_database_next_to_the_default_gets_its_url_value_after_the_apply(): void
+    {
+        $environment = $this->environment();
+        $this->tofu->outputs = [...self::OUTPUTS, 'password' => 'DO/pass+word'];
+        app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed);
+        $reports = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed, 'reports');
+
+        $this->assertSame(['reports', false, "env_{$environment->id}_reports", "env_{$environment->id}_0b7ec688"], [$reports->name, $reports->is_default, $reports->database_name, $reports->username]);
+        $this->assertSame([], $this->envOf($environment));
+
+        (new ProvisionManagedDatabase($reports))->handle(app(Runner::class));
+
+        $this->assertSame(['database' => "env_{$environment->id}_reports", 'user' => "env_{$environment->id}_0b7ec688"], array_intersect_key($this->tofu->ran[1]['variables'], array_flip(['database', 'user'])));
+        $this->assertSame([
+            'REPORTS_DB_URL' => ["postgres://env_{$environment->id}_0b7ec688:DO%2Fpass%2Bword@private-ams3-prod-mysql-1-do-user-1.db.ondigitalocean.com:25060/env_{$environment->id}_reports", true],
+        ], $this->envOf($environment));
+        $this->assertSame(['private-ams3-prod-mysql-1-do-user-1.db.ondigitalocean.com', 25060], [$reports->fresh()->host, $reports->fresh()->port]);
+    }
+
     public function test_postgres_uses_the_pg_engine_and_the_pgsql_connection(): void
     {
         $environment = $this->environment();
@@ -156,7 +176,7 @@ class ManagedDatabaseTest extends TestCase
         $this->assertSame([DatastoreStatus::Failed, $expected], [$attachment->datastore->fresh()->status, $attachment->datastore->fresh()->error]);
         $this->assertSame(0, $environment->envVars()->count());
 
-        $again = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $again = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Mysql, name: 'main');
 
         $this->assertTrue($again->is($attachment));
         $this->assertCount(2, Queue::pushed(ProvisionManagedDatabase::class));

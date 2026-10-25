@@ -21,7 +21,7 @@ final class ValkeyEngine implements Engine
         return [];
     }
 
-    public function names(Environment $environment): array
+    public function names(Environment $environment, ?string $name): array
     {
         return ['database_name' => null, 'username' => null];
     }
