@@ -13,7 +13,7 @@ use LogicException;
 
 /**
  * The registry and the capability table of the resources that opencloud can attach, keyed by kind and source. Every
- * list of kinds or sources in the backend comes from find(), and nothing else creates a provisioner or an engine.
+ * list of kinds or sources in the backend comes from find(), and nothing else creates a provisioner.
  */
 final class Provisioners
 {
@@ -98,15 +98,15 @@ final class Provisioners
         });
     }
 
-    /** The local arm has no default, so a new kind does not run until it has a local engine. */
+    /** The local arm has no default, so a new kind does not run until it has a local provisioner. */
     private static function find(DatastoreKind $kind, DatastoreSource $source): ?Provisioner
     {
         return match ($source) {
             DatastoreSource::Standard => match ($kind) {
-                DatastoreKind::Mysql => LocalProvisioner::database($kind, new MysqlEngine),
-                DatastoreKind::Postgres => LocalProvisioner::database($kind, new PostgresEngine),
-                DatastoreKind::Valkey => LocalProvisioner::keyValue($kind, new ValkeyEngine),
-                DatastoreKind::Rustfs => LocalProvisioner::bucket($kind, new RustfsEngine),
+                DatastoreKind::Mysql => new LocalMysql,
+                DatastoreKind::Postgres => new LocalPostgres,
+                DatastoreKind::Valkey => new LocalValkey,
+                DatastoreKind::Rustfs => new LocalRustfs,
             },
             DatastoreSource::Managed => ManagedResources::find($kind),
             DatastoreSource::External => ExternalResources::find($kind),

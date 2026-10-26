@@ -2,6 +2,7 @@
 
 namespace App\Datastores;
 
+use App\Enums\DatastoreKind;
 use App\Kube\Kubectl;
 use App\Kube\Manifests\DatastoreManifests;
 use App\Models\Datastore;
@@ -12,28 +13,38 @@ use App\Models\Environment;
  * Valkey has no per-tenant isolation worth trusting, so each attachment runs its own server. The Valkey datastore
  * row only groups those servers per cluster.
  */
-final class ValkeyEngine implements Engine
+final class LocalValkey extends LocalProvisioner
 {
     private const ROLLOUT_TIMEOUT_SECONDS = 300;
 
-    public function server(Datastore $datastore): array
+    protected function kind(): DatastoreKind
+    {
+        return DatastoreKind::Valkey;
+    }
+
+    protected function sharedServer(): bool
+    {
+        return false;
+    }
+
+    protected function server(Datastore $datastore): array
     {
         return [];
     }
 
-    public function names(Environment $environment, ?string $name): array
+    protected function names(Environment $environment, ?string $name): array
     {
         return ['database_name' => null, 'username' => null];
     }
 
-    public function attach(Kubectl $kubectl, DatastoreAttachment $attachment): void
+    protected function grant(Kubectl $kubectl, DatastoreAttachment $attachment): void
     {
         $kubectl->apply(DatastoreManifests::valkey($attachment));
         $kubectl->rolloutStatus(DatastoreManifests::NAMESPACE, 'deployment', DatastoreManifests::valkeyName($attachment), self::ROLLOUT_TIMEOUT_SECONDS)->throw();
     }
 
     /** Without $destroyData the volume stays, like the database of a detached MySQL attachment. */
-    public function detach(Kubectl $kubectl, DatastoreAttachment $attachment, bool $destroyData): void
+    protected function revoke(Kubectl $kubectl, DatastoreAttachment $attachment, bool $destroyData): void
     {
         $name = DatastoreManifests::valkeyName($attachment);
 

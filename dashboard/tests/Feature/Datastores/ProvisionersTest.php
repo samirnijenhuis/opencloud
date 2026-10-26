@@ -189,21 +189,21 @@ class ProvisionersTest extends TestCase
         $this->assertSame([], $this->kubectl->calls);
     }
 
-    public function test_only_the_registry_creates_an_engine(): void
+    public function test_only_the_registry_creates_a_local_provisioner(): void
     {
         $this->assertSame(
             ['app/Datastores/Provisioners.php'],
-            $this->filesWhere(['app', 'routes'], fn (array $code, int $i) => strtolower($code[$i]) === 'new' && str_ends_with($this->shortName($code[$i + 1]), 'Engine')),
+            $this->filesWhere(['app', 'routes'], fn (array $code, int $i) => strtolower($code[$i]) === 'new' && str_starts_with($this->shortName($code[$i + 1]), 'Local')),
         );
     }
 
-    public function test_no_code_picks_an_engine_by_the_kind_alone(): void
+    public function test_no_code_picks_a_local_provisioner_by_the_kind_alone(): void
     {
         $this->assertSame(
             [],
             $this->filesWhere(['app', 'routes'], fn (array $code, int $i) => ($this->shortName($code[$i]) === 'Engines' && $code[$i + 1] === '::')
                 || ($code[$i] === 'isSql' && $code[$i + 1] === '(')
-                || (strtolower($code[$i]) === 'instanceof' && $this->shortName($code[$i + 1]) === 'SqlEngine')),
+                || (strtolower($code[$i]) === 'instanceof' && $this->shortName($code[$i + 1]) === 'LocalSql')),
         );
     }
 
@@ -223,14 +223,19 @@ class ProvisionersTest extends TestCase
         $files = collect(Provisioners::table())
             ->reject(fn (array $row) => $row['source'] === DatastoreSource::External)
             ->map(fn (array $row) => str_replace(base_path().'/', '', (new ReflectionClass($row['provisioner']))->getFileName()))
-            ->merge(collect(Finder::create()->files()->name('Managed*.php')->in(app_path('Datastores')))->map(fn ($file) => str_replace(base_path().'/', '', $file->getPathname())))
+            ->merge(collect(Finder::create()->files()->name(['Managed*.php', 'Local*.php'])->in(app_path('Datastores')))->map(fn ($file) => str_replace(base_path().'/', '', $file->getPathname())))
             ->unique()
             ->sort()
             ->values();
 
         $this->assertSame(
             [
+                'app/Datastores/LocalMysql.php' => true,
+                'app/Datastores/LocalPostgres.php' => true,
                 'app/Datastores/LocalProvisioner.php' => true,
+                'app/Datastores/LocalRustfs.php' => true,
+                'app/Datastores/LocalSql.php' => true,
+                'app/Datastores/LocalValkey.php' => true,
                 'app/Datastores/ManagedBucket.php' => false,
                 'app/Datastores/ManagedDatabase.php' => false,
                 'app/Datastores/ManagedResource.php' => false,
@@ -283,7 +288,7 @@ class ProvisionersTest extends TestCase
         return array_values(array_map(fn (array|string $token) => is_array($token) ? $token[1] : $token, $code));
     }
 
-    /** App\Datastores\Engines and \App\Datastores\Engines are both Engines. */
+    /** App\Datastores\LocalSql and \App\Datastores\LocalSql are both LocalSql. */
     private function shortName(string $token): string
     {
         return ltrim(strrchr('\\'.$token, '\\'), '\\');
