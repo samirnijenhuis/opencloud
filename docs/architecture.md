@@ -75,7 +75,7 @@ A domain in `cloudflare` DNS mode needs the Cloudflare key. Opencloud creates th
 
 ## Provider keys
 
-`App\CloudProviders\Providers` is the one table of provider guides: DigitalOcean, Hetzner, AWS, and Cloudflare. Each `ProviderGuide` has the key page URL, the rights to select, an optional CLI command, and a check class. A check makes read-only API calls and returns a `CheckResult` with the status `ok`, `invalid`, or `missing_rights`. The AWS check signs its requests with `AwsSignatureV4`. The settings page "Provider keys" is for the owner only. The command `opencloud:check-provider-links` requests each key page, and a weekly workflow runs it.
+`App\CloudProviders\Providers` is the one table of provider guides: DigitalOcean, Hetzner, AWS, and Cloudflare. Each `ProviderGuide` has the key page URL, the rights to select, an optional CLI command, and a check class. A check makes read-only API calls and returns a `CheckResult` with the status `ok`, `invalid`, or `missing_rights`. The DigitalOcean guide lists the right `database` as optional, because a cluster works without it, and its check probes `/databases`. A stored key that lacks it does not offer a managed database, because `ManagedDatabase::availableOn()` reads `missing_rights`. The AWS check signs its requests with `AwsSignatureV4`. The settings page "Provider keys" is for the owner only. The command `opencloud:check-provider-links` requests each key page, and a weekly workflow runs it.
 
 ## OpenTofu
 

@@ -16,6 +16,7 @@ final class DigitalOceanCheck implements ProviderCheck
         'kubernetes' => '/kubernetes/clusters?per_page=1',
         'registry' => '/registry',
         'vpc' => '/vpcs?per_page=1',
+        'database' => '/databases?per_page=1',
     ];
 
     public function check(string $token): CheckResult

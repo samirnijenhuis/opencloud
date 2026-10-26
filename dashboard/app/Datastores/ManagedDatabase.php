@@ -30,13 +30,19 @@ final class ManagedDatabase
 
     private const ENGINES = ['mysql' => 'mysql', 'postgres' => 'pg'];
 
-    /** Only a cluster that opencloud created on DigitalOcean has the VPC and the id that the firewall rule needs. */
+    /**
+     * Only a cluster that opencloud created on DigitalOcean has the VPC and the id that the firewall rule needs.
+     * A key without the database right cannot create the database.
+     */
     public static function availableOn(Cluster $cluster): bool
     {
-        return $cluster->kind === ClusterKind::Created
-            && $cluster->provider === 'digitalocean'
-            && $cluster->provider_cluster_id !== null
-            && ProviderCredential::query()->where('provider', 'digitalocean')->exists();
+        if ($cluster->kind !== ClusterKind::Created || $cluster->provider !== 'digitalocean' || $cluster->provider_cluster_id === null) {
+            return false;
+        }
+
+        $credential = ProviderCredential::query()->where('provider', 'digitalocean')->first();
+
+        return $credential !== null && ! in_array('database', $credential->missing_rights ?? [], true);
     }
 
     public static function stack(DatastoreAttachment $attachment, string $token): Stack
