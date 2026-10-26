@@ -2,6 +2,7 @@
 
 namespace App\Datastores;
 
+use App\Enums\DatastoreKind;
 use App\Kube\Kubectl;
 use App\Kube\Manifests\DatastoreManifests;
 use App\Models\Datastore;
@@ -10,27 +11,38 @@ use App\Models\Environment;
 
 /**
  * One RustFS server per cluster, with one bucket and one IAM user per environment. A canned policy with the bucket
- * name allows the user that bucket only. The rc client in the server pod runs the admin commands.
+ * name allows the user that bucket only. The rc client in the server pod runs the admin commands. The nightly job
+ * copies its buckets.
  */
-final class RustfsEngine implements Engine
+final class LocalRustfs extends LocalProvisioner
 {
     private const LOGIN = 'rc alias set local http://127.0.0.1:9000 "$RUSTFS_ACCESS_KEY" "$RUSTFS_SECRET_KEY" >/dev/null';
 
     /** rc exits with 5 when the user or the bucket does not exist. */
     private const NOT_FOUND = '[ $? -eq 5 ]';
 
-    public function server(Datastore $datastore): array
+    protected function kind(): DatastoreKind
+    {
+        return DatastoreKind::Rustfs;
+    }
+
+    public function capabilities(): Capabilities
+    {
+        return new Capabilities($this->noDatabase(), copiesBuckets: true);
+    }
+
+    protected function server(Datastore $datastore): array
     {
         return DatastoreManifests::rustfs($datastore);
     }
 
-    public function names(Environment $environment, ?string $name): array
+    protected function names(Environment $environment, ?string $name): array
     {
         return ['database_name' => "env-{$environment->id}", 'username' => "env-{$environment->id}"];
     }
 
     /** The secret key comes in on stdin, so it is not in the argv of kubectl. */
-    public function attach(Kubectl $kubectl, DatastoreAttachment $attachment): void
+    protected function grant(Kubectl $kubectl, DatastoreAttachment $attachment): void
     {
         $bucket = $attachment->database_name;
         $user = $attachment->username;
@@ -50,7 +62,7 @@ final class RustfsEngine implements Engine
         ], $attachment->password."\n");
     }
 
-    public function detach(Kubectl $kubectl, DatastoreAttachment $attachment, bool $destroyData): void
+    protected function revoke(Kubectl $kubectl, DatastoreAttachment $attachment, bool $destroyData): void
     {
         $user = $attachment->username;
 

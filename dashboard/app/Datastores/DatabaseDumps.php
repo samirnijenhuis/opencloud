@@ -6,7 +6,7 @@ use App\Models\DatastoreAttachment;
 
 /**
  * The dump and the restore of one database. Only Capabilities gives one out, so a caller that has it knows that
- * opencloud can dump this attachment.
+ * opencloud can dump this attachment. LocalSql is the only implementation.
  */
 interface DatabaseDumps
 {

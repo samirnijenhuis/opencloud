@@ -23,39 +23,43 @@ use LogicException;
 use Throwable;
 
 /**
- * The local source: opencloud runs the datastore in the cluster of the app, and a kubectl engine does the work. This
- * class is the only holder of an engine.
+ * The local source: opencloud runs the datastore in the cluster of the app and talks to it with kubectl. A subclass
+ * per kind holds what differs: the server manifests, the names, and the commands that create and remove the access
+ * of one attachment. This class holds the queue, the status, and the server rollout that the kinds share.
  *
  * A database or bucket row is one shared server per cluster and kind. A key-value row only groups attachments,
  * because each attachment runs its own Valkey server.
  */
-final class LocalProvisioner implements Provisioner
+abstract class LocalProvisioner implements Provisioner
 {
     private const SERVER_ROLLOUT_SECONDS = 600;
 
-    private function __construct(
-        private DatastoreKind $kind,
-        private Engine $engine,
-        private bool $sharedServer,
-        private Capabilities $capabilities,
-    ) {}
+    abstract protected function kind(): DatastoreKind;
 
-    /** One shared server with one database and user per attachment. opencloud dumps it. */
-    public static function database(DatastoreKind $kind, SqlEngine $engine): self
+    /** @return list<array<string, mixed>> the StatefulSet server and its parts, or [] when each attachment runs its own server */
+    abstract protected function server(Datastore $datastore): array;
+
+    /**
+     * @param  string|null  $name  the connection name of a MySQL or Postgres database, null for the other kinds
+     * @return array{database_name: ?string, username: ?string}
+     */
+    abstract protected function names(Environment $environment, ?string $name): array;
+
+    /** Creates the database, user, bucket, or server of one attachment. A second run converges to the same state. */
+    abstract protected function grant(Kubectl $kubectl, DatastoreAttachment $attachment): void;
+
+    /** Removes the user, key, or server of one attachment. With $destroyData it also removes the data. */
+    abstract protected function revoke(Kubectl $kubectl, DatastoreAttachment $attachment, bool $destroyData): void;
+
+    /** One shared server with one database or bucket and user per attachment. Valkey overrides this. */
+    protected function sharedServer(): bool
     {
-        return new self($kind, $engine, sharedServer: true, capabilities: new Capabilities(new InClusterDumps($engine)));
+        return true;
     }
 
-    /** One server per attachment, so the datastore row has no root password and no server of its own. */
-    public static function keyValue(DatastoreKind $kind, Engine $engine): self
+    public function capabilities(): Capabilities
     {
-        return new self($kind, $engine, sharedServer: false, capabilities: new Capabilities(self::noDatabase($kind)));
-    }
-
-    /** One shared server with one bucket and user per attachment. The nightly job copies its buckets. */
-    public static function bucket(DatastoreKind $kind, Engine $engine): self
-    {
-        return new self($kind, $engine, sharedServer: true, capabilities: new Capabilities(self::noDatabase($kind), copiesBuckets: true));
+        return new Capabilities($this->noDatabase());
     }
 
     public function refusalOn(Cluster $cluster): ?string
@@ -70,15 +74,15 @@ final class LocalProvisioner implements Provisioner
         }
 
         $datastore = Datastore::firstOrCreate(
-            ['cluster_id' => $environment->application->cluster_id, 'kind' => $this->kind, 'source' => DatastoreSource::Standard],
-            ['version' => DatastoreManifests::VERSIONS[$this->kind->value], 'root_password' => $this->sharedServer ? Str::random(32) : null],
+            ['cluster_id' => $environment->application->cluster_id, 'kind' => $this->kind(), 'source' => DatastoreSource::Standard],
+            ['version' => DatastoreManifests::VERSIONS[$this->kind()->value], 'root_password' => $this->sharedServer() ? Str::random(32) : null],
         );
 
         $attachment = $environment->datastoreAttachments()->create([
             'name' => $name,
             'is_default' => $isDefault,
-            ...$this->engine->names($environment, $name),
-            ...($this->kind->family() === ResourceFamily::Database ? DatabaseNames::server($datastore) : []),
+            ...$this->names($environment, $name),
+            ...($this->kind()->family() === ResourceFamily::Database ? DatabaseNames::server($datastore) : []),
             'datastore_id' => $datastore->id,
             'password' => Str::random(32),
         ]);
@@ -122,7 +126,7 @@ final class LocalProvisioner implements Provisioner
 
         try {
             $this->provisionServer($kubectl, $datastore, $masker);
-            $this->engine->attach($kubectl, $attachment);
+            $this->grant($kubectl, $attachment);
         } catch (Throwable $e) {
             $attachment->update(['status' => DatastoreStatus::Failed, 'error' => $masker->mask($e->getMessage())]);
 
@@ -136,22 +140,12 @@ final class LocalProvisioner implements Provisioner
     {
         $released = (new DatastoreAttachment)->setRawAttributes($attachment)->setRelation('datastore', $datastore);
 
-        $this->engine->detach(Kubectl::for($datastore->cluster), $released, $destroyData);
+        $this->revoke(Kubectl::for($datastore->cluster), $released, $destroyData);
     }
 
-    public function connection(DatastoreAttachment $attachment): ?Connection
+    protected function noDatabase(): string
     {
-        return $this->engine->connection($attachment);
-    }
-
-    public function capabilities(): Capabilities
-    {
-        return $this->capabilities;
-    }
-
-    private static function noDatabase(DatastoreKind $kind): string
-    {
-        return "A {$kind->value} datastore has no database to back up.";
+        return "A {$this->kind()->value} datastore has no database to back up.";
     }
 
     /** The apply and the rollout check run each time, so a server that someone removed comes back. */
@@ -162,7 +156,7 @@ final class LocalProvisioner implements Provisioner
         }
 
         try {
-            $server = $this->engine->server($datastore);
+            $server = $this->server($datastore);
             $kubectl->apply([DatastoreManifests::namespace(), ...$server]);
 
             if ($server !== []) {
