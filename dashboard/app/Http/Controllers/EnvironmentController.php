@@ -141,7 +141,7 @@ class EnvironmentController extends Controller
         return [
             'attachments' => $rows,
             'available_kinds' => collect(DatastoreKind::cases())
-                ->reject(fn (DatastoreKind $kind) => ! $kind->isSql() && $rows->contains('kind', $kind))
+                ->reject(fn (DatastoreKind $kind) => ! $kind->family()->isNamed() && $rows->contains('kind', $kind))
                 ->values(),
             'has_backup_target' => BackupTarget::query()->exists(),
             'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::Pending, DatastoreStatus::Provisioning], true)
@@ -183,7 +183,7 @@ class EnvironmentController extends Controller
             return [...$row, 'managed' => true, 'tofu_log' => $datastore->tofu_log];
         }
 
-        if (! $datastore->kind->isSql()) {
+        if (! $datastore->kind->family()->isNamed()) {
             return $row;
         }
 

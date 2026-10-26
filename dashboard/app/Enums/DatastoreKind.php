@@ -2,6 +2,9 @@
 
 namespace App\Enums;
 
+/**
+ * The engine of a datastore. What opencloud can do with it from each source is in Provisioners.
+ */
 enum DatastoreKind: string
 {
     case Mysql = 'mysql';
@@ -9,9 +12,13 @@ enum DatastoreKind: string
     case Valkey = 'valkey';
     case Rustfs = 'rustfs';
 
-    /** A SQL database has a connection name, and an environment can have more than one. */
-    public function isSql(): bool
+    /** No default arm, so a new kind does not run until it has a family. */
+    public function family(): ResourceFamily
     {
-        return $this === self::Mysql || $this === self::Postgres;
+        return match ($this) {
+            self::Mysql, self::Postgres => ResourceFamily::Database,
+            self::Valkey => ResourceFamily::KeyValue,
+            self::Rustfs => ResourceFamily::Bucket,
+        };
     }
 }

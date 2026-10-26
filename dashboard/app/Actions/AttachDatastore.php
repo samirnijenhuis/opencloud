@@ -9,6 +9,7 @@ use App\Datastores\Engines;
 use App\Datastores\ManagedDatabase;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
+use App\Enums\ResourceFamily;
 use App\Jobs\ProvisionDatastoreAttachment;
 use App\Jobs\ProvisionManagedDatabase;
 use App\Kube\Manifests\DatastoreManifests;
@@ -42,8 +43,8 @@ class AttachDatastore
 
         return DB::transaction(function () use ($environment, $by, $kind, $source, $name) {
             $attachments = $environment->datastoreAttachments()->with('datastore')->get();
-            $name = $kind->isSql() ? $this->databaseName($attachments, $name) : null;
-            $existing = $attachments->first(fn (DatastoreAttachment $attachment) => $kind->isSql()
+            $name = $kind->family()->isNamed() ? $this->databaseName($attachments, $name) : null;
+            $existing = $attachments->first(fn (DatastoreAttachment $attachment) => $kind->family()->isNamed()
                 ? $attachment->name === $name
                 : $attachment->datastore->kind === $kind);
 
@@ -53,7 +54,7 @@ class AttachDatastore
 
             $fields = [
                 'name' => $name,
-                'is_default' => $kind->isSql() && ! $attachments->contains('is_default', true),
+                'is_default' => $kind->family()->isNamed() && ! $attachments->contains('is_default', true),
                 ...Engines::for($kind)->names($environment, $name),
             ];
 
@@ -89,7 +90,7 @@ class AttachDatastore
     /** Only a failed attachment of the same kind can be attached again. For a database, that means the same name too. */
     private function retry(DatastoreAttachment $existing, DatastoreKind $kind): DatastoreAttachment
     {
-        if ($kind->isSql() && ($existing->datastore->kind !== $kind || $existing->status !== DatastoreStatus::Failed)) {
+        if ($kind->family()->isNamed() && ($existing->datastore->kind !== $kind || $existing->status !== DatastoreStatus::Failed)) {
             throw new InvalidArgumentException("This environment already has a database with the name {$existing->name}.");
         }
 
@@ -112,7 +113,7 @@ class AttachDatastore
 
         $attachment = $environment->datastoreAttachments()->create([
             ...$fields,
-            ...($kind->isSql() ? DatabaseNames::server($datastore) : []),
+            ...($kind->family() === ResourceFamily::Database ? DatabaseNames::server($datastore) : []),
             'datastore_id' => $datastore->id,
             'password' => Str::random(32),
         ]);
