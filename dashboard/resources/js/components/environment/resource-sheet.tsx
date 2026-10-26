@@ -372,7 +372,11 @@ export function ResourceSheet({
                     <dd className="flex flex-wrap items-center gap-2">
                         <Status tone={statusTones[attachment.status]}>{statusLabels[attachment.status]}</Status>
                         {attachment.status === 'failed' && canUpdate && attachment.server.status !== 'destroying' && (
-                            <Button variant="secondary" size="sm" onClick={() => attach(environmentId, attachment.kind, attachment.source, attachment.name)}>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => attach(environmentId, attachment.kind, attachment.source, attachment.name)}
+                            >
                                 Try again
                             </Button>
                         )}

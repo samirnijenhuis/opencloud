@@ -146,4 +146,3 @@ export type AppTab = 'general' | 'autoscaling' | 'processes';
 
 /** The open side sheet. Only one is open at a time. */
 export type Sheet = { kind: 'https' } | { kind: 'domains'; adding: boolean } | { kind: 'app'; tab: AppTab } | { kind: 'resource'; id: number };
-
