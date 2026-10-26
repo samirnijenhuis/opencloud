@@ -185,7 +185,7 @@ class EnvironmentController extends Controller
             return [...$row, 'managed' => true, 'tofu_log' => $datastore->tofu_log];
         }
 
-        if (! $datastore->kind->family()->isNamed()) {
+        if (Provisioners::of($datastore)->capabilities()->dumps === null) {
             return $row;
         }
 

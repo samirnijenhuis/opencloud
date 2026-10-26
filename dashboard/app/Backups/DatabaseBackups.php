@@ -2,10 +2,9 @@
 
 namespace App\Backups;
 
+use App\Datastores\DatabaseDumps;
 use App\Datastores\DatabaseNames;
-use App\Datastores\Engines;
-use App\Datastores\SqlEngine;
-use App\Kube\Kubectl;
+use App\Datastores\Provisioners;
 use App\Models\Backup;
 use App\Models\DatastoreAttachment;
 use App\Support\SecretMasker;
@@ -47,7 +46,7 @@ final class DatabaseBackups
         $dump = tmpfile();
 
         try {
-            $this->engine($attachment)->dump(Kubectl::for($datastore->cluster), $attachment, $dump);
+            $this->dumps($attachment)->dump($attachment, $dump);
             rewind($dump);
             $disk->writeStream($backup->location, $dump);
             $backup->update(['status' => BackupStatus::Done, 'size' => $disk->size($backup->location)]);
@@ -84,7 +83,7 @@ final class DatabaseBackups
         $dump = BackupDisk::for($backup)->readStream($backup->location);
 
         try {
-            $this->engine($attachment)->restore(Kubectl::for($attachment->datastore->cluster), $attachment, $dump);
+            $this->dumps($attachment)->restore($attachment, $dump);
         } finally {
             fclose($dump);
         }
@@ -112,11 +111,11 @@ final class DatabaseBackups
         }
     }
 
-    private function engine(DatastoreAttachment $attachment): SqlEngine
+    private function dumps(DatastoreAttachment $attachment): DatabaseDumps
     {
-        $engine = Engines::for($attachment->datastore->kind);
+        $capabilities = Provisioners::of($attachment->datastore)->capabilities();
 
-        return $engine instanceof SqlEngine ? $engine : throw new InvalidArgumentException("A {$attachment->datastore->kind->value} datastore has no database to back up.");
+        return $capabilities->dumps ?? throw new InvalidArgumentException($capabilities->noDumps);
     }
 
     private function deleteFile(Filesystem $disk, string $path): void
