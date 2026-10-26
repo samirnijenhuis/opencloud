@@ -8,50 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { parseDotenv, sizeLabel, sizeText } from '@/lib/format';
-import { cn } from '@/lib/utils';
 import { applicationTypeLabels, type ApplicationType, type EnvProfileKind, type ProcessValues, type Size, type SizeOption } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
+import { Chip, envProfiles, presetText, type Preset } from './preset-form';
 
 type Cluster = { id: number; name: string; kind: string; ingress_ip: string | null };
 type EnvRow = { key: string; value: string; is_secret: boolean };
 type Database = 'mysql' | 'postgres' | 'none';
-
-/** The defaults of one preset, from the server. */
-type Preset = {
-    value: ApplicationType;
-    port: number;
-    chooses_port: boolean;
-    uses_build_command: boolean;
-    deploy_commands: string[];
-    processes: ProcessValues[];
-    database: Database;
-    env_profile: EnvProfileKind;
-};
-
-const presetText: Record<ApplicationType, { hint: string; buildCommand: string }> = {
-    laravel: {
-        hint: 'FrankenPHP, a queue worker, and a scheduler',
-        buildCommand: 'Optional extra step after the build, for example php artisan icons:cache',
-    },
-    node: {
-        hint: 'The build and start scripts of package.json',
-        buildCommand: 'Optional extra step after the build script, for example npx prisma generate',
-    },
-    static: {
-        hint: 'nginx serves the files or the build output',
-        buildCommand: 'Not used. The build script of package.json builds the site.',
-    },
-    dockerfile: {
-        hint: 'The Dockerfile of the repository',
-        buildCommand: 'Not used. The Dockerfile builds the image.',
-    },
-};
-
-const envProfiles: { value: EnvProfileKind; label: string; hint: string }[] = [
-    { value: 'laravel', label: 'Laravel names', hint: 'DB_HOST, REDIS_HOST, AWS_BUCKET' },
-    { value: 'generic', label: 'URLs', hint: 'DATABASE_URL, REDIS_URL, AWS_BUCKET' },
-];
 
 type FormData = {
     repository: string;
@@ -83,22 +47,6 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
             </div>
             <div className="min-w-0 space-y-2">{children}</div>
         </div>
-    );
-}
-
-function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-pressed={selected}
-            className={cn(
-                'rounded-md border px-3 py-2 text-left text-sm transition-colors',
-                selected ? 'border-primary bg-primary/5 ring-primary ring-1' : 'hover:bg-muted',
-            )}
-        >
-            {children}
-        </button>
     );
 }
 
