@@ -69,6 +69,16 @@ class ProviderCredentialActionsTest extends TestCase
         $this->assertSame(['vpc'], ProviderCredential::sole()->missing_rights);
     }
 
+    public function test_a_key_without_the_database_right_is_stored_and_records_the_gap(): void
+    {
+        $this->fakeDigitalOcean(databases: 403);
+
+        $result = app(StoreProviderCredential::class)->handle(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
+
+        $this->assertSame(CheckStatus::MissingRights, $result->status);
+        $this->assertSame(['database'], ProviderCredential::sole()->missing_rights);
+    }
+
     public function test_pasting_again_replaces_the_key_of_that_provider(): void
     {
         $this->fakeDigitalOcean();
@@ -113,13 +123,14 @@ class ProviderCredentialActionsTest extends TestCase
         $this->assertSame(['provider' => 'hetzner'], AuditEvent::where('action', 'provider_credential.deleted')->sole()->context);
     }
 
-    private function fakeDigitalOcean(int $registry = 200, int $vpcs = 200): void
+    private function fakeDigitalOcean(int $registry = 200, int $vpcs = 200, int $databases = 200): void
     {
         Http::fake([
             'https://api.digitalocean.com/v2/account' => Http::response(['account' => ['email' => 'me@example.com']]),
             'https://api.digitalocean.com/v2/kubernetes/clusters*' => Http::response([]),
             'https://api.digitalocean.com/v2/registry' => Http::response(['message' => 'forbidden'], $registry),
             'https://api.digitalocean.com/v2/vpcs*' => Http::response(['message' => 'forbidden'], $vpcs),
+            'https://api.digitalocean.com/v2/databases*' => Http::response(['message' => 'forbidden'], $databases),
         ]);
     }
 }

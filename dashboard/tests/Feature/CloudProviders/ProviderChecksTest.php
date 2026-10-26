@@ -21,6 +21,7 @@ class ProviderChecksTest extends TestCase
             self::DO.'/kubernetes/clusters*' => Http::response(['kubernetes_clusters' => []]),
             self::DO.'/registry' => Http::response(['id' => 'not_found', 'message' => 'no registry'], 404),
             self::DO.'/vpcs*' => Http::response(['vpcs' => []]),
+            self::DO.'/databases*' => Http::response(['databases' => []]),
         ]);
 
         $result = Providers::find('digitalocean')->check('dop_v1_abc');
@@ -28,7 +29,7 @@ class ProviderChecksTest extends TestCase
         $this->assertSame(CheckStatus::Ok, $result->status);
         $this->assertSame('The token works for the account me@example.com.', $result->message);
         Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer dop_v1_abc'));
-        Http::assertSentCount(4);
+        Http::assertSentCount(5);
     }
 
     public function test_digitalocean_invalid_uses_the_message_of_digitalocean(): void
@@ -49,6 +50,7 @@ class ProviderChecksTest extends TestCase
             self::DO.'/kubernetes/clusters*' => Http::response(['id' => 'forbidden', 'message' => 'You are not authorized to perform this operation'], 403),
             self::DO.'/registry' => Http::response(['id' => 'forbidden', 'message' => 'You are not authorized to perform this operation'], 403),
             self::DO.'/vpcs*' => Http::response(['vpcs' => []]),
+            self::DO.'/databases*' => Http::response(['databases' => []]),
         ]);
 
         $result = Providers::find('digitalocean')->check('scoped');
@@ -59,6 +61,26 @@ class ProviderChecksTest extends TestCase
             'DigitalOcean answered 403 for kubernetes: You are not authorized to perform this operation; registry: You are not authorized to perform this operation.',
             $result->message,
         );
+    }
+
+    public function test_digitalocean_names_the_missing_database_right_and_still_accepts_the_key(): void
+    {
+        Http::fake([
+            self::DO.'/account' => Http::response(['account' => ['email' => 'me@example.com']]),
+            self::DO.'/kubernetes/clusters*' => Http::response(['kubernetes_clusters' => []]),
+            self::DO.'/registry' => Http::response(['id' => 'not_found', 'message' => 'no registry'], 404),
+            self::DO.'/vpcs*' => Http::response(['vpcs' => []]),
+            self::DO.'/databases*' => Http::response(['id' => 'forbidden', 'message' => 'You are not authorized to perform this operation'], 403),
+        ]);
+        $guide = Providers::find('digitalocean');
+
+        $result = $guide->check('no-database');
+
+        $this->assertSame(CheckStatus::MissingRights, $result->status);
+        $this->assertSame(['database'], $result->missing);
+        $this->assertSame('DigitalOcean answered 403 for database: You are not authorized to perform this operation.', $result->message);
+        $this->assertTrue($guide->accepts($result));
+        $this->assertSame(['database: all rights (create, read, update, delete). Needed for managed Postgres.'], $guide->labelsOf($result->missing));
     }
 
     public function test_hetzner_ok_invalid_and_forbidden(): void
