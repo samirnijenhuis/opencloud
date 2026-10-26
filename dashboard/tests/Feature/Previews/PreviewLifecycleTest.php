@@ -8,6 +8,7 @@ use App\Actions\SetDefaultDatabase;
 use App\Actions\SetEnvVar;
 use App\Enums\ClusterKind;
 use App\Enums\DatastoreKind;
+use App\Enums\DatastoreSource;
 use App\Enums\DeploymentStatus;
 use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
@@ -20,6 +21,7 @@ use App\Kube\FakeKubectl;
 use App\Models\Application;
 use App\Models\AuditEvent;
 use App\Models\Cluster;
+use App\Models\Datastore;
 use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Domain;
@@ -189,6 +191,24 @@ class PreviewLifecycleTest extends TestCase
             [$preview->envVars()->where('key', 'DB_CONNECTION')->sole()->value, $preview->envVars()->where('key', 'DB_DATABASE')->sole()->value],
         );
         $this->assertStringEndsWith(":3306/env_{$preview->id}", $preview->envVars()->where('key', 'MAIN_DB_URL')->sole()->value);
+    }
+
+    public function test_a_preview_gets_a_local_database_for_a_managed_database_of_production(): void
+    {
+        $production = $this->environment('production');
+        $managed = Datastore::factory()->create(['cluster_id' => $production->application->cluster_id, 'kind' => DatastoreKind::Postgres, 'source' => DatastoreSource::Managed]);
+        DatastoreAttachment::factory()->create(['datastore_id' => $managed->id, 'environment_id' => $production->id, 'name' => 'reports', 'is_default' => false]);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+
+        $preview = $this->environment('pr-12');
+        $this->assertSame(
+            [['postgres', 'reports', DatastoreSource::Standard]],
+            $preview->datastoreAttachments()->with('datastore')->get()
+                ->filter(fn (DatastoreAttachment $a) => $a->datastore->kind === DatastoreKind::Postgres)
+                ->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->name, $a->datastore->source])->values()->all(),
+        );
+        $this->assertNotSame($managed->id, $preview->datastoreAttachments()->where('name', 'reports')->sole()->datastore_id);
     }
 
     public function test_a_preview_domain_gives_each_preview_a_subdomain(): void
