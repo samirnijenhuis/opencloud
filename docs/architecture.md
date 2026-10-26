@@ -213,7 +213,7 @@ A rollout ends when the old pods start to stop, but each old pod still answers d
 
 Each deployment has its own env Secret, `env-<deployment-id>`. A failed deploy cannot change the env of the pods that still run. After a deployment goes live, the job keeps the live Secret and the two newest, and deletes the rest.
 
-Backups run every night at 03:00. A dump streams through `kubectl exec` into a gzip file under `<data_path>/backups`, or into the S3 backup target when one exists. The newest 7 dumps per attachment stay. A restore first backs up the current state, then empties the database and streams the dump back.
+Backups run every night at 03:00. A dump streams through `kubectl exec` into a gzip file under `<data_path>/backups`, or into the S3 backup target when one exists. The newest 7 dumps per attachment stay. A restore first backs up the current state, then empties the database and streams the dump back. A managed database has no dump and no restore here, because DigitalOcean backs it up itself. `BackupNow` and `RestoreBackup` refuse it.
 
 ## Restore
 
