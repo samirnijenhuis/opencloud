@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Actions\UpdateEnvironmentSettings;
 use App\Backups\BackupStatus;
+use App\CloudProviders\Providers;
 use App\Datastores\AttachmentEnv;
+use App\Datastores\Capabilities;
 use App\Datastores\DatastoreStatus;
-use App\Datastores\ManagedDatabase;
+use App\Datastores\ExternalConnectionForm;
+use App\Datastores\ExternalField;
 use App\Datastores\Provisioners;
 use App\Domains\CloudflareDns;
 use App\Enums\Ability;
@@ -16,10 +19,12 @@ use App\Enums\EnvVarSource;
 use App\Enums\Role;
 use App\Enums\Size;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
+use App\Http\Requests\AttachDatastoreRequest;
 use App\Http\Requests\UpdateEnvironmentSettingsRequest;
 use App\Models\AuditEvent;
 use App\Models\Backup;
 use App\Models\BackupTarget;
+use App\Models\Cluster;
 use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Domain;
@@ -28,6 +33,7 @@ use App\Models\EnvVar;
 use App\Models\Process;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -42,6 +48,12 @@ class EnvironmentController extends Controller
     private const BACKUPS_SHOWN = 7;
 
     private const RESTORE_ACTIONS = ['backup.restore_requested', 'backup.restored', 'backup.restore_failed'];
+
+    /** The name of a kind when its capabilities give no label. */
+    private const KIND_NAMES = ['mysql' => 'MySQL', 'postgres' => 'Postgres', 'valkey' => 'Valkey', 'rustfs' => 'RustFS'];
+
+    /** What each family is for, whatever the source. */
+    private const PURPOSES = ['database' => 'A SQL database', 'key_value' => 'Cache, queues, and sessions', 'bucket' => 'S3 storage for files'];
 
     /** The canvas: the network, the app, and the resources of one environment, each with the data its sheet edits. */
     public function show(Request $request, Environment $environment): Response
@@ -136,56 +148,114 @@ class EnvironmentController extends Controller
     /** @return array<string, mixed> */
     private function datastores(Environment $environment, Role $role): array
     {
-        $cluster = $environment->application->cluster;
-        $rows = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get()
-            ->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment));
+        $attachments = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get();
+        $rows = $attachments->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment, $role));
 
         return [
             'attachments' => $rows,
-            'available_kinds' => collect(Provisioners::offered(DatastoreSource::Standard, $cluster))
-                ->reject(fn (DatastoreKind $kind) => ! $kind->family()->isNamed() && $rows->contains(fn (array $row) => $row['kind']->family() === $kind->family()))
-                ->values(),
+            'offers' => $this->offers($environment->application->cluster, $role, $attachments),
             'has_backup_target' => BackupTarget::query()->exists(),
             'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::Pending, DatastoreStatus::Provisioning], true)
                 || $row['server']['status'] === DatastoreStatus::Destroying
                 || collect($row['backups'] ?? [])->contains('status', BackupStatus::Running)
                 || ($row['restore']['status'] ?? null) === 'running'),
-            'managed' => [
-                'available' => $role->allows(Ability::ManageCredentials) && Provisioners::offered(DatastoreSource::Managed, $cluster) !== [],
-                'pricing_url' => ManagedDatabase::PRICING_URL,
-                'size' => config('opencloud.managed_database_size'),
-            ],
         ];
     }
 
+    /**
+     * Each kind and source of the registry that the environment can still add, with the reason when this user cannot
+     * add it here. The add menu shows exactly this list, so a new arm of the registry needs no change in the dashboard.
+     *
+     * @param  Collection<int, DatastoreAttachment>  $attachments
+     * @return list<array<string, mixed>>
+     */
+    private function offers(Cluster $cluster, Role $role, Collection $attachments): array
+    {
+        $taken = $attachments->map(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family());
+        $provider = self::providerName($cluster);
+        $offered = [];
+        $offers = [];
+
+        foreach (Provisioners::table() as ['kind' => $kind, 'source' => $source, 'provisioner' => $provisioner]) {
+            $family = $kind->family();
+
+            // An environment has one attachment of each family other than databases.
+            if (! $family->isNamed() && $taken->contains($family)) {
+                continue;
+            }
+
+            $capabilities = $provisioner->capabilities();
+            $offered[$source->value] ??= Provisioners::offered($source, $cluster);
+
+            $offers[] = [
+                'kind' => $kind,
+                'source' => $source,
+                'family' => $family,
+                'named' => $family->isNamed(),
+                'label' => self::label($kind, $source, $capabilities),
+                'description' => self::PURPOSES[$family->value],
+                'group' => match ($source) {
+                    DatastoreSource::Standard => "In the cluster {$cluster->name}",
+                    DatastoreSource::Managed => "Managed by {$provider}",
+                    DatastoreSource::External => 'Bring your own',
+                },
+                'note' => match ($source) {
+                    DatastoreSource::Standard => null,
+                    DatastoreSource::Managed => ucfirst("{$provider} runs it and charges your account for it."),
+                    DatastoreSource::External => 'Opencloud stores the address and sets the env values. It does not back up the data.',
+                },
+                'refusal' => in_array($kind, $offered[$source->value], true)
+                    ? AttachDatastoreRequest::sourceRefusal($role, $source)
+                    : $capabilities->notOffered ?? $provisioner->refusalOn($cluster),
+                'fields' => $source === DatastoreSource::External
+                    ? array_map(fn (ExternalField $field) => $field->toArray(), ExternalConnectionForm::fields($kind))
+                    : [],
+            ];
+        }
+
+        return $offers;
+    }
+
     /** @return array<string, mixed> */
-    private function presentAttachment(DatastoreAttachment $attachment): array
+    private function presentAttachment(DatastoreAttachment $attachment, Role $role): array
     {
         $datastore = $attachment->datastore;
+        $capabilities = Provisioners::of($datastore)->capabilities();
         $row = [
             'id' => $attachment->id,
             'kind' => $datastore->kind,
+            'source' => $datastore->source,
+            'label' => self::label($datastore->kind, $datastore->source, $capabilities),
             'name' => $attachment->name,
             'is_default' => $attachment->is_default,
             // The default sets the DB_* values that Laravel reads by itself. Each other database needs this line.
             'config_line' => AttachmentEnv::configLine($attachment),
             'status' => $attachment->status,
             'error' => $attachment->error,
+            // The address of an external server is what the user typed, so its host may show. Its secret never does.
+            'runs_on' => match ($datastore->source) {
+                DatastoreSource::Standard => $datastore->cluster->name,
+                DatastoreSource::Managed => self::providerName($datastore->cluster),
+                DatastoreSource::External => parse_url((string) $attachment->host, PHP_URL_HOST) ?: (string) $attachment->host,
+            },
             'server' => [
-                'cluster' => $datastore->cluster->name,
+                'cluster' => $datastore->cluster?->name,
                 'version' => $datastore->version,
                 'status' => $datastore->status,
                 'error' => $datastore->error,
             ],
             'env_keys' => $attachment->envVars->pluck('key')->sort()->values(),
+            'detach_refusal' => $datastore->source === DatastoreSource::Managed && ! $role->allows(Ability::ManageCredentials)
+                ? 'Only an owner can destroy a managed resource.'
+                : null,
         ];
 
-        // DigitalOcean backs up a managed database itself, and the nightly dump cannot reach it.
+        // The provider backs up a managed resource itself, and the nightly dump cannot reach it.
         if ($datastore->source === DatastoreSource::Managed) {
             return [...$row, 'managed' => true, 'tofu_log' => $datastore->tofu_log];
         }
 
-        if (Provisioners::of($datastore)->capabilities()->dumps === null) {
+        if ($capabilities->dumps === null) {
             return $row;
         }
 
@@ -234,5 +304,21 @@ class EnvironmentController extends Controller
             'at' => $event->created_at->toIso8601String(),
             'error' => $event->action === 'backup.restore_failed' ? ($event->context['error'] ?? null) : null,
         ];
+    }
+
+    private static function label(DatastoreKind $kind, DatastoreSource $source, Capabilities $capabilities): string
+    {
+        return $capabilities->label ?? match ($source) {
+            DatastoreSource::Managed => 'Managed '.self::KIND_NAMES[$kind->value],
+            default => self::KIND_NAMES[$kind->value],
+        };
+    }
+
+    /** The provider that runs a managed resource for an environment on the cluster. */
+    private static function providerName(?Cluster $cluster): string
+    {
+        $guide = $cluster?->provider === null ? null : Providers::all()[$cluster->provider] ?? null;
+
+        return $guide->label ?? 'a cloud provider';
     }
 }

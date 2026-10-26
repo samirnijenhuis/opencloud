@@ -48,17 +48,26 @@ class ManagedDatastoreControllerTest extends TestCase
         $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create(['is_protected' => true]);
     }
 
-    public function test_only_the_owner_gets_the_managed_choice_on_a_digitalocean_cluster(): void
+    public function test_only_the_owner_gets_the_managed_offers_on_a_digitalocean_cluster(): void
     {
         $url = "/environments/{$this->environment->id}";
+        $mysqlOnly = 'A managed database on DigitalOcean is Postgres only for now. Use managed Postgres, or MySQL in the cluster.';
 
-        $this->actingAs(User::factory()->owner()->create())->get($url)->assertInertia(fn (Assert $page) => $page
-            ->where('datastores.managed', ['available' => true, 'pricing_url' => 'https://www.digitalocean.com/pricing/managed-databases', 'size' => 'db-s-1vcpu-1gb']));
-        $this->actingAs(User::factory()->admin()->create())->get($url)->assertInertia(fn (Assert $page) => $page->where('datastores.managed.available', false));
+        $this->assertSame([
+            ['mysql', 'Managed MySQL', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', $mysqlOnly],
+            ['postgres', 'Managed Postgres', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', null],
+        ], $this->managedOffers(User::factory()->owner()->create(), $url));
+        $this->assertSame([
+            ['mysql', 'Managed MySQL', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', $mysqlOnly],
+            ['postgres', 'Managed Postgres', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', 'Only an owner can add a managed resource.'],
+        ], $this->managedOffers(User::factory()->admin()->create(), $url));
 
         $local = Environment::factory()->for(Application::factory()->for(Cluster::factory()->create(['kind' => ClusterKind::Local])))->create();
-        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$local->id}")
-            ->assertInertia(fn (Assert $page) => $page->where('datastores.managed.available', false));
+        $refusal = 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.';
+        $this->assertSame([
+            ['mysql', 'Managed MySQL', 'Managed by a cloud provider', 'A cloud provider runs it and charges your account for it.', $mysqlOnly],
+            ['postgres', 'Managed Postgres', 'Managed by a cloud provider', 'A cloud provider runs it and charges your account for it.', $refusal],
+        ], $this->managedOffers(User::factory()->owner()->create(), "/environments/{$local->id}"));
     }
 
     public function test_only_the_owner_attaches_a_managed_database(): void
@@ -90,7 +99,7 @@ class ManagedDatastoreControllerTest extends TestCase
 
         $this->actingAs(User::factory()->admin()->create())->delete($url, ['confirm' => true])->assertForbidden();
         $owner = User::factory()->owner()->create();
-        $this->actingAs($owner)->delete($url)->assertSessionHasErrors(['confirm' => 'Confirm that DigitalOcean deletes the database and its data.']);
+        $this->actingAs($owner)->delete($url)->assertSessionHasErrors(['confirm' => 'Confirm that you want to destroy this resource and its data.']);
         Queue::assertNothingPushed();
 
         $this->actingAs($owner)->delete($url, ['confirm' => true])->assertRedirect();
@@ -110,6 +119,10 @@ class ManagedDatastoreControllerTest extends TestCase
 
         $response->assertInertia(fn (Assert $page) => $page
             ->where('datastores.attachments.0.managed', true)
+            ->where('datastores.attachments.0.source', 'managed')
+            ->where('datastores.attachments.0.label', 'Managed MySQL')
+            ->where('datastores.attachments.0.runs_on', 'DigitalOcean')
+            ->where('datastores.attachments.0.detach_refusal', null)
             ->where('datastores.attachments.0.env_keys', ['DB_HOST', 'DB_PASSWORD'])
             ->where('datastores.attachments.0.tofu_log', "2026-10-23T00:00:00Z digitalocean_database_cluster.this: Creation complete\n")
             ->missing('datastores.attachments.0.backups'));
@@ -117,6 +130,9 @@ class ManagedDatastoreControllerTest extends TestCase
         foreach (['DO_GENERATED_PASSWORD_SECRET', self::TOKEN, 'private-db.example.ondigitalocean.com'] as $secret) {
             $this->assertStringNotContainsString($secret, $response->getContent());
         }
+
+        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$this->environment->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('datastores.attachments.0.detach_refusal', 'Only an owner can destroy a managed resource.'));
     }
 
     public function test_the_page_polls_while_a_managed_database_is_destroyed(): void
@@ -126,6 +142,16 @@ class ManagedDatastoreControllerTest extends TestCase
 
         $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}")
             ->assertInertia(fn (Assert $page) => $page->where('datastores.polling', true)->where('datastores.attachments.0.server.status', 'destroying'));
+    }
+
+    /** @return list<array{0: string, 1: string, 2: string, 3: ?string, 4: ?string}> kind, label, group, note, and refusal of each managed offer */
+    private function managedOffers(User $user, string $url): array
+    {
+        $page = json_decode(json_encode($this->actingAs($user)->get($url)->assertOk()->viewData('page')), true);
+
+        return collect($page['props']['datastores']['offers'])->where('source', 'managed')
+            ->map(fn (array $offer) => [$offer['kind'], $offer['label'], $offer['group'], $offer['note'], $offer['refusal']])
+            ->values()->all();
     }
 
     private function managedAttachment(): DatastoreAttachment

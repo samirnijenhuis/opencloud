@@ -12,7 +12,8 @@ class DetachDatastore
 {
     /**
      * Removes the attachment, its env values, and its access. A local database, bucket, or Valkey volume stays, so a
-     * later attach of the same kind and name finds the data again. A managed database is destroyed.
+     * later attach of the same kind and name finds the data again. A managed database is destroyed. An external
+     * resource loses only its rows, and its server keeps the data.
      *
      * @throws InvalidArgumentException for the default database while the environment has other databases
      */

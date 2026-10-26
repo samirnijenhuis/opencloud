@@ -27,7 +27,7 @@ class DatastoreController extends Controller
     public function store(AttachDatastoreRequest $request, Environment $environment, AttachDatastore $attachDatastore): RedirectResponse
     {
         try {
-            $attachDatastore->handle($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source(), $request->validated('name'));
+            $attachDatastore->handle($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source(), $request->validated('name'), $request->connection());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['kind' => $e->getMessage()]);
         }
@@ -41,7 +41,7 @@ class DatastoreController extends Controller
 
         if ($attachment->datastore->source === DatastoreSource::Managed) {
             abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
-            $request->validate(['confirm' => ['accepted']], ['confirm.accepted' => 'Confirm that DigitalOcean deletes the database and its data.']);
+            $request->validate(['confirm' => ['accepted']], ['confirm.accepted' => 'Confirm that you want to destroy this resource and its data.']);
         }
 
         try {

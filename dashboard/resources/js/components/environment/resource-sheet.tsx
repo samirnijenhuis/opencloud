@@ -3,17 +3,32 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Link, router, usePage } from '@inertiajs/react';
 import { Check, Copy } from 'lucide-react';
-import { type FormEventHandler, type ReactNode, useState } from 'react';
+import { type ReactNode, useState } from 'react';
+import { AddResourceForm, needsDialog } from './add-resource';
 import { Status, type Tone } from './block';
 import { EditorSheet, NextDeployFooter } from './editor-sheet';
-import { type Attachment, type BackupRow, type DatastoreKind, type DatastoreStatus, type Datastores, kindLabels, sqlKinds } from './types';
+import {
+    type Attachment,
+    type BackupRow,
+    type DatastoreKind,
+    type DatastoreSource,
+    type DatastoreStatus,
+    type Datastores,
+    type Offer,
+} from './types';
 
 export const statusLabels: Record<DatastoreStatus, string> = {
     pending: 'Pending',
@@ -31,16 +46,6 @@ export const statusTones: Record<DatastoreStatus, Tone> = {
     destroying: 'warn',
 };
 
-const kindPurposes: Record<DatastoreKind, string> = {
-    mysql: 'A SQL database in this cluster',
-    postgres: 'A SQL database in this cluster',
-    valkey: 'Cache, queues, and sessions',
-    rustfs: 'S3 storage for files',
-};
-
-// DigitalOcean MySQL needs a TLS CA that apps do not load yet, so only Postgres is offered as managed.
-const offeredManagedKinds: DatastoreKind[] = ['postgres'];
-
 const backupStatusLabels = { running: 'Running', done: 'Done', failed: 'Failed' } as const;
 
 function formatBytes(bytes: number): string {
@@ -51,22 +56,55 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
-type Source = 'standard' | 'managed';
-
-type DatabaseChoice = { kind: DatastoreKind; source: Source };
-
-const attach = (environmentId: number, kind: DatastoreKind, source: Source = 'standard', name: string | null = null) => {
+const attach = (environmentId: number, kind: DatastoreKind, source: DatastoreSource = 'standard', name: string | null = null) => {
     router.post(route('datastores.store', environmentId), { kind, source, name }, { preserveScroll: true });
 };
 
-/** Only to show the config line while the user types. The server checks the name and gives the messages. */
-const namePattern = /^[a-z][a-z0-9_]{0,29}$/;
+/** What the sheet says about each source. The backend gives the names, so no provider name appears here. */
+const sourceTexts: Record<
+    DatastoreSource,
+    {
+        where: (attachment: Attachment) => string;
+        verb: 'Detach' | 'Destroy';
+        detach: (attachment: Attachment) => string;
+        confirm: (attachment: Attachment) => string;
+    }
+> = {
+    standard: {
+        where: (attachment) => `Runs in the cluster ${attachment.runs_on}.`,
+        verb: 'Detach',
+        detach: () => 'The app loses access. The data stays on the server.',
+        confirm: (attachment) =>
+            `The app loses its access and the env values it set are removed. The data stays on the server. ${attachment.name ? 'Attach a database with the same kind and name again to use it.' : 'Attach the same kind again to use it.'}`,
+    },
+    managed: {
+        where: (attachment) => `${attachment.runs_on} runs it for this environment.`,
+        verb: 'Destroy',
+        detach: (attachment) => `OpenTofu destroys it at ${attachment.runs_on}, with its data and backups.`,
+        confirm: (attachment) =>
+            `OpenTofu destroys it at ${attachment.runs_on}, and ${attachment.runs_on} deletes the data and its backups. You cannot undo this. The env values it set are removed now.`,
+    },
+    external: {
+        where: (attachment) => `A server that you run at ${attachment.runs_on}.`,
+        verb: 'Detach',
+        detach: () => 'The app loses access. Opencloud does not touch the data on your server.',
+        confirm: () => 'The app loses its access and the env values it set are removed. Opencloud does not touch the data on your server.',
+    },
+};
 
-const laravelDrivers: Partial<Record<DatastoreKind, string>> = { mysql: 'mysql', postgres: 'pgsql' };
+type OfferGroup = { source: DatastoreSource; heading: string; offers: Offer[]; refusal: string | null };
 
-const urlKey = (name: string) => `${name.toUpperCase()}_DB_URL`;
+/** The offers of each source in the order of the backend. A group whose offers all share one refusal shows it once. */
+function groupBySource(offers: Offer[]): OfferGroup[] {
+    const sources = [...new Set(offers.map((offer) => offer.source))];
 
-const configLine = (kind: DatastoreKind, name: string) => `'${name}' => ['driver' => '${laravelDrivers[kind]}', 'url' => env('${urlKey(name)}')],`;
+    return sources.map((source) => {
+        const members = offers.filter((offer) => offer.source === source);
+        const refusals = new Set(members.map((offer) => offer.refusal));
+
+        return { source, heading: members[0].group, offers: members, refusal: members.length > 1 && refusals.size === 1 ? members[0].refusal : null };
+    });
+}
 
 function CopyLine({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
@@ -87,148 +125,55 @@ function CopyLine({ text }: { text: string }) {
     );
 }
 
-/** The kinds a user can attach. A MySQL or Postgres database first asks for its connection name. */
+/** What the backend registry offers to this environment and this user, by source. The menu holds no list of its own. */
 export function AddResourceMenu({ environmentId, datastores, children }: { environmentId: number; datastores: Datastores; children: ReactNode }) {
-    const { available_kinds, managed } = datastores;
-    const [choice, setChoice] = useState<DatabaseChoice | null>(null);
+    const [choice, setChoice] = useState<Offer | null>(null);
+
+    const pick = (offer: Offer) => (needsDialog(offer) ? setChoice(offer) : attach(environmentId, offer.kind, offer.source));
 
     return (
         <>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-72">
-                    {available_kinds.map((kind) => (
-                        <DropdownMenuItem
-                            key={kind}
-                            onSelect={() => (sqlKinds.includes(kind) ? setChoice({ kind, source: 'standard' }) : attach(environmentId, kind))}
-                            className="flex-col items-start gap-0"
-                        >
-                            <span>{kindLabels[kind]}</span>
-                            <span className="text-muted-foreground text-xs">{kindPurposes[kind]}</span>
-                        </DropdownMenuItem>
+                <DropdownMenuContent align="start" className="max-h-[70vh] w-80 overflow-y-auto">
+                    {groupBySource(datastores.offers).map((group) => (
+                        <DropdownMenuGroup key={group.source}>
+                            <DropdownMenuLabel className="text-muted-foreground text-xs">{group.heading}</DropdownMenuLabel>
+                            {group.refusal !== null ? (
+                                <p className="text-muted-foreground px-2 pb-2 text-xs">{group.refusal}</p>
+                            ) : (
+                                group.offers.map((offer) => (
+                                    <DropdownMenuItem
+                                        key={offer.kind}
+                                        disabled={offer.refusal !== null}
+                                        onSelect={() => pick(offer)}
+                                        className="flex-col items-start gap-0"
+                                    >
+                                        <span>{offer.label}</span>
+                                        <span className="text-muted-foreground text-xs">{offer.refusal ?? offer.description}</span>
+                                    </DropdownMenuItem>
+                                ))
+                            )}
+                            <DropdownMenuSeparator />
+                        </DropdownMenuGroup>
                     ))}
-                    {managed.available &&
-                        offeredManagedKinds.map((kind) => (
-                            <DropdownMenuItem
-                                key={`managed-${kind}`}
-                                onSelect={() => setChoice({ kind, source: 'managed' })}
-                                className="flex-col items-start gap-0"
-                            >
-                                <span>Managed {kindLabels[kind]}</span>
-                                <span className="text-muted-foreground text-xs">
-                                    DigitalOcean runs it, backs it up, and charges for it. Size {managed.size}.
-                                </span>
-                            </DropdownMenuItem>
-                        ))}
-                    {available_kinds.length > 0 && <DropdownMenuSeparator />}
                     <DropdownMenuItem asChild className="flex-col items-start gap-0">
                         <Link href={`${route('environments.settings', environmentId)}#environment-values`}>
-                            <span>External service</span>
-                            <span className="text-muted-foreground text-xs">Add env values for a service you run elsewhere</span>
+                            <span>Another service</span>
+                            <span className="text-muted-foreground text-xs">Add its env values by hand</span>
                         </Link>
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
 
             <Dialog open={choice !== null} onOpenChange={(next) => !next && setChoice(null)}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                     {choice && (
-                        <AddDatabaseForm environmentId={environmentId} datastores={datastores} choice={choice} onClose={() => setChoice(null)} />
+                        <AddResourceForm environmentId={environmentId} datastores={datastores} offer={choice} onClose={() => setChoice(null)} />
                     )}
                 </DialogContent>
             </Dialog>
         </>
-    );
-}
-
-/** The dialog content mounts on each open, so the name starts fresh: "main" for the first database, empty after. */
-function AddDatabaseForm({
-    environmentId,
-    datastores,
-    choice,
-    onClose,
-}: {
-    environmentId: number;
-    datastores: Datastores;
-    choice: DatabaseChoice;
-    onClose: () => void;
-}) {
-    const first = !datastores.attachments.some((attachment) => attachment.name !== null);
-    const [name, setName] = useState(first ? 'main' : '');
-    const [busy, setBusy] = useState(false);
-    const [refusal, setRefusal] = useState<string | undefined>();
-    const label = kindLabels[choice.kind];
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        router.post(
-            route('datastores.store', environmentId),
-            { kind: choice.kind, source: choice.source, name },
-            {
-                preserveScroll: true,
-                onStart: () => {
-                    setBusy(true);
-                    setRefusal(undefined);
-                },
-                onSuccess: onClose,
-                // The page reloads its datastores while one is pending, and a reload clears the page errors.
-                onError: (errors) => setRefusal(errors.kind),
-                onFinish: () => setBusy(false),
-            },
-        );
-    };
-
-    return (
-        <form onSubmit={submit} className="grid min-w-0 gap-4">
-            <DialogHeader>
-                <DialogTitle>Add {choice.source === 'managed' ? `managed ${label}` : label}</DialogTitle>
-                <DialogDescription>
-                    {first
-                        ? 'This is the first database of the environment, so it is the default. Laravel reads its DB_* values with no config.'
-                        : 'The DB_* values stay with the default database. The app reaches this database through one env value.'}
-                </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid gap-2">
-                <Label htmlFor="database-name">Connection name</Label>
-                <Input
-                    id="database-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="reports"
-                    autoComplete="off"
-                    spellCheck={false}
-                    autoFocus
-                    className="font-mono"
-                />
-                <p className="text-muted-foreground text-xs">Use 1 to 30 lowercase letters, digits, and underscores. Start with a letter.</p>
-                <InputError message={refusal} />
-            </div>
-
-            {!first && namePattern.test(name) && (
-                <div className="grid min-w-0 gap-2 text-sm">
-                    <p>
-                        Opencloud sets <code className="bg-muted rounded px-1 font-mono text-xs">{urlKey(name)}</code>. Add this line to the
-                        connections in config/database.php.
-                    </p>
-                    <CopyLine text={configLine(choice.kind, name)} />
-                    <p className="text-muted-foreground text-xs">Then use DB::connection(&apos;{name}&apos;) in the app.</p>
-                </div>
-            )}
-
-            {choice.source === 'managed' && (
-                <p className="text-muted-foreground text-sm">
-                    DigitalOcean runs it, backs it up, and charges for it. Size {datastores.managed.size}.
-                </p>
-            )}
-
-            <DialogFooter className="gap-2">
-                <Button type="button" variant="secondary" onClick={onClose}>
-                    Cancel
-                </Button>
-                <Button disabled={busy || name.trim() === ''}>Add {label}</Button>
-            </DialogFooter>
-        </form>
     );
 }
 
@@ -358,11 +303,11 @@ export function ResourceSheet({
         return null;
     }
 
-    const label = kindLabels[attachment.kind];
+    const text = sourceTexts[attachment.source];
+    const title = [attachment.label, attachment.server.version].filter(Boolean).join(' ');
     const currentDefault = datastores.attachments.find((each) => each.is_default);
     const keepsTheDefault = attachment.is_default && datastores.attachments.some((each) => each.id !== attachment.id && each.name !== null);
-    const canDetach =
-        canUpdate && !keepsTheDefault && attachment.server.status !== 'destroying' && (!attachment.managed || datastores.managed.available);
+    const canDetach = canUpdate && !keepsTheDefault && attachment.server.status !== 'destroying' && attachment.detach_refusal === null;
 
     const makeDefault = () => {
         router.post(
@@ -381,7 +326,7 @@ export function ResourceSheet({
 
     const detach = () => {
         router.delete(route('datastores.destroy', attachment.id), {
-            data: attachment.managed ? { confirm: true } : {},
+            data: attachment.source === 'managed' ? { confirm: true } : {},
             preserveScroll: true,
             onStart: () => setBusy(true),
             onSuccess: () => onClose(),
@@ -414,8 +359,8 @@ export function ResourceSheet({
             <EditorSheet
                 open={open}
                 onClose={onClose}
-                title={attachment.name ? `${attachment.name} (${label} ${attachment.server.version})` : `${label} ${attachment.server.version}`}
-                description={attachment.managed ? 'A managed database on DigitalOcean.' : `Runs in the cluster ${attachment.server.cluster}.`}
+                title={attachment.name ? `${attachment.name} (${title})` : title}
+                description={text.where(attachment)}
                 footer={<NextDeployFooter environmentId={environmentId} canDeploy={canDeploy} />}
             >
                 {errors.kind && <p className="text-sm text-red-600 dark:text-red-400">{errors.kind}</p>}
@@ -434,7 +379,7 @@ export function ResourceSheet({
                     </dd>
                     <dt className="text-muted-foreground">Server</dt>
                     <dd>
-                        {attachment.managed ? 'DigitalOcean' : attachment.server.cluster}, {label} {attachment.server.version}{' '}
+                        {attachment.runs_on}, {title}{' '}
                         <span className="text-muted-foreground">({statusLabels[attachment.server.status].toLowerCase()})</span>
                         {attachment.server.status === 'failed' && attachment.server.error && (
                             <span className="block text-red-600 dark:text-red-400">{attachment.server.error}</span>
@@ -461,17 +406,17 @@ export function ResourceSheet({
                             )}
                         </div>
                         {attachment.is_default ? (
-                            <p className="text-muted-foreground text-sm">
-                                This is the default database. The DB_* values point to it, so Laravel uses it with no config.
-                            </p>
-                        ) : (
+                            <p className="text-muted-foreground text-sm">This is the default database. The default env values point to it.</p>
+                        ) : attachment.config_line ? (
                             <>
                                 <p className="text-muted-foreground text-sm">
                                     Add this line to the connections in config/database.php. Then use DB::connection(&apos;{attachment.name}&apos;) in
                                     the app.
                                 </p>
-                                {attachment.config_line && <CopyLine text={attachment.config_line} />}
+                                <CopyLine text={attachment.config_line} />
                             </>
+                        ) : (
+                            <p className="text-muted-foreground text-sm">The app reaches this database through its URL value.</p>
                         )}
                         <InputError message={errors.default} />
                     </section>
@@ -480,7 +425,7 @@ export function ResourceSheet({
                 <section className="space-y-2">
                     <h3 className="text-sm font-medium">Env values it sets</h3>
                     {attachment.env_keys.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">None yet. The values appear when the database is ready.</p>
+                        <p className="text-muted-foreground text-sm">None yet. The values appear when it is ready.</p>
                     ) : (
                         <div className="flex flex-wrap gap-1">
                             {attachment.env_keys.map((key) => (
@@ -519,17 +464,13 @@ export function ResourceSheet({
                 )}
 
                 <section className="space-y-2 border-t pt-5">
-                    <h3 className="text-sm font-medium">{attachment.managed ? 'Destroy' : 'Detach'}</h3>
+                    <h3 className="text-sm font-medium">{text.verb}</h3>
                     <InputError message={errors.detach} />
                     {canDetach ? (
                         <>
-                            <p className="text-muted-foreground text-sm">
-                                {attachment.managed
-                                    ? 'OpenTofu destroys the database on DigitalOcean with its data and backups.'
-                                    : 'The app loses access. The data stays on the server.'}
-                            </p>
+                            <p className="text-muted-foreground text-sm">{text.detach(attachment)}</p>
                             <Button variant="destructive" size="sm" onClick={() => setDetaching(true)}>
-                                {attachment.managed ? 'Destroy the database' : `Detach ${label}`}
+                                {text.verb} {attachment.label}
                             </Button>
                         </>
                     ) : (
@@ -538,7 +479,7 @@ export function ResourceSheet({
                                 ? 'Only an admin or an owner can change the resources of a protected environment.'
                                 : keepsTheDefault
                                   ? 'This is the default database. Make another database the default first.'
-                                  : 'Only an owner can destroy a managed database.'}
+                                  : (attachment.detach_refusal ?? 'OpenTofu destroys it now.')}
                         </p>
                     )}
                 </section>
@@ -548,22 +489,16 @@ export function ResourceSheet({
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>
-                            {attachment.managed ? 'Destroy' : 'Detach'} {label}?
+                            {text.verb} {attachment.label}?
                         </DialogTitle>
-                        <DialogDescription>
-                            {attachment.managed
-                                ? 'OpenTofu destroys the managed database on DigitalOcean. DigitalOcean deletes the data and its backups. You cannot undo this. The env values it set are removed now.'
-                                : attachment.name
-                                  ? 'The app loses its access and the env values it set are removed. The data stays on the server. Attach a database with the same kind and name again to use it.'
-                                  : 'The app loses its access and the env values it set are removed. The data stays on the server. Attach the same kind again to use it.'}
-                        </DialogDescription>
+                        <DialogDescription>{text.confirm(attachment)}</DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="secondary" onClick={() => setDetaching(false)}>
                             Cancel
                         </Button>
                         <Button variant="destructive" disabled={busy} onClick={detach}>
-                            {attachment.managed ? 'Destroy the database' : 'Detach'}
+                            {text.verb}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -574,9 +509,9 @@ export function ResourceSheet({
                     <DialogHeader>
                         <DialogTitle>Make {attachment.name} the default?</DialogTitle>
                         <DialogDescription>
-                            On the next deploy, the DB_* values point to {attachment.name}.
+                            On the next deploy, the default env values point to {attachment.name}.
                             {currentDefault?.name &&
-                                ` ${currentDefault.name} gets the value ${urlKey(currentDefault.name)}, and the app needs a line in config/database.php to use it.`}
+                                ` ${currentDefault.name} gets one URL value instead, and the app needs a line in its database config to use it.`}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
