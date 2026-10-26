@@ -108,18 +108,16 @@ final class Provisioners
                 DatastoreKind::Valkey => LocalProvisioner::keyValue($kind, new ValkeyEngine),
                 DatastoreKind::Rustfs => LocalProvisioner::bucket($kind, new RustfsEngine),
             },
-            DatastoreSource::Managed => match ($kind) {
-                DatastoreKind::Postgres => new ManagedDatabase($kind),
-                DatastoreKind::Mysql => new ManagedDatabase($kind, notOffered: ManagedDatabase::MYSQL_NOT_OFFERED),
-                default => null,
-            },
+            DatastoreSource::Managed => ManagedResources::find($kind),
+            DatastoreSource::External => ExternalResources::find($kind),
         };
     }
 
     private static function unsupported(DatastoreSource $source): string
     {
         return match ($source) {
-            DatastoreSource::Managed => ManagedDatabase::KINDS_ONLY,
+            DatastoreSource::Managed => ManagedResources::unsupported(),
+            DatastoreSource::External => ExternalResources::unsupported(),
         };
     }
 }

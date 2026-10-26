@@ -22,11 +22,14 @@ final readonly class Capabilities
      *                               install restore copies them back
      * @param  string|null  $notOffered  why the dashboard does not offer it, or null when it does. The code paths still
      *                                   work, so existing rows keep running.
+     * @param  string|null  $label  the name that the dashboard shows for it, for example "Spaces bucket", or null for
+     *                              the name of the kind
      */
     public function __construct(
         DatabaseDumps|string $dumps,
         public bool $copiesBuckets = false,
         public ?string $notOffered = null,
+        public ?string $label = null,
     ) {
         [$this->dumps, $this->noDumps] = is_string($dumps) ? [null, $dumps] : [$dumps, null];
     }

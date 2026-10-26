@@ -3,6 +3,7 @@
 namespace App\Datastores;
 
 use App\Datastores\Env\EnvProfile;
+use App\Models\DatastoreAttachment;
 
 /**
  * One key-value server (Valkey today) as the app reaches it. An environment has at most one, so it has no name.
@@ -16,6 +17,12 @@ final readonly class KeyValueConnection implements Connection
         public ?string $password,
         public bool $tls,
     ) {}
+
+    /** A managed or external store keeps its address on the attachment. A managed one has none before its apply. */
+    public static function of(DatastoreAttachment $attachment): ?self
+    {
+        return $attachment->host === null ? null : new self($attachment->host, $attachment->port, $attachment->password, $attachment->tls);
+    }
 
     /** redis://:password@host:port, or rediss:// with TLS. The password is percent-encoded. */
     public function url(): string
