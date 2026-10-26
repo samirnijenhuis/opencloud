@@ -5,6 +5,7 @@ namespace App\Previews;
 use App\Actions\AttachDatastore;
 use App\Actions\StartDeployment;
 use App\Enums\ApplicationType;
+use App\Enums\DatastoreSource;
 use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
 use App\Enums\EnvVarSource;
@@ -108,7 +109,8 @@ class OpenPreview
             $this->copyEnv($application, $template, $preview);
 
             foreach ($attachments as $attachment) {
-                $this->attachDatastore->handle($preview, null, $attachment->datastore->kind, name: $attachment->name);
+                // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
+                $this->attachDatastore->handle($preview, null, $attachment->datastore->kind, DatastoreSource::Standard, $attachment->name);
             }
 
             $hostname = $this->hostname($application, $pullRequest->number);
