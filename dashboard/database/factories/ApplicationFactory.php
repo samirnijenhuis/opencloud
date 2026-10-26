@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Enums\ApplicationType;
 use App\Models\Application;
 use App\Models\Cluster;
+use App\Presets\EnvProfileKind;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -22,6 +23,7 @@ class ApplicationFactory extends Factory
             'repository' => fake()->userName().'/'.fake()->slug(2),
             'cluster_id' => Cluster::factory(),
             'type' => ApplicationType::Laravel,
+            'env_profile' => EnvProfileKind::Laravel,
         ];
     }
 }

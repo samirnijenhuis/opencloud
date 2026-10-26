@@ -3,7 +3,6 @@
 namespace App\Datastores;
 
 use App\Datastores\Env\EnvProfile;
-use App\Datastores\Env\LaravelProfile;
 use App\Enums\EnvVarAvailability;
 use App\Enums\EnvVarSource;
 use App\Models\DatastoreAttachment;
@@ -41,9 +40,8 @@ final class AttachmentEnv
             : null;
     }
 
-    /** Every app gets the Laravel names until app presets pick a profile per app. */
     private static function profile(Environment $environment): EnvProfile
     {
-        return new LaravelProfile;
+        return $environment->application->env_profile->profile();
     }
 }
