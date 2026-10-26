@@ -16,6 +16,7 @@ use App\Models\EnvVar;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -50,14 +51,27 @@ class DatastoreControllerTest extends TestCase
             ->component('environments/show')
             ->has('datastores.attachments', 1)
             ->where('datastores.attachments.0.kind', 'valkey')
+            ->where('datastores.attachments.0.source', 'standard')
+            ->where('datastores.attachments.0.label', 'Valkey')
             ->where('datastores.attachments.0.status', 'failed')
             ->where('datastores.attachments.0.error', 'The pod did not start.')
+            ->where('datastores.attachments.0.runs_on', 'local')
             ->where('datastores.attachments.0.server.cluster', 'local')
             ->where('datastores.attachments.0.env_keys', ['REDIS_HOST', 'REDIS_PASSWORD'])
-            ->where('datastores.available_kinds', ['mysql', 'postgres', 'rustfs'])
+            ->where('datastores.attachments.0.detach_refusal', null)
             ->where('datastores.has_backup_target', false)
             ->where('datastores.polling', false)
             ->where('can.update', true));
+        $this->assertSame([
+            ['standard', 'mysql', 'MySQL', null],
+            ['standard', 'postgres', 'Postgres', null],
+            ['standard', 'rustfs', 'RustFS', null],
+            ['managed', 'mysql', 'Managed MySQL', 'A managed database on DigitalOcean is Postgres only for now. Use managed Postgres, or MySQL in the cluster.'],
+            ['managed', 'postgres', 'Managed Postgres', 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.'],
+            ['external', 'mysql', 'External MySQL', null],
+            ['external', 'postgres', 'External Postgres', null],
+            ['external', 'rustfs', 'External S3 bucket', null],
+        ], $this->offers($response));
 
         $raw = $response->getContent();
         foreach (['attachment-password-abc', 'root-password-xyz', 'valkey.internal.example'] as $secret) {
@@ -237,7 +251,7 @@ class DatastoreControllerTest extends TestCase
         $this->attach($environment, DatastoreKind::Postgres, attributes: ['name' => 'reports']);
         $this->attach($environment, DatastoreKind::Valkey);
 
-        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")
+        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('datastores.attachments.0.name', 'main')
                 ->where('datastores.attachments.0.is_default', true)
@@ -246,8 +260,59 @@ class DatastoreControllerTest extends TestCase
                 ->where('datastores.attachments.1.is_default', false)
                 ->where('datastores.attachments.1.config_line', "'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],")
                 ->where('datastores.attachments.2.name', null)
-                ->where('datastores.attachments.2.config_line', null)
-                ->where('datastores.available_kinds', ['mysql', 'postgres', 'rustfs']));
+                ->where('datastores.attachments.2.config_line', null));
+
+        // More databases are always possible. A second key-value store is not, from any source.
+        $this->assertSame(
+            [['standard', 'mysql'], ['standard', 'postgres'], ['standard', 'rustfs'], ['managed', 'mysql'], ['managed', 'postgres'], ['external', 'mysql'], ['external', 'postgres'], ['external', 'rustfs']],
+            array_map(fn (array $offer) => array_slice($offer, 0, 2), $this->offers($response)),
+        );
+    }
+
+    public function test_each_offer_tells_the_menu_its_family_its_text_and_the_fields_of_an_address(): void
+    {
+        $environment = $this->makeEnvironment();
+        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")->assertOk();
+        $offers = collect($this->page($response)['props']['datastores']['offers']);
+
+        $this->assertSame([
+            'kind' => 'valkey',
+            'source' => 'standard',
+            'family' => 'key_value',
+            'named' => false,
+            'label' => 'Valkey',
+            'description' => 'Cache, queues, and sessions',
+            'group' => 'In the cluster local',
+            'note' => null,
+            'refusal' => null,
+            'fields' => [],
+        ], $offers->first(fn (array $offer) => $offer['source'] === 'standard' && $offer['kind'] === 'valkey'));
+        $this->assertSame([
+            'kind' => 'postgres',
+            'source' => 'external',
+            'family' => 'database',
+            'named' => true,
+            'label' => 'External Postgres',
+            'description' => 'A SQL database',
+            'group' => 'Bring your own',
+            'note' => 'Opencloud stores the address and sets the env values. It does not back up the data.',
+            'refusal' => null,
+            'fields' => [
+                ['key' => 'host', 'label' => 'Host', 'type' => 'text', 'required' => true, 'value' => null, 'placeholder' => 'db.example.com', 'help' => null],
+                ['key' => 'port', 'label' => 'Port', 'type' => 'number', 'required' => true, 'value' => 5432, 'placeholder' => null, 'help' => null],
+                ['key' => 'database', 'label' => 'Database', 'type' => 'text', 'required' => true, 'value' => null, 'placeholder' => 'shop', 'help' => null],
+                ['key' => 'username', 'label' => 'User', 'type' => 'text', 'required' => true, 'value' => null, 'placeholder' => null, 'help' => null],
+                ['key' => 'password', 'label' => 'Password', 'type' => 'secret', 'required' => true, 'value' => null, 'placeholder' => null, 'help' => null],
+            ],
+        ], $offers->first(fn (array $offer) => $offer['source'] === 'external' && $offer['kind'] === 'postgres'));
+        $this->assertSame(
+            [
+                ['valkey', 'host', 'text'], ['valkey', 'port', 'number'], ['valkey', 'password', 'secret'], ['valkey', 'tls', 'toggle'],
+                ['rustfs', 'endpoint', 'text'], ['rustfs', 'region', 'text'], ['rustfs', 'bucket', 'text'], ['rustfs', 'access_key_id', 'text'], ['rustfs', 'password', 'secret'], ['rustfs', 'path_style', 'toggle'],
+            ],
+            $offers->where('source', 'external')->whereIn('kind', ['valkey', 'rustfs'])
+                ->flatMap(fn (array $offer) => array_map(fn (array $field) => [$offer['kind'], $field['key'], $field['type']], $offer['fields']))->values()->all(),
+        );
     }
 
     public function test_the_action_message_is_shown_on_a_refusal(): void
@@ -270,5 +335,20 @@ class DatastoreControllerTest extends TestCase
             ->withArgs(fn (DatastoreAttachment $given, User $by) => $given->is($attachment) && $by->is($admin));
 
         $this->actingAs($admin)->delete("/datastore-attachments/{$attachment->id}")->assertRedirect();
+    }
+
+    /** @return array<string, mixed> the page as the browser gets it */
+    private function page(TestResponse $response): array
+    {
+        return json_decode(json_encode($response->viewData('page')), true);
+    }
+
+    /** @return list<array{0: string, 1: string, 2: string, 3: ?string}> source, kind, label, and refusal of each offer */
+    private function offers(TestResponse $response): array
+    {
+        return array_map(
+            fn (array $offer) => [$offer['source'], $offer['kind'], $offer['label'], $offer['refusal']],
+            $this->page($response)['props']['datastores']['offers'],
+        );
     }
 }

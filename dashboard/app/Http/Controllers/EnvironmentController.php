@@ -8,7 +8,8 @@ use App\CloudProviders\Providers;
 use App\Datastores\AttachmentEnv;
 use App\Datastores\Capabilities;
 use App\Datastores\DatastoreStatus;
-use App\Datastores\ManagedDatabase;
+use App\Datastores\ExternalConnectionForm;
+use App\Datastores\ExternalField;
 use App\Datastores\Provisioners;
 use App\Domains\CloudflareDns;
 use App\Enums\Ability;
@@ -18,6 +19,7 @@ use App\Enums\EnvVarSource;
 use App\Enums\Role;
 use App\Enums\Size;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
+use App\Http\Requests\AttachDatastoreRequest;
 use App\Http\Requests\UpdateEnvironmentSettingsRequest;
 use App\Models\AuditEvent;
 use App\Models\Backup;
@@ -31,6 +33,7 @@ use App\Models\EnvVar;
 use App\Models\Process;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -48,6 +51,9 @@ class EnvironmentController extends Controller
 
     /** The name of a kind when its capabilities give no label. */
     private const KIND_NAMES = ['mysql' => 'MySQL', 'postgres' => 'Postgres', 'valkey' => 'Valkey', 'rustfs' => 'RustFS'];
+
+    /** What each family is for, whatever the source. */
+    private const PURPOSES = ['database' => 'A SQL database', 'key_value' => 'Cache, queues, and sessions', 'bucket' => 'S3 storage for files'];
 
     /** The canvas: the network, the app, and the resources of one environment, each with the data its sheet edits. */
     public function show(Request $request, Environment $environment): Response
@@ -145,24 +151,69 @@ class EnvironmentController extends Controller
         $attachments = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get();
         $rows = $attachments->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment, $role));
 
-        $cluster = $environment->application->cluster;
-
         return [
             'attachments' => $rows,
-            'available_kinds' => collect(Provisioners::offered(DatastoreSource::Standard, $cluster))
-                ->reject(fn (DatastoreKind $kind) => ! $kind->family()->isNamed() && $rows->contains(fn (array $row) => $row['kind']->family() === $kind->family()))
-                ->values(),
+            'offers' => $this->offers($environment->application->cluster, $role, $attachments),
             'has_backup_target' => BackupTarget::query()->exists(),
             'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::Pending, DatastoreStatus::Provisioning], true)
                 || $row['server']['status'] === DatastoreStatus::Destroying
                 || collect($row['backups'] ?? [])->contains('status', BackupStatus::Running)
                 || ($row['restore']['status'] ?? null) === 'running'),
-            'managed' => [
-                'available' => $role->allows(Ability::ManageCredentials) && Provisioners::offered(DatastoreSource::Managed, $cluster) !== [],
-                'pricing_url' => ManagedDatabase::PRICING_URL,
-                'size' => config('opencloud.managed_database_size'),
-            ],
         ];
+    }
+
+    /**
+     * Each kind and source of the registry that the environment can still add, with the reason when this user cannot
+     * add it here. The add menu shows exactly this list, so a new arm of the registry needs no change in the dashboard.
+     *
+     * @param  Collection<int, DatastoreAttachment>  $attachments
+     * @return list<array<string, mixed>>
+     */
+    private function offers(Cluster $cluster, Role $role, Collection $attachments): array
+    {
+        $taken = $attachments->map(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family());
+        $provider = self::providerName($cluster);
+        $offered = [];
+        $offers = [];
+
+        foreach (Provisioners::table() as ['kind' => $kind, 'source' => $source, 'provisioner' => $provisioner]) {
+            $family = $kind->family();
+
+            // An environment has one attachment of each family other than databases.
+            if (! $family->isNamed() && $taken->contains($family)) {
+                continue;
+            }
+
+            $capabilities = $provisioner->capabilities();
+            $offered[$source->value] ??= Provisioners::offered($source, $cluster);
+
+            $offers[] = [
+                'kind' => $kind,
+                'source' => $source,
+                'family' => $family,
+                'named' => $family->isNamed(),
+                'label' => self::label($kind, $source, $capabilities),
+                'description' => self::PURPOSES[$family->value],
+                'group' => match ($source) {
+                    DatastoreSource::Standard => "In the cluster {$cluster->name}",
+                    DatastoreSource::Managed => "Managed by {$provider}",
+                    DatastoreSource::External => 'Bring your own',
+                },
+                'note' => match ($source) {
+                    DatastoreSource::Standard => null,
+                    DatastoreSource::Managed => ucfirst("{$provider} runs it and charges your account for it."),
+                    DatastoreSource::External => 'Opencloud stores the address and sets the env values. It does not back up the data.',
+                },
+                'refusal' => in_array($kind, $offered[$source->value], true)
+                    ? AttachDatastoreRequest::sourceRefusal($role, $source)
+                    : $capabilities->notOffered ?? $provisioner->refusalOn($cluster),
+                'fields' => $source === DatastoreSource::External
+                    ? array_map(fn (ExternalField $field) => $field->toArray(), ExternalConnectionForm::fields($kind))
+                    : [],
+            ];
+        }
+
+        return $offers;
     }
 
     /** @return array<string, mixed> */

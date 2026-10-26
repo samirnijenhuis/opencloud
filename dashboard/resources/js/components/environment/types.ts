@@ -28,19 +28,32 @@ export type BackupRow = {
 
 export type Restore = { status: 'running' | 'restored' | 'failed'; at: string; error: string | null };
 
+/** Standard runs in the cluster of the app, managed runs at a cloud provider, and external is a server that the user runs. */
+export type DatastoreSource = 'standard' | 'managed' | 'external';
+
+export type ResourceFamily = 'database' | 'key_value' | 'bucket';
+
 export type Attachment = {
     id: number;
     kind: DatastoreKind;
-    /** The connection name of a MySQL or Postgres database. Valkey, RustFS, and a database that DigitalOcean destroys have none. */
+    source: DatastoreSource;
+    /** The name that the backend gives it, for example "Postgres" or "External MySQL". */
+    label: string;
+    /** The connection name of a database. Another family, and a managed database that is being destroyed, have none. */
     name: string | null;
-    /** The default database sets the DB_* values. Each other database sets <NAME>_DB_URL. */
+    /** The default database sets the default env values. Each other database sets one URL value. */
     is_default: boolean;
-    /** The line for config/database.php, for a database that is not the default. */
+    /** The line for the database config of the app, for a database that is not the default, or null. */
     config_line: string | null;
     status: DatastoreStatus;
     error: string | null;
-    server: { cluster: string; version: string; status: DatastoreStatus; error: string | null };
+    /** The cluster, the cloud provider, or the host of a server that the user runs. */
+    runs_on: string;
+    /** The cluster is null for a server that the user runs. The version is empty when opencloud does not know it. */
+    server: { cluster: string | null; version: string; status: DatastoreStatus; error: string | null };
     env_keys: string[];
+    /** Why this user cannot detach it, beyond the rights on the environment, or null. */
+    detach_refusal: string | null;
     /** Only a SQL database in the cluster has backups. */
     backups?: BackupRow[];
     restore?: Restore | null;
@@ -48,12 +61,41 @@ export type Attachment = {
     tofu_log?: string | null;
 };
 
+/** One field of the address of a server that the user runs. A secret field never comes back from the backend. */
+export type ConnectionField = {
+    key: string;
+    label: string;
+    type: 'text' | 'number' | 'secret' | 'toggle';
+    required: boolean;
+    value: string | number | boolean | null;
+    placeholder: string | null;
+    help: string | null;
+};
+
+/** One kind from one source that the add menu shows. The backend registry decides the list and every text in it. */
+export type Offer = {
+    kind: DatastoreKind;
+    source: DatastoreSource;
+    family: ResourceFamily;
+    /** A database has a connection name, and the first one is the default. */
+    named: boolean;
+    label: string;
+    description: string;
+    /** The heading of the source in the menu. */
+    group: string;
+    /** What the add dialog says about the source, or null when the source needs no dialog. */
+    note: string | null;
+    /** Why this user cannot add it here, or null. */
+    refusal: string | null;
+    /** The address fields of a server that the user runs. Empty for the other sources. */
+    fields: ConnectionField[];
+};
+
 export type Datastores = {
     attachments: Attachment[];
-    available_kinds: DatastoreKind[];
+    offers: Offer[];
     has_backup_target: boolean;
     polling: boolean;
-    managed: { available: boolean; pricing_url: string; size: string };
 };
 
 export type Compute = { size: Size; min_instances: number; max_instances: number; cpu_target: number; health_path: string };
@@ -106,5 +148,3 @@ export type AppTab = 'general' | 'autoscaling' | 'processes';
 export type Sheet = { kind: 'https' } | { kind: 'domains'; adding: boolean } | { kind: 'app'; tab: AppTab } | { kind: 'resource'; id: number };
 
 export const kindLabels: Record<DatastoreKind, string> = { mysql: 'MySQL', postgres: 'Postgres', valkey: 'Valkey', rustfs: 'RustFS' };
-
-export const sqlKinds: DatastoreKind[] = ['mysql', 'postgres'];
