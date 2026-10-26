@@ -176,18 +176,16 @@ class ProvisionersTest extends TestCase
 
     public function test_only_the_registry_creates_an_engine(): void
     {
-        // Engines.php stays until the env profiles stop calling it.
         $this->assertSame(
-            ['app/Datastores/Engines.php', 'app/Datastores/Provisioners.php'],
+            ['app/Datastores/Provisioners.php'],
             $this->filesWhere(['app', 'routes'], fn (array $code, int $i) => strtolower($code[$i]) === 'new' && str_ends_with($this->shortName($code[$i + 1]), 'Engine')),
         );
     }
 
     public function test_no_code_picks_an_engine_by_the_kind_alone(): void
     {
-        // AttachmentEnv asks the engines for the Laravel env until the env profiles replace it.
         $this->assertSame(
-            ['app/Datastores/AttachmentEnv.php'],
+            [],
             $this->filesWhere(['app', 'routes'], fn (array $code, int $i) => ($this->shortName($code[$i]) === 'Engines' && $code[$i + 1] === '::')
                 || ($code[$i] === 'isSql' && $code[$i + 1] === '(')
                 || (strtolower($code[$i]) === 'instanceof' && $this->shortName($code[$i + 1]) === 'SqlEngine')),

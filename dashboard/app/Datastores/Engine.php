@@ -8,7 +8,7 @@ use App\Models\DatastoreAttachment;
 use App\Models\Environment;
 
 /**
- * What one kind of standard datastore does. Engines::for() picks the engine of a kind.
+ * What one kind of standard datastore does in the cluster. Only LocalProvisioner holds an engine.
  */
 interface Engine
 {
