@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ApplicationController;
+use App\Http\Controllers\ApplicationPresetController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\ClusterController;
 use App\Http\Controllers\CommandRunController;
@@ -39,6 +40,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('applications/create', [ApplicationController::class, 'create'])->name('applications.create');
     Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
     Route::get('applications/{application}', [ApplicationController::class, 'show'])->name('applications.show');
+    Route::patch('applications/{application}/preset', [ApplicationPresetController::class, 'update'])->name('applications.preset.update');
     Route::patch('applications/{application}/previews', [PreviewSettingsController::class, 'update'])->name('applications.previews.update');
 
     Route::get('environments/{environment}', [EnvironmentController::class, 'show'])->name('environments.show');
