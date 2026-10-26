@@ -24,9 +24,11 @@ class AttachDatastore
      *
      * A database has a connection name. The first one of an environment is the default and is named "main" without
      * $name. A later one needs a name. Another family has no name, and attaching it again returns the existing
-     * attachment. Attaching a failed attachment again retries it with the provisioner of its own datastore.
+     * attachment. Attaching a failed attachment again retries it with the provisioner of its own datastore. An attach
+     * with a typed address never reuses an attachment, so the address that the user typed never goes unused.
      *
-     * @param  Connection|null  $connection  what the user typed for the external source, later; null today
+     * @param  Connection|null  $connection  what the user typed for the external source, null for the sources that
+     *                                       make their own
      *
      * @throws InvalidArgumentException when the name is not valid or taken, or the source cannot serve the kind here
      */
@@ -48,7 +50,7 @@ class AttachDatastore
                 : $attachment->datastore->kind->family() === $kind->family());
 
             if ($existing !== null) {
-                return $this->retry($existing, $kind);
+                return $this->retry($existing, $kind, typed: $connection !== null);
             }
 
             $attachment = $provisioner->attach($environment, $name, $named && ! $attachments->contains('is_default', true), $connection);
@@ -82,12 +84,13 @@ class AttachDatastore
     /**
      * Only a failed attachment of the same kind can be attached again. For a database, that means the same name too.
      * Another kind of the same family is refused, so a second key-value engine gets an error and not the first one.
+     * A typed address is refused too, because a retry would provision the old attachment and drop the new address.
      */
-    private function retry(DatastoreAttachment $existing, DatastoreKind $kind): DatastoreAttachment
+    private function retry(DatastoreAttachment $existing, DatastoreKind $kind, bool $typed): DatastoreAttachment
     {
         $named = $kind->family()->isNamed();
 
-        if ($existing->datastore->kind !== $kind || ($named && $existing->status !== DatastoreStatus::Failed)) {
+        if ($typed || $existing->datastore->kind !== $kind || ($named && $existing->status !== DatastoreStatus::Failed)) {
             throw new InvalidArgumentException($named
                 ? "This environment already has a database with the name {$existing->name}."
                 : "This environment already has a {$existing->datastore->kind->value} datastore.");

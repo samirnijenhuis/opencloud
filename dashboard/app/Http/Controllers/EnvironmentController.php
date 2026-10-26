@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Actions\UpdateEnvironmentSettings;
 use App\Backups\BackupStatus;
+use App\CloudProviders\Providers;
 use App\Datastores\AttachmentEnv;
+use App\Datastores\Capabilities;
 use App\Datastores\DatastoreStatus;
 use App\Datastores\ManagedDatabase;
 use App\Datastores\Provisioners;
@@ -20,6 +22,7 @@ use App\Http\Requests\UpdateEnvironmentSettingsRequest;
 use App\Models\AuditEvent;
 use App\Models\Backup;
 use App\Models\BackupTarget;
+use App\Models\Cluster;
 use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Domain;
@@ -42,6 +45,9 @@ class EnvironmentController extends Controller
     private const BACKUPS_SHOWN = 7;
 
     private const RESTORE_ACTIONS = ['backup.restore_requested', 'backup.restored', 'backup.restore_failed'];
+
+    /** The name of a kind when its capabilities give no label. */
+    private const KIND_NAMES = ['mysql' => 'MySQL', 'postgres' => 'Postgres', 'valkey' => 'Valkey', 'rustfs' => 'RustFS'];
 
     /** The canvas: the network, the app, and the resources of one environment, each with the data its sheet edits. */
     public function show(Request $request, Environment $environment): Response
@@ -136,9 +142,10 @@ class EnvironmentController extends Controller
     /** @return array<string, mixed> */
     private function datastores(Environment $environment, Role $role): array
     {
+        $attachments = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get();
+        $rows = $attachments->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment, $role));
+
         $cluster = $environment->application->cluster;
-        $rows = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get()
-            ->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment));
 
         return [
             'attachments' => $rows,
@@ -159,33 +166,45 @@ class EnvironmentController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function presentAttachment(DatastoreAttachment $attachment): array
+    private function presentAttachment(DatastoreAttachment $attachment, Role $role): array
     {
         $datastore = $attachment->datastore;
+        $capabilities = Provisioners::of($datastore)->capabilities();
         $row = [
             'id' => $attachment->id,
             'kind' => $datastore->kind,
+            'source' => $datastore->source,
+            'label' => self::label($datastore->kind, $datastore->source, $capabilities),
             'name' => $attachment->name,
             'is_default' => $attachment->is_default,
             // The default sets the DB_* values that Laravel reads by itself. Each other database needs this line.
             'config_line' => AttachmentEnv::configLine($attachment),
             'status' => $attachment->status,
             'error' => $attachment->error,
+            // The address of an external server is what the user typed, so its host may show. Its secret never does.
+            'runs_on' => match ($datastore->source) {
+                DatastoreSource::Standard => $datastore->cluster->name,
+                DatastoreSource::Managed => self::providerName($datastore->cluster),
+                DatastoreSource::External => parse_url((string) $attachment->host, PHP_URL_HOST) ?: (string) $attachment->host,
+            },
             'server' => [
-                'cluster' => $datastore->cluster->name,
+                'cluster' => $datastore->cluster?->name,
                 'version' => $datastore->version,
                 'status' => $datastore->status,
                 'error' => $datastore->error,
             ],
             'env_keys' => $attachment->envVars->pluck('key')->sort()->values(),
+            'detach_refusal' => $datastore->source === DatastoreSource::Managed && ! $role->allows(Ability::ManageCredentials)
+                ? 'Only an owner can destroy a managed resource.'
+                : null,
         ];
 
-        // DigitalOcean backs up a managed database itself, and the nightly dump cannot reach it.
+        // The provider backs up a managed resource itself, and the nightly dump cannot reach it.
         if ($datastore->source === DatastoreSource::Managed) {
             return [...$row, 'managed' => true, 'tofu_log' => $datastore->tofu_log];
         }
 
-        if (Provisioners::of($datastore)->capabilities()->dumps === null) {
+        if ($capabilities->dumps === null) {
             return $row;
         }
 
@@ -234,5 +253,21 @@ class EnvironmentController extends Controller
             'at' => $event->created_at->toIso8601String(),
             'error' => $event->action === 'backup.restore_failed' ? ($event->context['error'] ?? null) : null,
         ];
+    }
+
+    private static function label(DatastoreKind $kind, DatastoreSource $source, Capabilities $capabilities): string
+    {
+        return $capabilities->label ?? match ($source) {
+            DatastoreSource::Managed => 'Managed '.self::KIND_NAMES[$kind->value],
+            default => self::KIND_NAMES[$kind->value],
+        };
+    }
+
+    /** The provider that runs a managed resource for an environment on the cluster. */
+    private static function providerName(?Cluster $cluster): string
+    {
+        $guide = $cluster?->provider === null ? null : Providers::all()[$cluster->provider] ?? null;
+
+        return $guide->label ?? 'a cloud provider';
     }
 }

@@ -90,7 +90,7 @@ class ManagedDatastoreControllerTest extends TestCase
 
         $this->actingAs(User::factory()->admin()->create())->delete($url, ['confirm' => true])->assertForbidden();
         $owner = User::factory()->owner()->create();
-        $this->actingAs($owner)->delete($url)->assertSessionHasErrors(['confirm' => 'Confirm that DigitalOcean deletes the database and its data.']);
+        $this->actingAs($owner)->delete($url)->assertSessionHasErrors(['confirm' => 'Confirm that you want to destroy this resource and its data.']);
         Queue::assertNothingPushed();
 
         $this->actingAs($owner)->delete($url, ['confirm' => true])->assertRedirect();

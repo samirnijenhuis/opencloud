@@ -85,6 +85,11 @@ class ProvisionersTest extends TestCase
         $seen = [];
 
         foreach (Provisioners::table() as ['kind' => $kind, 'source' => $source, 'provisioner' => $provisioner]) {
+            // The external arm needs a typed address. ExternalResourcesTest runs each of its methods.
+            if ($source === DatastoreSource::External) {
+                continue;
+            }
+
             Queue::fake();
             $kubectlBefore = count($this->kubectl->calls);
             $tofuBefore = count($this->tofu->ran);
@@ -206,6 +211,7 @@ class ProvisionersTest extends TestCase
     public function test_only_the_local_provisioner_names_kubectl(): void
     {
         $files = collect(Provisioners::table())
+            ->reject(fn (array $row) => $row['source'] === DatastoreSource::External)
             ->map(fn (array $row) => str_replace(base_path().'/', '', (new ReflectionClass($row['provisioner']))->getFileName()))
             ->unique();
 

@@ -2,28 +2,40 @@
 
 namespace App\Http\Requests;
 
+use App\Datastores\Connection;
+use App\Datastores\ExternalConnectionForm;
 use App\Datastores\Provisioners;
 use App\Enums\Ability;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
+use App\Enums\Role;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class AttachDatastoreRequest extends FormRequest
 {
-    /** A managed database costs money on the DigitalOcean account of the owner, so only the owner creates one. */
+    /** A managed resource costs money on the cloud account of the owner, so only the owner creates one. */
+    public static function sourceRefusal(Role $role, DatastoreSource $source): ?string
+    {
+        return $source === DatastoreSource::Managed && ! $role->allows(Ability::ManageCredentials)
+            ? 'Only an owner can add a managed resource.'
+            : null;
+    }
+
     public function authorize(): bool
     {
         $user = $this->user();
+        $source = DatastoreSource::tryFrom((string) $this->input('source')) ?? DatastoreSource::Standard;
 
-        return $user->can('update', $this->route('environment'))
-            && ($this->input('source') !== DatastoreSource::Managed->value || $user->role->allows(Ability::ManageCredentials));
+        return $user->can('update', $this->route('environment')) && self::sourceRefusal($user->role, $source) === null;
     }
 
     /** @return array<string, mixed> */
     public function rules(): array
     {
+        $external = $this->externalKind();
+
         return [
             'kind' => ['required', Rule::enum(DatastoreKind::class), function (string $attribute, mixed $value, Closure $fail) {
                 $kind = DatastoreKind::tryFrom((string) $value);
@@ -37,11 +49,34 @@ class AttachDatastoreRequest extends FormRequest
             'source' => ['nullable', Rule::enum(DatastoreSource::class)],
             // AttachDatastore owns the name rules, because they depend on the other databases of the environment.
             'name' => ['nullable', 'string'],
+            ...($external === null ? [] : ExternalConnectionForm::rules($external)),
         ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        $external = $this->externalKind();
+
+        return $external === null ? [] : ExternalConnectionForm::messages($external);
     }
 
     public function source(): DatastoreSource
     {
         return DatastoreSource::tryFrom((string) $this->validated('source')) ?? DatastoreSource::Standard;
+    }
+
+    /** What the user typed for a resource that they run, or null for a source that makes its own connection. */
+    public function connection(): ?Connection
+    {
+        $external = $this->externalKind();
+
+        return $external === null ? null : ExternalConnectionForm::connection($external, $this->validated(), $this->validated('name'));
+    }
+
+    /** The kind when the user brings their own server. The other sources ignore the address fields. */
+    private function externalKind(): ?DatastoreKind
+    {
+        return $this->input('source') === DatastoreSource::External->value ? DatastoreKind::tryFrom((string) $this->input('kind')) : null;
     }
 }
