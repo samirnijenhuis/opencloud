@@ -2,6 +2,8 @@
 
 namespace App\Datastores;
 
+use App\Datastores\Env\EnvProfile;
+
 /**
  * One S3-compatible bucket (RustFS today) as the app reaches it. An environment has at most one, so it has no name.
  */
@@ -20,4 +22,9 @@ final readonly class BucketConnection implements Connection
         public string $secretAccessKey,
         public bool $pathStyle,
     ) {}
+
+    public function envFor(EnvProfile $profile): array
+    {
+        return $profile->bucket($this);
+    }
 }
