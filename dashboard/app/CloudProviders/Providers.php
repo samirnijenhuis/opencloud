@@ -46,7 +46,7 @@ SH;
                     new Right('kubernetes', 'kubernetes: all rights (create, read, update, delete)'),
                     new Right('registry', 'registry: all rights (create, read, update, delete)'),
                     new Right('vpc', 'vpc: read', optional: true),
-                    new Right('database', 'database: all rights (create, read, update, delete). Needed for managed Postgres.', optional: true),
+                    new Right('database', 'database: all rights (create, read, update, delete, view_credentials). Needed for managed Postgres and managed Valkey.', optional: true),
                 ],
                 command: null,
                 pasteHint: 'dop_v1_...',

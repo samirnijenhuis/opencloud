@@ -80,7 +80,7 @@ class ProviderChecksTest extends TestCase
         $this->assertSame(['database'], $result->missing);
         $this->assertSame('DigitalOcean answered 403 for database: You are not authorized to perform this operation.', $result->message);
         $this->assertTrue($guide->accepts($result));
-        $this->assertSame(['database: all rights (create, read, update, delete). Needed for managed Postgres.'], $guide->labelsOf($result->missing));
+        $this->assertSame(['database: all rights (create, read, update, delete, view_credentials). Needed for managed Postgres and managed Valkey.'], $guide->labelsOf($result->missing));
     }
 
     public function test_hetzner_ok_invalid_and_forbidden(): void

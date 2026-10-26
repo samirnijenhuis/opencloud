@@ -123,23 +123,25 @@ class ProvisionersTest extends TestCase
             'tofu' => [],
             'datastore kept' => true,
         ];
-        $managed = [
+        $managed = fn (string $connection, array $tofu) => [
             'refusal' => null,
             'status' => 'ready',
-            'connection' => 'SqlConnection',
+            'connection' => $connection,
             'dumps' => false,
             'queued' => ['App\Jobs\ProvisionManagedDatabase' => 2, 'App\Jobs\TearDownManagedDatabase' => 1],
             'kubectl calls' => false,
-            'tofu' => ['init', 'apply', 'output', 'init', 'destroy'],
+            'tofu' => $tofu,
             'datastore kept' => false,
         ];
+        $oneStack = ['init', 'apply', 'output', 'init', 'destroy'];
         $this->assertSame([
             'standard mysql' => $local('SqlConnection', dumps: true),
             'standard postgres' => $local('SqlConnection', dumps: true),
             'standard valkey' => $local('KeyValueConnection', dumps: false),
             'standard rustfs' => $local('BucketConnection', dumps: false),
-            'managed mysql' => $managed,
-            'managed postgres' => $managed,
+            'managed mysql' => $managed('SqlConnection', $oneStack),
+            'managed postgres' => $managed('SqlConnection', $oneStack),
+            'managed valkey' => $managed('KeyValueConnection', $oneStack),
         ], $seen);
     }
 
@@ -219,6 +221,7 @@ class ProvisionersTest extends TestCase
                 'app/Datastores/ManagedResource.php' => false,
                 'app/Datastores/ManagedResources.php' => false,
                 'app/Datastores/ManagedStack.php' => false,
+                'app/Datastores/ManagedValkey.php' => false,
             ],
             $files->mapWithKeys(fn (string $file) => [$file => collect($this->code($file))->contains(fn (string $token) => str_contains($token, 'Kubectl'))])->all(),
         );
