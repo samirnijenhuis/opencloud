@@ -100,17 +100,24 @@ class ManagedDatabaseTest extends TestCase
         $this->assertSame(['environment_id' => $environment->id, 'kind' => 'mysql', 'name' => 'main', 'source' => 'managed'], AuditEvent::query()->sole()->context);
     }
 
-    public function test_a_key_without_the_database_right_does_not_offer_a_managed_database(): void
+    public function test_a_key_without_a_right_does_not_offer_the_managed_resources_that_need_it(): void
     {
-        $this->assertSame([DatastoreKind::Postgres], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
+        $this->assertSame([DatastoreKind::Postgres, DatastoreKind::Valkey, DatastoreKind::Rustfs], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
 
         ProviderCredential::query()->update(['missing_rights' => ['vpc']]);
-        $this->assertSame([DatastoreKind::Postgres], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
+        $this->assertSame([DatastoreKind::Postgres, DatastoreKind::Valkey, DatastoreKind::Rustfs], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
 
         ProviderCredential::query()->update(['missing_rights' => ['vpc', 'database']]);
-        $this->assertSame([], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
+        $this->assertSame([DatastoreKind::Rustfs], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
 
-        $this->assertRefused($this->environment(), DatastoreKind::Postgres, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.');
+        ProviderCredential::query()->update(['missing_rights' => ['spaces_key']]);
+        $this->assertSame([DatastoreKind::Postgres, DatastoreKind::Valkey], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
+
+        $this->assertRefused($this->environment(), DatastoreKind::Rustfs, 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.');
+
+        ProviderCredential::query()->update(['missing_rights' => ['database']]);
+        $this->assertRefused($this->environment(), DatastoreKind::Postgres, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
+        $this->assertRefused($this->environment(), DatastoreKind::Valkey, 'Managed Valkey needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
     }
 
     public function test_the_apply_writes_the_same_laravel_env_values_as_the_standard_engine(): void
@@ -237,15 +244,15 @@ class ManagedDatabaseTest extends TestCase
         Queue::assertNotPushed(ProvisionDatastoreAttachment::class);
     }
 
-    public function test_managed_is_refused_for_other_kinds_other_clusters_and_without_a_key(): void
+    public function test_managed_is_refused_for_other_clusters_and_without_a_key(): void
     {
-        $this->assertRefused($this->environment(), DatastoreKind::Valkey, 'DigitalOcean manages MySQL and Postgres only.');
-
         $connected = Application::factory()->for(Cluster::factory()->create(['status' => ClusterStatus::Ready]))->create();
-        $this->assertRefused(Environment::factory()->for($connected)->create(), DatastoreKind::Mysql, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.');
+        $this->assertRefused(Environment::factory()->for($connected)->create(), DatastoreKind::Mysql, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
+        $this->assertRefused(Environment::factory()->for($connected)->create(), DatastoreKind::Rustfs, 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.');
 
         ProviderCredential::query()->delete();
-        $this->assertRefused($this->environment(), DatastoreKind::Mysql, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.');
+        $this->assertRefused($this->environment(), DatastoreKind::Mysql, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
+        $this->assertRefused($this->environment(), DatastoreKind::Valkey, 'Managed Valkey needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
     }
 
     public function test_detach_removes_the_env_values_now_and_destroys_the_database_with_opentofu(): void

@@ -17,6 +17,9 @@ final class FakeTofu
     /** @var array<string, mixed> name => value, what `tofu output -json` returns */
     public array $outputs = [];
 
+    /** @var array<string, array<string, mixed>> stack kind => outputs, for example "spacesadmin" for the stack spacesadmin-3 */
+    public array $outputsOf = [];
+
     /** @var array<string, list<string>> subcommand => output lines */
     public array $lines = [];
 
@@ -61,7 +64,9 @@ final class FakeTofu
         }
 
         if ($args[0] === 'output') {
-            return Process::result(json_encode(array_map(fn (mixed $value) => ['sensitive' => false, 'type' => 'string', 'value' => $value], $this->outputs)));
+            $outputs = $this->outputsOf[strstr(basename($process->path), '-', true)] ?? $this->outputs;
+
+            return Process::result(json_encode(array_map(fn (mixed $value) => ['sensitive' => false, 'type' => 'string', 'value' => $value], $outputs)));
         }
 
         return Process::describe()->output($this->lines[$args[0]] ?? [])->exitCode(0);

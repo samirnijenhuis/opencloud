@@ -123,7 +123,7 @@ class ProviderCredentialActionsTest extends TestCase
         $this->assertSame(['provider' => 'hetzner'], AuditEvent::where('action', 'provider_credential.deleted')->sole()->context);
     }
 
-    private function fakeDigitalOcean(int $registry = 200, int $vpcs = 200, int $databases = 200): void
+    private function fakeDigitalOcean(int $registry = 200, int $vpcs = 200, int $databases = 200, int $spacesKeys = 200): void
     {
         Http::fake([
             'https://api.digitalocean.com/v2/account' => Http::response(['account' => ['email' => 'me@example.com']]),
@@ -131,6 +131,7 @@ class ProviderCredentialActionsTest extends TestCase
             'https://api.digitalocean.com/v2/registry' => Http::response(['message' => 'forbidden'], $registry),
             'https://api.digitalocean.com/v2/vpcs*' => Http::response(['message' => 'forbidden'], $vpcs),
             'https://api.digitalocean.com/v2/databases*' => Http::response(['message' => 'forbidden'], $databases),
+            'https://api.digitalocean.com/v2/spaces/keys*' => Http::response(['message' => 'forbidden'], $spacesKeys),
         ]);
     }
 }

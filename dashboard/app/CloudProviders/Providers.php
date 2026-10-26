@@ -34,7 +34,7 @@ SH;
             new ProviderGuide(
                 key: 'digitalocean',
                 label: 'DigitalOcean',
-                use: 'Managed Kubernetes clusters and the container registry.',
+                use: 'Managed Kubernetes clusters, the container registry, managed Postgres and Valkey, and Spaces buckets.',
                 url: 'https://cloud.digitalocean.com/account/api/tokens/new',
                 steps: [
                     'Open the link and give the token a name, for example opencloud.',
@@ -46,7 +46,8 @@ SH;
                     new Right('kubernetes', 'kubernetes: all rights (create, read, update, delete)'),
                     new Right('registry', 'registry: all rights (create, read, update, delete)'),
                     new Right('vpc', 'vpc: read', optional: true),
-                    new Right('database', 'database: all rights (create, read, update, delete). Needed for managed Postgres.', optional: true),
+                    new Right('database', 'database: all rights (create, read, update, delete, view_credentials). Needed for managed Postgres and managed Valkey.', optional: true),
+                    new Right('spaces_key', 'spaces_key: all rights (create_credentials, read, update, delete). Needed for a Spaces bucket.', optional: true),
                 ],
                 command: null,
                 pasteHint: 'dop_v1_...',

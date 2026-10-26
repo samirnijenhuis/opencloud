@@ -60,6 +60,10 @@ class ProvisionersTest extends TestCase
         $this->kubectl = FakeKubectl::install();
         $this->tofu = FakeTofu::install();
         $this->tofu->outputs = self::OUTPUTS;
+        $this->tofu->outputsOf = [
+            'spacesadmin' => ['access_key_id' => 'DO_ADMIN_KEY', 'secret_key' => 'DO_ADMIN_SECRET'],
+            'bucket' => ['endpoint' => 'https://ams3.digitaloceanspaces.com', 'region' => 'ams3', 'bucket' => 'ams3-prod-env-1-k3x9q2m7', 'access_key_id' => 'DO_BUCKET_KEY', 'secret_key' => 'DO_BUCKET_SECRET'],
+        ];
         ProviderCredential::factory()->create(['provider' => 'digitalocean', 'token' => 'dop_v1_FAKE_TOKEN_provisioners']);
         $this->cluster = Cluster::factory()->create([
             'name' => 'ams3-prod',
@@ -123,23 +127,29 @@ class ProvisionersTest extends TestCase
             'tofu' => [],
             'datastore kept' => true,
         ];
-        $managed = [
+        $managed = fn (string $connection, array $tofu) => [
             'refusal' => null,
             'status' => 'ready',
-            'connection' => 'SqlConnection',
+            'connection' => $connection,
             'dumps' => false,
             'queued' => ['App\Jobs\ProvisionManagedDatabase' => 2, 'App\Jobs\TearDownManagedDatabase' => 1],
             'kubectl calls' => false,
-            'tofu' => ['init', 'apply', 'output', 'init', 'destroy'],
+            'tofu' => $tofu,
             'datastore kept' => false,
         ];
+        $oneStack = ['init', 'apply', 'output', 'init', 'destroy'];
         $this->assertSame([
             'standard mysql' => $local('SqlConnection', dumps: true),
             'standard postgres' => $local('SqlConnection', dumps: true),
             'standard valkey' => $local('KeyValueConnection', dumps: false),
             'standard rustfs' => $local('BucketConnection', dumps: false),
-            'managed mysql' => $managed,
-            'managed postgres' => $managed,
+            'managed mysql' => $managed('SqlConnection', $oneStack),
+            'managed postgres' => $managed('SqlConnection', $oneStack),
+            'managed valkey' => $managed('KeyValueConnection', $oneStack),
+            'managed rustfs' => $managed('BucketConnection', [
+                'init', 'apply', 'output', 'init', 'apply', 'output',
+                'init', 'apply', 'output', 'init', 'destroy', 'init', 'destroy',
+            ]),
         ], $seen);
     }
 
@@ -207,10 +217,21 @@ class ProvisionersTest extends TestCase
     {
         $files = collect(Provisioners::table())
             ->map(fn (array $row) => str_replace(base_path().'/', '', (new ReflectionClass($row['provisioner']))->getFileName()))
-            ->unique();
+            ->merge(collect(Finder::create()->files()->name('Managed*.php')->in(app_path('Datastores')))->map(fn ($file) => str_replace(base_path().'/', '', $file->getPathname())))
+            ->unique()
+            ->sort()
+            ->values();
 
         $this->assertSame(
-            ['app/Datastores/LocalProvisioner.php' => true, 'app/Datastores/ManagedDatabase.php' => false],
+            [
+                'app/Datastores/LocalProvisioner.php' => true,
+                'app/Datastores/ManagedBucket.php' => false,
+                'app/Datastores/ManagedDatabase.php' => false,
+                'app/Datastores/ManagedResource.php' => false,
+                'app/Datastores/ManagedResources.php' => false,
+                'app/Datastores/ManagedStack.php' => false,
+                'app/Datastores/ManagedValkey.php' => false,
+            ],
             $files->mapWithKeys(fn (string $file) => [$file => collect($this->code($file))->contains(fn (string $token) => str_contains($token, 'Kubectl'))])->all(),
         );
     }

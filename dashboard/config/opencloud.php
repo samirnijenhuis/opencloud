@@ -74,4 +74,9 @@ return [
      */
     'managed_database_size' => env('OPENCLOUD_MANAGED_DATABASE_SIZE', 'db-s-1vcpu-1gb'),
 
+    /*
+     * The size of a managed Valkey on DigitalOcean. A Spaces bucket has no size.
+     */
+    'managed_valkey_size' => env('OPENCLOUD_MANAGED_VALKEY_SIZE', 'db-s-1vcpu-1gb'),
+
 ];
