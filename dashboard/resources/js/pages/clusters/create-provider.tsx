@@ -16,6 +16,7 @@ type Props = {
     max_nodes: number;
     pricing_url: string;
     has_key: boolean;
+    provider: { key: string; label: string };
 };
 
 function ChoiceSelect({ id, value, choices, onChange }: { id: string; value: string; choices: Choice[]; onChange: (value: string) => void }) {
@@ -35,7 +36,7 @@ function ChoiceSelect({ id, value, choices, onChange }: { id: string; value: str
     );
 }
 
-export default function ClustersCreateDigitalOcean({ regions, node_sizes, max_nodes, pricing_url, has_key }: Props) {
+export default function ClustersCreateProvider({ provider, regions, node_sizes, max_nodes, pricing_url, has_key }: Props) {
     const form = useForm({
         name: '',
         region: regions[0]?.value ?? '',
@@ -47,24 +48,24 @@ export default function ClustersCreateDigitalOcean({ regions, node_sizes, max_no
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        form.post(route('clusters.digitalocean.store'));
+        form.post(route('clusters.provider.store', provider.key));
     };
 
     return (
         <AppLayout
             breadcrumbs={[
                 { title: 'Clusters', href: '/clusters' },
-                { title: 'Create on DigitalOcean', href: '/clusters/create/digitalocean' },
+                { title: `Create on ${provider.label}`, href: `/clusters/create/${provider.key}` },
             ]}
         >
-            <Head title="Create a cluster on DigitalOcean" />
+            <Head title={`Create a cluster on ${provider.label}`} />
 
             <form onSubmit={submit} className="mx-auto w-full max-w-2xl space-y-6 p-4">
                 <div className="space-y-1">
-                    <h1 className="text-2xl font-semibold tracking-tight">Create a cluster on DigitalOcean</h1>
+                    <h1 className="text-2xl font-semibold tracking-tight">Create a cluster on {provider.label}</h1>
                     <p className="text-muted-foreground text-sm">
-                        OpenTofu creates a Kubernetes cluster and a container registry with your DigitalOcean key. Then opencloud installs its parts,
-                        like on a connected cluster. This takes about ten minutes.
+                        OpenTofu creates a Kubernetes cluster and a container registry with your {provider.label} key. Then opencloud installs its
+                        parts, like on a connected cluster. This takes about ten minutes.
                     </p>
                 </div>
 
@@ -72,7 +73,7 @@ export default function ClustersCreateDigitalOcean({ regions, node_sizes, max_no
                     <Alert>
                         <AlertDescription>
                             <span>
-                                Add a DigitalOcean key in{' '}
+                                Add a {provider.label} key in{' '}
                                 <Link href={route('provider-keys.index')} className="underline">
                                     Settings, Provider keys
                                 </Link>{' '}
@@ -92,7 +93,7 @@ export default function ClustersCreateDigitalOcean({ regions, node_sizes, max_no
                         onChange={(e) => setData('name', e.target.value)}
                     />
                     <p className="text-muted-foreground text-sm">
-                        Lowercase letters, digits, and dashes. DigitalOcean shows the cluster with this name.
+                        Lowercase letters, digits, and dashes. {provider.label} shows the cluster with this name.
                     </p>
                     <InputError message={errors.name} />
                 </div>
@@ -137,13 +138,13 @@ export default function ClustersCreateDigitalOcean({ regions, node_sizes, max_no
                             <InputError message={errors.max_nodes} />
                         </div>
                     </div>
-                    <p className="text-muted-foreground text-sm">DigitalOcean adds nodes when the pods need more room and removes idle nodes.</p>
+                    <p className="text-muted-foreground text-sm">{provider.label} adds nodes when the pods need more room and removes idle nodes.</p>
                 </div>
 
                 <p className="rounded-lg border p-4 text-sm">
-                    DigitalOcean charges for each node, for the load balancer of Caddy, and for the registry. Read the{' '}
+                    {provider.label} charges for each node, for the load balancer of Caddy, and for the registry. Read the{' '}
                     <a href={pricing_url} target="_blank" rel="noreferrer" className="underline">
-                        Kubernetes prices on DigitalOcean
+                        Kubernetes prices on {provider.label}
                     </a>
                     .
                 </p>

@@ -87,9 +87,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('clusters', [ClusterController::class, 'index'])->name('clusters.index');
     Route::get('clusters/create', [ClusterController::class, 'create'])->name('clusters.create');
-    Route::get('clusters/create/digitalocean', [CreatedClusterController::class, 'create'])->name('clusters.digitalocean.create');
-    Route::post('clusters/digitalocean', [CreatedClusterController::class, 'store'])->name('clusters.digitalocean.store');
-    Route::delete('clusters/{cluster}/destroy', [CreatedClusterController::class, 'destroy'])->name('clusters.digitalocean.destroy');
+    Route::get('clusters/create/{provider}', [CreatedClusterController::class, 'create'])->name('clusters.provider.create');
+    Route::post('clusters/create/{provider}', [CreatedClusterController::class, 'store'])->name('clusters.provider.store');
+    Route::delete('clusters/{cluster}/destroy', [CreatedClusterController::class, 'destroy'])->name('clusters.provider.destroy');
     Route::post('clusters', [ClusterController::class, 'store'])->name('clusters.store');
     Route::get('clusters/{cluster}', [ClusterController::class, 'show'])->name('clusters.show');
     Route::post('clusters/{cluster}/reinstall', [ClusterController::class, 'reinstall'])->name('clusters.reinstall');

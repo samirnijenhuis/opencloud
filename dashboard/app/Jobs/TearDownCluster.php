@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Clusters\ClusterProviders;
 use App\Clusters\ClusterStatus;
-use App\Clusters\DigitalOceanCluster;
 use App\Models\AuditEvent;
 use App\Models\Cluster;
 use App\Tofu\Runner;
@@ -36,13 +36,13 @@ class TearDownCluster implements ShouldQueue
         return [(new WithoutOverlapping("tofu-cluster-{$this->cluster->id}"))->dontRelease()->expireAfter($this->timeout + 60)];
     }
 
-    public function handle(Runner $runner): void
+    public function handle(Runner $runner, ClusterProviders $providers): void
     {
         $cluster = $this->cluster;
         $cluster->update(['status' => ClusterStatus::Destroying, 'error' => null, 'tofu_log' => null]);
 
         try {
-            $runner->destroy(DigitalOceanCluster::stack($cluster, DigitalOceanCluster::token()), $cluster);
+            $runner->destroy($providers->for($cluster->provider)->stack($cluster), $cluster);
         } catch (Throwable $e) {
             $this->failed($e);
 
