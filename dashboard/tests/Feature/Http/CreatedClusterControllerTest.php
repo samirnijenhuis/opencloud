@@ -111,6 +111,7 @@ class CreatedClusterControllerTest extends TestCase
 
         $show = $this->actingAs($owner)->get("/clusters/{$cluster->id}")->assertInertia(fn (Assert $page) => $page
             ->where('created', [
+                'provider' => 'DigitalOcean',
                 'region' => 'ams3',
                 'node_size' => 's-2vcpu-4gb',
                 'min_nodes' => 1,

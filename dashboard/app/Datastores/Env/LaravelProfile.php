@@ -43,7 +43,8 @@ final class LaravelProfile implements EnvProfile
     {
         return [
             'REDIS_CLIENT' => EnvValue::plain('phpredis'),
-            'REDIS_HOST' => EnvValue::plain($connection->host),
+            // phpredis opens a TLS connection for a host with tls://, and the stock Laravel config has no scheme value.
+            'REDIS_HOST' => EnvValue::plain($connection->tls ? "tls://{$connection->host}" : $connection->host),
             'REDIS_PORT' => EnvValue::plain((string) $connection->port),
             ...($connection->password === null ? [] : ['REDIS_PASSWORD' => EnvValue::secret($connection->password)]),
             'CACHE_STORE' => EnvValue::plain('redis'),

@@ -56,7 +56,7 @@ SH;
             new ProviderGuide(
                 key: 'hetzner',
                 label: 'Hetzner',
-                use: 'Servers for k3s clusters.',
+                use: 'A key for Hetzner. Opencloud does not create Hetzner clusters yet.',
                 url: 'https://console.hetzner.cloud/projects',
                 steps: [
                     'Open the link and open the project that will hold the servers.',
@@ -72,7 +72,7 @@ SH;
             new ProviderGuide(
                 key: 'aws',
                 label: 'AWS',
-                use: 'Images for connected EKS clusters go to ECR.',
+                use: 'A key for AWS. Opencloud does not copy images to ECR yet. This key is for a later feature.',
                 url: null,
                 steps: [
                     'Sign in to the AWS CLI with an account that can manage IAM.',

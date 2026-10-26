@@ -36,7 +36,7 @@ class DestroyCluster
         }
 
         if ($cluster->datastores()->where('source', DatastoreSource::Managed)->exists()) {
-            throw ValidationException::withMessages(['cluster' => 'This cluster has managed databases. Detach them first.']);
+            throw ValidationException::withMessages(['cluster' => 'This cluster has managed resources. Detach them first.']);
         }
 
         $cluster->update(['status' => ClusterStatus::Destroying, 'error' => null]);

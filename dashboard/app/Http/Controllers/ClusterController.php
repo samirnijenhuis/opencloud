@@ -46,7 +46,7 @@ class ClusterController extends Controller
         return to_route('clusters.show', $cluster);
     }
 
-    public function show(Request $request, Cluster $cluster): Response
+    public function show(Request $request, Cluster $cluster, ClusterProviders $providers): Response
     {
         Gate::authorize('view', $cluster);
 
@@ -76,6 +76,7 @@ class ClusterController extends Controller
                 'disconnect' => ! $local && $user->can('delete', $cluster),
             ],
             'created' => $cluster->kind === ClusterKind::Created ? [
+                'provider' => $providers->find((string) $cluster->provider)?->label() ?? (string) $cluster->provider,
                 'region' => $cluster->region,
                 'node_size' => $cluster->node_size,
                 'min_nodes' => $cluster->min_nodes,

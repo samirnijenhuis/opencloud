@@ -112,7 +112,6 @@ class ManagedValkeyTest extends TestCase
         $this->assertEquals(new KeyValueConnection('private-ams3-prod-valkey-1-do-user-1.k.db.ondigitalocean.com', 25061, 'DO_VALKEY_PASSWORD_SECRET', tls: true), KeyValueConnection::of($attachment));
     }
 
-    /** LaravelProfile does not write the TLS flag yet. A stock Laravel app needs REDIS_HOST=tls://<host> for it. */
     public function test_the_apply_writes_the_laravel_redis_values(): void
     {
         $environment = $this->environment();
@@ -123,7 +122,7 @@ class ManagedValkeyTest extends TestCase
         $this->assertSame([
             'CACHE_STORE' => ['redis', false],
             'REDIS_CLIENT' => ['phpredis', false],
-            'REDIS_HOST' => ['private-ams3-prod-valkey-1-do-user-1.k.db.ondigitalocean.com', false],
+            'REDIS_HOST' => ['tls://private-ams3-prod-valkey-1-do-user-1.k.db.ondigitalocean.com', false],
             'REDIS_PASSWORD' => ['DO_VALKEY_PASSWORD_SECRET', true],
             'REDIS_PORT' => ['25061', false],
         ], $this->envOf($environment));

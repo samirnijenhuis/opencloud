@@ -193,7 +193,7 @@ class CreatedClusterTest extends TestCase
         $cluster = $this->createdCluster(['status' => ClusterStatus::Ready]);
         Datastore::factory()->for($cluster)->create(['source' => DatastoreSource::Managed]);
 
-        $this->assertDestroyRefused($cluster, 'This cluster has managed databases. Detach them first.');
+        $this->assertDestroyRefused($cluster, 'This cluster has managed resources. Detach them first.');
     }
 
     public function test_destroy_refuses_while_opentofu_runs(): void

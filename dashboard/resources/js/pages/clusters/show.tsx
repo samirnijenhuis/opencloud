@@ -22,6 +22,7 @@ type Cluster = {
 };
 
 type Created = {
+    provider: string;
     region: string;
     node_size: string;
     min_nodes: number;
@@ -104,12 +105,12 @@ export default function ClustersShow({ cluster, applications, datastores, can, c
                 </div>
 
                 {cluster.status === 'provisioning' && (
-                    <p className="text-sm">OpenTofu creates the cluster on DigitalOcean. This takes about ten minutes.</p>
+                    <p className="text-sm">OpenTofu creates the cluster on {created?.provider}. This takes about ten minutes.</p>
                 )}
                 {cluster.status === 'installing' && (
                     <p className="text-sm">Opencloud installs its parts and waits for the load balancer. This can take a few minutes.</p>
                 )}
-                {cluster.status === 'destroying' && <p className="text-sm">OpenTofu destroys the cluster on DigitalOcean.</p>}
+                {cluster.status === 'destroying' && <p className="text-sm">OpenTofu destroys the cluster on {created?.provider}.</p>}
 
                 {cluster.error && (
                     <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
@@ -121,7 +122,7 @@ export default function ClustersShow({ cluster, applications, datastores, can, c
                 <dl className="divide-y rounded-lg border px-4">
                     <Row label="Kind">{kindLabels[cluster.kind]}</Row>
                     {created && (
-                        <Row label="DigitalOcean">
+                        <Row label={created.provider}>
                             <span className="font-mono">
                                 {created.region}, {created.node_size}
                             </span>
@@ -189,7 +190,7 @@ export default function ClustersShow({ cluster, applications, datastores, can, c
                         )}
                         {created?.can_destroy && (
                             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                                <p className="text-sm">Delete the cluster, its nodes, and its volumes on DigitalOcean.</p>
+                                <p className="text-sm">Delete the cluster, its nodes, and its volumes on {created.provider}.</p>
                                 <Button variant="destructive" onClick={() => setDestroying(true)} disabled={busy}>
                                     Destroy cluster
                                 </Button>
@@ -214,10 +215,12 @@ export default function ClustersShow({ cluster, applications, datastores, can, c
             <Dialog open={destroying} onOpenChange={setDestroying}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Destroy {cluster.name} on DigitalOcean?</DialogTitle>
+                        <DialogTitle>
+                            Destroy {cluster.name} on {created?.provider}?
+                        </DialogTitle>
                         <DialogDescription>
                             OpenTofu deletes the cluster, its nodes, and its volumes. You cannot undo this. The container registry stays, because
-                            other clusters can use it. Delete it on DigitalOcean when you no longer need it.
+                            other clusters can use it. Delete it on {created?.provider} when you no longer need it.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-2">
