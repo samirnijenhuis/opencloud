@@ -12,6 +12,7 @@ use App\Enums\DeploymentStatus;
 use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
 use App\Enums\EnvVarSource;
+use App\Enums\ResourceFamily;
 use App\Enums\Size;
 use App\Environments\CommandRunStatus;
 use App\Models\Application;
@@ -279,7 +280,7 @@ class DemoSeeder extends Seeder
             'datastore_id' => $datastore->id,
             'name' => $name,
             'is_default' => $name !== null && ! $environment->datastoreAttachments()->where('is_default', true)->exists(),
-            'host' => $kind->isSql() ? "{$kind->value}.shop.svc" : null,
+            'host' => $kind->family() === ResourceFamily::Database ? "{$kind->value}.shop.svc" : null,
             'port' => ['mysql' => 3306, 'postgres' => 5432][$kind->value] ?? null,
             'database_name' => $databaseName,
             'username' => $databaseName,

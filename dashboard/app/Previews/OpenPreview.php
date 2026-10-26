@@ -81,7 +81,7 @@ class OpenPreview
         $production = $application->environments()->where('name', 'production')->first();
         // The default comes first, so it is the default of the preview too. A database that DigitalOcean destroys has no name.
         $attachments = $production?->datastoreAttachments()->with('datastore')->orderByDesc('is_default')->orderBy('id')->get()
-            ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->isSql() && $attachment->name === null) ?? collect();
+            ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family()->isNamed() && $attachment->name === null) ?? collect();
 
         return DB::transaction(function () use ($application, $pullRequest, $template, $attachments) {
             $preview = $application->environments()->create([

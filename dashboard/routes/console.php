@@ -1,8 +1,8 @@
 <?php
 
 use App\Clusters\ClusterStatus;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
+use App\Datastores\Capabilities;
+use App\Datastores\Provisioners;
 use App\Jobs\BackupDashboard;
 use App\Jobs\BackupDatastore;
 use App\Jobs\CheckCertificates;
@@ -32,7 +32,7 @@ Schedule::job(new CheckCertificates)->everyMinute();
 Schedule::job(new CheckLatestRelease)->daily();
 
 Schedule::call(function () {
-    Datastore::query()->where('source', DatastoreSource::Standard)->whereIn('kind', [DatastoreKind::Mysql, DatastoreKind::Postgres])->each(fn (Datastore $datastore) => BackupDatastore::dispatch($datastore));
-    Datastore::query()->where('kind', DatastoreKind::Rustfs)->each(fn (Datastore $datastore) => CopyBuckets::dispatch($datastore));
+    Provisioners::datastores(fn (Capabilities $can) => $can->dumps !== null)->each(fn (Datastore $datastore) => BackupDatastore::dispatch($datastore));
+    Provisioners::datastores(fn (Capabilities $can) => $can->copiesBuckets)->each(fn (Datastore $datastore) => CopyBuckets::dispatch($datastore));
     BackupDashboard::dispatch();
 })->name('nightly-backups')->dailyAt('03:00');

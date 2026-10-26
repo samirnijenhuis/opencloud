@@ -6,19 +6,17 @@ use App\Actions\StartDeployment;
 use App\Backups\BackupDisk;
 use App\Backups\DatabaseBackups;
 use App\Caddy\CaddySync;
+use App\Datastores\Capabilities;
 use App\Datastores\DatastoreStatus;
-use App\Datastores\Engines;
-use App\Datastores\SqlEngine;
+use App\Datastores\Provisioners;
 use App\Deploy\DeploymentLog;
 use App\Domains\CloudflareDns;
 use App\Domains\DnsStatus;
-use App\Enums\DatastoreKind;
 use App\Enums\DeploymentStatus;
 use App\Enums\DnsMode;
 use App\Enums\EnvironmentKind;
 use App\Jobs\CheckDashboardDomain;
 use App\Jobs\CheckDomain;
-use App\Jobs\ProvisionDatastoreAttachment;
 use App\Kube\Kubectl;
 use App\Kube\Manifests\DatastoreManifests;
 use App\Models\BackupTarget;
@@ -138,7 +136,7 @@ final class RestoreInstall
         $attachments = $this->attachments($cluster);
 
         foreach ($attachments as $attachment) {
-            (new ProvisionDatastoreAttachment($attachment))->handle();
+            Provisioners::of($attachment->datastore)->provision($attachment);
         }
 
         $failed = $attachments->filter(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::Failed);
@@ -159,13 +157,12 @@ final class RestoreInstall
         }
 
         $bucket = BackupDisk::s3($target);
-        $kubectl = Kubectl::for($cluster);
         $lines = [];
 
         foreach ($this->attachments($cluster) as $attachment) {
-            $engine = Engines::for($attachment->datastore->kind);
+            $dumps = Provisioners::of($attachment->datastore)->capabilities()->dumps;
 
-            if (! $engine instanceof SqlEngine) {
+            if ($dumps === null) {
                 continue;
             }
 
@@ -180,7 +177,7 @@ final class RestoreInstall
             $stream = $bucket->readStream($dump);
 
             try {
-                $engine->restore($kubectl, $attachment, $stream);
+                $dumps->restore($attachment, $stream);
             } finally {
                 fclose($stream);
             }
@@ -194,7 +191,7 @@ final class RestoreInstall
     private function restoreBuckets(Cluster $cluster): string
     {
         $target = BackupDisk::target();
-        $servers = Datastore::query()->where('cluster_id', $cluster->id)->where('kind', DatastoreKind::Rustfs)->orderBy('id')->get();
+        $servers = Provisioners::datastores(fn (Capabilities $can) => $can->copiesBuckets)->where('cluster_id', $cluster->id)->orderBy('id')->get();
 
         if ($target === null || $servers->isEmpty()) {
             return $target === null ? 'No backup target, so no bucket copy.' : 'No RustFS server.';

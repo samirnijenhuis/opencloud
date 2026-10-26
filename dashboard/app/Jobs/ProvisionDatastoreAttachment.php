@@ -2,23 +2,16 @@
 
 namespace App\Jobs;
 
-use App\Datastores\DatastoreStatus;
-use App\Datastores\Engine;
-use App\Datastores\Engines;
-use App\Kube\Kubectl;
-use App\Kube\Manifests\DatastoreManifests;
-use App\Models\Datastore;
+use App\Datastores\Provisioners;
 use App\Models\DatastoreAttachment;
-use App\Support\SecretMasker;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
-use Throwable;
 
 /**
- * Makes sure the server of the datastore runs, then creates the database, user, bucket, or server of one attachment.
- * Each step converges, so a failed attachment can simply run again.
+ * The queue side of the local source: one lock per datastore, because the attachments of one shared server must not
+ * apply its StatefulSet at the same time. LocalProvisioner dispatches it, and LocalProvisioner::provision() does the work.
  */
 class ProvisionDatastoreAttachment implements ShouldQueue
 {
@@ -27,8 +20,6 @@ class ProvisionDatastoreAttachment implements ShouldQueue
     public int $timeout = 1200;
 
     public bool $deleteWhenMissingModels = true;
-
-    private const SERVER_ROLLOUT_SECONDS = 600;
 
     public function __construct(public DatastoreAttachment $attachment) {}
 
@@ -46,48 +37,6 @@ class ProvisionDatastoreAttachment implements ShouldQueue
 
     public function handle(): void
     {
-        $attachment = $this->attachment;
-        $datastore = $attachment->datastore;
-        $engine = Engines::for($datastore->kind);
-        $kubectl = Kubectl::for($datastore->cluster);
-        $masker = new SecretMasker(array_filter([$attachment->password, $datastore->root_password]));
-
-        $attachment->update(['status' => DatastoreStatus::Provisioning, 'error' => null]);
-
-        try {
-            $this->provisionServer($kubectl, $engine, $datastore, $masker);
-            $engine->attach($kubectl, $attachment);
-        } catch (Throwable $e) {
-            $attachment->update(['status' => DatastoreStatus::Failed, 'error' => $masker->mask($e->getMessage())]);
-
-            return;
-        }
-
-        $attachment->update(['status' => DatastoreStatus::Ready]);
-    }
-
-    /** The apply and the rollout check run each time, so a server that someone removed comes back. */
-    private function provisionServer(Kubectl $kubectl, Engine $engine, Datastore $datastore, SecretMasker $masker): void
-    {
-        if ($datastore->status !== DatastoreStatus::Ready) {
-            $datastore->update(['status' => DatastoreStatus::Provisioning, 'error' => null]);
-        }
-
-        try {
-            $server = $engine->server($datastore);
-            $kubectl->apply([DatastoreManifests::namespace(), ...$server]);
-
-            if ($server !== []) {
-                $kubectl->rolloutStatus(DatastoreManifests::NAMESPACE, 'statefulset', DatastoreManifests::serverName($datastore), self::SERVER_ROLLOUT_SECONDS)->throw();
-            }
-        } catch (Throwable $e) {
-            $datastore->update(['status' => DatastoreStatus::Failed, 'error' => $masker->mask($e->getMessage())]);
-
-            throw $e;
-        }
-
-        if ($datastore->status !== DatastoreStatus::Ready) {
-            $datastore->update(['status' => DatastoreStatus::Ready]);
-        }
+        Provisioners::of($this->attachment->datastore)->provision($this->attachment);
     }
 }

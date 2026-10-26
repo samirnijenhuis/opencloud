@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Datastores\ManagedDatabase;
+use App\Datastores\Provisioners;
 use App\Enums\Ability;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
@@ -26,8 +26,12 @@ class AttachDatastoreRequest extends FormRequest
     {
         return [
             'kind' => ['required', Rule::enum(DatastoreKind::class), function (string $attribute, mixed $value, Closure $fail) {
-                if ($this->input('source') === DatastoreSource::Managed->value && ! in_array(DatastoreKind::tryFrom((string) $value), ManagedDatabase::OFFERED, true)) {
-                    $fail('A managed database on DigitalOcean is Postgres only for now. Use managed Postgres, or MySQL in the cluster.');
+                $kind = DatastoreKind::tryFrom((string) $value);
+                $source = DatastoreSource::tryFrom((string) $this->input('source')) ?? DatastoreSource::Standard;
+                $notOffered = $kind === null ? null : Provisioners::notOffered($kind, $source);
+
+                if ($notOffered !== null) {
+                    $fail($notOffered);
                 }
             }],
             'source' => ['nullable', Rule::enum(DatastoreSource::class)],
