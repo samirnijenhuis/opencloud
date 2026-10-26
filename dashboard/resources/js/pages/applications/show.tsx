@@ -7,9 +7,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind } from '@/types';
+import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind, type EnvProfileKind } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
+import { PresetForm, type Preset } from './preset-form';
 
 type EnvironmentRow = {
     id: number;
@@ -33,7 +34,8 @@ type PreviewSettings = {
 };
 
 type Props = {
-    application: { id: number; name: string; repository: string; type: ApplicationType };
+    application: { id: number; name: string; repository: string; type: ApplicationType; env_profile: EnvProfileKind; port: number };
+    presets: Preset[];
     environments: EnvironmentRow[];
     previews: PreviewSettings;
     canUpdate: boolean;
@@ -108,7 +110,9 @@ function PreviewsForm({ application, previews, canUpdate }: { application: Props
     );
 }
 
-export default function ApplicationShow({ application, environments, previews, canUpdate }: Props) {
+export default function ApplicationShow({ application, presets, environments, previews, canUpdate }: Props) {
+    const production = environments.find((environment) => environment.name === 'production');
+
     return (
         <AppLayout
             breadcrumbs={[
@@ -155,6 +159,14 @@ export default function ApplicationShow({ application, environments, previews, c
                         </li>
                     ))}
                 </ul>
+
+                <div className="space-y-4">
+                    <HeadingSmall
+                        title="Preset"
+                        description="How opencloud builds the app, and the env names that its databases, Valkey, and buckets set."
+                    />
+                    <PresetForm application={application} presets={presets} productionId={production?.id ?? null} canUpdate={canUpdate} />
+                </div>
 
                 <div className="space-y-4">
                     <HeadingSmall
