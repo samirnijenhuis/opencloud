@@ -207,10 +207,19 @@ class ProvisionersTest extends TestCase
     {
         $files = collect(Provisioners::table())
             ->map(fn (array $row) => str_replace(base_path().'/', '', (new ReflectionClass($row['provisioner']))->getFileName()))
-            ->unique();
+            ->merge(collect(Finder::create()->files()->name('Managed*.php')->in(app_path('Datastores')))->map(fn ($file) => str_replace(base_path().'/', '', $file->getPathname())))
+            ->unique()
+            ->sort()
+            ->values();
 
         $this->assertSame(
-            ['app/Datastores/LocalProvisioner.php' => true, 'app/Datastores/ManagedDatabase.php' => false],
+            [
+                'app/Datastores/LocalProvisioner.php' => true,
+                'app/Datastores/ManagedDatabase.php' => false,
+                'app/Datastores/ManagedResource.php' => false,
+                'app/Datastores/ManagedResources.php' => false,
+                'app/Datastores/ManagedStack.php' => false,
+            ],
             $files->mapWithKeys(fn (string $file) => [$file => collect($this->code($file))->contains(fn (string $token) => str_contains($token, 'Kubectl'))])->all(),
         );
     }

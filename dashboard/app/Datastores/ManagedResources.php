@@ -5,15 +5,27 @@ namespace App\Datastores;
 use App\Enums\DatastoreKind;
 
 /**
- * The managed arm of the registry: a resource that a cloud provider runs and opencloud creates with OpenTofu.
+ * The managed arm of the registry: a resource that a cloud provider runs and opencloud creates with OpenTofu. Each row
+ * names the stack, the right of the DigitalOcean key that the stack needs, and the capabilities.
  */
 final class ManagedResources
 {
     public static function find(DatastoreKind $kind): ?Provisioner
     {
+        $database = 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.';
+        $backedUp = 'DigitalOcean backs up a managed database itself.';
+
         return match ($kind) {
-            DatastoreKind::Postgres => new ManagedDatabase($kind),
-            DatastoreKind::Mysql => new ManagedDatabase($kind, notOffered: ManagedDatabase::MYSQL_NOT_OFFERED),
+            DatastoreKind::Postgres => new ManagedResource($kind, new ManagedDatabase($kind),
+                right: 'database',
+                refusal: $database,
+                capabilities: new Capabilities($backedUp),
+            ),
+            DatastoreKind::Mysql => new ManagedResource($kind, new ManagedDatabase($kind),
+                right: 'database',
+                refusal: $database,
+                capabilities: new Capabilities($backedUp, notOffered: ManagedDatabase::MYSQL_NOT_OFFERED),
+            ),
             default => null,
         };
     }
@@ -21,6 +33,6 @@ final class ManagedResources
     /** Why the managed source cannot serve a kind that find() does not know. */
     public static function unsupported(): string
     {
-        return ManagedDatabase::KINDS_ONLY;
+        return 'DigitalOcean manages MySQL and Postgres only.';
     }
 }

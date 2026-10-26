@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Datastores\ManagedDatabase;
+use App\Datastores\ManagedResource;
 use App\Datastores\Provisioners;
 use App\Models\Datastore;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -11,8 +11,9 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Throwable;
 
 /**
- * Destroys a managed database with OpenTofu, on the builds queue with the lock of its apply. ManagedDatabase::release()
- * does the work. A failed destroy keeps the records with the error, so "Detach" can run it again.
+ * Destroys a managed resource and its data with OpenTofu, on the builds queue with the lock of its apply.
+ * ManagedResource::release() does the work. A failed destroy keeps the records with the error, so "Detach" can run it
+ * again. The class keeps its old name, so jobs already in the queue still run.
  */
 class TearDownManagedDatabase implements ShouldQueue
 {
@@ -41,6 +42,6 @@ class TearDownManagedDatabase implements ShouldQueue
 
     public function failed(?Throwable $e): void
     {
-        ManagedDatabase::destroyFailed($this->datastore, $e);
+        ManagedResource::destroyFailed($this->datastore, $e);
     }
 }

@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Datastores\ManagedDatabase;
+use App\Datastores\ManagedResource;
 use App\Datastores\Provisioners;
 use App\Models\DatastoreAttachment;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,7 +12,8 @@ use Throwable;
 
 /**
  * The queue side of the managed source: OpenTofu runs on the builds queue, one apply per datastore at a time.
- * ManagedDatabase dispatches it, and ManagedDatabase::provision() does the work.
+ * ManagedResource dispatches it for every managed kind, and ManagedResource::provision() does the work. The class
+ * keeps its old name, so jobs already in the queue still run.
  */
 class ProvisionManagedDatabase implements ShouldQueue
 {
@@ -40,6 +41,6 @@ class ProvisionManagedDatabase implements ShouldQueue
 
     public function failed(?Throwable $e): void
     {
-        ManagedDatabase::failed($this->attachment, $e);
+        ManagedResource::failed($this->attachment, $e);
     }
 }
