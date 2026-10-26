@@ -1,0 +1,557 @@
+{
+    "shop": [
+        [
+            "ANALYTICS_DB_URL",
+            "mysql://env_7_66d9b558:analytics-pass@mysql-3.oc-datastores.svc.cluster.local:3306/env_7_analytics",
+            true,
+            "runtime",
+            "datastore",
+            23
+        ],
+        [
+            "AWS_ACCESS_KEY_ID",
+            "env-7",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_BUCKET",
+            "env-7",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_DEFAULT_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_ENDPOINT",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_SECRET_ACCESS_KEY",
+            "rustfs-secret",
+            true,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_USE_PATH_STYLE_ENDPOINT",
+            "true",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "CACHE_STORE",
+            "redis",
+            false,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "DB_CONNECTION",
+            "mysql",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_DATABASE",
+            "env_7",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_HOST",
+            "mysql-3.oc-datastores.svc.cluster.local",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_PASSWORD",
+            "mysql-main-pass",
+            true,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_PORT",
+            "3306",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_USERNAME",
+            "env_7",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "FILESYSTEM_DISK",
+            "s3",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "REDIS_CLIENT",
+            "phpredis",
+            false,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "REDIS_HOST",
+            "valkey-24.oc-datastores.svc.cluster.local",
+            false,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "REDIS_PASSWORD",
+            "valkey-pass",
+            true,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "REDIS_PORT",
+            "6379",
+            false,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "REPORTS_DB_URL",
+            "postgres://env_7_0b7ec688:p%2Fss%2Bw%40rd%3A1%25@postgres-4.oc-datastores.svc.cluster.local:5432/env_7_reports",
+            true,
+            "runtime",
+            "datastore",
+            22
+        ]
+    ],
+    "shop after a second write": [
+        [
+            "ANALYTICS_DB_URL",
+            "mysql://env_7_66d9b558:analytics-pass@mysql-3.oc-datastores.svc.cluster.local:3306/env_7_analytics",
+            true,
+            "runtime",
+            "datastore",
+            23
+        ],
+        [
+            "AWS_ACCESS_KEY_ID",
+            "env-7",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_BUCKET",
+            "env-7",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_DEFAULT_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_ENDPOINT",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_SECRET_ACCESS_KEY",
+            "rustfs-secret",
+            true,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "AWS_USE_PATH_STYLE_ENDPOINT",
+            "true",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "CACHE_STORE",
+            "redis",
+            false,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "DB_CONNECTION",
+            "mysql",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_DATABASE",
+            "env_7",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_HOST",
+            "mysql-3.oc-datastores.svc.cluster.local",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_PASSWORD",
+            "mysql-main-pass",
+            true,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_PORT",
+            "3306",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "DB_USERNAME",
+            "env_7",
+            false,
+            "runtime",
+            "datastore",
+            21
+        ],
+        [
+            "FILESYSTEM_DISK",
+            "s3",
+            false,
+            "runtime",
+            "datastore",
+            25
+        ],
+        [
+            "REDIS_CLIENT",
+            "phpredis",
+            false,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "REDIS_HOST",
+            "valkey-24.oc-datastores.svc.cluster.local",
+            false,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "REDIS_PASSWORD",
+            "valkey-pass",
+            true,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "REDIS_PORT",
+            "6379",
+            false,
+            "runtime",
+            "datastore",
+            24
+        ],
+        [
+            "REPORTS_DB_URL",
+            "postgres://env_7_0b7ec688:p%2Fss%2Bw%40rd%3A1%25@postgres-4.oc-datastores.svc.cluster.local:5432/env_7_reports",
+            true,
+            "runtime",
+            "datastore",
+            22
+        ]
+    ],
+    "shop config lines": {
+        "21": null,
+        "22": "'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],",
+        "23": "'analytics' => ['driver' => 'mysql', 'url' => env('ANALYTICS_DB_URL')],",
+        "24": null,
+        "25": null
+    },
+    "blog before the apply": [],
+    "blog after the apply": [
+        [
+            "DB_CONNECTION",
+            "pgsql",
+            false,
+            "runtime",
+            "datastore",
+            31
+        ],
+        [
+            "DB_DATABASE",
+            "env_8",
+            false,
+            "runtime",
+            "datastore",
+            31
+        ],
+        [
+            "DB_HOST",
+            "private-blog-main.db.ondigitalocean.com",
+            false,
+            "runtime",
+            "datastore",
+            31
+        ],
+        [
+            "DB_PASSWORD",
+            "DO/generated+pass",
+            true,
+            "runtime",
+            "datastore",
+            31
+        ],
+        [
+            "DB_PORT",
+            "25060",
+            false,
+            "runtime",
+            "datastore",
+            31
+        ],
+        [
+            "DB_USERNAME",
+            "env_8",
+            false,
+            "runtime",
+            "datastore",
+            31
+        ],
+        [
+            "REPORTS_DB_URL",
+            "postgres://env_8_0b7ec688:do-reports-pass@private-blog-reports.db.ondigitalocean.com:25060/env_8_reports",
+            true,
+            "runtime",
+            "datastore",
+            32
+        ]
+    ],
+    "swap before the default moves": [
+        [
+            "DB_CONNECTION",
+            "pgsql",
+            false,
+            "runtime",
+            "datastore",
+            41
+        ],
+        [
+            "DB_DATABASE",
+            "env_9",
+            false,
+            "runtime",
+            "datastore",
+            41
+        ],
+        [
+            "DB_HOST",
+            "postgres-4.oc-datastores.svc.cluster.local",
+            false,
+            "runtime",
+            "datastore",
+            41
+        ],
+        [
+            "DB_PASSWORD",
+            "swap-main-pass",
+            true,
+            "runtime",
+            "datastore",
+            41
+        ],
+        [
+            "DB_PORT",
+            "5432",
+            false,
+            "runtime",
+            "datastore",
+            41
+        ],
+        [
+            "DB_USERNAME",
+            "env_9",
+            false,
+            "runtime",
+            "datastore",
+            41
+        ],
+        [
+            "REPORTS_DB_URL",
+            "mysql://env_9_0b7ec688:swap-reports-pass@mysql-3.oc-datastores.svc.cluster.local:3306/env_9_reports",
+            true,
+            "runtime",
+            "datastore",
+            42
+        ]
+    ],
+    "swap after the default moves": [
+        [
+            "DB_CONNECTION",
+            "mysql",
+            false,
+            "runtime",
+            "datastore",
+            42
+        ],
+        [
+            "DB_DATABASE",
+            "env_9_reports",
+            false,
+            "runtime",
+            "datastore",
+            42
+        ],
+        [
+            "DB_HOST",
+            "mysql-3.oc-datastores.svc.cluster.local",
+            false,
+            "runtime",
+            "datastore",
+            42
+        ],
+        [
+            "DB_PASSWORD",
+            "swap-reports-pass",
+            true,
+            "runtime",
+            "datastore",
+            42
+        ],
+        [
+            "DB_PORT",
+            "3306",
+            false,
+            "runtime",
+            "datastore",
+            42
+        ],
+        [
+            "DB_USERNAME",
+            "env_9_0b7ec688",
+            false,
+            "runtime",
+            "datastore",
+            42
+        ],
+        [
+            "MAIN_DB_URL",
+            "postgres://env_9:swap-main-pass@postgres-4.oc-datastores.svc.cluster.local:5432/env_9",
+            true,
+            "runtime",
+            "datastore",
+            41
+        ]
+    ],
+    "runtime shop": {
+        "ANALYTICS_DB_URL": "mysql://env_7_66d9b558:analytics-pass@mysql-3.oc-datastores.svc.cluster.local:3306/env_7_analytics",
+        "APP_DEBUG": "false",
+        "APP_ENV": "production",
+        "AWS_ACCESS_KEY_ID": "env-7",
+        "AWS_BUCKET": "env-7",
+        "AWS_DEFAULT_REGION": "us-east-1",
+        "AWS_ENDPOINT": "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+        "AWS_SECRET_ACCESS_KEY": "rustfs-secret",
+        "AWS_USE_PATH_STYLE_ENDPOINT": "true",
+        "CACHE_STORE": "redis",
+        "DB_CONNECTION": "mysql",
+        "DB_DATABASE": "env_7",
+        "DB_HOST": "mysql-3.oc-datastores.svc.cluster.local",
+        "DB_PASSWORD": "mysql-main-pass",
+        "DB_PORT": "3306",
+        "DB_USERNAME": "env_7",
+        "FILESYSTEM_DISK": "s3",
+        "LOG_CHANNEL": "stderr",
+        "REDIS_CLIENT": "phpredis",
+        "REDIS_HOST": "valkey-24.oc-datastores.svc.cluster.local",
+        "REDIS_PASSWORD": "valkey-pass",
+        "REDIS_PORT": "6379",
+        "REPORTS_DB_URL": "postgres://env_7_0b7ec688:p%2Fss%2Bw%40rd%3A1%25@postgres-4.oc-datastores.svc.cluster.local:5432/env_7_reports"
+    },
+    "runtime blog": {
+        "APP_DEBUG": "false",
+        "APP_ENV": "production",
+        "DB_CONNECTION": "pgsql",
+        "DB_DATABASE": "env_8",
+        "DB_HOST": "private-blog-main.db.ondigitalocean.com",
+        "DB_PASSWORD": "DO/generated+pass",
+        "DB_PORT": "25060",
+        "DB_USERNAME": "env_8",
+        "LOG_CHANNEL": "stderr",
+        "REPORTS_DB_URL": "postgres://env_8_0b7ec688:do-reports-pass@private-blog-reports.db.ondigitalocean.com:25060/env_8_reports"
+    },
+    "runtime swap": {
+        "APP_DEBUG": "false",
+        "APP_ENV": "production",
+        "DB_CONNECTION": "mysql",
+        "DB_DATABASE": "env_9_reports",
+        "DB_HOST": "mysql-3.oc-datastores.svc.cluster.local",
+        "DB_PASSWORD": "swap-reports-pass",
+        "DB_PORT": "3306",
+        "DB_USERNAME": "env_9_0b7ec688",
+        "LOG_CHANNEL": "stderr",
+        "MAIN_DB_URL": "postgres://env_9:swap-main-pass@postgres-4.oc-datastores.svc.cluster.local:5432/env_9"
+    }
+}

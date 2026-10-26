@@ -29,4 +29,7 @@ interface Engine
 
     /** @return array<string, array{0: string, 1: bool}> the Laravel env, key => [value, is secret] */
     public function env(DatastoreAttachment $attachment): array;
+
+    /** How the app reaches the attachment, or null while that is not known yet. The engine writes no env names here. */
+    public function connection(DatastoreAttachment $attachment): ?Connection;
 }

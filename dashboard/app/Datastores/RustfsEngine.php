@@ -77,6 +77,13 @@ final class RustfsEngine implements Engine
         ];
     }
 
+    public function connection(DatastoreAttachment $attachment): ?Connection
+    {
+        $host = DatastoreManifests::host(DatastoreManifests::serverName($attachment->datastore));
+
+        return new BucketConnection("http://{$host}:9000", 'us-east-1', $attachment->database_name, $attachment->username, $attachment->password, pathStyle: true);
+    }
+
     /** @param  list<string>  $lines */
     private function run(Kubectl $kubectl, Datastore $datastore, array $lines, ?string $stdin = null): void
     {

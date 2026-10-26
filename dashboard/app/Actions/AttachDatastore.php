@@ -3,7 +3,7 @@
 namespace App\Actions;
 
 use App\Datastores\AttachmentEnv;
-use App\Datastores\DatabaseConnection;
+use App\Datastores\DatabaseNames;
 use App\Datastores\DatastoreStatus;
 use App\Datastores\Engines;
 use App\Datastores\ManagedDatabase;
@@ -78,10 +78,10 @@ class AttachDatastore
         if ($name === null) {
             return $attachments->contains(fn (DatastoreAttachment $attachment) => $attachment->name !== null)
                 ? throw new InvalidArgumentException('This environment already has a database. Give the new database a name.')
-                : DatabaseConnection::FIRST_NAME;
+                : DatabaseNames::FIRST_NAME;
         }
 
-        $error = DatabaseConnection::nameError($name);
+        $error = DatabaseNames::nameError($name);
 
         return $error === null ? $name : throw new InvalidArgumentException($error);
     }
@@ -112,7 +112,7 @@ class AttachDatastore
 
         $attachment = $environment->datastoreAttachments()->create([
             ...$fields,
-            ...($kind->isSql() ? DatabaseConnection::server($datastore) : []),
+            ...($kind->isSql() ? DatabaseNames::server($datastore) : []),
             'datastore_id' => $datastore->id,
             'password' => Str::random(32),
         ]);

@@ -52,4 +52,9 @@ final class ValkeyEngine implements Engine
             'CACHE_STORE' => ['redis', false],
         ];
     }
+
+    public function connection(DatastoreAttachment $attachment): ?Connection
+    {
+        return new KeyValueConnection(DatastoreManifests::host(DatastoreManifests::valkeyName($attachment)), 6379, $attachment->password, tls: false);
+    }
 }

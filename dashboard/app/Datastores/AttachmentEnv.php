@@ -25,4 +25,12 @@ final class AttachmentEnv
             ]);
         }
     }
+
+    /** The config line that the canvas shows for a named database that is not the default, or null. */
+    public static function configLine(DatastoreAttachment $attachment): ?string
+    {
+        return $attachment->name !== null && ! $attachment->is_default
+            ? DatabaseConnection::configLine($attachment->datastore->kind, $attachment->name)
+            : null;
+    }
 }

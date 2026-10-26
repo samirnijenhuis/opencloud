@@ -2,7 +2,7 @@
 
 namespace App\Backups;
 
-use App\Datastores\DatabaseConnection;
+use App\Datastores\DatabaseNames;
 use App\Datastores\Engines;
 use App\Datastores\SqlEngine;
 use App\Kube\Kubectl;
@@ -29,7 +29,7 @@ final class DatabaseBackups
     {
         $folder = "backups/{$attachment->datastore_id}/{$attachment->environment_id}";
 
-        return in_array($attachment->name, [null, DatabaseConnection::FIRST_NAME], true) ? $folder : "{$folder}/{$attachment->name}";
+        return in_array($attachment->name, [null, DatabaseNames::FIRST_NAME], true) ? $folder : "{$folder}/{$attachment->name}";
     }
 
     /** A failed dump returns a failed backup with the error, so the nightly run goes on with the next database. */

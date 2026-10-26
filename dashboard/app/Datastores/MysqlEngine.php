@@ -23,7 +23,7 @@ final class MysqlEngine implements SqlEngine
 
     public function names(Environment $environment, ?string $name): array
     {
-        return DatabaseConnection::names($environment, $name ?? DatabaseConnection::FIRST_NAME);
+        return DatabaseNames::names($environment, $name ?? DatabaseNames::FIRST_NAME);
     }
 
     public function attach(Kubectl $kubectl, DatastoreAttachment $attachment): void
@@ -51,6 +51,11 @@ final class MysqlEngine implements SqlEngine
     public function env(DatastoreAttachment $attachment): array
     {
         return DatabaseConnection::env($attachment);
+    }
+
+    public function connection(DatastoreAttachment $attachment): ?Connection
+    {
+        return SqlConnection::of($attachment);
     }
 
     public function dump(Kubectl $kubectl, DatastoreAttachment $attachment, mixed $sink): void

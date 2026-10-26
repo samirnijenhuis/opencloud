@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\UpdateEnvironmentSettings;
 use App\Backups\BackupStatus;
-use App\Datastores\DatabaseConnection;
+use App\Datastores\AttachmentEnv;
 use App\Datastores\DatastoreStatus;
 use App\Datastores\ManagedDatabase;
 use App\Domains\CloudflareDns;
@@ -166,7 +166,7 @@ class EnvironmentController extends Controller
             'name' => $attachment->name,
             'is_default' => $attachment->is_default,
             // The default sets the DB_* values that Laravel reads by itself. Each other database needs this line.
-            'config_line' => $attachment->name !== null && ! $attachment->is_default ? DatabaseConnection::configLine($datastore->kind, $attachment->name) : null,
+            'config_line' => AttachmentEnv::configLine($attachment),
             'status' => $attachment->status,
             'error' => $attachment->error,
             'server' => [
