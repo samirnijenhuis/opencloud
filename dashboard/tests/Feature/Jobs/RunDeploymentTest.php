@@ -15,7 +15,6 @@ use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Environment;
 use App\Models\EnvVar;
-use App\Models\Process;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Sleep;
@@ -57,7 +56,7 @@ class RunDeploymentTest extends TestCase
         $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
         $application = Application::factory()->for($cluster)->create(['repository' => 'acme/shop', 'type' => ApplicationType::Laravel]);
         $this->environment = Environment::factory()->for($application)->create(['deploy_commands' => ['php artisan migrate --force']]);
-        $this->environment->processes()->createMany(Process::defaultsFor(ApplicationType::Laravel));
+        $this->environment->processes()->createMany(ApplicationType::Laravel->processes());
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);
         $this->old = Deployment::factory()->for($this->environment)->create(['status' => DeploymentStatus::Live, 'image' => 'old-image']);
         $this->new = Deployment::factory()->for($this->environment)->create(['commit_sha' => self::SHA]);

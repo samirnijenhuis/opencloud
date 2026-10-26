@@ -12,9 +12,11 @@ use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\User;
+use App\Presets\EnvProfileKind;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
 
@@ -35,6 +37,7 @@ class ApplicationControllerTest extends TestCase
             'branch' => 'main',
             'cluster_id' => $this->makeCluster()->id,
             'type' => 'laravel',
+            'env_profile' => 'laravel',
             'size' => 's',
             'min_instances' => 1,
             'max_instances' => 3,
@@ -106,12 +109,50 @@ class ApplicationControllerTest extends TestCase
                 ->where('clusters.0.ingress_ip', '203.0.113.10')
                 ->where('sizes.1', ['value' => 's', 'cpu_millicores' => 500, 'memory_mib' => 512])
                 ->has('sizes', 4)
-                ->where('defaultProcesses', [
-                    'laravel' => [
-                        ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
-                        ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
+                ->where('presets', [
+                    [
+                        'value' => 'laravel',
+                        'port' => 8080,
+                        'chooses_port' => false,
+                        'uses_build_command' => true,
+                        'deploy_commands' => ['php artisan migrate --force'],
+                        'processes' => [
+                            ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
+                            ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
+                        ],
+                        'database' => 'mysql',
+                        'env_profile' => 'laravel',
                     ],
-                    'dockerfile' => [],
+                    [
+                        'value' => 'node',
+                        'port' => 3000,
+                        'chooses_port' => true,
+                        'uses_build_command' => true,
+                        'deploy_commands' => [],
+                        'processes' => [],
+                        'database' => 'none',
+                        'env_profile' => 'generic',
+                    ],
+                    [
+                        'value' => 'static',
+                        'port' => 8080,
+                        'chooses_port' => false,
+                        'uses_build_command' => false,
+                        'deploy_commands' => [],
+                        'processes' => [],
+                        'database' => 'none',
+                        'env_profile' => 'generic',
+                    ],
+                    [
+                        'value' => 'dockerfile',
+                        'port' => 8080,
+                        'chooses_port' => true,
+                        'uses_build_command' => false,
+                        'deploy_commands' => [],
+                        'processes' => [],
+                        'database' => 'none',
+                        'env_profile' => 'generic',
+                    ],
                 ]));
     }
 
@@ -138,7 +179,8 @@ class ApplicationControllerTest extends TestCase
                 'repository' => 'https://github.com/acme/shop.git',
                 'cluster_id' => $this->cluster->id,
                 'type' => ApplicationType::Laravel,
-                'port' => 8080,
+                'env_profile' => EnvProfileKind::Laravel,
+                'port' => null,
                 'branch' => 'main',
                 'env' => [
                     ['key' => 'APP_ENV', 'value' => 'production', 'is_secret' => false, 'available_at' => 'runtime'],
@@ -179,6 +221,7 @@ class ApplicationControllerTest extends TestCase
             'repository' => 'https://github.com/acme/shop.git',
             'cluster_id' => $this->makeCluster()->id,
             'type' => 'dockerfile',
+            'env_profile' => 'generic',
             'port' => 3000,
             'size' => 'm',
             'min_instances' => 2,
@@ -193,6 +236,71 @@ class ApplicationControllerTest extends TestCase
         $this->assertSame(['shop', ApplicationType::Dockerfile, 3000, EnvironmentKind::Permanent], [$application->name, $application->type, $application->port, $production->kind]);
         $this->assertSame(['m', 2, 4, 60, []], [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->processes->all()]);
         $this->assertSame(0, AuditEvent::where('action', 'environment.updated')->count());
+    }
+
+    /**
+     * What the form posts after a click on each preset, and what opencloud stores: the type, the env profile, the
+     * port, the deploy commands, the health path, the processes, the user env keys, and the databases.
+     *
+     * @return array<string, array{array<string, mixed>, list<mixed>}>
+     */
+    public static function presetForms(): array
+    {
+        $laravelProcesses = [
+            ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
+            ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
+        ];
+
+        return [
+            'laravel' => [
+                ['type' => 'laravel', 'env_profile' => 'laravel', 'port' => null, 'deploy_commands' => ['php artisan migrate --force'], 'processes' => $laravelProcesses, 'database' => 'mysql'],
+                ['laravel', 'laravel', 8080, ['php artisan migrate --force'], '/up', ['worker', 'scheduler'], ['APP_KEY'], ['mysql']],
+            ],
+            'node with postgres' => [
+                ['type' => 'node', 'env_profile' => 'generic', 'port' => 3000, 'deploy_commands' => ['npx prisma migrate deploy'], 'processes' => [], 'database' => 'postgres'],
+                ['node', 'generic', 3000, ['npx prisma migrate deploy'], '/', [], [], ['postgres']],
+            ],
+            'static' => [
+                ['type' => 'static', 'env_profile' => 'generic', 'port' => null, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
+                ['static', 'generic', 8080, [], '/', [], [], []],
+            ],
+            'dockerfile' => [
+                ['type' => 'dockerfile', 'env_profile' => 'generic', 'port' => 3000, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
+                ['dockerfile', 'generic', 3000, [], '/', [], [], []],
+            ],
+            'dockerfile with the laravel names and postgres' => [
+                ['type' => 'dockerfile', 'env_profile' => 'laravel', 'port' => 8080, 'deploy_commands' => ['php /var/www/deploy.php'], 'processes' => [], 'database' => 'postgres'],
+                ['dockerfile', 'laravel', 8080, ['php /var/www/deploy.php'], '/', [], [], ['postgres']],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $form
+     * @param  list<mixed>  $expected
+     */
+    #[DataProvider('presetForms')]
+    public function test_the_form_creates_each_preset_with_its_defaults(array $form, array $expected): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+
+        $this->actingAs(User::factory()->owner()->create())
+            ->post('/applications', $this->validForm(['env' => [], ...$form]))
+            ->assertRedirect();
+
+        $application = Application::sole();
+        $production = $application->environments()->where('name', 'production')->sole();
+        $this->assertSame($expected, [
+            $application->type->value,
+            $application->env_profile->value,
+            $application->port,
+            $production->deploy_commands,
+            $production->health_path,
+            $production->processes()->pluck('name')->all(),
+            $production->envVars()->where('source', 'user')->orderBy('key')->pluck('key')->all(),
+            $production->datastoreAttachments()->with('datastore')->get()->map(fn ($attachment) => $attachment->datastore->kind->value)->all(),
+        ]);
     }
 
     public function test_a_repository_that_git_cannot_read_comes_back_as_a_form_error(): void
@@ -216,7 +324,9 @@ class ApplicationControllerTest extends TestCase
             'repository' => [['repository' => ''], 'repository'],
             'a repository that is not owner/repo or https' => [['repository' => 'git@github.com:acme/shop.git'], 'repository'],
             'an unknown cluster' => [['cluster_id' => 999], 'cluster_id'],
-            'a dockerfile app without a port' => [['type' => 'dockerfile', 'port' => null], 'port'],
+            'an unknown preset' => [['type' => 'rails'], 'type'],
+            'an unknown env profile' => [['env_profile' => 'django'], 'env_profile'],
+            'a port above 65535' => [['type' => 'dockerfile', 'port' => 65536], 'port'],
             'a maximum below the minimum' => [['min_instances' => 3, 'max_instances' => 2], 'max_instances'],
             'an unknown size' => [['size' => 'xl'], 'size'],
             'a cpu target of zero' => [['cpu_target' => 0], 'cpu_target'],

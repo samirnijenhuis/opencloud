@@ -243,6 +243,34 @@ class CreateApplicationTest extends TestCase
         $this->assertSame([['queue', 'node queue.js', 2, false]], self::processes($worker->environments()->where('name', 'production')->sole()));
     }
 
+    public function test_a_new_application_gets_the_env_profile_and_the_port_of_its_preset_unless_it_asks_for_others(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+        $cluster = Cluster::factory()->create();
+        $create = fn (string $name, array $extra) => app(CreateApplication::class)->handle(User::factory()->create(), [
+            'name' => $name,
+            'repository' => "acme/{$name}",
+            'cluster_id' => $cluster->id,
+            'database' => 'none',
+            ...$extra,
+        ]);
+
+        $applications = [
+            $create('shop', ['type' => 'laravel', 'port' => 3000]),
+            $create('api', ['type' => 'node']),
+            $create('worker', ['type' => 'node', 'port' => 4000]),
+            $create('docs', ['type' => 'static', 'port' => 3000]),
+            $create('site', ['type' => 'dockerfile']),
+            $create('php', ['type' => 'dockerfile', 'env_profile' => 'laravel', 'port' => 9000]),
+        ];
+
+        $this->assertSame(
+            [['shop', 'laravel', 8080], ['api', 'generic', 3000], ['worker', 'generic', 4000], ['docs', 'generic', 8080], ['site', 'generic', 8080], ['php', 'laravel', 9000]],
+            array_map(fn (Application $application) => [$application->name, $application->env_profile->value, $application->port], $applications),
+        );
+    }
+
     public function test_a_missing_branch_creates_nothing(): void
     {
         Queue::fake();

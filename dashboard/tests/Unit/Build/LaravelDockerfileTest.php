@@ -2,12 +2,12 @@
 
 namespace Tests\Unit\Build;
 
-use App\Build\DockerfileTemplate;
+use App\Build\LaravelDockerfile;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
-class DockerfileTemplateTest extends TestCase
+class LaravelDockerfileTest extends TestCase
 {
     public function test_the_stock_laravel_app_gets_php_8_4_and_the_asset_build(): void
     {
@@ -55,25 +55,6 @@ class DockerfileTemplateTest extends TestCase
             DOCKERFILE, $this->template()->render($composer, $package));
     }
 
-    /** @return array<string, array{array<string, mixed>, string}> */
-    public static function pnpmProjects(): array
-    {
-        return [
-            'packageManager wins' => [['packageManager' => 'pnpm@9.15.4+sha512.abc', 'engines' => ['pnpm' => '^11.0.0']], '9.15.4'],
-            'engines range' => [['engines' => ['pnpm' => '^11.0.0']], '^11.0.0'],
-            'nothing set' => [['private' => true], 'latest'],
-            'yarn as package manager' => [['packageManager' => 'yarn@4.1.0'], 'latest'],
-            'unsafe engines value' => [['engines' => ['pnpm' => '11; rm -rf /']], 'latest'],
-        ];
-    }
-
-    /** @param  array<string, mixed>  $package */
-    #[DataProvider('pnpmProjects')]
-    public function test_the_pnpm_version_follows_the_project(array $package, string $expected): void
-    {
-        $this->assertSame($expected, DockerfileTemplate::pnpmVersion($package));
-    }
-
     public function test_extensions_build_secrets_and_the_build_command_without_package_json(): void
     {
         $composer = ['require' => [
@@ -110,7 +91,7 @@ class DockerfileTemplateTest extends TestCase
             EXPOSE 8080
             CMD ["sh", "-c", "php artisan optimize || echo 'opencloud: php artisan optimize failed, so the app starts without caches'; exec frankenphp run --config /etc/frankenphp/Caddyfile --adapter caddyfile"]
 
-            DOCKERFILE, (new DockerfileTemplate(['8.2', '8.3', '8.4'], 'ghcr.io/acme/php:{php}-frankenphp'))->render(
+            DOCKERFILE, (new LaravelDockerfile(['8.2', '8.3', '8.4'], 'ghcr.io/acme/php:{php}-frankenphp'))->render(
             $composer,
             null,
             ['COMPOSER_AUTH', 'NOVA_LICENSE'],
@@ -149,7 +130,7 @@ class DockerfileTemplateTest extends TestCase
     #[DataProvider('phpChoices')]
     public function test_it_picks_the_highest_listed_php_minor_that_composer_allows(array $composer, array $versions, string $expected): void
     {
-        $this->assertSame($expected, (new DockerfileTemplate($versions, 'php:{php}'))->phpVersion($composer));
+        $this->assertSame($expected, (new LaravelDockerfile($versions, 'php:{php}'))->phpVersion($composer));
     }
 
     public function test_it_refuses_a_php_requirement_without_a_base_image(): void
@@ -160,8 +141,8 @@ class DockerfileTemplateTest extends TestCase
         $this->template()->phpVersion(['require' => ['php' => '^7.4']]);
     }
 
-    private function template(): DockerfileTemplate
+    private function template(): LaravelDockerfile
     {
-        return new DockerfileTemplate(['8.2', '8.3', '8.4'], 'dunglas/frankenphp:1-php{php}');
+        return new LaravelDockerfile(['8.2', '8.3', '8.4'], 'dunglas/frankenphp:1-php{php}');
     }
 }

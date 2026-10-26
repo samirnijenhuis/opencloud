@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type DeploymentStatus, type EnvironmentKind } from '@/types';
+import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
@@ -33,7 +33,7 @@ type PreviewSettings = {
 };
 
 type Props = {
-    application: { id: number; name: string; repository: string; type: 'laravel' | 'dockerfile' };
+    application: { id: number; name: string; repository: string; type: ApplicationType };
     environments: EnvironmentRow[];
     previews: PreviewSettings;
     canUpdate: boolean;
@@ -122,7 +122,7 @@ export default function ApplicationShow({ application, environments, previews, c
                 <div className="space-y-1">
                     <h1 className="text-2xl font-semibold tracking-tight">{application.name}</h1>
                     <p className="text-muted-foreground text-sm">
-                        {application.repository} - {application.type === 'laravel' ? 'Laravel' : 'Dockerfile'}
+                        {application.repository} - {applicationTypeLabels[application.type]}
                     </p>
                 </div>
 

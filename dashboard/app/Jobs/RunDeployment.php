@@ -92,14 +92,7 @@ class RunDeployment implements ShouldQueue
         $deployment->started_at = now();
         $deployment->moveTo(DeploymentStatus::Building);
 
-        $build = $builder->build($deployment, $log);
-
-        if ($application->type !== $build->type) {
-            $application->update(['type' => $build->type]);
-            $log->write("The repository is a {$build->type->value} app.");
-        }
-
-        $deployment->image = ImageCopy::toCluster($deployment, $build->image, $log);
+        $deployment->image = ImageCopy::toCluster($deployment, $builder->build($deployment, $log), $log);
         $deployment->moveTo(DeploymentStatus::Deploying);
 
         $this->waitForDatastores($environment, $log);

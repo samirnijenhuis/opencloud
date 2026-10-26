@@ -31,8 +31,15 @@ final class Builder
     /** Files that a Laravel image never needs. BuildKit reads "<dockerfile>.dockerignore" next to the Dockerfile. */
     private const LARAVEL_IGNORE = ".git\n.env\nnode_modules\nvendor\n";
 
-    /** @throws RuntimeException when the clone or the build fails */
-    public function build(Deployment $deployment, DeploymentLog $log): BuildResult
+    /** Files that a Node image or a static site never needs. A static site without a build serves the repository root. */
+    private const NODE_IGNORE = ".git\nnode_modules\n";
+
+    /**
+     * @return string the image reference
+     *
+     * @throws RuntimeException when the clone or the build fails, or when the repository does not fit the preset
+     */
+    public function build(Deployment $deployment, DeploymentLog $log): string
     {
         $environment = $deployment->environment;
         $application = $environment->application;
@@ -44,7 +51,7 @@ final class Builder
             Git::checkout($application->cloneUrl(), $deployment->commit_sha, $dir);
 
             $buildEnv = EnvironmentVariables::build($environment);
-            [$type, $dockerfile] = $this->prepare($dir, array_keys($buildEnv), $environment->build_command);
+            $dockerfile = $this->prepare($application->type, $dir, array_keys($buildEnv), $environment->build_command);
             $image = self::imageReference($deployment);
             $log->write("Building {$image} from {$dockerfile}.");
 
@@ -60,7 +67,7 @@ final class Builder
                 throw new RuntimeException("buildctl exited with code {$exitCode}.");
             }
 
-            return new BuildResult($image, $type);
+            return $image;
         } finally {
             File::deleteDirectory($dir);
         }
@@ -92,27 +99,72 @@ final class Builder
     }
 
     /**
+     * The preset of the application picks the Dockerfile. The repository only fills it in.
+     *
      * @param  list<string>  $secrets
-     * @return array{0: ApplicationType, 1: string} the app type and the Dockerfile name
+     * @return string the name of the Dockerfile in $dir
      */
-    private function prepare(string $dir, array $secrets, ?string $buildCommand): array
+    private function prepare(ApplicationType $type, string $dir, array $secrets, ?string $buildCommand): string
+    {
+        return match ($type) {
+            ApplicationType::Laravel => self::generate($dir, self::LARAVEL_IGNORE, LaravelDockerfile::fromConfig()->render(
+                self::laravelComposer($dir), self::readJson("{$dir}/package.json"), $secrets, $buildCommand,
+            )),
+            ApplicationType::Node => self::generate($dir, self::NODE_IGNORE, NodeDockerfile::render(
+                self::nodeProject($dir) ?? throw new RuntimeException('The application uses the Node.js preset, but the repository has no package.json at its root.'),
+                $secrets,
+                $buildCommand,
+            )),
+            ApplicationType::Static => self::generate($dir, self::NODE_IGNORE, StaticDockerfile::render(self::nodeProject($dir), $secrets)),
+            ApplicationType::Dockerfile => self::repositoryDockerfile($dir, $secrets),
+        };
+    }
+
+    private static function nodeProject(string $dir): ?NodeProject
+    {
+        $package = self::readJson("{$dir}/package.json");
+        $lockFiles = array_filter(NodeProject::LOCK_FILES, fn (string $file) => is_file("{$dir}/{$file}"));
+
+        return $package === null ? null : new NodeProject($package, $lockFiles === [] ? null : reset($lockFiles));
+    }
+
+    private static function generate(string $dir, string $ignore, string $dockerfile): string
+    {
+        file_put_contents("{$dir}/".self::GENERATED_DOCKERFILE, $dockerfile);
+        file_put_contents("{$dir}/".self::GENERATED_DOCKERFILE.'.dockerignore', $ignore);
+
+        return self::GENERATED_DOCKERFILE;
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws RuntimeException when composer.json does not require laravel/framework
+     */
+    private static function laravelComposer(string $dir): array
     {
         $composer = self::readJson("{$dir}/composer.json");
 
-        if (isset($composer['require']['laravel/framework'])) {
-            $text = DockerfileTemplate::fromConfig()->render($composer, self::readJson("{$dir}/package.json"), $secrets, $buildCommand);
-            file_put_contents("{$dir}/".self::GENERATED_DOCKERFILE, $text);
-            file_put_contents("{$dir}/".self::GENERATED_DOCKERFILE.'.dockerignore', self::LARAVEL_IGNORE);
-
-            return [ApplicationType::Laravel, self::GENERATED_DOCKERFILE];
+        if (! isset($composer['require']['laravel/framework'])) {
+            throw new RuntimeException('The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.');
         }
 
+        return $composer;
+    }
+
+    /**
+     * @param  list<string>  $secrets
+     *
+     * @throws RuntimeException when the repository has no Dockerfile
+     */
+    private static function repositoryDockerfile(string $dir, array $secrets): string
+    {
         if (! is_file("{$dir}/Dockerfile")) {
-            throw new RuntimeException('The repository has no Dockerfile at its root, and its composer.json does not require laravel/framework.');
+            throw new RuntimeException('The application uses the Dockerfile preset, but the repository has no Dockerfile at its root.');
         }
 
         if ($secrets === []) {
-            return [ApplicationType::Dockerfile, 'Dockerfile'];
+            return 'Dockerfile';
         }
 
         file_put_contents("{$dir}/".self::DECLARED_DOCKERFILE, self::declareInEachStage(file_get_contents("{$dir}/Dockerfile"), self::BUILD_ENV_ARG));
@@ -122,7 +174,7 @@ final class Builder
             copy("{$dir}/Dockerfile.dockerignore", "{$dir}/".self::DECLARED_DOCKERFILE.'.dockerignore');
         }
 
-        return [ApplicationType::Dockerfile, self::DECLARED_DOCKERFILE];
+        return self::DECLARED_DOCKERFILE;
     }
 
     /**

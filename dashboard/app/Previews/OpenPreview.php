@@ -4,7 +4,6 @@ namespace App\Previews;
 
 use App\Actions\AttachDatastore;
 use App\Actions\StartDeployment;
-use App\Enums\ApplicationType;
 use App\Enums\DatastoreSource;
 use App\Enums\EnvironmentKind;
 use App\Enums\EnvVarAvailability;
@@ -125,19 +124,18 @@ class OpenPreview
         });
     }
 
-    /**
-     * Copies each user value of the template, secrets too, as values of the preview. A Laravel preview without
-     * an APP_KEY gets its own, because production keeps its key to itself.
-     */
+    /** Copies each user value of the template, secrets too, as values of the preview. The preset generates each secret that the template lacks. */
     private function copyEnv(Application $application, Environment $template, Environment $preview): void
     {
         $copied = $template->envVars()->where('source', EnvVarSource::User)->orderBy('key')->get()
             ->map(fn (EnvVar $var) => $preview->envVars()->create($var->only(['key', 'value', 'is_secret', 'available_at', 'source']))->key);
         $generated = [];
 
-        if ($application->type === ApplicationType::Laravel && ! $copied->contains('APP_KEY')) {
-            $preview->envVars()->create(['key' => 'APP_KEY', 'value' => 'base64:'.base64_encode(random_bytes(32)), 'is_secret' => true, 'available_at' => EnvVarAvailability::Runtime]);
-            $generated[] = 'APP_KEY';
+        foreach ($application->type->generatedSecrets() as $key => $value) {
+            if (! $copied->contains($key)) {
+                $preview->envVars()->create(['key' => $key, 'value' => $value, 'is_secret' => true, 'available_at' => EnvVarAvailability::Runtime]);
+                $generated[] = $key;
+            }
         }
 
         AuditEvent::record(null, 'preview.env_copied', $preview, ['keys' => $copied->all(), 'generated' => $generated]);

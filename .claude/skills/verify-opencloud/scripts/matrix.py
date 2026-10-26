@@ -74,7 +74,7 @@ class Cell:
         return None if text is None else text.replace('{cell}', self.id)
 
     def create_database(self):
-        # The create form offers a database for a Laravel app only. Other apps add one with Add resource.
+        # A Dockerfile fixture gets its database on the second deploy, so the matrix also proves Add resource.
         if self.fixture['type'] != 'laravel':
             return 'none'
         return {'mysql': 'mysql', 'mysqlpostgres': 'mysql', 'postgres': 'postgres'}.get(self.db, 'none')
@@ -245,6 +245,7 @@ class CellRun:
             'branch': fixture['branch'],
             'cluster_id': self.cluster_id,
             'type': fixture['type'],
+            'env_profile': fixture['env_profile'],
             'port': fixture.get('port'),
             'size': 'xs',
             'min_instances': 1,

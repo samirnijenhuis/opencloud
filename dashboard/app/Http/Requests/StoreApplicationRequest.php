@@ -7,6 +7,7 @@ use App\Enums\EnvVarAvailability;
 use App\Enums\Size;
 use App\Models\Application;
 use App\Models\Process;
+use App\Presets\EnvProfileKind;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -70,7 +71,8 @@ class StoreApplicationRequest extends FormRequest
             'branch' => ['nullable', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
             'cluster_id' => ['required', 'integer', 'exists:clusters,id'],
             'type' => ['required', Rule::enum(ApplicationType::class)],
-            'port' => ['nullable', 'required_if:type,dockerfile', 'integer', 'between:1,65535'],
+            'env_profile' => ['required', Rule::enum(EnvProfileKind::class)],
+            'port' => ['nullable', 'integer', 'between:1,65535'],
             'size' => ['required', Rule::enum(Size::class)],
             'min_instances' => ['required', 'integer', 'min:1', 'max:50'],
             'max_instances' => ['required', 'integer', 'min:1', 'max:50', 'gte:min_instances'],

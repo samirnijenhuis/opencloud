@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ApplicationType;
 use App\GitHub\RepositoryName;
+use App\Presets\EnvProfileKind;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +15,7 @@ class Application extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'allow_forks', 'preview_domain'];
+    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'env_profile', 'port', 'previews_enabled', 'allow_forks', 'preview_domain'];
 
     protected $attributes = [
         'port' => 8080,
@@ -26,6 +27,7 @@ class Application extends Model
     {
         return [
             'type' => ApplicationType::class,
+            'env_profile' => EnvProfileKind::class,
             'port' => 'integer',
             'previews_enabled' => 'boolean',
             'allow_forks' => 'boolean',
