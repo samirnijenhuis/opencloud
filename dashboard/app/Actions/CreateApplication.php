@@ -10,8 +10,8 @@ use App\Enums\EnvVarAvailability;
 use App\Environments\DefaultDomain;
 use App\Models\Application;
 use App\Models\AuditEvent;
-use App\Models\Process;
 use App\Models\User;
+use App\Presets\EnvProfileKind;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -29,15 +29,15 @@ class CreateApplication
     /**
      * Creates the application, its protected production environment, the preview template, the env values,
      * the processes, the database, the domains, and the free sslip.io domain. Then it starts the first deployment of production.
-     * A Laravel app gets a MySQL database unless `database` is `none`. Other apps get one only when `database` asks.
-     * Without `processes`, the environments get the defaults of the type: a worker and a scheduler for Laravel, none for a Dockerfile app.
+     * Each value that `$data` leaves out comes from the preset in `type`.
      *
      * @param array{
      *     name: string,
      *     repository: string,
      *     cluster_id: int,
      *     type?: ApplicationType|string,
-     *     port?: int,
+     *     env_profile?: EnvProfileKind|string,
+     *     port?: int|null,
      *     branch?: string,
      *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
      *     domains?: list<string>,
@@ -51,8 +51,8 @@ class CreateApplication
         $type = $data['type'] ?? ApplicationType::Laravel;
         $type = $type instanceof ApplicationType ? $type : ApplicationType::from($type);
         $env = $data['env'] ?? [];
-        $database = $data['database'] ?? ($type === ApplicationType::Laravel ? 'mysql' : 'none');
-        $processes = $data['processes'] ?? Process::defaultsFor($type);
+        $database = $data['database'] ?? $type->database();
+        $processes = $data['processes'] ?? $type->processes();
 
         // A wrong repository or branch fails here, before any record exists.
         $cloneUrl = (new Application(['repository' => $data['repository']]))->cloneUrl();
@@ -65,11 +65,13 @@ class CreateApplication
                 'repository' => $data['repository'],
                 'cluster_id' => $data['cluster_id'],
                 'type' => $type,
-                'port' => $data['port'] ?? 8080,
+                'env_profile' => $data['env_profile'] ?? $type->envProfile(),
+                'port' => $type->choosesPort() ? ($data['port'] ?? $type->defaultPort()) : $type->defaultPort(),
             ]);
 
             $settings = [
-                ...($type === ApplicationType::Laravel ? ['deploy_commands' => ['php artisan migrate --force']] : ['health_path' => '/']),
+                'deploy_commands' => $type->deployCommands(),
+                'health_path' => $type->healthPath(),
                 ...($data['settings'] ?? []),
             ];
 
@@ -98,8 +100,8 @@ class CreateApplication
                 $this->addProcess->handle($template, $by, $process['name'], $process['command'], 1, $exclusive);
             }
 
-            if ($type === ApplicationType::Laravel && ! in_array('APP_KEY', array_column($env, 'key'), true)) {
-                $this->setEnvVar->handle($production, $by, 'APP_KEY', 'base64:'.base64_encode(random_bytes(32)), true, EnvVarAvailability::Runtime);
+            foreach (array_diff_key($type->generatedSecrets(), array_flip(array_column($env, 'key'))) as $key => $value) {
+                $this->setEnvVar->handle($production, $by, $key, $value, true, EnvVarAvailability::Runtime);
             }
 
             foreach ($env as $value) {

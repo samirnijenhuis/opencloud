@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { type EnvironmentLink, type EnvironmentPageProps } from '@/types';
+import { applicationTypeLabels, type EnvironmentLink, type EnvironmentPageProps } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react';
 
@@ -143,7 +143,7 @@ export default function EnvironmentLayout({
                                 <DeploymentBadge status={environment.status} />
                             </h1>
                             <p className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
-                                <span>{application.type === 'laravel' ? 'Laravel' : 'Dockerfile'}</span>
+                                <span>{applicationTypeLabels[application.type]}</span>
                                 <span className="inline-flex min-w-0 items-center gap-1">
                                     <GitBranch className="size-3.5 shrink-0" />
                                     <span className="break-all">

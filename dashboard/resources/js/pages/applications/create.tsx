@@ -9,18 +9,48 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { parseDotenv, sizeLabel, sizeText } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { type ProcessValues, type Size, type SizeOption } from '@/types';
+import { applicationTypeLabels, type ApplicationType, type EnvProfileKind, type ProcessValues, type Size, type SizeOption } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 type Cluster = { id: number; name: string; kind: string; ingress_ip: string | null };
 type EnvRow = { key: string; value: string; is_secret: boolean };
+type Database = 'mysql' | 'postgres' | 'none';
+
+/** The defaults of one preset, from the server. */
+type Preset = {
+    value: ApplicationType;
+    port: number;
+    chooses_port: boolean;
+    uses_build_command: boolean;
+    deploy_commands: string[];
+    processes: ProcessValues[];
+    database: Database;
+    env_profile: EnvProfileKind;
+};
+
+const presetText: Record<ApplicationType, { hint: string; buildCommand: string }> = {
+    laravel: {
+        hint: 'FrankenPHP, a queue worker, and a scheduler',
+        buildCommand: 'Optional extra step after the build, for example php artisan icons:cache',
+    },
+    dockerfile: {
+        hint: 'The Dockerfile of the repository',
+        buildCommand: 'Not used. The Dockerfile builds the image.',
+    },
+};
+
+const envProfiles: { value: EnvProfileKind; label: string; hint: string }[] = [
+    { value: 'laravel', label: 'Laravel names', hint: 'DB_HOST, REDIS_HOST, AWS_BUCKET' },
+    { value: 'generic', label: 'URLs', hint: 'DATABASE_URL, REDIS_URL, AWS_BUCKET' },
+];
 
 type FormData = {
     repository: string;
     branch: string;
     cluster_id: string;
-    type: 'laravel' | 'dockerfile';
+    type: ApplicationType;
+    env_profile: EnvProfileKind;
     port: string;
     size: Size;
     min_instances: number;
@@ -31,7 +61,7 @@ type FormData = {
     processes: ProcessValues[];
     env: EnvRow[];
     domain: string;
-    database: 'mysql' | 'postgres' | 'none';
+    database: Database;
 };
 
 const looksSecret = (key: string) => /(SECRET|PASSWORD|TOKEN|KEY|AUTH)/i.test(key);
@@ -68,44 +98,40 @@ export default function ApplicationCreate({
     clusters,
     defaultClusterId,
     sizes,
-    defaultProcesses,
+    presets,
 }: {
     clusters: Cluster[];
     defaultClusterId: number | null;
     sizes: SizeOption[];
-    defaultProcesses: Record<FormData['type'], ProcessValues[]>;
+    presets: Preset[];
 }) {
+    const defaults = (preset: Preset) => ({
+        type: preset.value,
+        env_profile: preset.env_profile,
+        port: String(preset.port),
+        deploy_commands: preset.deploy_commands.join('\n'),
+        processes: preset.processes,
+        database: preset.database,
+    });
     const form = useForm<FormData>({
         repository: '',
         branch: '',
         cluster_id: defaultClusterId ? String(defaultClusterId) : '',
-        type: 'laravel',
-        port: '8080',
         size: 's',
         min_instances: 1,
         max_instances: 1,
         cpu_target: 70,
         build_command: '',
-        deploy_commands: 'php artisan migrate --force',
-        processes: defaultProcesses.laravel,
         env: [],
         domain: '',
-        database: 'mysql',
+        ...defaults(presets[0]),
     });
     const { data, setData, errors, processing } = form;
     const [pasting, setPasting] = useState(false);
     const [pasted, setPasted] = useState('');
-    const laravel = data.type === 'laravel';
+    const preset = presets.find((each) => each.value === data.type) ?? presets[0];
 
-    const changeType = (type: FormData['type']) => {
-        setData((current) => ({
-            ...current,
-            type,
-            deploy_commands: type === 'laravel' ? 'php artisan migrate --force' : '',
-            database: type === 'laravel' ? 'mysql' : 'none',
-            processes: defaultProcesses[type],
-        }));
-    };
+    const changePreset = (next: Preset) => setData((current) => ({ ...current, ...defaults(next) }));
 
     const setProcess = (index: number, change: Partial<ProcessValues>) => {
         setData(
@@ -141,7 +167,7 @@ export default function ApplicationCreate({
         e.preventDefault();
         form.transform((current) => ({
             ...current,
-            port: laravel ? null : current.port,
+            port: preset.chooses_port ? current.port : null,
             deploy_commands: current.deploy_commands.split('\n'),
             env: current.env.filter((row) => row.key.trim() !== ''),
         }));
@@ -201,16 +227,17 @@ export default function ApplicationCreate({
                         <InputError message={errors.cluster_id} />
                     </Row>
 
-                    <Row label="Type">
+                    <Row label="Preset" hint="The defaults for the kind of app. You can change each one below.">
                         <div className="flex flex-wrap gap-2">
-                            <Chip selected={laravel} onClick={() => changeType('laravel')}>
-                                Laravel
-                            </Chip>
-                            <Chip selected={!laravel} onClick={() => changeType('dockerfile')}>
-                                Dockerfile
-                            </Chip>
+                            {presets.map((each) => (
+                                <Chip key={each.value} selected={data.type === each.value} onClick={() => changePreset(each)}>
+                                    <span className="font-medium">{applicationTypeLabels[each.value]}</span>
+                                    <span className="text-muted-foreground block text-xs">{presetText[each.value].hint}</span>
+                                </Chip>
+                            ))}
                         </div>
-                        {!laravel && (
+                        <InputError message={errors.type} />
+                        {preset.chooses_port && (
                             <div className="flex items-center gap-2">
                                 <Label htmlFor="port">Port</Label>
                                 <Input id="port" type="number" className="w-28" value={data.port} onChange={(e) => setData('port', e.target.value)} />
@@ -271,11 +298,8 @@ export default function ApplicationCreate({
                     <Row label="Build command" hint="Optional">
                         <Input
                             className="font-mono text-sm"
-                            placeholder={
-                                laravel
-                                    ? 'Optional extra step after the build, for example php artisan icons:cache'
-                                    : 'Not used. The Dockerfile builds the image.'
-                            }
+                            placeholder={presetText[preset.value].buildCommand}
+                            disabled={!preset.uses_build_command}
                             value={data.build_command}
                             onChange={(e) => setData('build_command', e.target.value)}
                         />
@@ -419,21 +443,35 @@ export default function ApplicationCreate({
                         <InputError message={errors.domain} />
                     </Row>
 
-                    {laravel && (
-                        <Row label="Database" hint="opencloud creates it and sets the DB_ values.">
-                            <Select value={data.database} onValueChange={(value) => setData('database', value as FormData['database'])}>
-                                <SelectTrigger className="w-full sm:w-72" aria-label="Database">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="mysql">MySQL</SelectItem>
-                                    <SelectItem value="postgres">Postgres</SelectItem>
-                                    <SelectItem value="none">None</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.database} />
-                        </Row>
-                    )}
+                    <Row label="Env names" hint="The names of the values that a database, Valkey, or a bucket sets.">
+                        <div className="flex flex-wrap gap-2">
+                            {envProfiles.map((profile) => (
+                                <Chip
+                                    key={profile.value}
+                                    selected={data.env_profile === profile.value}
+                                    onClick={() => setData('env_profile', profile.value)}
+                                >
+                                    <span className="font-medium">{profile.label}</span>
+                                    <span className="text-muted-foreground block font-mono text-xs">{profile.hint}</span>
+                                </Chip>
+                            ))}
+                        </div>
+                        <InputError message={errors.env_profile} />
+                    </Row>
+
+                    <Row label="Database" hint="opencloud creates it and sets its env values.">
+                        <Select value={data.database} onValueChange={(value) => setData('database', value as Database)}>
+                            <SelectTrigger className="w-full sm:w-72" aria-label="Database">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="mysql">MySQL</SelectItem>
+                                <SelectItem value="postgres">Postgres</SelectItem>
+                                <SelectItem value="none">None</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError message={errors.database} />
+                    </Row>
                 </div>
 
                 <div className="mt-6 flex items-center gap-3">

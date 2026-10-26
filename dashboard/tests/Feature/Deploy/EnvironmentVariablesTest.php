@@ -18,6 +18,7 @@ use App\Models\EnvVar;
 use App\Presets\EnvProfileKind;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class EnvironmentVariablesTest extends TestCase
@@ -63,14 +64,33 @@ class EnvironmentVariablesTest extends TestCase
         );
     }
 
-    public function test_a_dockerfile_app_gets_no_system_defaults(): void
+    /** @return array<string, array{ApplicationType, int, array<string, string>}> */
+    public static function presets(): array
     {
-        $application = Application::factory()->create(['type' => ApplicationType::Dockerfile]);
+        return [
+            'laravel' => [ApplicationType::Laravel, 8080, ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'APP_URL' => 'https://api.example.com', 'LOG_CHANNEL' => 'stderr']],
+            'dockerfile' => [ApplicationType::Dockerfile, 3000, ['APP_URL' => 'https://api.example.com', 'PORT' => '3000']],
+        ];
+    }
+
+    /** @param  array<string, string>  $expected */
+    #[DataProvider('presets')]
+    public function test_each_preset_has_its_own_system_values(ApplicationType $type, int $port, array $expected): void
+    {
+        $application = Application::factory()->create(['type' => $type, 'port' => $port]);
         $environment = Environment::factory()->for($application)->create();
         Domain::factory()->for($environment)->create(['hostname' => 'api.example.com']);
-        $this->envVar($environment, 'PORT', '3000', EnvVarSource::User);
 
-        $this->assertSame(['PORT' => '3000'], EnvironmentVariables::runtime($environment));
+        $this->assertSame($expected, EnvironmentVariables::runtime($environment));
+    }
+
+    public function test_a_user_port_beats_the_port_of_the_application(): void
+    {
+        $application = Application::factory()->create(['type' => ApplicationType::Dockerfile, 'port' => 3000]);
+        $environment = Environment::factory()->for($application)->create();
+        $this->envVar($environment, 'PORT', '4000', EnvVarSource::User);
+
+        $this->assertSame(['PORT' => '4000'], EnvironmentVariables::runtime($environment));
     }
 
     public function test_values_of_other_environments_stay_out(): void

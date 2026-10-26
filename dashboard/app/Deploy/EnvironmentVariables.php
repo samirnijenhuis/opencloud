@@ -2,7 +2,6 @@
 
 namespace App\Deploy;
 
-use App\Enums\ApplicationType;
 use App\Enums\EnvVarAvailability;
 use App\Enums\EnvVarSource;
 use App\Models\Environment;
@@ -47,17 +46,9 @@ final class EnvironmentVariables
     /** @return array<string, string> */
     private static function systemDefaults(Environment $environment): array
     {
-        if ($environment->application->type !== ApplicationType::Laravel) {
-            return [];
-        }
-
-        $defaults = ['APP_ENV' => 'production', 'APP_DEBUG' => 'false', 'LOG_CHANNEL' => 'stderr'];
+        $application = $environment->application;
         $hostname = $environment->domains()->orderBy('id')->value('hostname');
 
-        if ($hostname !== null) {
-            $defaults['APP_URL'] = "https://{$hostname}";
-        }
-
-        return $defaults;
+        return $application->type->systemEnv($application->port, $hostname === null ? null : "https://{$hostname}");
     }
 }

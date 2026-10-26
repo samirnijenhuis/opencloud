@@ -24,8 +24,8 @@ use App\Models\DatastoreAttachment;
 use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
-use App\Models\Process;
 use App\Models\User;
+use App\Presets\EnvProfileKind;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -50,7 +50,7 @@ class DemoSeeder extends Seeder
         ]);
 
         $shop = Application::create(['name' => 'shop', 'repository' => 'https://github.com/acme/shop.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::Laravel]);
-        $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::Dockerfile, 'port' => 3000]);
+        $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::Dockerfile, 'env_profile' => EnvProfileKind::Generic, 'port' => 3000]);
 
         $production = $this->environment($shop, 'production', EnvironmentKind::Permanent, protected: true, attributes: [
             'size' => Size::M,
@@ -99,7 +99,7 @@ class DemoSeeder extends Seeder
         }
 
         foreach ($environments as $each) {
-            foreach (Process::defaultsFor($application->type) as $process) {
+            foreach ($application->type->processes() as $process) {
                 $each->processes()->create($process);
             }
         }

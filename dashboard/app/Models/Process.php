@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\ApplicationType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Validator;
@@ -44,23 +43,6 @@ class Process extends Model
     public function environment(): BelongsTo
     {
         return $this->belongsTo(Environment::class);
-    }
-
-    /**
-     * The processes of a new application. A Dockerfile app gets none, because opencloud does not know its commands.
-     *
-     * @return list<array{name: string, command: string, instances: int, exclusive: bool}>
-     */
-    public static function defaultsFor(ApplicationType $type): array
-    {
-        if ($type !== ApplicationType::Laravel) {
-            return [];
-        }
-
-        return [
-            ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
-            ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
-        ];
     }
 
     /**

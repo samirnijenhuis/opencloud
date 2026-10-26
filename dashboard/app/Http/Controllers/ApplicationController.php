@@ -14,7 +14,7 @@ use App\Models\Cluster;
 use App\Models\Deployment;
 use App\Models\Domain;
 use App\Models\Environment;
-use App\Models\Process;
+use App\Presets\EnvProfileKind;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -78,7 +78,16 @@ class ApplicationController extends Controller
                 'cpu_millicores' => $size->cpuMillicores(),
                 'memory_mib' => $size->memoryMib(),
             ], Size::cases()),
-            'defaultProcesses' => collect(ApplicationType::cases())->mapWithKeys(fn (ApplicationType $type) => [$type->value => Process::defaultsFor($type)]),
+            'presets' => array_map(fn (ApplicationType $type) => [
+                'value' => $type->value,
+                'port' => $type->defaultPort(),
+                'chooses_port' => $type->choosesPort(),
+                'uses_build_command' => $type->usesBuildCommand(),
+                'deploy_commands' => $type->deployCommands(),
+                'processes' => $type->processes(),
+                'database' => $type->database(),
+                'env_profile' => $type->envProfile(),
+            ], ApplicationType::cases()),
         ]);
     }
 
@@ -86,16 +95,14 @@ class ApplicationController extends Controller
     {
         $data = $request->validated();
         $user = $request->user();
-        $type = ApplicationType::from($data['type']);
-        $laravel = $type === ApplicationType::Laravel;
-
         try {
             $application = $createApplication->handle($user, [
                 'name' => $data['name'] ?? basename(preg_replace('/\.git$/', '', $data['repository'])),
                 'repository' => $data['repository'],
                 'cluster_id' => $data['cluster_id'],
-                'type' => $type,
-                'port' => $laravel ? 8080 : $data['port'],
+                'type' => ApplicationType::from($data['type']),
+                'env_profile' => EnvProfileKind::from($data['env_profile']),
+                'port' => $data['port'] ?? null,
                 'branch' => $data['branch'] ?? null,
                 'env' => array_map(fn (array $row) => [
                     'key' => $row['key'],
@@ -104,7 +111,7 @@ class ApplicationController extends Controller
                     'available_at' => $row['available_at'] ?? 'runtime',
                 ], $data['env'] ?? []),
                 'domains' => isset($data['domain']) ? [$data['domain']] : [],
-                'database' => $laravel ? $data['database'] : 'none',
+                'database' => $data['database'],
                 ...(isset($data['processes']) ? ['processes' => array_map(fn (array $row) => [
                     'name' => $row['name'],
                     'command' => $row['command'],
