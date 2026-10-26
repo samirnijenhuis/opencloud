@@ -11,7 +11,7 @@ use App\Models\User;
 /**
  * Everything opencloud does for one kind from one source: its storage shape, its provisioning, its release, its
  * connection, and its capabilities. Only Provisioners creates one, and it keys on kind and source together, so the
- * code for a managed datastore never reaches a kubectl engine.
+ * code for a managed datastore never reaches kubectl.
  *
  * Actions and jobs call one method per operation and do not test the source. The request-time methods run inside the
  * transaction of the action. provision() and release() run inside the queued job that this source dispatches, with the

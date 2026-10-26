@@ -4,7 +4,7 @@ namespace App\Datastores;
 
 /**
  * What opencloud does with one kind from one source, beyond attach and detach. The backend asks this value and does
- * not test a kind, a source, or an engine class. Whether an environment can have several of a kind follows from the
+ * not test a kind, a source, or a provisioner class. Whether an environment can have several of a kind follows from the
  * family of the kind, whatever the source.
  */
 final readonly class Capabilities
