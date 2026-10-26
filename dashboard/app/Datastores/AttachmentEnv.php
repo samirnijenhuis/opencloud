@@ -2,24 +2,31 @@
 
 namespace App\Datastores;
 
+use App\Datastores\Env\EnvProfile;
+use App\Datastores\Env\LaravelProfile;
 use App\Enums\EnvVarAvailability;
 use App\Enums\EnvVarSource;
 use App\Models\DatastoreAttachment;
+use App\Models\Environment;
 
 /**
- * Writes the env values of one attachment as env rows with the source datastore. Attach, the managed apply, and a new
- * default database all write through here, so the rows always match what the engine gives for the attachment now.
+ * The env of one attachment under the profile of its environment. It is the only code that turns a connection into
+ * env rows, and the only code that picks a profile. Attach, the managed apply, and a new default database all write
+ * through here, so the rows always match what the provisioner says about the attachment now.
  */
 final class AttachmentEnv
 {
+    /** An attachment without a connection yet (a managed database before its apply) has no rows. */
     public static function write(DatastoreAttachment $attachment): void
     {
         $attachment->envVars()->delete();
 
-        foreach (Engines::for($attachment->datastore->kind)->env($attachment) as $key => [$value, $isSecret]) {
+        $connection = Provisioners::of($attachment->datastore)->connection($attachment);
+
+        foreach ($connection?->envFor(self::profile($attachment->environment)) ?? [] as $key => $value) {
             $attachment->environment->envVars()->updateOrCreate(['key' => $key, 'source' => EnvVarSource::Datastore], [
-                'value' => $value,
-                'is_secret' => $isSecret,
+                'value' => $value->value,
+                'is_secret' => $value->secret,
                 'available_at' => EnvVarAvailability::Runtime,
                 'datastore_attachment_id' => $attachment->id,
             ]);
@@ -30,7 +37,13 @@ final class AttachmentEnv
     public static function configLine(DatastoreAttachment $attachment): ?string
     {
         return $attachment->name !== null && ! $attachment->is_default
-            ? DatabaseConnection::configLine($attachment->datastore->kind, $attachment->name)
+            ? self::profile($attachment->environment)->configLine($attachment->datastore->kind, $attachment->name)
             : null;
+    }
+
+    /** Every app gets the Laravel names until app presets pick a profile per app. */
+    private static function profile(Environment $environment): EnvProfile
+    {
+        return new LaravelProfile;
     }
 }
