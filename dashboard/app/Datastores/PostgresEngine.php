@@ -59,11 +59,6 @@ final class PostgresEngine implements SqlEngine
         ]);
     }
 
-    public function env(DatastoreAttachment $attachment): array
-    {
-        return DatabaseConnection::env($attachment);
-    }
-
     public function connection(DatastoreAttachment $attachment): ?Connection
     {
         return SqlConnection::of($attachment);

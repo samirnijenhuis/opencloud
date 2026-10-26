@@ -2,6 +2,7 @@
 
 namespace App\Datastores;
 
+use App\Datastores\Env\EnvProfile;
 use App\Enums\DatastoreKind;
 use App\Models\DatastoreAttachment;
 
@@ -43,5 +44,19 @@ final readonly class SqlConnection implements Connection
             $attachment->name,
             $attachment->is_default,
         );
+    }
+
+    /**
+     * scheme://user:password@host:port/database. The user and the password are percent-encoded, the database name is
+     * not. The profile gives the scheme, because frameworks differ on postgres:// and postgresql://.
+     */
+    public function url(string $scheme): string
+    {
+        return sprintf('%s://%s:%s@%s:%d/%s', $scheme, rawurlencode($this->username), rawurlencode($this->password), $this->host, $this->port, $this->database);
+    }
+
+    public function envFor(EnvProfile $profile): array
+    {
+        return $profile->database($this);
     }
 }

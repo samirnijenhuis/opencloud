@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Migrations;
 
-use App\Datastores\DatabaseConnection;
+use App\Datastores\Env\EnvValue;
+use App\Datastores\Env\LaravelProfile;
+use App\Datastores\SqlConnection;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
 use App\Enums\EnvVarSource;
@@ -60,7 +62,7 @@ class AddConnectionNamesToDatastoreAttachmentsTest extends TestCase
         ], DB::table('datastore_attachments')->orderBy('id')->get()
             ->map(fn (object $row) => [$row->id, $row->name, (int) $row->is_default, $row->host, $row->port === null ? null : (int) $row->port])
             ->all());
-        $this->assertSame($before, [DatabaseConnection::env($mysql->fresh()), DatabaseConnection::env($managed->fresh())]);
+        $this->assertSame($before, [$this->laravelEnvOf($mysql), $this->laravelEnvOf($managed)]);
     }
 
     /** @param  array<string, string>  $env */
@@ -91,5 +93,14 @@ class AddConnectionNamesToDatastoreAttachmentsTest extends TestCase
     private function envOf(DatastoreAttachment $attachment): array
     {
         return $attachment->envVars()->orderBy('id')->get()->mapWithKeys(fn (EnvVar $var) => [$var->key => [$var->value, $var->is_secret]])->all();
+    }
+
+    /** @return array<string, array{0: string, 1: bool}> */
+    private function laravelEnvOf(DatastoreAttachment $attachment): array
+    {
+        return array_map(
+            fn (EnvValue $value) => [$value->value, $value->secret],
+            SqlConnection::of($attachment->fresh())->envFor(new LaravelProfile),
+        );
     }
 }
