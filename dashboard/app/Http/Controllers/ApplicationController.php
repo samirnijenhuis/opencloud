@@ -78,16 +78,7 @@ class ApplicationController extends Controller
                 'cpu_millicores' => $size->cpuMillicores(),
                 'memory_mib' => $size->memoryMib(),
             ], Size::cases()),
-            'presets' => array_map(fn (ApplicationType $type) => [
-                'value' => $type->value,
-                'port' => $type->defaultPort(),
-                'chooses_port' => $type->choosesPort(),
-                'uses_build_command' => $type->usesBuildCommand(),
-                'deploy_commands' => $type->deployCommands(),
-                'processes' => $type->processes(),
-                'database' => $type->database(),
-                'env_profile' => $type->envProfile(),
-            ], ApplicationType::cases()),
+            'presets' => self::presets(),
         ]);
     }
 
@@ -159,7 +150,10 @@ class ApplicationController extends Controller
                 'name' => $application->name,
                 'repository' => $application->repository,
                 'type' => $application->type,
+                'env_profile' => $application->env_profile,
+                'port' => $application->port,
             ],
+            'presets' => self::presets(),
             'previews' => [
                 'previews_enabled' => $application->previews_enabled,
                 'allow_forks' => $application->allow_forks,
@@ -184,5 +178,20 @@ class ApplicationController extends Controller
                 ])
                 ->values(),
         ]);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private static function presets(): array
+    {
+        return array_map(fn (ApplicationType $type) => [
+            'value' => $type->value,
+            'port' => $type->defaultPort(),
+            'chooses_port' => $type->choosesPort(),
+            'uses_build_command' => $type->usesBuildCommand(),
+            'deploy_commands' => $type->deployCommands(),
+            'processes' => $type->processes(),
+            'database' => $type->database(),
+            'env_profile' => $type->envProfile(),
+        ], ApplicationType::cases());
     }
 }
