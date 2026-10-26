@@ -94,6 +94,43 @@ class BuilderTest extends TestCase
         $this->assertContains('build-arg:OPENCLOUD_BUILD_ENV=41fbf08025be968956e2d9ea9146108cd9f1828845becca8f341e623141af7de', $processes->commands()[3]);
     }
 
+    public function test_the_node_preset_writes_a_dockerfile_from_package_json_and_the_lock_file(): void
+    {
+        $processes = FakeProcesses::install();
+        $processes->repository = [
+            'package.json' => json_encode(['engines' => ['node' => '22.x'], 'scripts' => ['build' => 'vite build', 'start' => 'node server.js']]),
+            'pnpm-lock.yaml' => "lockfileVersion: '9.0'\n",
+            'yarn.lock' => "# yarn lockfile v1\n",
+        ];
+        $deployment = $this->deployment('acme/api', ApplicationType::Node);
+        $deployment->environment->update(['build_command' => 'npx prisma generate']);
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertContains('filename=.opencloud.Dockerfile', $processes->commands()[3]);
+        $this->assertSame([
+            'FROM node:22-slim',
+            'RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile',
+            'RUN pnpm run build',
+            'RUN npx prisma generate',
+            'CMD ["pnpm", "run", "start"]',
+        ], array_values(preg_grep('/^(FROM|RUN|CMD) /', explode("\n", $processes->dockerfiles[0]))));
+        $this->assertSame([".git\nnode_modules\n"], $processes->dockerignores);
+    }
+
+    public function test_the_static_preset_serves_a_repository_without_package_json_and_ignores_the_build_command(): void
+    {
+        $processes = FakeProcesses::install();
+        $processes->repository = ['index.html' => '<h1>Docs</h1>', 'composer.json' => '{"require":{"laravel/framework":"^12.0"}}'];
+        $deployment = $this->deployment('acme/docs', ApplicationType::Static);
+        $deployment->environment->update(['build_command' => 'make site']);
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertSame(['FROM nginx:1.30-alpine', 'COPY . /site'], array_values(preg_grep('/^(FROM|RUN|CMD|COPY) [^<]/', explode("\n", $processes->dockerfiles[0]))));
+        $this->assertSame([".git\nnode_modules\n"], $processes->dockerignores);
+    }
+
     public function test_a_dockerfile_app_with_build_values_gets_a_cache_key_for_each_set_of_values(): void
     {
         $dockerfile = "# syntax=docker/dockerfile:1\nFROM node:22 AS assets\nRUN --mount=type=secret,id=VITE_API npm run build\n\nFROM nginx:alpine\nCOPY --from=assets /app/dist /usr/share/nginx/html\n";
@@ -136,6 +173,16 @@ class BuilderTest extends TestCase
                 ApplicationType::Laravel,
                 ['Dockerfile' => "FROM nginx:alpine\n"],
                 'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.',
+            ],
+            'node without package.json' => [
+                ApplicationType::Node,
+                ['Dockerfile' => "FROM node:24\n"],
+                'The application uses the Node.js preset, but the repository has no package.json at its root.',
+            ],
+            'node without a way to start' => [
+                ApplicationType::Node,
+                ['package.json' => '{"scripts":{"build":"tsc"}}'],
+                'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script.',
             ],
             'dockerfile without a Dockerfile' => [
                 ApplicationType::Dockerfile,

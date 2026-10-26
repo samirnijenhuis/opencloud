@@ -95,6 +95,7 @@ class ApplicationController extends Controller
     {
         $data = $request->validated();
         $user = $request->user();
+
         try {
             $application = $createApplication->handle($user, [
                 'name' => $data['name'] ?? basename(preg_replace('/\.git$/', '', $data['repository'])),

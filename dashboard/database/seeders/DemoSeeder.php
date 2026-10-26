@@ -50,7 +50,7 @@ class DemoSeeder extends Seeder
         ]);
 
         $shop = Application::create(['name' => 'shop', 'repository' => 'https://github.com/acme/shop.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::Laravel]);
-        $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::Dockerfile, 'env_profile' => EnvProfileKind::Generic, 'port' => 3000]);
+        $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::Node, 'env_profile' => EnvProfileKind::Generic, 'port' => 3000]);
 
         $production = $this->environment($shop, 'production', EnvironmentKind::Permanent, protected: true, attributes: [
             'size' => Size::M,
@@ -76,7 +76,7 @@ class DemoSeeder extends Seeder
         $this->datastores($cluster, $production, $staging, $owner);
 
         AuditEvent::record($owner, 'application.created', $shop, ['repository' => $shop->repository, 'type' => 'laravel']);
-        AuditEvent::record($owner, 'application.created', $docs, ['repository' => $docs->repository, 'type' => 'dockerfile']);
+        AuditEvent::record($owner, 'application.created', $docs, ['repository' => $docs->repository, 'type' => 'node']);
         AuditEvent::record($owner, 'domain.added', Domain::where('hostname', 'shop.example.com')->sole(), ['hostname' => 'shop.example.com']);
         AuditEvent::record($developer, 'deployment.started', Deployment::first(), ['commit_sha' => Deployment::first()->commit_sha]);
     }

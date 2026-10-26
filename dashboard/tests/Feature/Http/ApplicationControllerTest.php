@@ -124,6 +124,26 @@ class ApplicationControllerTest extends TestCase
                         'env_profile' => 'laravel',
                     ],
                     [
+                        'value' => 'node',
+                        'port' => 3000,
+                        'chooses_port' => true,
+                        'uses_build_command' => true,
+                        'deploy_commands' => [],
+                        'processes' => [],
+                        'database' => 'none',
+                        'env_profile' => 'generic',
+                    ],
+                    [
+                        'value' => 'static',
+                        'port' => 8080,
+                        'chooses_port' => false,
+                        'uses_build_command' => false,
+                        'deploy_commands' => [],
+                        'processes' => [],
+                        'database' => 'none',
+                        'env_profile' => 'generic',
+                    ],
+                    [
                         'value' => 'dockerfile',
                         'port' => 8080,
                         'chooses_port' => true,
@@ -235,6 +255,14 @@ class ApplicationControllerTest extends TestCase
             'laravel' => [
                 ['type' => 'laravel', 'env_profile' => 'laravel', 'port' => null, 'deploy_commands' => ['php artisan migrate --force'], 'processes' => $laravelProcesses, 'database' => 'mysql'],
                 ['laravel', 'laravel', 8080, ['php artisan migrate --force'], '/up', ['worker', 'scheduler'], ['APP_KEY'], ['mysql']],
+            ],
+            'node with postgres' => [
+                ['type' => 'node', 'env_profile' => 'generic', 'port' => 3000, 'deploy_commands' => ['npx prisma migrate deploy'], 'processes' => [], 'database' => 'postgres'],
+                ['node', 'generic', 3000, ['npx prisma migrate deploy'], '/', [], [], ['postgres']],
+            ],
+            'static' => [
+                ['type' => 'static', 'env_profile' => 'generic', 'port' => null, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
+                ['static', 'generic', 8080, [], '/', [], [], []],
             ],
             'dockerfile' => [
                 ['type' => 'dockerfile', 'env_profile' => 'generic', 'port' => 3000, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],

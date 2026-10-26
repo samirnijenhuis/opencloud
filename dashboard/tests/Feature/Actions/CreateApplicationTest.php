@@ -258,12 +258,15 @@ class CreateApplicationTest extends TestCase
 
         $applications = [
             $create('shop', ['type' => 'laravel', 'port' => 3000]),
+            $create('api', ['type' => 'node']),
+            $create('worker', ['type' => 'node', 'port' => 4000]),
+            $create('docs', ['type' => 'static', 'port' => 3000]),
             $create('site', ['type' => 'dockerfile']),
             $create('php', ['type' => 'dockerfile', 'env_profile' => 'laravel', 'port' => 9000]),
         ];
 
         $this->assertSame(
-            [['shop', 'laravel', 8080], ['site', 'generic', 8080], ['php', 'laravel', 9000]],
+            [['shop', 'laravel', 8080], ['api', 'generic', 3000], ['worker', 'generic', 4000], ['docs', 'generic', 8080], ['site', 'generic', 8080], ['php', 'laravel', 9000]],
             array_map(fn (Application $application) => [$application->name, $application->env_profile->value, $application->port], $applications),
         );
     }

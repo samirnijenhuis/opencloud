@@ -31,6 +31,9 @@ final class Builder
     /** Files that a Laravel image never needs. BuildKit reads "<dockerfile>.dockerignore" next to the Dockerfile. */
     private const LARAVEL_IGNORE = ".git\n.env\nnode_modules\nvendor\n";
 
+    /** Files that a Node image or a static site never needs. A static site without a build serves the repository root. */
+    private const NODE_IGNORE = ".git\nnode_modules\n";
+
     /**
      * @return string the image reference
      *
@@ -107,8 +110,22 @@ final class Builder
             ApplicationType::Laravel => self::generate($dir, self::LARAVEL_IGNORE, LaravelDockerfile::fromConfig()->render(
                 self::laravelComposer($dir), self::readJson("{$dir}/package.json"), $secrets, $buildCommand,
             )),
+            ApplicationType::Node => self::generate($dir, self::NODE_IGNORE, NodeDockerfile::render(
+                self::nodeProject($dir) ?? throw new RuntimeException('The application uses the Node.js preset, but the repository has no package.json at its root.'),
+                $secrets,
+                $buildCommand,
+            )),
+            ApplicationType::Static => self::generate($dir, self::NODE_IGNORE, StaticDockerfile::render(self::nodeProject($dir), $secrets)),
             ApplicationType::Dockerfile => self::repositoryDockerfile($dir, $secrets),
         };
+    }
+
+    private static function nodeProject(string $dir): ?NodeProject
+    {
+        $package = self::readJson("{$dir}/package.json");
+        $lockFiles = array_filter(NodeProject::LOCK_FILES, fn (string $file) => is_file("{$dir}/{$file}"));
+
+        return $package === null ? null : new NodeProject($package, $lockFiles === [] ? null : reset($lockFiles));
     }
 
     private static function generate(string $dir, string $ignore, string $dockerfile): string

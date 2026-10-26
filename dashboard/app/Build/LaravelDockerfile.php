@@ -49,28 +49,10 @@ final readonly class LaravelDockerfile
             'base_image' => str_replace('{php}', $this->phpVersion($composer), $this->baseImage),
             'base_extensions' => implode(' ', self::BASE_EXTENSIONS),
             'extra_extensions' => $extra === [] ? '' : 'RUN install-php-extensions '.implode(' ', $extra),
-            'secret_mounts' => implode('', array_map(fn (string $key) => "--mount=type=secret,id={$key},env={$key} ", $buildSecrets)),
+            'secret_mounts' => DockerfileTemplate::secretMounts($buildSecrets),
             'build_command' => $buildCommand === null || trim($buildCommand) === '' ? '' : 'RUN '.trim($buildCommand),
-            'pnpm_version' => self::pnpmVersion($package ?? []),
+            'pnpm_version' => NodeProject::pnpmVersion($package ?? []),
         ]);
-    }
-
-    /**
-     * pnpm stops when the project's engines.pnpm does not match its own version, so the build installs the version the project asks for.
-     *
-     * @param  array<string, mixed>  $package
-     */
-    public static function pnpmVersion(array $package): string
-    {
-        $manager = $package['packageManager'] ?? null;
-
-        if (is_string($manager) && preg_match('/^pnpm@([^+\s]+)/', $manager, $match) === 1) {
-            return $match[1];
-        }
-
-        $engine = $package['engines']['pnpm'] ?? null;
-
-        return is_string($engine) && preg_match('/^[\w.^~<>=| -]+$/', $engine) === 1 ? trim($engine) : 'latest';
     }
 
     /**

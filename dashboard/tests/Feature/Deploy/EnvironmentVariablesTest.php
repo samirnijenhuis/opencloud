@@ -69,6 +69,8 @@ class EnvironmentVariablesTest extends TestCase
     {
         return [
             'laravel' => [ApplicationType::Laravel, 8080, ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'APP_URL' => 'https://api.example.com', 'LOG_CHANNEL' => 'stderr']],
+            'node' => [ApplicationType::Node, 3000, ['APP_URL' => 'https://api.example.com', 'NODE_ENV' => 'production', 'PORT' => '3000']],
+            'static' => [ApplicationType::Static, 8080, ['APP_URL' => 'https://api.example.com', 'PORT' => '8080']],
             'dockerfile' => [ApplicationType::Dockerfile, 3000, ['APP_URL' => 'https://api.example.com', 'PORT' => '3000']],
         ];
     }

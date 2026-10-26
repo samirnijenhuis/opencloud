@@ -34,6 +34,14 @@ const presetText: Record<ApplicationType, { hint: string; buildCommand: string }
         hint: 'FrankenPHP, a queue worker, and a scheduler',
         buildCommand: 'Optional extra step after the build, for example php artisan icons:cache',
     },
+    node: {
+        hint: 'The build and start scripts of package.json',
+        buildCommand: 'Optional extra step after the build script, for example npx prisma generate',
+    },
+    static: {
+        hint: 'nginx serves the files or the build output',
+        buildCommand: 'Not used. The build script of package.json builds the site.',
+    },
     dockerfile: {
         hint: 'The Dockerfile of the repository',
         buildCommand: 'Not used. The Dockerfile builds the image.',

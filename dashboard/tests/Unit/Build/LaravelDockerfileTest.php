@@ -55,25 +55,6 @@ class LaravelDockerfileTest extends TestCase
             DOCKERFILE, $this->template()->render($composer, $package));
     }
 
-    /** @return array<string, array{array<string, mixed>, string}> */
-    public static function pnpmProjects(): array
-    {
-        return [
-            'packageManager wins' => [['packageManager' => 'pnpm@9.15.4+sha512.abc', 'engines' => ['pnpm' => '^11.0.0']], '9.15.4'],
-            'engines range' => [['engines' => ['pnpm' => '^11.0.0']], '^11.0.0'],
-            'nothing set' => [['private' => true], 'latest'],
-            'yarn as package manager' => [['packageManager' => 'yarn@4.1.0'], 'latest'],
-            'unsafe engines value' => [['engines' => ['pnpm' => '11; rm -rf /']], 'latest'],
-        ];
-    }
-
-    /** @param  array<string, mixed>  $package */
-    #[DataProvider('pnpmProjects')]
-    public function test_the_pnpm_version_follows_the_project(array $package, string $expected): void
-    {
-        $this->assertSame($expected, LaravelDockerfile::pnpmVersion($package));
-    }
-
     public function test_extensions_build_secrets_and_the_build_command_without_package_json(): void
     {
         $composer = ['require' => [

@@ -30,4 +30,14 @@ final class DockerfileTemplate
 
         return $text;
     }
+
+    /**
+     * The mounts that put each build value in the env of one RUN.
+     *
+     * @param  list<string>  $keys
+     */
+    public static function secretMounts(array $keys): string
+    {
+        return implode('', array_map(fn (string $key) => "--mount=type=secret,id={$key},env={$key} ", $keys));
+    }
 }
