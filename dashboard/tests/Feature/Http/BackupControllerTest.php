@@ -7,12 +7,16 @@ use App\Actions\RestoreBackup;
 use App\Backups\BackupStatus;
 use App\Datastores\DatastoreStatus;
 use App\Enums\DatastoreKind;
+use App\Enums\DatastoreSource;
+use App\Jobs\BackupDatabase;
+use App\Jobs\RestoreDatabase;
 use App\Models\AuditEvent;
 use App\Models\Backup;
 use App\Models\Datastore;
 use App\Models\DatastoreAttachment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -141,5 +145,37 @@ class BackupControllerTest extends TestCase
 
         $this->actingAs(User::factory()->owner()->create())->post("/backups/{$backup->id}/restore", ['confirm' => true])
             ->assertSessionHasErrors(['backup' => 'Only a finished backup can be restored.']);
+    }
+
+    public function test_a_managed_database_is_not_backed_up_by_a_hand_made_request(): void
+    {
+        Queue::fake();
+        $managed = $this->managedAttachment();
+
+        $this->actingAs(User::factory()->owner()->create())->post(route('backups.store', $managed))
+            ->assertSessionHasErrors(['backup' => 'DigitalOcean backs up a managed database itself.']);
+
+        Queue::assertNotPushed(BackupDatabase::class);
+        $this->assertSame(0, AuditEvent::query()->where('action', 'backup.requested')->count());
+    }
+
+    public function test_a_backup_of_a_managed_database_is_not_restored_by_a_hand_made_request(): void
+    {
+        Queue::fake();
+        $managed = $this->managedAttachment();
+        $backup = Backup::factory()->create(['datastore_id' => $managed->datastore_id, 'datastore_attachment_id' => $managed->id, 'database_name' => $managed->database_name]);
+
+        $this->actingAs(User::factory()->owner()->create())->post(route('backups.restore', $backup), ['confirm' => true])
+            ->assertSessionHasErrors(['backup' => 'DigitalOcean backs up a managed database itself.']);
+
+        Queue::assertNotPushed(RestoreDatabase::class);
+        $this->assertSame(0, AuditEvent::query()->where('action', 'backup.restore_requested')->count());
+    }
+
+    private function managedAttachment(): DatastoreAttachment
+    {
+        $datastore = Datastore::factory()->create(['cluster_id' => $this->attachment->datastore->cluster_id, 'kind' => DatastoreKind::Postgres, 'source' => DatastoreSource::Managed, 'status' => DatastoreStatus::Ready->value]);
+
+        return DatastoreAttachment::factory()->create(['datastore_id' => $datastore->id, 'environment_id' => $this->attachment->environment_id, 'database_name' => 'managed_production', 'status' => DatastoreStatus::Ready]);
     }
 }
