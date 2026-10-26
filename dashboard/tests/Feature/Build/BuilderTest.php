@@ -12,6 +12,7 @@ use App\Models\Environment;
 use App\Models\EnvVar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
@@ -42,11 +43,10 @@ class BuilderTest extends TestCase
         ]);
         EnvVar::factory()->for($deployment->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'runtime-only', 'is_secret' => true]);
 
-        $result = (new Builder)->build($deployment, DeploymentLog::for($deployment));
+        $image = (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
         $dir = $processes->ran[0]['path'];
-        $this->assertSame(ApplicationType::Laravel, $result->type);
-        $this->assertSame("registry.opencloud.svc.cluster.local:5000/{$deployment->environment->application_id}/{$deployment->environment_id}:0123456-{$deployment->id}", $result->image);
+        $this->assertSame("registry.opencloud.svc.cluster.local:5000/{$deployment->environment->application_id}/{$deployment->environment_id}:0123456-{$deployment->id}", $image);
         $this->assertSame([
             ['git', 'init', '--quiet'],
             ['git', 'fetch', '--quiet', '--depth', '1', 'https://github.com/acme/shop.git', self::SHA],
@@ -57,7 +57,7 @@ class BuilderTest extends TestCase
                 '--local', "context={$dir}", '--local', "dockerfile={$dir}", '--opt', 'filename=.opencloud.Dockerfile',
                 '--opt', 'build-arg:OPENCLOUD_BUILD_ENV=a41cb0306208220797c400e27ec48dac355d1011defd7fc63dd02a8f0eb02ef6',
                 '--secret', 'id=COMPOSER_AUTH,env=COMPOSER_AUTH',
-                '--output', "type=image,name={$result->image},push=true,registry.insecure=true",
+                '--output', "type=image,name={$image},push=true,registry.insecure=true",
             ],
         ], $processes->commands());
         $this->assertSame([$dir, $dir, $dir, $dir], array_column($processes->ran, 'path'));
@@ -69,7 +69,7 @@ class BuilderTest extends TestCase
         $this->assertStringContainsString("FROM base AS vendor\n# Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.\nARG OPENCLOUD_BUILD_ENV\nCOPY . .\n", $processes->dockerfiles[0]);
         $this->assertSame(
             '2026-10-23T12:00:00Z Cloning acme/shop at '.self::SHA.".\n".
-            "2026-10-23T12:00:00Z Building {$result->image} from .opencloud.Dockerfile.\n".
+            "2026-10-23T12:00:00Z Building {$image} from .opencloud.Dockerfile.\n".
             "2026-10-23T12:00:00Z #1 [internal] load build definition\n".
             "2026-10-23T12:00:00Z #5 composer install with token ********\n".
             "2026-10-23T12:00:00Z #9 DONE 1.2s\n",
@@ -78,19 +78,19 @@ class BuilderTest extends TestCase
         $this->assertDirectoryDoesNotExist($dir);
     }
 
-    public function test_a_repository_without_laravel_builds_its_own_dockerfile(): void
+    public function test_the_dockerfile_preset_builds_the_repository_dockerfile_also_in_a_laravel_repository(): void
     {
-        $processes = FakeProcesses::install();
-        $processes->repository = ['Dockerfile' => "FROM nginx:alpine\n", 'package.json' => '{}'];
-        $deployment = $this->deployment('https://git.example.com/acme/site.git', ApplicationType::Laravel);
+        $processes = FakeProcesses::install()->withLaravelRepository();
+        $processes->repository['Dockerfile'] = "FROM nginx:alpine\n";
+        $deployment = $this->deployment('https://git.example.com/acme/site.git', ApplicationType::Dockerfile);
 
-        $result = (new Builder)->build($deployment, DeploymentLog::for($deployment));
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
-        $this->assertSame(ApplicationType::Dockerfile, $result->type);
         $this->assertSame(['git', 'fetch', '--quiet', '--depth', '1', 'https://git.example.com/acme/site.git', self::SHA], $processes->commands()[1]);
         $this->assertContains('filename=Dockerfile', $processes->commands()[3]);
         $this->assertNotContains('--secret', $processes->commands()[3]);
         $this->assertSame(["FROM nginx:alpine\n"], $processes->dockerfiles);
+        $this->assertSame([null], $processes->dockerignores);
         $this->assertContains('build-arg:OPENCLOUD_BUILD_ENV=41fbf08025be968956e2d9ea9146108cd9f1828845becca8f341e623141af7de', $processes->commands()[3]);
     }
 
@@ -123,17 +123,41 @@ class BuilderTest extends TestCase
         ], $keys);
     }
 
-    public function test_a_repository_without_laravel_and_without_a_dockerfile_fails_before_buildctl(): void
+    /** @return array<string, array{ApplicationType, array<string, string>, string}> */
+    public static function repositoriesThatDoNotFit(): array
+    {
+        return [
+            'laravel without laravel/framework' => [
+                ApplicationType::Laravel,
+                ['composer.json' => '{"require":{"symfony/console":"^7"}}', 'Dockerfile' => "FROM php:8.4-cli\n"],
+                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.',
+            ],
+            'laravel without composer.json' => [
+                ApplicationType::Laravel,
+                ['Dockerfile' => "FROM nginx:alpine\n"],
+                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.',
+            ],
+            'dockerfile without a Dockerfile' => [
+                ApplicationType::Dockerfile,
+                ['composer.json' => '{"require":{"laravel/framework":"^12.0"}}'],
+                'The application uses the Dockerfile preset, but the repository has no Dockerfile at its root.',
+            ],
+        ];
+    }
+
+    /** @param  array<string, string>  $repository */
+    #[DataProvider('repositoriesThatDoNotFit')]
+    public function test_a_repository_that_does_not_fit_the_stored_preset_fails_before_buildctl(ApplicationType $type, array $repository, string $message): void
     {
         $processes = FakeProcesses::install();
-        $processes->repository = ['composer.json' => '{"require":{"symfony/console":"^7"}}'];
-        $deployment = $this->deployment('acme/cli');
+        $processes->repository = $repository;
+        $deployment = $this->deployment('acme/app', $type);
 
         try {
             (new Builder)->build($deployment, DeploymentLog::for($deployment));
             $this->fail('The build did not fail.');
         } catch (RuntimeException $e) {
-            $this->assertSame('The repository has no Dockerfile at its root, and its composer.json does not require laravel/framework.', $e->getMessage());
+            $this->assertSame($message, $e->getMessage());
         }
 
         $this->assertSame(['git', 'git', 'git'], array_column($processes->commands(), 0));
