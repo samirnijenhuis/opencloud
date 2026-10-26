@@ -4,10 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Actions\CreateCluster;
 use App\Actions\DestroyCluster;
-use App\Clusters\DigitalOceanCluster;
+use App\Clusters\ClusterProviders;
 use App\Http\Requests\CreateClusterRequest;
 use App\Models\Cluster;
-use App\Models\ProviderCredential;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -16,28 +15,31 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Clusters that OpenTofu creates on DigitalOcean with the stored key. The key never goes to the browser.
+ * Clusters that OpenTofu creates on a cluster provider with the stored key. The key never goes to the browser.
  */
 class CreatedClusterController extends Controller
 {
-    public function create(): Response
+    public function create(string $provider, ClusterProviders $providers): Response
     {
         Gate::authorize('create', Cluster::class);
 
+        $provider = $providers->for($provider);
+
         $choices = fn (array $table) => collect($table)->map(fn (string $label, string $slug) => ['value' => $slug, 'label' => "{$label} ({$slug})"])->values();
 
-        return Inertia::render('clusters/create-digitalocean', [
-            'regions' => $choices(DigitalOceanCluster::REGIONS),
-            'node_sizes' => $choices(DigitalOceanCluster::NODE_SIZES),
-            'max_nodes' => DigitalOceanCluster::MAX_NODES,
-            'pricing_url' => DigitalOceanCluster::PRICING_URL,
-            'has_key' => ProviderCredential::query()->where('provider', 'digitalocean')->exists(),
+        return Inertia::render('clusters/create-provider', [
+            'provider' => ['key' => $provider->key(), 'label' => $provider->label()],
+            'regions' => $choices($provider->regions()),
+            'node_sizes' => $choices($provider->nodeSizes()),
+            'max_nodes' => $provider->maxNodes(),
+            'pricing_url' => $provider->pricingUrl(),
+            'has_key' => $providers->hasCredential($provider),
         ]);
     }
 
     public function store(CreateClusterRequest $request, CreateCluster $createCluster): RedirectResponse
     {
-        $cluster = $createCluster->handle($request->user(), $request->cluster());
+        $cluster = $createCluster->handle($request->user(), $request->provider(), $request->cluster());
 
         return to_route('clusters.show', $cluster);
     }

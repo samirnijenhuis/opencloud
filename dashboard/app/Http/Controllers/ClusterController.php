@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Actions\ConnectCluster;
 use App\Actions\DisconnectCluster;
 use App\Actions\ReinstallClusterParts;
+use App\Clusters\ClusterProvider;
+use App\Clusters\ClusterProviders;
 use App\Enums\ClusterKind;
 use App\Http\Requests\ConnectClusterRequest;
 use App\Models\Application;
@@ -21,10 +23,11 @@ use Inertia\Response;
  */
 class ClusterController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, ClusterProviders $providers): Response
     {
         return Inertia::render('clusters/index', [
             'clusters' => Cluster::query()->orderBy('id')->get(['id', 'name', 'kind', 'ingress_ip', 'status', 'parts_version']),
+            'providers' => $providers->all()->map(fn (ClusterProvider $provider) => ['key' => $provider->key(), 'label' => $provider->label()])->values(),
             'canConnect' => $request->user()->can('create', Cluster::class),
         ]);
     }

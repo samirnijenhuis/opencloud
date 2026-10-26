@@ -13,12 +13,10 @@ use RuntimeException;
  * The DigitalOcean side of a created cluster: the choices of the form, the stack of tofu/digitalocean/cluster, and
  * the cluster fields from its outputs.
  */
-final class DigitalOceanCluster
+final class DigitalOceanCluster implements ClusterProvider
 {
-    public const PRICING_URL = 'https://www.digitalocean.com/pricing/kubernetes';
-
     /** @var array<string, string> slug => label, the regions with Kubernetes */
-    public const REGIONS = [
+    private const REGIONS = [
         'ams3' => 'Amsterdam',
         'atl1' => 'Atlanta',
         'blr1' => 'Bangalore',
@@ -33,16 +31,49 @@ final class DigitalOceanCluster
     ];
 
     /** @var array<string, string> slug => label */
-    public const NODE_SIZES = [
+    private const NODE_SIZES = [
         's-1vcpu-2gb' => '1 vCPU, 2 GB',
         's-2vcpu-4gb' => '2 vCPU, 4 GB',
         's-4vcpu-8gb' => '4 vCPU, 8 GB',
         's-8vcpu-16gb' => '8 vCPU, 16 GB',
     ];
 
-    public const MAX_NODES = 10;
-
     private const API = 'https://api.digitalocean.com/v2';
+
+    public function key(): string
+    {
+        return 'digitalocean';
+    }
+
+    public function label(): string
+    {
+        return 'DigitalOcean';
+    }
+
+    public function credential(): string
+    {
+        return 'digitalocean';
+    }
+
+    public function regions(): array
+    {
+        return self::REGIONS;
+    }
+
+    public function nodeSizes(): array
+    {
+        return self::NODE_SIZES;
+    }
+
+    public function maxNodes(): int
+    {
+        return 10;
+    }
+
+    public function pricingUrl(): string
+    {
+        return 'https://www.digitalocean.com/pricing/kubernetes';
+    }
 
     public static function token(): string
     {
@@ -54,8 +85,9 @@ final class DigitalOceanCluster
      * The registry is looked up on each run. When an earlier run created it, the module now reads it instead, and the
      * destroy = false rule of the module only forgets it, so a second run converges.
      */
-    public static function stack(Cluster $cluster, string $token): Stack
+    public function stack(Cluster $cluster): Stack
     {
+        $token = self::token();
         [$registry, $create] = self::registry($token);
 
         return new Stack('digitalocean/cluster', "cluster-{$cluster->id}", [
@@ -73,7 +105,7 @@ final class DigitalOceanCluster
      * @param  array<string, mixed>  $outputs  the outputs of tofu/digitalocean/cluster
      * @return array<string, mixed>
      */
-    public static function attributes(array $outputs): array
+    public function attributes(array $outputs): array
     {
         return [
             'kubeconfig' => $outputs['kubeconfig'],

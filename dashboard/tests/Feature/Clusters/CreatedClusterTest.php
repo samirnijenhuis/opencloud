@@ -5,7 +5,9 @@ namespace Tests\Feature\Clusters;
 use App\Actions\CreateCluster;
 use App\Actions\DestroyCluster;
 use App\Actions\ReinstallClusterParts;
+use App\Clusters\ClusterProviders;
 use App\Clusters\ClusterStatus;
+use App\Clusters\DigitalOceanCluster;
 use App\Enums\ClusterKind;
 use App\Enums\DatastoreSource;
 use App\Jobs\InstallClusterParts;
@@ -71,7 +73,7 @@ class CreatedClusterTest extends TestCase
     {
         $owner = User::factory()->owner()->create();
 
-        $cluster = app(CreateCluster::class)->handle($owner, $this->form());
+        $cluster = app(CreateCluster::class)->handle($owner, new DigitalOceanCluster, $this->form());
 
         $this->assertSame(
             ['ams3-prod', ClusterKind::Created, 'digitalocean', ClusterStatus::Provisioning, 'ams3', 's-2vcpu-4gb', 1, 3],
@@ -88,7 +90,7 @@ class CreatedClusterTest extends TestCase
         ProviderCredential::query()->delete();
 
         try {
-            app(CreateCluster::class)->handle(User::factory()->owner()->create(), $this->form());
+            app(CreateCluster::class)->handle(User::factory()->owner()->create(), new DigitalOceanCluster, $this->form());
             $this->fail('The create was not refused.');
         } catch (ValidationException $e) {
             $this->assertSame(['name' => ['Add a DigitalOcean key in Settings, Provider keys, first.']], $e->errors());
@@ -212,7 +214,7 @@ class CreatedClusterTest extends TestCase
         $job = Queue::pushed(TearDownCluster::class)->sole();
         $this->assertSame('builds', $job->queue);
 
-        $job->handle(app(Runner::class));
+        $job->handle(app(Runner::class), app(ClusterProviders::class));
 
         $this->assertSame([['init'], ['destroy']], array_map(fn (array $args) => [$args[0]], $this->tofu->commands()));
         $this->assertContains('-suppress-forget-errors', $this->tofu->commands()[1]);
@@ -232,7 +234,7 @@ class CreatedClusterTest extends TestCase
         $this->tofu->error = 'Error: Error deleting Kubernetes cluster: 500 Server Error';
         $cluster = $this->createdCluster(['status' => ClusterStatus::Destroying]);
 
-        (new TearDownCluster($cluster))->handle(app(Runner::class));
+        (new TearDownCluster($cluster))->handle(app(Runner::class), app(ClusterProviders::class));
 
         $cluster->refresh();
         $this->assertSame(ClusterStatus::Failed, $cluster->status);
@@ -260,7 +262,7 @@ class CreatedClusterTest extends TestCase
 
     private function provision(Cluster $cluster): void
     {
-        (new ProvisionCluster($cluster))->handle(app(Runner::class));
+        (new ProvisionCluster($cluster))->handle(app(Runner::class), app(ClusterProviders::class));
     }
 
     private function assertDestroyRefused(Cluster $cluster, string $message): void

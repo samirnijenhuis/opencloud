@@ -35,7 +35,7 @@ class CreatedClusterControllerTest extends TestCase
 
         foreach ([User::factory()->admin()->create(), User::factory()->create()] as $user) {
             $this->actingAs($user)->get('/clusters/create/digitalocean')->assertForbidden();
-            $this->actingAs($user)->post('/clusters/digitalocean', $this->form())->assertForbidden();
+            $this->actingAs($user)->post('/clusters/create/digitalocean', $this->form())->assertForbidden();
             $this->actingAs($user)->delete("/clusters/{$cluster->id}/destroy", ['confirm' => 'ams3-prod'])->assertForbidden();
             $this->actingAs($user)->get("/clusters/{$cluster->id}")->assertInertia(fn (Assert $page) => $page
                 ->where('created.tofu_log', null)
@@ -50,7 +50,7 @@ class CreatedClusterControllerTest extends TestCase
     public function test_the_create_page_offers_the_choices_and_the_cost_link(): void
     {
         $this->actingAs(User::factory()->owner()->create())->get('/clusters/create/digitalocean')->assertInertia(fn (Assert $page) => $page
-            ->component('clusters/create-digitalocean')
+            ->component('clusters/create-provider')
             ->where('regions.0', ['value' => 'ams3', 'label' => 'Amsterdam (ams3)'])
             ->where('node_sizes.1', ['value' => 's-2vcpu-4gb', 'label' => '2 vCPU, 4 GB (s-2vcpu-4gb)'])
             ->where('max_nodes', 10)
@@ -64,7 +64,7 @@ class CreatedClusterControllerTest extends TestCase
 
     public function test_the_owner_creates_a_cluster_and_lands_on_its_page(): void
     {
-        $response = $this->actingAs(User::factory()->owner()->create())->post('/clusters/digitalocean', [...$this->form(), 'min_nodes' => '2', 'max_nodes' => '4']);
+        $response = $this->actingAs(User::factory()->owner()->create())->post('/clusters/create/digitalocean', [...$this->form(), 'min_nodes' => '2', 'max_nodes' => '4']);
 
         $cluster = Cluster::query()->where('name', 'ams3-prod')->sole();
         $response->assertRedirect("/clusters/{$cluster->id}");
@@ -76,7 +76,7 @@ class CreatedClusterControllerTest extends TestCase
     {
         $this->actingAs(User::factory()->owner()->create())
             ->from('/clusters/create/digitalocean')
-            ->post('/clusters/digitalocean', ['name' => 'Prod Cluster', 'region' => 'mars1', 'node_size' => 's-1vcpu-1gb', 'min_nodes' => 3, 'max_nodes' => 2])
+            ->post('/clusters/create/digitalocean', ['name' => 'Prod Cluster', 'region' => 'mars1', 'node_size' => 's-1vcpu-1gb', 'min_nodes' => 3, 'max_nodes' => 2])
             ->assertRedirect('/clusters/create/digitalocean')
             ->assertSessionHasErrors([
                 'name' => 'Use lowercase letters, digits, and dashes. Start and end with a letter or a digit.',

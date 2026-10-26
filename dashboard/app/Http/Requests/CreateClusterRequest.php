@@ -2,7 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Clusters\DigitalOceanCluster;
+use App\Clusters\ClusterProvider;
+use App\Clusters\ClusterProviders;
 use App\Models\Cluster;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -14,15 +15,22 @@ class CreateClusterRequest extends FormRequest
         return $this->user()->can('create', Cluster::class);
     }
 
+    public function provider(): ClusterProvider
+    {
+        return app(ClusterProviders::class)->for((string) $this->route('provider'));
+    }
+
     /** @return array<string, mixed> */
     public function rules(): array
     {
+        $provider = $this->provider();
+
         return [
             'name' => ['required', 'string', 'max:40', 'regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/', 'unique:clusters,name'],
-            'region' => ['required', Rule::in(array_keys(DigitalOceanCluster::REGIONS))],
-            'node_size' => ['required', Rule::in(array_keys(DigitalOceanCluster::NODE_SIZES))],
-            'min_nodes' => ['required', 'integer', 'min:1', 'max:'.DigitalOceanCluster::MAX_NODES],
-            'max_nodes' => ['required', 'integer', 'gte:min_nodes', 'max:'.DigitalOceanCluster::MAX_NODES],
+            'region' => ['required', Rule::in(array_keys($provider->regions()))],
+            'node_size' => ['required', Rule::in(array_keys($provider->nodeSizes()))],
+            'min_nodes' => ['required', 'integer', 'min:1', 'max:'.$provider->maxNodes()],
+            'max_nodes' => ['required', 'integer', 'gte:min_nodes', 'max:'.$provider->maxNodes()],
         ];
     }
 

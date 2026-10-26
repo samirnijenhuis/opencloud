@@ -12,7 +12,9 @@ type Cluster = {
     parts_version: string | null;
 };
 
-export default function ClustersIndex({ clusters, canConnect }: { clusters: Cluster[]; canConnect: boolean }) {
+type Provider = { key: string; label: string };
+
+export default function ClustersIndex({ clusters, providers, canConnect }: { clusters: Cluster[]; providers: Provider[]; canConnect: boolean }) {
     return (
         <AppLayout breadcrumbs={[{ title: 'Clusters', href: '/clusters' }]}>
             <Head title="Clusters" />
@@ -22,9 +24,11 @@ export default function ClustersIndex({ clusters, canConnect }: { clusters: Clus
                     <h1 className="text-2xl font-semibold tracking-tight">Clusters</h1>
                     {canConnect && (
                         <div className="flex flex-wrap gap-2">
-                            <Button asChild variant="secondary">
-                                <Link href={route('clusters.digitalocean.create')}>Create on DigitalOcean</Link>
-                            </Button>
+                            {providers.map((provider) => (
+                                <Button key={provider.key} asChild variant="secondary">
+                                    <Link href={route('clusters.provider.create', provider.key)}>Create on {provider.label}</Link>
+                                </Button>
+                            ))}
                             <Button asChild>
                                 <Link href={route('clusters.create')}>Connect a cluster</Link>
                             </Button>

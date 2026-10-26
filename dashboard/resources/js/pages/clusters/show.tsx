@@ -79,7 +79,7 @@ export default function ClustersShow({ cluster, applications, datastores, can, c
     };
 
     const destroy = () =>
-        router.delete(route('clusters.digitalocean.destroy', cluster.id), {
+        router.delete(route('clusters.provider.destroy', cluster.id), {
             data: { confirm: confirmName },
             preserveScroll: true,
             onSuccess: () => {
