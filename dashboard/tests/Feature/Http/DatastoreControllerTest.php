@@ -67,7 +67,8 @@ class DatastoreControllerTest extends TestCase
             ['standard', 'postgres', 'Postgres', null],
             ['standard', 'rustfs', 'RustFS', null],
             ['managed', 'mysql', 'Managed MySQL', 'A managed database on DigitalOcean is Postgres only for now. Use managed Postgres, or MySQL in the cluster.'],
-            ['managed', 'postgres', 'Managed Postgres', 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.'],
+            ['managed', 'postgres', 'Managed Postgres', 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.'],
+            ['managed', 'rustfs', 'Spaces bucket', 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.'],
             ['external', 'mysql', 'External MySQL', null],
             ['external', 'postgres', 'External Postgres', null],
             ['external', 'rustfs', 'External S3 bucket', null],
@@ -264,7 +265,7 @@ class DatastoreControllerTest extends TestCase
 
         // More databases are always possible. A second key-value store is not, from any source.
         $this->assertSame(
-            [['standard', 'mysql'], ['standard', 'postgres'], ['standard', 'rustfs'], ['managed', 'mysql'], ['managed', 'postgres'], ['external', 'mysql'], ['external', 'postgres'], ['external', 'rustfs']],
+            [['standard', 'mysql'], ['standard', 'postgres'], ['standard', 'rustfs'], ['managed', 'mysql'], ['managed', 'postgres'], ['managed', 'rustfs'], ['external', 'mysql'], ['external', 'postgres'], ['external', 'rustfs']],
             array_map(fn (array $offer) => array_slice($offer, 0, 2), $this->offers($response)),
         );
     }

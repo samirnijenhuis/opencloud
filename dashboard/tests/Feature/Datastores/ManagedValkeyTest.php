@@ -75,6 +75,23 @@ class ManagedValkeyTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_a_local_valkey_attaches_while_the_managed_one_is_being_destroyed(): void
+    {
+        $environment = $this->environment();
+        $owner = User::factory()->owner()->create();
+        $attach = app(AttachDatastore::class);
+        $managed = $attach->handle($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        app(DetachDatastore::class)->handle($managed, $owner);
+
+        $local = $attach->handle($environment, $owner, DatastoreKind::Valkey);
+
+        $this->assertNotSame($managed->id, $local->id);
+        $this->assertSame(
+            [[DatastoreSource::Managed, DatastoreStatus::Destroying], [DatastoreSource::Standard, DatastoreStatus::Pending]],
+            [[$managed->datastore->fresh()->source, $managed->datastore->fresh()->status], [$local->datastore->source, $local->datastore->status]],
+        );
+    }
+
     public function test_the_apply_gets_the_valkey_variables_and_stores_a_tls_address(): void
     {
         $environment = $this->environment();

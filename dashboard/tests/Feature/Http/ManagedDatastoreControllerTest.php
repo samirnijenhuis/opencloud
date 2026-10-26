@@ -56,17 +56,23 @@ class ManagedDatastoreControllerTest extends TestCase
         $this->assertSame([
             ['mysql', 'Managed MySQL', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', $mysqlOnly],
             ['postgres', 'Managed Postgres', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', null],
+            ['valkey', 'Managed Valkey', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', null],
+            ['rustfs', 'Spaces bucket', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', null],
         ], $this->managedOffers(User::factory()->owner()->create(), $url));
         $this->assertSame([
             ['mysql', 'Managed MySQL', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', $mysqlOnly],
             ['postgres', 'Managed Postgres', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', 'Only an owner can add a managed resource.'],
+            ['valkey', 'Managed Valkey', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', 'Only an owner can add a managed resource.'],
+            ['rustfs', 'Spaces bucket', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', 'Only an owner can add a managed resource.'],
         ], $this->managedOffers(User::factory()->admin()->create(), $url));
 
         $local = Environment::factory()->for(Application::factory()->for(Cluster::factory()->create(['kind' => ClusterKind::Local])))->create();
-        $refusal = 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.';
+        $refusal = 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.';
         $this->assertSame([
             ['mysql', 'Managed MySQL', 'Managed by a cloud provider', 'A cloud provider runs it and charges your account for it.', $mysqlOnly],
             ['postgres', 'Managed Postgres', 'Managed by a cloud provider', 'A cloud provider runs it and charges your account for it.', $refusal],
+            ['valkey', 'Managed Valkey', 'Managed by a cloud provider', 'A cloud provider runs it and charges your account for it.', 'Managed Valkey needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.'],
+            ['rustfs', 'Spaces bucket', 'Managed by a cloud provider', 'A cloud provider runs it and charges your account for it.', 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.'],
         ], $this->managedOffers(User::factory()->owner()->create(), "/environments/{$local->id}"));
     }
 

@@ -11,7 +11,6 @@ import {
     type LiveStatus,
     type Resources,
     type Sheet,
-    kindLabels,
 } from '@/components/environment/types';
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
@@ -188,7 +187,7 @@ function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: 
     return (
         <Block
             icon={resourceIcons[attachment.kind]}
-            title={`${kindLabels[attachment.kind]} ${attachment.server.version}`}
+            title={[attachment.label, attachment.server.version].filter(Boolean).join(' ')}
             aside={<Status tone={statusTones[attachment.status]}>{statusLabels[attachment.status]}</Status>}
             onOpen={onOpen}
         >
@@ -204,7 +203,7 @@ function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: 
                     </span>
                 </Row>
             )}
-            <Row label="Runs on">{attachment.managed ? 'DigitalOcean' : attachment.server.cluster}</Row>
+            <Row label="Runs on">{attachment.runs_on}</Row>
             <Row label="Env values">{attachment.env_keys.length}</Row>
             {attachment.backups && <Row label="Last backup">{lastBackup ? timeAgo(lastBackup.created_at) : 'None yet'}</Row>}
         </Block>

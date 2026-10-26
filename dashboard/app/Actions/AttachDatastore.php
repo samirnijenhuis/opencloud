@@ -42,7 +42,9 @@ class AttachDatastore
         }
 
         return DB::transaction(function () use ($environment, $by, $kind, $source, $name, $connection, $provisioner) {
-            $attachments = $environment->datastoreAttachments()->with('datastore')->get();
+            // An attachment whose datastore is being destroyed no longer holds its name or its family.
+            $attachments = $environment->datastoreAttachments()->with('datastore')->get()
+                ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->status === DatastoreStatus::Destroying);
             $named = $kind->family()->isNamed();
             $name = $named ? $this->databaseName($attachments, $name) : null;
             $existing = $attachments->first(fn (DatastoreAttachment $attachment) => $named

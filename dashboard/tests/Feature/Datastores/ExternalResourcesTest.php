@@ -218,7 +218,7 @@ class ExternalResourcesTest extends TestCase
         $this->assertSame([
             ['CACHE_STORE', 'redis', false, $store->id],
             ['REDIS_CLIENT', 'phpredis', false, $store->id],
-            ['REDIS_HOST', 'redis.example.com', false, $store->id],
+            ['REDIS_HOST', 'tls://redis.example.com', false, $store->id],
             ['REDIS_PASSWORD', 'redis-secret', true, $store->id],
             ['REDIS_PORT', '6380', false, $store->id],
         ], $this->env());
