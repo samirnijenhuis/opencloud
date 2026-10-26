@@ -3,70 +3,62 @@
 namespace App\Actions;
 
 use App\Datastores\AttachmentEnv;
+use App\Datastores\Connection;
 use App\Datastores\DatabaseNames;
 use App\Datastores\DatastoreStatus;
-use App\Datastores\Engines;
-use App\Datastores\ManagedDatabase;
+use App\Datastores\Provisioners;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
-use App\Enums\ResourceFamily;
-use App\Jobs\ProvisionDatastoreAttachment;
-use App\Jobs\ProvisionManagedDatabase;
-use App\Kube\Manifests\DatastoreManifests;
 use App\Models\AuditEvent;
-use App\Models\Datastore;
 use App\Models\DatastoreAttachment;
 use App\Models\Environment;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class AttachDatastore
 {
     /**
-     * Finds or creates the standard datastore of that kind on the cluster, creates the attachment and its env values,
-     * and dispatches the provisioning. The managed source creates a DigitalOcean database for this environment instead.
+     * Creates the attachment with the provisioner of the kind and source, then its env values and its audit event.
      *
-     * A MySQL or Postgres database has a connection name. The first one of an environment is the default and is named
-     * "main" without $name. A later one needs a name. Valkey and RustFS have no name, and attaching one of them again
-     * returns the existing attachment. Attaching a failed database or datastore again retries it.
+     * A database has a connection name. The first one of an environment is the default and is named "main" without
+     * $name. A later one needs a name. Another family has no name, and attaching it again returns the existing
+     * attachment. Attaching a failed attachment again retries it with the provisioner of its own datastore.
      *
-     * @throws InvalidArgumentException when the name is not valid or taken, or DigitalOcean cannot serve the database
+     * @param  Connection|null  $connection  what the user typed for the external source, later; null today
+     *
+     * @throws InvalidArgumentException when the name is not valid or taken, or the source cannot serve the kind here
      */
-    public function handle(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = DatastoreSource::Standard, ?string $name = null): DatastoreAttachment
+    public function handle(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = DatastoreSource::Standard, ?string $name = null, ?Connection $connection = null): DatastoreAttachment
     {
-        if ($source === DatastoreSource::Managed) {
-            $this->checkManaged($environment, $kind);
+        $provisioner = Provisioners::for($kind, $source);
+        $refusal = $provisioner->refusalOn($environment->application->cluster);
+
+        if ($refusal !== null) {
+            throw new InvalidArgumentException($refusal);
         }
 
-        return DB::transaction(function () use ($environment, $by, $kind, $source, $name) {
+        return DB::transaction(function () use ($environment, $by, $kind, $source, $name, $connection, $provisioner) {
             $attachments = $environment->datastoreAttachments()->with('datastore')->get();
-            $name = $kind->family()->isNamed() ? $this->databaseName($attachments, $name) : null;
-            $existing = $attachments->first(fn (DatastoreAttachment $attachment) => $kind->family()->isNamed()
+            $named = $kind->family()->isNamed();
+            $name = $named ? $this->databaseName($attachments, $name) : null;
+            $existing = $attachments->first(fn (DatastoreAttachment $attachment) => $named
                 ? $attachment->name === $name
-                : $attachment->datastore->kind === $kind);
+                : $attachment->datastore->kind->family() === $kind->family());
 
             if ($existing !== null) {
                 return $this->retry($existing, $kind);
             }
 
-            $fields = [
-                'name' => $name,
-                'is_default' => $kind->family()->isNamed() && ! $attachments->contains('is_default', true),
-                ...Engines::for($kind)->names($environment, $name),
-            ];
-
-            $attachment = $source === DatastoreSource::Managed
-                ? $this->createManaged($environment, $kind, $fields)
-                : $this->createStandard($environment, $kind, $fields);
+            $attachment = $provisioner->attach($environment, $name, $named && ! $attachments->contains('is_default', true), $connection);
+            AttachmentEnv::write($attachment);
 
             AuditEvent::record($by, 'datastore.attached', $attachment, array_filter([
                 'environment_id' => $environment->id,
                 'kind' => $kind->value,
                 'name' => $name,
-                'source' => $source === DatastoreSource::Managed ? 'managed' : null,
+                'source' => $source === DatastoreSource::Standard ? null : $source->value,
             ]));
 
             return $attachment;
@@ -87,73 +79,24 @@ class AttachDatastore
         return $error === null ? $name : throw new InvalidArgumentException($error);
     }
 
-    /** Only a failed attachment of the same kind can be attached again. For a database, that means the same name too. */
+    /**
+     * Only a failed attachment of the same kind can be attached again. For a database, that means the same name too.
+     * Another kind of the same family is refused, so a second key-value engine gets an error and not the first one.
+     */
     private function retry(DatastoreAttachment $existing, DatastoreKind $kind): DatastoreAttachment
     {
-        if ($kind->family()->isNamed() && ($existing->datastore->kind !== $kind || $existing->status !== DatastoreStatus::Failed)) {
-            throw new InvalidArgumentException("This environment already has a database with the name {$existing->name}.");
+        $named = $kind->family()->isNamed();
+
+        if ($existing->datastore->kind !== $kind || ($named && $existing->status !== DatastoreStatus::Failed)) {
+            throw new InvalidArgumentException($named
+                ? "This environment already has a database with the name {$existing->name}."
+                : "This environment already has a {$existing->datastore->kind->value} datastore.");
         }
 
         if ($existing->status === DatastoreStatus::Failed) {
-            $existing->datastore->source === DatastoreSource::Managed
-                ? ProvisionManagedDatabase::dispatch($existing)->afterCommit()
-                : ProvisionDatastoreAttachment::dispatch($existing)->afterCommit();
+            Provisioners::of($existing->datastore)->retry($existing);
         }
 
         return $existing;
-    }
-
-    /** @param  array<string, mixed>  $fields */
-    private function createStandard(Environment $environment, DatastoreKind $kind, array $fields): DatastoreAttachment
-    {
-        $datastore = Datastore::firstOrCreate(
-            ['cluster_id' => $environment->application->cluster_id, 'kind' => $kind, 'source' => DatastoreSource::Standard],
-            ['version' => DatastoreManifests::VERSIONS[$kind->value], 'root_password' => $kind === DatastoreKind::Valkey ? null : Str::random(32)],
-        );
-
-        $attachment = $environment->datastoreAttachments()->create([
-            ...$fields,
-            ...($kind->family() === ResourceFamily::Database ? DatabaseNames::server($datastore) : []),
-            'datastore_id' => $datastore->id,
-            'password' => Str::random(32),
-        ]);
-
-        AttachmentEnv::write($attachment);
-        ProvisionDatastoreAttachment::dispatch($attachment)->afterCommit();
-
-        return $attachment;
-    }
-
-    /**
-     * A managed database has a datastore of its own. Its env values come after the apply, because DigitalOcean
-     * generates the password and the host.
-     *
-     * @param  array<string, mixed>  $fields
-     */
-    private function createManaged(Environment $environment, DatastoreKind $kind, array $fields): DatastoreAttachment
-    {
-        $datastore = Datastore::query()->create([
-            'cluster_id' => $environment->application->cluster_id,
-            'kind' => $kind,
-            'source' => DatastoreSource::Managed,
-            'version' => ManagedDatabase::VERSIONS[$kind->value],
-        ]);
-
-        $attachment = $environment->datastoreAttachments()->create([...$fields, 'datastore_id' => $datastore->id]);
-        ProvisionManagedDatabase::dispatch($attachment)->afterCommit();
-
-        return $attachment;
-    }
-
-    /** @throws InvalidArgumentException for a kind or a cluster that DigitalOcean cannot serve */
-    private function checkManaged(Environment $environment, DatastoreKind $kind): void
-    {
-        if (! in_array($kind, ManagedDatabase::KINDS, true)) {
-            throw new InvalidArgumentException('DigitalOcean manages MySQL and Postgres only.');
-        }
-
-        if (! ManagedDatabase::availableOn($environment->application->cluster)) {
-            throw new InvalidArgumentException('A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.');
-        }
     }
 }

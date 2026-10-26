@@ -7,6 +7,7 @@ use App\Backups\BackupStatus;
 use App\Datastores\AttachmentEnv;
 use App\Datastores\DatastoreStatus;
 use App\Datastores\ManagedDatabase;
+use App\Datastores\Provisioners;
 use App\Domains\CloudflareDns;
 use App\Enums\Ability;
 use App\Enums\DatastoreKind;
@@ -135,13 +136,14 @@ class EnvironmentController extends Controller
     /** @return array<string, mixed> */
     private function datastores(Environment $environment, Role $role): array
     {
+        $cluster = $environment->application->cluster;
         $rows = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get()
             ->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment));
 
         return [
             'attachments' => $rows,
-            'available_kinds' => collect(DatastoreKind::cases())
-                ->reject(fn (DatastoreKind $kind) => ! $kind->family()->isNamed() && $rows->contains('kind', $kind))
+            'available_kinds' => collect(Provisioners::offered(DatastoreSource::Standard, $cluster))
+                ->reject(fn (DatastoreKind $kind) => ! $kind->family()->isNamed() && $rows->contains(fn (array $row) => $row['kind']->family() === $kind->family()))
                 ->values(),
             'has_backup_target' => BackupTarget::query()->exists(),
             'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::Pending, DatastoreStatus::Provisioning], true)
@@ -149,7 +151,7 @@ class EnvironmentController extends Controller
                 || collect($row['backups'] ?? [])->contains('status', BackupStatus::Running)
                 || ($row['restore']['status'] ?? null) === 'running'),
             'managed' => [
-                'available' => $role->allows(Ability::ManageCredentials) && ManagedDatabase::availableOn($environment->application->cluster),
+                'available' => $role->allows(Ability::ManageCredentials) && Provisioners::offered(DatastoreSource::Managed, $cluster) !== [],
                 'pricing_url' => ManagedDatabase::PRICING_URL,
                 'size' => config('opencloud.managed_database_size'),
             ],

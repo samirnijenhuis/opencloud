@@ -2,17 +2,15 @@
 
 namespace App\Jobs;
 
-use App\Datastores\Engines;
-use App\Kube\Kubectl;
+use App\Datastores\Provisioners;
 use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 /**
- * Removes the user, key, or server of an attachment that DetachDatastore already deleted from the database.
+ * Removes the user, key, or server of an attachment that LocalProvisioner::detach() already deleted from the database.
  */
 class RevokeDatastoreAccess implements ShouldQueue
 {
@@ -36,8 +34,6 @@ class RevokeDatastoreAccess implements ShouldQueue
 
     public function handle(): void
     {
-        $attachment = (new DatastoreAttachment)->setRawAttributes($this->attachment)->setRelation('datastore', $this->datastore);
-
-        Engines::for($this->datastore->kind)->detach(Kubectl::for($this->datastore->cluster), $attachment, $this->destroyData);
+        Provisioners::of($this->datastore)->release($this->datastore, $this->attachment, $this->destroyData);
     }
 }

@@ -7,7 +7,7 @@ use App\Actions\DetachDatastore;
 use App\Actions\SetDefaultDatabase;
 use App\Clusters\ClusterStatus;
 use App\Datastores\DatastoreStatus;
-use App\Datastores\ManagedDatabase;
+use App\Datastores\Provisioners;
 use App\Enums\ClusterKind;
 use App\Enums\DatastoreKind;
 use App\Enums\DatastoreSource;
@@ -102,13 +102,13 @@ class ManagedDatabaseTest extends TestCase
 
     public function test_a_key_without_the_database_right_does_not_offer_a_managed_database(): void
     {
-        $this->assertTrue(ManagedDatabase::availableOn($this->cluster));
+        $this->assertSame([DatastoreKind::Postgres], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
 
         ProviderCredential::query()->update(['missing_rights' => ['vpc']]);
-        $this->assertTrue(ManagedDatabase::availableOn($this->cluster));
+        $this->assertSame([DatastoreKind::Postgres], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
 
         ProviderCredential::query()->update(['missing_rights' => ['vpc', 'database']]);
-        $this->assertFalse(ManagedDatabase::availableOn($this->cluster));
+        $this->assertSame([], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
 
         $this->assertRefused($this->environment(), DatastoreKind::Postgres, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.');
     }

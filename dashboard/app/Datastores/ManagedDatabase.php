@@ -29,23 +29,19 @@ use Throwable;
  */
 final class ManagedDatabase implements Provisioner
 {
-    public const KINDS = [DatastoreKind::Mysql, DatastoreKind::Postgres];
-
-    /**
-     * DigitalOcean MySQL needs TLS with DigitalOcean's own CA, and a stock Laravel app does not load that CA yet.
-     * Postgres connects with sslmode=prefer, so the dashboard offers only Postgres until the CA is handled.
-     */
-    public const OFFERED = [DatastoreKind::Postgres];
-
-    /** @var array<string, string> kind => the major version on DigitalOcean */
-    public const VERSIONS = ['mysql' => '8', 'postgres' => '17'];
-
     public const PRICING_URL = 'https://www.digitalocean.com/pricing/managed-databases';
 
     /** The refusal for a managed kind that Provisioners has no arm for. */
     public const KINDS_ONLY = 'DigitalOcean manages MySQL and Postgres only.';
 
+    /**
+     * DigitalOcean MySQL needs TLS with DigitalOcean's own CA, and a stock Laravel app does not load that CA yet.
+     * Postgres connects with sslmode=prefer, so the dashboard offers only Postgres until the CA is handled.
+     */
     public const MYSQL_NOT_OFFERED = 'A managed database on DigitalOcean is Postgres only for now. Use managed Postgres, or MySQL in the cluster.';
+
+    /** @var array<string, string> kind => the major version on DigitalOcean */
+    private const VERSIONS = ['mysql' => '8', 'postgres' => '17'];
 
     private const ENGINES = ['mysql' => 'mysql', 'postgres' => 'pg'];
 
@@ -58,20 +54,17 @@ final class ManagedDatabase implements Provisioner
      * Only a cluster that opencloud created on DigitalOcean has the VPC and the id that the firewall rule needs.
      * A key without the database right cannot create the database.
      */
-    public static function availableOn(Cluster $cluster): bool
+    public function refusalOn(Cluster $cluster): ?string
     {
+        $refusal = 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.';
+
         if ($cluster->kind !== ClusterKind::Created || $cluster->provider !== 'digitalocean' || $cluster->provider_cluster_id === null) {
-            return false;
+            return $refusal;
         }
 
         $credential = ProviderCredential::query()->where('provider', 'digitalocean')->first();
 
-        return $credential !== null && ! in_array('database', $credential->missing_rights ?? [], true);
-    }
-
-    public function refusalOn(Cluster $cluster): ?string
-    {
-        return self::availableOn($cluster) ? null : 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key.';
+        return $credential !== null && ! in_array('database', $credential->missing_rights ?? [], true) ? null : $refusal;
     }
 
     /** DigitalOcean generates the host and the password, so the attachment has neither until the apply. */
@@ -142,7 +135,7 @@ final class ManagedDatabase implements Provisioner
         $datastore->update(['status' => DatastoreStatus::Provisioning, 'error' => null, 'tofu_log' => null]);
 
         try {
-            $outputs = app(Runner::class)->apply(self::stack($attachment, DigitalOceanCluster::token()), $datastore);
+            $outputs = app(Runner::class)->apply($this->stack($attachment), $datastore);
         } catch (Throwable $e) {
             self::failed($attachment, $e);
 
@@ -167,7 +160,7 @@ final class ManagedDatabase implements Provisioner
         $datastore->update(['status' => DatastoreStatus::Destroying, 'error' => null, 'tofu_log' => null]);
 
         try {
-            app(Runner::class)->destroy(self::stack($released, DigitalOceanCluster::token()), $datastore);
+            app(Runner::class)->destroy($this->stack($released), $datastore);
         } catch (Throwable $e) {
             self::destroyFailed($datastore, $e);
 
@@ -207,7 +200,7 @@ final class ManagedDatabase implements Provisioner
         $datastore->update(['status' => DatastoreStatus::Failed, 'error' => 'The destroy failed. '.($e?->getMessage() ?? '')]);
     }
 
-    public static function stack(DatastoreAttachment $attachment, string $token): Stack
+    private function stack(DatastoreAttachment $attachment): Stack
     {
         $datastore = $attachment->datastore;
         $cluster = $datastore->cluster;
@@ -222,6 +215,6 @@ final class ManagedDatabase implements Provisioner
             'kubernetes_cluster_id' => $cluster->provider_cluster_id,
             'database' => $attachment->database_name,
             'user' => $attachment->username,
-        ], ['DIGITALOCEAN_TOKEN' => $token]);
+        ], ['DIGITALOCEAN_TOKEN' => DigitalOceanCluster::token()]);
     }
 }
