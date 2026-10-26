@@ -62,21 +62,6 @@ final class RustfsEngine implements Engine
         ]);
     }
 
-    public function env(DatastoreAttachment $attachment): array
-    {
-        $host = DatastoreManifests::host(DatastoreManifests::serverName($attachment->datastore));
-
-        return [
-            'FILESYSTEM_DISK' => ['s3', false],
-            'AWS_ACCESS_KEY_ID' => [$attachment->username, false],
-            'AWS_SECRET_ACCESS_KEY' => [$attachment->password, true],
-            'AWS_DEFAULT_REGION' => ['us-east-1', false],
-            'AWS_BUCKET' => [$attachment->database_name, false],
-            'AWS_ENDPOINT' => ["http://{$host}:9000", false],
-            'AWS_USE_PATH_STYLE_ENDPOINT' => ['true', false],
-        ];
-    }
-
     public function connection(DatastoreAttachment $attachment): ?Connection
     {
         $host = DatastoreManifests::host(DatastoreManifests::serverName($attachment->datastore));

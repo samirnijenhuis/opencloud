@@ -42,17 +42,6 @@ final class ValkeyEngine implements Engine
         }
     }
 
-    public function env(DatastoreAttachment $attachment): array
-    {
-        return [
-            'REDIS_CLIENT' => ['phpredis', false],
-            'REDIS_HOST' => [DatastoreManifests::host(DatastoreManifests::valkeyName($attachment)), false],
-            'REDIS_PORT' => ['6379', false],
-            'REDIS_PASSWORD' => [$attachment->password, true],
-            'CACHE_STORE' => ['redis', false],
-        ];
-    }
-
     public function connection(DatastoreAttachment $attachment): ?Connection
     {
         return new KeyValueConnection(DatastoreManifests::host(DatastoreManifests::valkeyName($attachment)), 6379, $attachment->password, tls: false);
