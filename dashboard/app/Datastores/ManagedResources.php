@@ -31,6 +31,11 @@ final class ManagedResources
                 refusal: 'Managed Valkey needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.',
                 capabilities: new Capabilities('DigitalOcean does not back up Valkey, and opencloud does not either. Keep only data that the app can make again.', label: 'Managed Valkey'),
             ),
+            DatastoreKind::Rustfs => new ManagedResource($kind, new ManagedBucket,
+                right: 'spaces_key',
+                refusal: 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.',
+                capabilities: new Capabilities('The bucket is at DigitalOcean and not on the server, so the nightly job does not copy it.', label: 'Spaces bucket'),
+            ),
             default => null,
         };
     }
