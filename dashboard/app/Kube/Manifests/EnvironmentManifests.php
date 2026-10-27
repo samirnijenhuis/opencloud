@@ -115,11 +115,24 @@ final readonly class EnvironmentManifests
             strategy: self::ROLLING,
             container: [
                 'ports' => [['name' => 'http', 'containerPort' => $this->environment->application->port]],
-                'readinessProbe' => ['httpGet' => ['path' => $this->environment->health_path, 'port' => 'http']],
+                'readinessProbe' => ['httpGet' => ['path' => $this->environment->health_path, 'port' => 'http', ...$this->probeHost()]],
                 // The old pod keeps serving until the Service and Caddy stop sending it new connections.
                 'lifecycle' => ['preStop' => ['sleep' => ['seconds' => 10]]],
             ],
         );
+    }
+
+    /**
+     * The kubelet sends the pod address as the Host header. An app that checks the host, for example Django with
+     * ALLOWED_HOSTS, refuses it, so the probe sends the first domain of the environment.
+     *
+     * @return array{httpHeaders?: list<array{name: string, value: string}>}
+     */
+    private function probeHost(): array
+    {
+        $hostname = $this->environment->domains->sortBy('id')->first()?->hostname;
+
+        return $hostname === null ? [] : ['httpHeaders' => [['name' => 'Host', 'value' => $hostname]]];
     }
 
     /**
@@ -134,7 +147,8 @@ final readonly class EnvironmentManifests
             $deployment,
             replicas: $process->instances,
             strategy: $process->exclusive ? ['type' => 'Recreate'] : self::ROLLING,
-            container: ['command' => self::shellCommand($process->command)],
+            // An image with tini as its entrypoint gets only the arguments, so tini stays PID 1 and passes SIGTERM on.
+            container: [$this->environment->application->type->imageRunsTini() ? 'args' : 'command' => self::shellCommand($process->command)],
         );
     }
 

@@ -10,6 +10,7 @@ use App\Kube\Manifests\EnvironmentManifests;
 use App\Models\Application;
 use App\Models\Cluster;
 use App\Models\Deployment;
+use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\Process;
 use Illuminate\Database\Eloquent\Collection;
@@ -307,6 +308,31 @@ class EnvironmentManifestsTest extends TestCase
         $this->assertSame(['sh', '-c', 'exec node queue.js'], $workloads[1]['spec']['template']['spec']['containers'][0]['command']);
     }
 
+    public function test_a_process_of_a_tini_image_passes_only_its_arguments_so_tini_stays_pid_1(): void
+    {
+        $worker = new Process(['name' => 'worker', 'command' => 'node worker.js', 'instances' => 1, 'exclusive' => false]);
+
+        $container = $this->manifests(type: ApplicationType::Node, processes: [$worker])
+            ->workloads($this->deployment())[1]['spec']['template']['spec']['containers'][0];
+
+        $this->assertSame([['sh', '-c', 'exec node worker.js'], false], [$container['args'], array_key_exists('command', $container)]);
+    }
+
+    public function test_the_probe_sends_the_first_domain_of_the_environment_as_the_host(): void
+    {
+        $later = new Domain(['hostname' => 'www.example.com']);
+        $later->id = 9;
+        $first = new Domain(['hostname' => 'shop.example.com']);
+        $first->id = 4;
+
+        $web = $this->manifests(domains: [$later, $first])->web($this->deployment());
+
+        $this->assertSame(
+            ['path' => '/up', 'port' => 'http', 'httpHeaders' => [['name' => 'Host', 'value' => 'shop.example.com']]],
+            $web['spec']['template']['spec']['containers'][0]['readinessProbe']['httpGet'],
+        );
+    }
+
     public function test_a_single_command_replaces_the_shell_and_a_shell_construct_runs_as_it_is(): void
     {
         $this->assertSame([
@@ -331,8 +357,9 @@ class EnvironmentManifestsTest extends TestCase
     /**
      * @param  array<string, mixed>  $attributes
      * @param  list<Process>  $processes
+     * @param  list<Domain>  $domains
      */
-    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::Laravel, int $port = 8080, ?Cluster $cluster = null, array $processes = []): EnvironmentManifests
+    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::Laravel, int $port = 8080, ?Cluster $cluster = null, array $processes = [], array $domains = []): EnvironmentManifests
     {
         $application = new Application(['type' => $type, 'port' => $port]);
         $application->id = 3;
@@ -343,6 +370,7 @@ class EnvironmentManifestsTest extends TestCase
         $environment->application_id = 3;
         $environment->setRelation('application', $application);
         $environment->setRelation('processes', new Collection($processes));
+        $environment->setRelation('domains', new Collection($domains));
 
         return new EnvironmentManifests($environment);
     }

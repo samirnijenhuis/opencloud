@@ -81,6 +81,15 @@ enum ApplicationType: string
         };
     }
 
+    /** The image runs tini as its entrypoint, so a process passes only its arguments. */
+    public function imageRunsTini(): bool
+    {
+        return match ($this) {
+            self::Node, self::Python, self::Ruby => true,
+            self::Laravel, self::Static, self::Dockerfile => false,
+        };
+    }
+
     /** @return 'mysql'|'none' */
     public function database(): string
     {

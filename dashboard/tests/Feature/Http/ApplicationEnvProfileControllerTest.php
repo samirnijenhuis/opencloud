@@ -192,17 +192,7 @@ class ApplicationEnvProfileControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('applications/show')
                 ->where('application', ['id' => 1, 'name' => 'shop', 'repository' => $this->application->repository, 'type' => 'laravel', 'env_profile' => 'laravel', 'port' => 8080])
-                ->has('presets', 4)
-                ->where('presets.1', [
-                    'value' => 'node',
-                    'port' => 3000,
-                    'chooses_port' => true,
-                    'uses_build_command' => true,
-                    'deploy_commands' => [],
-                    'processes' => [],
-                    'database' => 'none',
-                    'env_profile' => 'generic',
-                ])
+                ->missing('presets')
                 ->where('canUpdate', true));
     }
 
