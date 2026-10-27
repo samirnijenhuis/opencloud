@@ -16,6 +16,8 @@ class NodeDockerfileTest extends TestCase
 
         $this->assertSame(<<<'DOCKERFILE'
             FROM node:20-slim
+            # tini runs as PID 1 and passes SIGTERM to the app. As PID 1, Node ignores SIGTERM when the app has no handler for it.
+            RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
             # Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
             ARG OPENCLOUD_BUILD_ENV
             # A stalled download fails after 60 seconds and npm tries again, instead of waiting 5 minutes.
@@ -31,6 +33,7 @@ class NodeDockerfileTest extends TestCase
             RUN --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN npx prisma generate
             # Some frameworks, for example Astro and Nuxt, listen on HOST. A probe cannot reach an app that listens on localhost.
             ENV HOST=0.0.0.0
+            ENTRYPOINT ["/usr/bin/tini", "--"]
             CMD ["npm", "run", "start"]
 
             DOCKERFILE, NodeDockerfile::render(new NodeProject($package, 'package-lock.json'), ['NPM_TOKEN'], ' npx prisma generate '));
@@ -79,7 +82,7 @@ class NodeDockerfileTest extends TestCase
     {
         $dockerfile = NodeDockerfile::render(new NodeProject($package, $lockFile));
 
-        $this->assertSame($expected, array_values(preg_grep('/^(FROM|RUN|CMD) /', explode("\n", $dockerfile))));
+        $this->assertSame($expected, array_values(preg_grep('/^(FROM|RUN (?!apt-get)|CMD )/', explode("\n", $dockerfile))));
     }
 
     /** @return array<string, array{array<string, mixed>, string}> */

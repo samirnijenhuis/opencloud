@@ -110,11 +110,13 @@ class BuilderTest extends TestCase
         $this->assertContains('filename=.opencloud.Dockerfile', $processes->commands()[3]);
         $this->assertSame([
             'FROM node:22-slim',
+            'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
             'RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile',
             'RUN pnpm run build',
             'RUN npx prisma generate',
+            'ENTRYPOINT ["/usr/bin/tini", "--"]',
             'CMD ["pnpm", "run", "start"]',
-        ], array_values(preg_grep('/^(FROM|RUN|CMD) /', explode("\n", $processes->dockerfiles[0]))));
+        ], array_values(preg_grep('/^(FROM|RUN|ENTRYPOINT|CMD) /', explode("\n", $processes->dockerfiles[0]))));
         $this->assertSame([".git\nnode_modules\n"], $processes->dockerignores);
     }
 
