@@ -56,6 +56,19 @@
         "no-sql": { "SESSION_DRIVER": "cookie", "CACHE_STORE": "file" },
         "valkey": { "CACHE_STORE": "redis" }
       }
+    },
+    "node": {
+      "branch": "node",
+      "type": "node",
+      "env_profile": "generic",
+      "verify_path": "/verify",
+      "checks": ["marker", "build", "secret", "db", "extra", "cache"],
+      "databases": ["none", "mysql", "postgres", "mysqlpostgres"],
+      "caches": ["none", "valkey"],
+      "database_in_create_form": true,
+      "build_command": {},
+      "deploy_commands": { "always": ["node deploy.js {cell}"] },
+      "env": {}
     }
   },
   "sets": {
@@ -67,7 +80,8 @@
       "laravel-mysql-none",
       "laravel-postgres-valkey",
       "laravel-sqlite-valkey",
-      "laravel-mysqlpostgres-none"
+      "laravel-mysqlpostgres-none",
+      "node-postgres-valkey"
     ]
   }
 }
