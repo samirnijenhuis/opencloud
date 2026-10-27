@@ -8,6 +8,7 @@ use App\Domains\Members\Enums\Ability;
 use App\Domains\Routing\Models\Domain;
 use App\Http\Controllers\Controller;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -39,7 +40,7 @@ class AuditLogController extends Controller
             return null;
         }
 
-        $type = str(class_basename($event->subject_type))->snake(' ')->lower()->toString();
+        $type = str(class_basename(Relation::getMorphedModel($event->subject_type) ?? $event->subject_type))->snake(' ')->lower()->toString();
         $subject = $event->subject;
 
         if (! $subject instanceof Model) {

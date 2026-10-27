@@ -24,7 +24,7 @@ class AuditEventTest extends TestCase
         $event = AuditEvent::sole();
         $this->assertSame($user->id, $event->user_id);
         $this->assertSame('env.updated', $event->action);
-        $this->assertSame(Environment::class, $event->subject_type);
+        $this->assertSame('environment', $event->subject_type);
         $this->assertSame($environment->id, $event->subject_id);
         $this->assertSame(['key' => 'DB_PASSWORD'], $event->context);
         $this->assertTrue($event->subject->is($environment));
