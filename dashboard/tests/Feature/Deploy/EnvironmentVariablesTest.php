@@ -70,6 +70,8 @@ class EnvironmentVariablesTest extends TestCase
         return [
             'laravel' => [ApplicationType::Laravel, 8080, ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'APP_URL' => 'https://api.example.com', 'LOG_CHANNEL' => 'stderr']],
             'node' => [ApplicationType::Node, 3000, ['APP_URL' => 'https://api.example.com', 'NODE_ENV' => 'production', 'PORT' => '3000']],
+            'ruby' => [ApplicationType::Ruby, 3000, ['APP_URL' => 'https://api.example.com', 'PORT' => '3000', 'RACK_ENV' => 'production', 'RAILS_ENV' => 'production', 'RAILS_LOG_TO_STDOUT' => '1', 'RAILS_SERVE_STATIC_FILES' => '1']],
+            'python' => [ApplicationType::Python, 8000, ['ALLOWED_HOSTS' => 'api.example.com,www.example.com', 'APP_URL' => 'https://api.example.com', 'DEBUG' => 'false', 'PORT' => '8000', 'PYTHONUNBUFFERED' => '1']],
             'static' => [ApplicationType::Static, 8080, ['APP_URL' => 'https://api.example.com', 'PORT' => '8080']],
             'dockerfile' => [ApplicationType::Dockerfile, 3000, ['APP_URL' => 'https://api.example.com', 'PORT' => '3000']],
         ];
@@ -82,8 +84,17 @@ class EnvironmentVariablesTest extends TestCase
         $application = Application::factory()->create(['type' => $type, 'port' => $port]);
         $environment = Environment::factory()->for($application)->create();
         Domain::factory()->for($environment)->create(['hostname' => 'api.example.com']);
+        Domain::factory()->for($environment)->create(['hostname' => 'www.example.com']);
 
         $this->assertSame($expected, EnvironmentVariables::runtime($environment));
+    }
+
+    public function test_a_python_app_without_a_domain_gets_no_url_and_no_allowed_hosts(): void
+    {
+        $application = Application::factory()->create(['type' => ApplicationType::Python, 'port' => 8000]);
+        $environment = Environment::factory()->for($application)->create();
+
+        $this->assertSame(['DEBUG' => 'false', 'PORT' => '8000', 'PYTHONUNBUFFERED' => '1'], EnvironmentVariables::runtime($environment));
     }
 
     public function test_a_user_port_beats_the_port_of_the_application(): void

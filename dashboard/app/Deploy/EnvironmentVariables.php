@@ -47,8 +47,7 @@ final class EnvironmentVariables
     private static function systemDefaults(Environment $environment): array
     {
         $application = $environment->application;
-        $hostname = $environment->domains()->orderBy('id')->value('hostname');
 
-        return $application->type->systemEnv($application->port, $hostname === null ? null : "https://{$hostname}");
+        return $application->type->systemEnv($application->port, $environment->domains()->orderBy('id')->pluck('hostname')->all());
     }
 }

@@ -80,7 +80,7 @@ final readonly class NodeProject
      *
      * @return list<string>
      *
-     * @throws RuntimeException when package.json has neither
+     * @throws RepositoryDoesNotFit when package.json has neither
      */
     public function start(): array
     {
@@ -92,7 +92,7 @@ final readonly class NodeProject
             return ['node', $this->package['main']];
         }
 
-        throw new RuntimeException('package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script.');
+        throw new RepositoryDoesNotFit('package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script.');
     }
 
     /**

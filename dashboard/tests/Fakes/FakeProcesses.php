@@ -68,6 +68,7 @@ final class FakeProcesses
 
         if ($command[0] === 'git' && $command[1] === 'checkout') {
             foreach ($this->repository as $path => $contents) {
+                is_dir(dirname("{$process->path}/{$path}")) || mkdir(dirname("{$process->path}/{$path}"), 0777, true);
                 file_put_contents("{$process->path}/{$path}", $contents);
             }
         }

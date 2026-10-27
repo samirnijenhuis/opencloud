@@ -23,7 +23,7 @@ final class NodeDockerfile
             'install' => $project->install(),
             'build_script' => $project->hasScript('build') ? "RUN {$mounts}{$project->run('build')}" : '',
             'build_command' => $buildCommand === '' ? '' : "RUN {$mounts}{$buildCommand}",
-            'start' => '['.implode(', ', array_map(fn (string $arg) => json_encode($arg, JSON_UNESCAPED_SLASHES), $project->start())).']',
+            'start' => DockerfileTemplate::execForm($project->start()),
         ]);
     }
 }

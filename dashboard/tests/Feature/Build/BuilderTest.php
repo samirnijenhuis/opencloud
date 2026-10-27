@@ -110,12 +110,69 @@ class BuilderTest extends TestCase
         $this->assertContains('filename=.opencloud.Dockerfile', $processes->commands()[3]);
         $this->assertSame([
             'FROM node:22-slim',
+            'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
             'RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile',
             'RUN pnpm run build',
             'RUN npx prisma generate',
+            'ENTRYPOINT ["/usr/bin/tini", "--"]',
             'CMD ["pnpm", "run", "start"]',
-        ], array_values(preg_grep('/^(FROM|RUN|CMD) /', explode("\n", $processes->dockerfiles[0]))));
+        ], array_values(preg_grep('/^(FROM|RUN|ENTRYPOINT|CMD) /', explode("\n", $processes->dockerfiles[0]))));
         $this->assertSame([".git\nnode_modules\n"], $processes->dockerignores);
+    }
+
+    public function test_the_python_preset_writes_a_dockerfile_from_the_dependency_file_and_the_procfile(): void
+    {
+        $processes = FakeProcesses::install();
+        $processes->repository = [
+            'requirements.txt' => "flask==3.1\ngunicorn==23.0\n",
+            'runtime.txt' => "python-3.9\n",
+            'Procfile' => "web: gunicorn shop.wsgi:app --bind 0.0.0.0:\$PORT\n",
+            'package.json' => '{"scripts":{"start":"node server.js"}}',
+        ];
+        $deployment = $this->deployment('acme/shop', ApplicationType::Python);
+        $deployment->environment->update(['build_command' => 'flask --app shop assets build']);
+        EnvVar::factory()->for($deployment->environment)->create(['key' => 'PIP_INDEX_URL', 'value' => 'https://pypi.example.com/simple', 'available_at' => EnvVarAvailability::Build]);
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertContains('filename=.opencloud.Dockerfile', $processes->commands()[3]);
+        $this->assertContains('id=PIP_INDEX_URL,env=PIP_INDEX_URL', $processes->commands()[3]);
+        $this->assertSame([
+            'FROM python:3.14',
+            'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
+            'RUN python -m venv /opt/venv',
+            'RUN --mount=type=cache,target=/root/.cache --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL pip install -r requirements.txt',
+            'RUN --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL flask --app shop assets build',
+            'ENTRYPOINT ["/usr/bin/tini", "--"]',
+            'CMD ["sh", "-c", "exec gunicorn shop.wsgi:app --bind 0.0.0.0:$PORT"]',
+        ], array_values(preg_grep('/^(FROM|RUN|ENTRYPOINT|CMD) /', explode("\n", $processes->dockerfiles[0]))));
+        $this->assertSame([".git\n.venv\n"], $processes->dockerignores);
+    }
+
+    public function test_the_ruby_preset_writes_a_dockerfile_from_the_gemfile_and_the_rails_files(): void
+    {
+        $processes = FakeProcesses::install();
+        $processes->repository = [
+            'Gemfile' => "source \"https://rubygems.org\"\nruby \"3.3.6\"\ngem \"rails\", \"~> 8.1\"\ngem \"propshaft\"\n",
+            'config.ru' => "require_relative \"config/environment\"\nrun Rails.application\n",
+            'bin/rails' => "#!/usr/bin/env ruby\n",
+            'config/application.rb' => "module Shop\nend\n",
+            'package.json' => '{"scripts":{"start":"node server.js"}}',
+        ];
+        $deployment = $this->deployment('acme/shop', ApplicationType::Ruby);
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertContains('filename=.opencloud.Dockerfile', $processes->commands()[3]);
+        $this->assertSame([
+            'FROM ruby:3.3.6',
+            'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
+            'RUN --mount=type=cache,target=/usr/local/bundle/cache bundle install',
+            'RUN SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile',
+            'ENTRYPOINT ["/usr/bin/tini", "--"]',
+            'CMD ["sh", "-c", "exec bin/rails server -b 0.0.0.0 -p $PORT"]',
+        ], array_values(preg_grep('/^(FROM|RUN|ENTRYPOINT|CMD) /', explode("\n", $processes->dockerfiles[0]))));
+        $this->assertSame([".git\nvendor/bundle\n"], $processes->dockerignores);
     }
 
     public function test_the_static_preset_serves_a_repository_without_package_json_and_ignores_the_build_command(): void
@@ -167,27 +224,37 @@ class BuilderTest extends TestCase
             'laravel without laravel/framework' => [
                 ApplicationType::Laravel,
                 ['composer.json' => '{"require":{"symfony/console":"^7"}}', 'Dockerfile' => "FROM php:8.4-cli\n"],
-                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.',
+                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework. To use another preset, create a new application with the same repository.',
             ],
             'laravel without composer.json' => [
                 ApplicationType::Laravel,
                 ['Dockerfile' => "FROM nginx:alpine\n"],
-                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.',
+                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework. To use another preset, create a new application with the same repository.',
             ],
             'node without package.json' => [
                 ApplicationType::Node,
                 ['Dockerfile' => "FROM node:24\n"],
-                'The application uses the Node.js preset, but the repository has no package.json at its root.',
+                'The application uses the Node.js preset, but the repository has no package.json at its root. To use another preset, create a new application with the same repository.',
             ],
             'node without a way to start' => [
                 ApplicationType::Node,
                 ['package.json' => '{"scripts":{"build":"tsc"}}'],
-                'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script.',
+                'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script. To use another preset, create a new application with the same repository.',
+            ],
+            'python without a dependency file' => [
+                ApplicationType::Python,
+                ['app.py' => "app = Flask(__name__)\n", 'package.json' => '{"scripts":{"start":"node server.js"}}'],
+                'The application uses the Python preset, but the repository has no uv.lock, poetry.lock, Pipfile.lock, requirements.txt, or pyproject.toml at its root. To use another preset, create a new application with the same repository.',
+            ],
+            'ruby without a Gemfile' => [
+                ApplicationType::Ruby,
+                ['Gemfile.lock' => "GEM\n", 'config.ru' => "run App\n"],
+                'The application uses the Ruby preset, but the repository has no Gemfile at its root. To use another preset, create a new application with the same repository.',
             ],
             'dockerfile without a Dockerfile' => [
                 ApplicationType::Dockerfile,
                 ['composer.json' => '{"require":{"laravel/framework":"^12.0"}}'],
-                'The application uses the Dockerfile preset, but the repository has no Dockerfile at its root.',
+                'The application uses the Dockerfile preset, but the repository has no Dockerfile at its root. To use another preset, create a new application with the same repository.',
             ],
         ];
     }

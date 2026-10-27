@@ -1,4 +1,6 @@
 FROM node:{{ node }}-slim
+# tini runs as PID 1 and passes SIGTERM to the app. As PID 1, Node ignores SIGTERM when the app has no handler for it.
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 # Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
 ARG OPENCLOUD_BUILD_ENV
 # A stalled download fails after 60 seconds and npm tries again, instead of waiting 5 minutes.
@@ -14,4 +16,5 @@ RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/
 {{ build_command }}
 # Some frameworks, for example Astro and Nuxt, listen on HOST. A probe cannot reach an app that listens on localhost.
 ENV HOST=0.0.0.0
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD {{ start }}
