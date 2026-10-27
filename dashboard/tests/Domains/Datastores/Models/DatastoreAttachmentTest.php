@@ -8,7 +8,7 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Actions\DetachDatastore;
-use App\Domains\Datastores\Actions\SetDefaultDatabase;
+use App\Domains\Datastores\Actions\SetDefaultAttachment;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Models\DatastoreAttachment;
@@ -21,6 +21,7 @@ use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Members\Models\User;
 use App\Support\Kube\FakeKubectl;
 use App\Support\Kube\KubectlResult;
+use App\Support\SecretMasker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\ConfigurationUrlParser;
 use Illuminate\Support\Str;
@@ -318,8 +319,8 @@ class DatastoreAttachmentTest extends TestCase
         $reports = $this->attach(DatastoreKind::POSTGRES, 'reports');
         $env = $this->environment->id;
 
-        app(SetDefaultDatabase::class)->execute($reports, $this->owner);
-        app(SetDefaultDatabase::class)->execute($reports->fresh(), $this->owner);
+        app(SetDefaultAttachment::class)->execute($reports, $this->owner);
+        app(SetDefaultAttachment::class)->execute($reports->fresh(), $this->owner);
 
         $this->assertSame([false, true], [$main->fresh()->is_default, $reports->fresh()->is_default]);
         $this->assertSame([
@@ -337,13 +338,13 @@ class DatastoreAttachmentTest extends TestCase
         );
     }
 
-    public function test_only_a_database_can_be_the_default(): void
+    public function test_only_a_database_or_a_bucket_can_be_the_default(): void
     {
         $valkey = $this->attach(DatastoreKind::VALKEY);
 
-        $this->expectExceptionObject(new InvalidArgumentException('Only a MySQL or Postgres database can be the default.'));
+        $this->expectExceptionObject(new InvalidArgumentException('Only a database or a bucket can be the default.'));
 
-        app(SetDefaultDatabase::class)->execute($valkey, $this->owner);
+        app(SetDefaultAttachment::class)->execute($valkey, $this->owner);
     }
 
     public function test_the_default_is_detached_only_as_the_last_database(): void
@@ -503,6 +504,159 @@ class DatastoreAttachmentTest extends TestCase
             ['deployment', 'service', 'secret', 'persistentvolumeclaim'],
             array_map(fn (array $call) => $call['args'][1], $this->kubectl->calls),
         );
+    }
+
+    public function test_another_bucket_gets_its_own_bucket_user_and_policy_on_the_same_server_and_prefixed_env_values(): void
+    {
+        $main = $this->attach(DatastoreKind::RUSTFS);
+        $uploads = $this->attach(DatastoreKind::RUSTFS, 'uploads');
+        $id = $main->datastore_id;
+        $env = $this->environment->id;
+        $name = "env-{$env}-fb611de4";
+
+        $this->assertSame([
+            ['main', true, "env-{$env}", "env-{$env}"],
+            ['uploads', false, $name, $name],
+        ], DatastoreAttachment::query()->orderBy('id')->get()->map(fn (DatastoreAttachment $a) => [$a->name, $a->is_default, $a->database_name, $a->username])->all());
+        $this->assertSame($id, $uploads->datastore_id);
+        $this->assertSame(['exec', '-i', "rustfs-{$id}-0", '--namespace=oc-datastores', '--container=rc', '--', 'sh', '-c', implode("\n", [
+            'set -e',
+            'read -r secret',
+            self::RUSTFS_LOGIN,
+            "rc bucket create --ignore-existing local/{$name} >/dev/null",
+            "printf '%s' '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:*\"],\"Resource\":[\"arn:aws:s3:::{$name}\",\"arn:aws:s3:::{$name}/*\"]}]}' > /tmp/{$name}.json",
+            "rc admin policy create local {$name} /tmp/{$name}.json >/dev/null",
+            "rc admin user add local {$name} \"\$secret\" >/dev/null",
+            "rc admin policy attach local {$name} --user {$name} >/dev/null",
+        ])], $this->kubectl->calls[5]['args']);
+        $this->assertSame("pass3\n", $this->kubectl->calls[5]['stdin']);
+        $this->assertSame([
+            'UPLOADS_AWS_ACCESS_KEY_ID' => [$name, false],
+            'UPLOADS_AWS_BUCKET' => [$name, false],
+            'UPLOADS_AWS_DEFAULT_REGION' => ['us-east-1', false],
+            'UPLOADS_AWS_ENDPOINT' => ["http://rustfs-{$id}.oc-datastores.svc.cluster.local:9000", false],
+            'UPLOADS_AWS_SECRET_ACCESS_KEY' => ['pass3', true],
+            'UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT' => ['true', false],
+        ], $this->datastoreEnv($uploads));
+        $this->assertSame(['FILESYSTEM_DISK' => ['s3', false]], array_intersect_key($this->datastoreEnv($main), ['FILESYSTEM_DISK' => true]));
+        $this->assertSame(SecretMasker::MASK, SecretMasker::forEnvironment($this->environment)->mask('pass3'));
+        $this->assertSame(
+            ['environment_id' => $env, 'kind' => 'rustfs', 'name' => 'uploads'],
+            AuditEvent::query()->where('subject_id', $uploads->id)->sole()->context,
+        );
+    }
+
+    public function test_a_bucket_name_is_unique_among_the_buckets_and_the_rules_refuse_a_missing_bad_reserved_or_taken_name(): void
+    {
+        $this->attach(DatastoreKind::MYSQL);
+        $this->attach(DatastoreKind::POSTGRES, 'uploads');
+        $bucket = $this->attach(DatastoreKind::RUSTFS);
+        $format = 'Use 1 to 30 lowercase letters, digits, and underscores. Start with a letter.';
+
+        foreach ([
+            [null, 'This environment already has a bucket. Give the new bucket a name.'],
+            ['Uploads', $format],
+            ['my-uploads', $format],
+            [str_repeat('a', 31), $format],
+            ['s3', 'Laravel already has a disk with the name s3. Use a different name.'],
+            ['public', 'Laravel already has a disk with the name public. Use a different name.'],
+            ['main', 'This environment already has a bucket with the name main.'],
+        ] as [$name, $message]) {
+            try {
+                $this->attach(DatastoreKind::RUSTFS, $name);
+                $this->fail('No refusal for the bucket '.json_encode($name).'.');
+            } catch (InvalidArgumentException $e) {
+                $this->assertSame($message, $e->getMessage());
+            }
+        }
+
+        $this->assertSame(['main', true], [$bucket->name, $bucket->is_default]);
+        $second = $this->attach(DatastoreKind::RUSTFS, 'uploads');
+        $this->assertSame(['uploads', false], [$second->name, $second->is_default]);
+        $this->assertSame('pgsql', $this->attach(DatastoreKind::RUSTFS, 'pgsql')->name);
+        $this->assertSame(5, DatastoreAttachment::count());
+    }
+
+    public function test_each_family_swaps_its_own_default_and_the_env_values_of_its_two_buckets_or_databases(): void
+    {
+        $database = $this->attach(DatastoreKind::MYSQL);
+        $reports = $this->attach(DatastoreKind::POSTGRES, 'reports');
+        $main = $this->attach(DatastoreKind::RUSTFS);
+        $uploads = $this->attach(DatastoreKind::RUSTFS, 'uploads');
+        $env = $this->environment->id;
+
+        app(SetDefaultAttachment::class)->execute($uploads, $this->owner);
+
+        $this->assertSame([true, false, false, true], [$database->fresh()->is_default, $reports->fresh()->is_default, $main->fresh()->is_default, $uploads->fresh()->is_default]);
+
+        app(SetDefaultAttachment::class)->execute($reports, $this->owner);
+
+        $this->assertSame([false, true, false, true], [$database->fresh()->is_default, $reports->fresh()->is_default, $main->fresh()->is_default, $uploads->fresh()->is_default]);
+        $this->assertSame(
+            ['AWS_ACCESS_KEY_ID', 'AWS_BUCKET', 'AWS_DEFAULT_REGION', 'AWS_ENDPOINT', 'AWS_SECRET_ACCESS_KEY', 'AWS_USE_PATH_STYLE_ENDPOINT', 'FILESYSTEM_DISK'],
+            array_keys($this->datastoreEnv($uploads)),
+        );
+        $this->assertSame(
+            ['MAIN_AWS_ACCESS_KEY_ID', 'MAIN_AWS_BUCKET', 'MAIN_AWS_DEFAULT_REGION', 'MAIN_AWS_ENDPOINT', 'MAIN_AWS_SECRET_ACCESS_KEY', 'MAIN_AWS_USE_PATH_STYLE_ENDPOINT'],
+            array_keys($this->datastoreEnv($main)),
+        );
+        $this->assertSame(["env-{$env}-fb611de4", "env-{$env}", "env_{$env}_reports"], [
+            $this->environmentEnv()['AWS_BUCKET'][0],
+            $this->environmentEnv()['MAIN_AWS_BUCKET'][0],
+            $this->environmentEnv()['DB_DATABASE'][0],
+        ]);
+    }
+
+    public function test_the_default_bucket_is_detached_only_as_the_last_bucket_and_buckets_do_not_hold_the_default_database(): void
+    {
+        $database = $this->attach(DatastoreKind::MYSQL);
+        $main = $this->attach(DatastoreKind::RUSTFS);
+        $uploads = $this->attach(DatastoreKind::RUSTFS, 'uploads');
+
+        app(DetachDatastore::class)->execute($database, $this->owner);
+
+        try {
+            app(DetachDatastore::class)->execute($main, $this->owner);
+            $this->fail('The default bucket was detached.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertSame('Make another bucket the default first.', $e->getMessage());
+        }
+
+        app(DetachDatastore::class)->execute($uploads, $this->owner);
+        app(DetachDatastore::class)->execute($main->fresh(), $this->owner);
+
+        $this->assertSame(0, DatastoreAttachment::count());
+    }
+
+    public function test_detaching_another_bucket_removes_its_own_user_and_policy_and_destroying_also_removes_its_bucket(): void
+    {
+        $main = $this->attach(DatastoreKind::RUSTFS);
+        $name = "env-{$this->environment->id}-fb611de4";
+        $script = fn (array $calls) => $calls[0]['args'][array_key_last($calls[0]['args'])];
+
+        $uploads = $this->attach(DatastoreKind::RUSTFS, 'uploads');
+        $this->kubectl->calls = [];
+        app(DetachDatastore::class)->execute($uploads, $this->owner);
+        $detach = $script($this->kubectl->calls);
+
+        $uploads = $this->attach(DatastoreKind::RUSTFS, 'uploads');
+        $this->kubectl->calls = [];
+        Provisioners::of($uploads->datastore)->detach($uploads, $this->owner, destroyData: true);
+
+        $this->assertSame(implode("\n", [
+            'set -e',
+            self::RUSTFS_LOGIN,
+            "rc admin user rm local {$name} >/dev/null || [ $? -eq 5 ]",
+            "rc admin policy rm local {$name} >/dev/null",
+        ]), $detach);
+        $this->assertSame(implode("\n", [
+            'set -e',
+            self::RUSTFS_LOGIN,
+            "rc admin user rm local {$name} >/dev/null || [ $? -eq 5 ]",
+            "rc admin policy rm local {$name} >/dev/null",
+            "rc bucket remove --force local/{$name} >/dev/null || [ $? -eq 5 ]",
+        ]), $script($this->kubectl->calls));
+        $this->assertSame(['main', true, 7], [$main->fresh()->name, $main->fresh()->is_default, count($this->datastoreEnv($main))]);
     }
 
     private function attach(DatastoreKind $kind, ?string $name = null): DatastoreAttachment

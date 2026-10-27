@@ -4,6 +4,7 @@ namespace App\Domains\Datastores\Models;
 
 use App\Domains\Backups\Models\Backup;
 use App\Domains\Datastores\Enums\DatastoreStatus;
+use App\Domains\Datastores\Enums\ResourceFamily;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use Database\Factories\DatastoreAttachmentFactory;
@@ -18,7 +19,7 @@ class DatastoreAttachment extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['datastore_id', 'environment_id', 'name', 'is_default', 'host', 'port', 'database_name', 'username', 'password', 'tls', 'region', 'path_style', 'status', 'error'];
+    protected $fillable = ['datastore_id', 'environment_id', 'family', 'name', 'is_default', 'host', 'port', 'database_name', 'username', 'password', 'tls', 'region', 'path_style', 'status', 'error'];
 
     protected $hidden = ['password'];
 
@@ -29,6 +30,7 @@ class DatastoreAttachment extends Model
     protected function casts(): array
     {
         return [
+            'family' => ResourceFamily::class,
             'is_default' => 'boolean',
             'tls' => 'boolean',
             'path_style' => 'boolean',

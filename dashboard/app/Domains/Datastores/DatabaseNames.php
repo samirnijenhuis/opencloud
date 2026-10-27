@@ -2,33 +2,18 @@
 
 namespace App\Domains\Datastores;
 
+use App\Domains\Datastores\Enums\ResourceFamily;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Environments\Models\Environment;
 
 /**
- * The rules of one named MySQL or Postgres database that do not depend on the app framework: the connection name, the
- * database and the user on the server, and the address of a local server.
+ * The names of one MySQL or Postgres database on the server, and the address of a local server. ResourceFamily holds
+ * the rules of the name itself.
  */
 final class DatabaseNames
 {
-    /** The name of the first database of an environment, when the user gives none. */
-    public const FIRST_NAME = 'main';
-
-    /** Laravel ships connections with these names, so a line for one of them in config/database.php would replace it. */
-    public const RESERVED = ['mysql', 'mariadb', 'pgsql', 'sqlite', 'sqlsrv'];
-
     /** The port of a local server. */
     private const PORTS = ['mysql' => 3306, 'postgres' => 5432];
-
-    /** @return string|null the reason the name is not valid, or null */
-    public static function nameError(string $name): ?string
-    {
-        return match (true) {
-            preg_match('/^[a-z][a-z0-9_]{0,29}\z/', $name) !== 1 => 'Use 1 to 30 lowercase letters, digits, and underscores. Start with a letter.',
-            in_array($name, self::RESERVED, true) => "Laravel already has a connection with the name {$name}. Use a different name.",
-            default => null,
-        };
-    }
 
     /**
      * The database "main" keeps the names that each environment had before databases had names, so its data stays.
@@ -40,7 +25,7 @@ final class DatabaseNames
     {
         $base = "env_{$environment->id}";
 
-        if ($name === self::FIRST_NAME) {
+        if ($name === ResourceFamily::FIRST_NAME) {
             return ['database_name' => $base, 'username' => $base];
         }
 

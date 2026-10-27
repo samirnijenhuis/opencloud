@@ -66,7 +66,7 @@ class DatastoreControllerTest extends TestCase
         $this->assertSame([
             ['standard', 'mysql', 'MySQL', null],
             ['standard', 'postgres', 'Postgres', null],
-            ['standard', 'rustfs', 'RustFS', null],
+            ['standard', 'rustfs', 'RustFS bucket', null],
             ['managed', 'mysql', 'Managed MySQL', 'A managed database on DigitalOcean is Postgres only for now. Use managed Postgres, or MySQL in the cluster.'],
             ['managed', 'postgres', 'Managed Postgres', 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.'],
             ['managed', 'rustfs', 'Spaces bucket', 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.'],
@@ -220,7 +220,7 @@ class DatastoreControllerTest extends TestCase
         $this->assertSame(['DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME'], $reports->envVars()->orderBy('key')->pluck('key')->all());
 
         $this->actingAs($admin)->post("/datastore-attachments/{$valkey->id}/default")
-            ->assertSessionHasErrors(['default' => 'Only a MySQL or Postgres database can be the default.']);
+            ->assertSessionHasErrors(['default' => 'Only a database or a bucket can be the default.']);
     }
 
     public function test_a_developer_makes_a_database_the_default_on_an_unprotected_environment(): void
@@ -271,6 +271,39 @@ class DatastoreControllerTest extends TestCase
         );
     }
 
+    public function test_the_menu_offers_a_bucket_again_after_the_first_and_the_page_shows_each_bucket_with_its_disk_line(): void
+    {
+        $environment = $this->makeEnvironment();
+        $owner = User::factory()->owner()->create();
+        $bucketField = fn (TestResponse $response) => collect($this->page($response)['props']['datastores']['offers'])
+            ->filter(fn (array $offer) => $offer['family'] === 'bucket')
+            ->map(fn (array $offer) => [$offer['source'], $offer['name_field']['value'], $offer['name_field']['description']])->values()->all();
+        $before = $bucketField($this->actingAs($owner)->get("/environments/{$environment->id}"));
+        $main = $this->attach($environment, DatastoreKind::RUSTFS, attributes: ['name' => 'main', 'is_default' => true]);
+        DatastoreAttachment::factory()->create(['datastore_id' => $main->datastore_id, 'environment_id' => $environment->id, 'name' => 'uploads', 'status' => DatastoreStatus::READY]);
+
+        $response = $this->actingAs($owner)->get("/environments/{$environment->id}")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('datastores.attachments.0.family', 'bucket')
+                ->where('datastores.attachments.0.label', 'RustFS bucket')
+                ->where('datastores.attachments.0.name', 'main')
+                ->where('datastores.attachments.0.is_default', true)
+                ->where('datastores.attachments.0.config_line', null)
+                ->where('datastores.attachments.1.name', 'uploads')
+                ->where('datastores.attachments.1.is_default', false)
+                ->where('datastores.attachments.1.config_line', "'uploads' => ['driver' => 's3', 'key' => env('UPLOADS_AWS_ACCESS_KEY_ID'), 'secret' => env('UPLOADS_AWS_SECRET_ACCESS_KEY'), 'region' => env('UPLOADS_AWS_DEFAULT_REGION'), 'bucket' => env('UPLOADS_AWS_BUCKET'), 'endpoint' => env('UPLOADS_AWS_ENDPOINT'), 'use_path_style_endpoint' => env('UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT', false)],"));
+
+        $first = 'This is the first bucket of the environment, so it is the default.';
+        $later = 'The default bucket keeps its env values. This bucket gets its own env values with its name as a prefix.';
+        $this->assertSame([['standard', 'main', $first], ['managed', 'main', $first], ['external', 'main', $first]], $before);
+        $this->assertSame([['standard', '', $later], ['managed', '', $later], ['external', '', $later]], $bucketField($response));
+        $this->assertSame(
+            ['label' => 'Name', 'placeholder' => 'uploads', 'value' => '', 'description' => $later],
+            collect($this->page($response)['props']['datastores']['offers'])->firstWhere('family', 'bucket')['name_field'],
+        );
+        $this->assertSame('main', collect($this->page($response)['props']['datastores']['offers'])->firstWhere('family', 'database')['name_field']['value']);
+    }
+
     public function test_each_offer_tells_the_menu_its_family_its_text_and_the_fields_of_an_address(): void
     {
         $environment = $this->makeEnvironment();
@@ -281,7 +314,7 @@ class DatastoreControllerTest extends TestCase
             'kind' => 'valkey',
             'source' => 'standard',
             'family' => 'key_value',
-            'named' => false,
+            'name_field' => null,
             'label' => 'Valkey',
             'description' => 'Cache, queues, and sessions',
             'group' => 'In the cluster local',
@@ -293,7 +326,12 @@ class DatastoreControllerTest extends TestCase
             'kind' => 'postgres',
             'source' => 'external',
             'family' => 'database',
-            'named' => true,
+            'name_field' => [
+                'label' => 'Connection name',
+                'placeholder' => 'reports',
+                'value' => 'main',
+                'description' => 'This is the first database of the environment, so it is the default.',
+            ],
             'label' => 'External Postgres',
             'description' => 'A SQL database',
             'group' => 'Bring your own',

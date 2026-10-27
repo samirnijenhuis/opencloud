@@ -33,7 +33,7 @@ Use these pieces before you write a new one.
 - **OpenTofu.** `Runner::apply()` and `Runner::destroy()` with a `Stack`. `TofuLog` writes the masked output to `tofu_log`.
 - **Caddy.** `CaddyConfig::forCluster()` builds the config, and the `SyncCaddy` job sends it. Do not post to the Caddy admin API yourself.
 - **Git and GitHub.** `Git::head()`, `Git::defaultBranch()`, and `Git::checkout()`. `GitHubClient` calls the GitHub API with the installation token.
-- **Datastores.** `Provisioners::for($kind, $source)` and `Provisioners::of($datastore)` give the provisioner. `AttachmentEnv::write()` writes the env values of one attachment. `DatabaseNames` holds the name rules.
+- **Datastores.** `Provisioners::for($kind, $source)` and `Provisioners::of($datastore)` give the provisioner. `AttachmentEnv::write()` writes the env values of one attachment. `ResourceFamily::nameError()` holds the name rules, and `DatabaseNames` holds the names of a database on the server.
 - **Env values.** `EnvironmentVariables::runtime()` and `build()` merge the values of an environment.
 - **Logs and secrets.** `DeploymentLog::for($deployment)->write()`, `SecretMasker::forEnvironment()`, and `TerminalText::plain()`.
 - **Audit.** `AuditEvent::record()`.

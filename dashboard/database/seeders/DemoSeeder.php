@@ -233,7 +233,7 @@ class DemoSeeder extends Seeder
         $mysql = $this->attachment($cluster, $production, DatastoreKind::MYSQL, DatastoreStatus::READY, 'shop_production', name: 'main');
         $reports = $this->attachment($cluster, $production, DatastoreKind::POSTGRES, DatastoreStatus::READY, 'shop_production_reports', name: 'reports');
         $this->attachment($cluster, $production, DatastoreKind::VALKEY, DatastoreStatus::PROVISIONING, null);
-        $this->attachment($cluster, $production, DatastoreKind::RUSTFS, DatastoreStatus::FAILED, 'shop-production', 'The bucket could not be created. The storage server did not answer.');
+        $this->attachment($cluster, $production, DatastoreKind::RUSTFS, DatastoreStatus::FAILED, 'shop-production', 'The bucket could not be created. The storage server did not answer.', name: 'main');
         $this->attachment($cluster, $staging, DatastoreKind::POSTGRES, DatastoreStatus::PENDING, 'shop_staging', name: 'main');
 
         $this->envKeys($mysql, ['DB_CONNECTION' => 'mysql', 'DB_HOST' => 'mysql.shop.svc', 'DB_PASSWORD' => 'demo-database-password']);
@@ -268,7 +268,7 @@ class DemoSeeder extends Seeder
         AuditEvent::record($owner, 'backup.restore_failed', $restored, ['datastore_id' => $restored->datastore_id, 'database_name' => $restored->database_name, 'error' => 'The dump is not a valid gzip file.']);
     }
 
-    /** The first database of an environment with a connection name is the default. */
+    /** The first database or bucket of an environment with a name is the default of its family. */
     private function attachment(Cluster $cluster, Environment $environment, DatastoreKind $kind, DatastoreStatus $status, ?string $databaseName, ?string $error = null, ?string $name = null): DatastoreAttachment
     {
         $datastore = Datastore::firstOrCreate(
@@ -278,8 +278,9 @@ class DemoSeeder extends Seeder
 
         return $environment->datastoreAttachments()->create([
             'datastore_id' => $datastore->id,
+            'family' => $kind->family(),
             'name' => $name,
-            'is_default' => $name !== null && ! $environment->datastoreAttachments()->where('is_default', true)->exists(),
+            'is_default' => $name !== null && ! $environment->datastoreAttachments()->where('family', $kind->family())->where('is_default', true)->exists(),
             'host' => $kind->family() === ResourceFamily::DATABASE ? "{$kind->value}.shop.svc" : null,
             'port' => ['mysql' => 3306, 'postgres' => 5432][$kind->value] ?? null,
             'database_name' => $databaseName,

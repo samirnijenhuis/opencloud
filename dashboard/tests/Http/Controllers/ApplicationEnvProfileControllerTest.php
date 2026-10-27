@@ -54,7 +54,7 @@ class ApplicationEnvProfileControllerTest extends TestCase
             $this->attachment(21, $mysql, $this->production, 'main', true, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7', 'env_7', 'main-pass'),
             $this->attachment(22, $postgres, $this->production, 'reports', false, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_7_reports', 'env_7_reports', 'reports-pass'),
             $this->attachment(24, $valkey, $this->production, null, false, null, null, null, null, 'valkey-pass'),
-            $this->attachment(25, $rustfs, $this->production, null, false, null, null, 'env-7', 'env-7', 'rustfs-secret'),
+            $this->attachment(25, $rustfs, $this->production, 'main', true, null, null, 'env-7', 'env-7', 'rustfs-secret'),
             $this->attachment(31, $mysql, $this->preview, 'main', true, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_8', 'env_8', 'preview-pass'),
         ];
 

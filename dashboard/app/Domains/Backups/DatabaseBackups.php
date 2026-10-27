@@ -5,7 +5,7 @@ namespace App\Domains\Backups;
 use App\Domains\Backups\Enums\BackupStatus;
 use App\Domains\Backups\Models\Backup;
 use App\Domains\Datastores\DatabaseDumps;
-use App\Domains\Datastores\DatabaseNames;
+use App\Domains\Datastores\Enums\ResourceFamily;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Datastores\Provisioners;
 use App\Support\SecretMasker;
@@ -29,7 +29,7 @@ final class DatabaseBackups
     {
         $folder = "backups/{$attachment->datastore_id}/{$attachment->environment_id}";
 
-        return in_array($attachment->name, [null, DatabaseNames::FIRST_NAME], true) ? $folder : "{$folder}/{$attachment->name}";
+        return in_array($attachment->name, [null, ResourceFamily::FIRST_NAME], true) ? $folder : "{$folder}/{$attachment->name}";
     }
 
     /** A failed dump returns a failed backup with the error, so the nightly run goes on with the next database. */

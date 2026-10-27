@@ -61,20 +61,24 @@ class EnvPinTest extends TestCase
             22 => new SqlConnection(DatastoreKind::POSTGRES, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_7_reports', 'env_7_0b7ec688', 'p/ss+w@rd:1%', 'reports', false),
             23 => new SqlConnection(DatastoreKind::MYSQL, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7_analytics', 'env_7_66d9b558', 'analytics-pass', 'analytics', false),
             24 => new KeyValueConnection('valkey-24.oc-datastores.svc.cluster.local', 6379, 'valkey-pass', tls: false),
-            25 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-7', 'env-7', 'rustfs-secret', pathStyle: true),
+            25 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-7', 'env-7', 'rustfs-secret', true, 'main', isDefault: true),
             31 => new SqlConnection(DatastoreKind::POSTGRES, 'private-blog-main.db.ondigitalocean.com', 25060, 'env_8', 'env_8', 'DO/generated+pass', 'main', true),
             32 => new SqlConnection(DatastoreKind::POSTGRES, 'private-blog-reports.db.ondigitalocean.com', 25060, 'env_8_reports', 'env_8_0b7ec688', 'do-reports-pass', 'reports', false),
             33 => null,
             41 => new SqlConnection(DatastoreKind::POSTGRES, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_9', 'env_9', 'swap-main-pass', 'main', false),
             42 => new SqlConnection(DatastoreKind::MYSQL, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_9_reports', 'env_9_0b7ec688', 'swap-reports-pass', 'reports', true),
+            51 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-10', 'env-10', 'files-main-secret', true, 'main', isDefault: false),
+            52 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-10-fb611de4', 'env-10-fb611de4', 'files-uploads-secret', true, 'uploads', isDefault: true),
         ], DatastoreAttachment::query()->with('datastore')->orderBy('id')->get()
             ->mapWithKeys(fn (DatastoreAttachment $attachment) => [$attachment->id => Provisioners::of($attachment->datastore)->connection($attachment)])
             ->all());
     }
 
     /**
-     * Three environments of one Laravel app. "shop" has every local shape, "blog" has managed Postgres before and
-     * after the apply, and "swap" moves the default from one database to another.
+     * Four environments of one Laravel app. "shop" has every local shape, "blog" has managed Postgres before and
+     * after the apply, and "swap" moves the default from one database to another. "files" came later, with the
+     * named buckets: a second bucket, then the default moves to it. Its entries come after the others, so the
+     * entries from before named buckets stay the same.
      *
      * @return array<string, mixed>
      */
@@ -93,13 +97,14 @@ class EnvPinTest extends TestCase
         $rustfs = $this->datastore(6, DatastoreKind::RUSTFS, DatastoreSource::STANDARD, $cluster);
         $snapshot = [];
 
-        // shop: the default database, two named databases, Valkey, and RustFS. The password needs URL encoding.
+        // shop: the default database, two named databases, Valkey, and RustFS. The password needs URL encoding. The
+        // bucket has the name and the default that the migration gives each bucket from before named buckets.
         $shopAttachments = [
             $this->attachment(21, $mysql, $shop, 'main', true, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7', 'env_7', 'mysql-main-pass'),
             $this->attachment(22, $postgres, $shop, 'reports', false, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_7_reports', 'env_7_0b7ec688', 'p/ss+w@rd:1%'),
             $this->attachment(23, $mysql, $shop, 'analytics', false, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7_analytics', 'env_7_66d9b558', 'analytics-pass'),
             $this->attachment(24, $valkey, $shop, null, false, null, null, null, null, 'valkey-pass'),
-            $this->attachment(25, $rustfs, $shop, null, false, null, null, 'env-7', 'env-7', 'rustfs-secret'),
+            $this->attachment(25, $rustfs, $shop, 'main', true, null, null, 'env-7', 'env-7', 'rustfs-secret'),
         ];
         $this->write($shopAttachments);
         $snapshot['shop'] = $this->rows($shop);
@@ -122,7 +127,7 @@ class EnvPinTest extends TestCase
         $this->write([$main, $reports]);
         $snapshot['blog after the apply'] = $this->rows($blog);
 
-        // swap: the old default gets its URL value and the new default gets DB_*, like SetDefaultDatabase does.
+        // swap: the old default gets its URL value and the new default gets DB_*, like SetDefaultAttachment does.
         $old = $this->attachment(41, $postgres, $swap, 'main', true, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_9', 'env_9', 'swap-main-pass');
         $new = $this->attachment(42, $mysql, $swap, 'reports', false, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_9_reports', 'env_9_0b7ec688', 'swap-reports-pass');
         $this->write([$old, $new]);
@@ -136,6 +141,19 @@ class EnvPinTest extends TestCase
         foreach (['shop' => $shop, 'blog' => $blog, 'swap' => $swap] as $label => $environment) {
             $snapshot["runtime {$label}"] = EnvironmentVariables::runtime($environment->fresh());
         }
+
+        // files: the default bucket and a second bucket on the same RustFS server, then the default moves.
+        $files = Environment::factory()->for($application)->create(['id' => 10, 'name' => 'files']);
+        $mainBucket = $this->attachment(51, $rustfs, $files, 'main', true, null, null, 'env-10', 'env-10', 'files-main-secret');
+        $uploads = $this->attachment(52, $rustfs, $files, 'uploads', false, null, null, 'env-10-fb611de4', 'env-10-fb611de4', 'files-uploads-secret');
+        $this->write([$mainBucket, $uploads]);
+        $snapshot['files'] = $this->rows($files);
+        $snapshot['files config lines'] = [51 => AttachmentEnv::configLine($mainBucket->fresh()), 52 => AttachmentEnv::configLine($uploads->fresh())];
+        $mainBucket->update(['is_default' => false]);
+        $uploads->update(['is_default' => true]);
+        $this->write([$mainBucket, $uploads]);
+        $snapshot['files after the default moves'] = $this->rows($files);
+        $snapshot['runtime files'] = EnvironmentVariables::runtime($files->fresh());
 
         return $snapshot;
     }

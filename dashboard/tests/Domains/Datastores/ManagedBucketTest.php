@@ -119,7 +119,7 @@ class ManagedBucketTest extends TestCase
             [$attachment->host, $attachment->region, $attachment->database_name, $attachment->username, $attachment->password, $attachment->path_style, $attachment->status],
         );
         $this->assertEquals(
-            new BucketConnection('https://ams3.digitaloceanspaces.com', 'ams3', 'ams3-prod-env-1-k3x9q2m7', 'DO00BUCKETKEYID', 'DO_BUCKET_SECRET_KEY', pathStyle: false),
+            new BucketConnection('https://ams3.digitaloceanspaces.com', 'ams3', 'ams3-prod-env-1-k3x9q2m7', 'DO00BUCKETKEYID', 'DO_BUCKET_SECRET_KEY', false, 'main', isDefault: true),
             BucketConnection::of($attachment),
         );
     }
@@ -142,6 +142,33 @@ class ManagedBucketTest extends TestCase
         ], $this->envOf($environment));
     }
 
+    public function test_a_second_spaces_bucket_gets_its_own_datastore_and_stack_and_prefixed_env_values(): void
+    {
+        $environment = $this->environment();
+        $main = $this->attach($environment);
+        Str::createRandomStringsUsing(fn () => 'Up10adS2');
+        $uploads = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::RUSTFS, DatastoreSource::MANAGED, 'uploads');
+
+        $this->assertSame(
+            [['main', true, 'ams3-prod-env-1-k3x9q2m7'], ['uploads', false, 'ams3-prod-env-1-up10ads2']],
+            [[$main->name, $main->is_default, $main->database_name], [$uploads->name, $uploads->is_default, $uploads->database_name]],
+        );
+        $this->assertNotSame($main->datastore_id, $uploads->datastore_id);
+
+        Queue::pushed(ProvisionManagedDatabase::class)->each(fn (ProvisionManagedDatabase $job) => $job->handle());
+
+        $this->assertSame(
+            [["bucket-{$main->datastore_id}", 'ams3-prod-env-1-k3x9q2m7'], ["bucket-{$uploads->datastore_id}", 'ams3-prod-env-1-up10ads2']],
+            collect($this->tofu->ran)->filter(fn (array $run) => $run['args'][0] === 'apply' && str_starts_with(basename($run['path']), 'bucket-'))
+                ->map(fn (array $run) => [basename($run['path']), $run['variables']['name']])->values()->all(),
+        );
+        $this->assertSame([
+            'AWS_ACCESS_KEY_ID', 'AWS_BUCKET', 'AWS_DEFAULT_REGION', 'AWS_ENDPOINT', 'AWS_SECRET_ACCESS_KEY', 'AWS_USE_PATH_STYLE_ENDPOINT', 'FILESYSTEM_DISK',
+            'UPLOADS_AWS_ACCESS_KEY_ID', 'UPLOADS_AWS_BUCKET', 'UPLOADS_AWS_DEFAULT_REGION', 'UPLOADS_AWS_ENDPOINT', 'UPLOADS_AWS_SECRET_ACCESS_KEY', 'UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT',
+        ], array_keys($this->envOf($environment)));
+        $this->assertSame(['DO_BUCKET_SECRET_KEY', true], $this->envOf($environment)['UPLOADS_AWS_SECRET_ACCESS_KEY']);
+    }
+
     public function test_a_failed_apply_keeps_the_bucket_name_and_attach_again_finishes_it(): void
     {
         $environment = $this->environment();
@@ -157,7 +184,7 @@ class ManagedBucketTest extends TestCase
         $this->assertSame([DatastoreStatus::FAILED, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
         $this->assertSame([], $this->envOf($environment));
 
-        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::RUSTFS, DatastoreSource::MANAGED);
+        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::RUSTFS, DatastoreSource::MANAGED, 'main');
         Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
 
         $id = $attachment->datastore_id;
@@ -301,7 +328,7 @@ class ManagedBucketTest extends TestCase
 
         $this->assertSame(DatastoreStatus::FAILED, $attachment->fresh()->status);
 
-        app(AttachDatastore::class)->execute($attachment->environment, null, DatastoreKind::RUSTFS, DatastoreSource::MANAGED);
+        app(AttachDatastore::class)->execute($attachment->environment, null, DatastoreKind::RUSTFS, DatastoreSource::MANAGED, 'main');
         Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
 
         $id = $attachment->datastore_id;

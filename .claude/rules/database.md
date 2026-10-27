@@ -12,7 +12,7 @@ paths:
 - The dashboard database is one SQLite file, `/var/lib/opencloud/data/database.sqlite`. The `web`, `worker`, `builder`, and `scheduler` containers share it. The tests use SQLite in memory.
 - The queue, the cache, and the sessions use the `database` driver, so they live in the same file.
 - The connection uses WAL, a 10 second `busy_timeout`, and `transaction_mode` `IMMEDIATE` (`config/database.php`). A transaction takes the write lock at its start, and the other containers wait for it. Keep each transaction short, and keep external calls out of it.
-- Use a transaction only for an invariant across several writes. `SetDefaultDatabase` writes the env values of the new default and of the old default in one transaction.
+- Use a transaction only for an invariant across several writes. `SetDefaultAttachment` writes the env values of the new default and of the old default in one transaction.
 - Write each query and each migration so that it runs on SQLite.
 
 ## Columns

@@ -6,14 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { router } from '@inertiajs/react';
 import { type FormEventHandler, useState } from 'react';
-import { type ConnectionField, type Datastores, type Offer } from './types';
+import { type ConnectionField, type Offer } from './types';
 
 type Values = Record<string, string | boolean>;
 
 const inputTypes = { text: 'text', number: 'number', secret: 'password' } as const;
 
-/** A database asks for its name, a paid or outside resource explains itself, and an address needs its fields. */
-export const needsDialog = (offer: Offer) => offer.named || offer.note !== null || offer.fields.length > 0;
+/** A database or a bucket asks for its name, a paid or outside resource explains itself, and an address needs its fields. */
+export const needsDialog = (offer: Offer) => offer.name_field !== null || offer.note !== null || offer.fields.length > 0;
 
 function startValues(fields: ConnectionField[]): Values {
     return Object.fromEntries(fields.map((field) => [field.key, typeof field.value === 'boolean' ? field.value : String(field.value ?? '')]));
@@ -68,20 +68,10 @@ function AddressField({
     );
 }
 
-/** The dialog content mounts on each open, so the form starts fresh: "main" for the first database, empty after. */
-export function AddResourceForm({
-    environmentId,
-    datastores,
-    offer,
-    onClose,
-}: {
-    environmentId: number;
-    datastores: Datastores;
-    offer: Offer;
-    onClose: () => void;
-}) {
-    const first = offer.named && !datastores.attachments.some((attachment) => attachment.name !== null);
-    const [name, setName] = useState(first ? 'main' : '');
+/** The dialog content mounts on each open, so the form starts fresh: "main" for the first of a family, empty after. */
+export function AddResourceForm({ environmentId, offer, onClose }: { environmentId: number; offer: Offer; onClose: () => void }) {
+    const nameField = offer.name_field;
+    const [name, setName] = useState(nameField?.value ?? '');
     const [values, setValues] = useState<Values>(() => startValues(offer.fields));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [busy, setBusy] = useState(false);
@@ -90,7 +80,7 @@ export function AddResourceForm({
         e.preventDefault();
         router.post(
             route('datastores.store', environmentId),
-            { kind: offer.kind, source: offer.source, name: offer.named ? name : null, ...values },
+            { kind: offer.kind, source: offer.source, name: nameField ? name : null, ...values },
             {
                 preserveScroll: true,
                 onStart: () => {
@@ -109,23 +99,17 @@ export function AddResourceForm({
         <form onSubmit={submit} className="grid min-w-0 gap-4">
             <DialogHeader>
                 <DialogTitle>Add {offer.label}</DialogTitle>
-                <DialogDescription>
-                    {!offer.named
-                        ? `${offer.description}.`
-                        : first
-                          ? 'This is the first database of the environment, so it is the default.'
-                          : 'The default database keeps its env values. The app reaches this database through one URL value.'}
-                </DialogDescription>
+                <DialogDescription>{nameField?.description ?? `${offer.description}.`}</DialogDescription>
             </DialogHeader>
 
-            {offer.named && (
+            {nameField && (
                 <div className="grid gap-2">
-                    <Label htmlFor="resource-name">Connection name</Label>
+                    <Label htmlFor="resource-name">{nameField.label}</Label>
                     <Input
                         id="resource-name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="reports"
+                        placeholder={nameField.placeholder}
                         autoComplete="off"
                         spellCheck={false}
                         autoFocus
@@ -147,13 +131,13 @@ export function AddResourceForm({
             ))}
 
             {offer.note && <p className="text-muted-foreground text-sm">{offer.note}</p>}
-            {!offer.named && <InputError message={errors.kind} />}
+            {!nameField && <InputError message={errors.kind} />}
 
             <DialogFooter className="gap-2">
                 <Button type="button" variant="secondary" onClick={onClose}>
                     Cancel
                 </Button>
-                <Button disabled={busy || (offer.named && name.trim() === '')}>Add {offer.label}</Button>
+                <Button disabled={busy || (nameField !== null && name.trim() === '')}>Add {offer.label}</Button>
             </DialogFooter>
         </form>
     );

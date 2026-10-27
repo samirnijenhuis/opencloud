@@ -133,7 +133,7 @@ class ExternalResourcesTest extends TestCase
                 'refusal' => null,
                 'status' => ['ready', 'ready'],
                 'cluster' => null,
-                'connection' => new BucketConnection('https://fsn1.your-objectstorage.com', 'fsn1', 'shop-uploads', 'AKIAEXTERNAL', 'bucket-secret/key', pathStyle: false),
+                'connection' => new BucketConnection('https://fsn1.your-objectstorage.com', 'fsn1', 'shop-uploads', 'AKIAEXTERNAL', 'bucket-secret/key', false, 'main', isDefault: true),
                 'label' => 'External S3 bucket',
                 'no dumps' => 'Opencloud does not copy a bucket that you run yourself.',
                 'copies buckets' => false,
@@ -239,7 +239,7 @@ class ExternalResourcesTest extends TestCase
         $this->assertNothingRan();
     }
 
-    public function test_an_external_bucket_is_ready_at_once_with_the_laravel_env_and_detach_removes_only_the_rows(): void
+    public function test_two_external_buckets_are_ready_at_once_with_the_laravel_env_and_detach_removes_only_the_rows(): void
     {
         $attach = app(AttachDatastore::class);
         $bucket = $attach->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::RUSTFS));
@@ -262,9 +262,23 @@ class ExternalResourcesTest extends TestCase
             $attach->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::RUSTFS));
             $this->fail('A second bucket took the place of the first.');
         } catch (InvalidArgumentException $e) {
-            $this->assertSame('This environment already has a rustfs datastore.', $e->getMessage());
+            $this->assertSame('This environment already has a bucket. Give the new bucket a name.', $e->getMessage());
         }
 
+        $uploads = $attach->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, DatastoreSource::EXTERNAL, 'uploads', $this->typed(DatastoreKind::RUSTFS));
+
+        $this->assertSame(['main', true, 'uploads', false], [$bucket->name, $bucket->is_default, $uploads->name, $uploads->is_default]);
+        $this->assertNotSame($bucket->datastore_id, $uploads->datastore_id);
+        $this->assertSame([
+            ['UPLOADS_AWS_ACCESS_KEY_ID', 'AKIAEXTERNAL', false, $uploads->id],
+            ['UPLOADS_AWS_BUCKET', 'shop-uploads', false, $uploads->id],
+            ['UPLOADS_AWS_DEFAULT_REGION', 'fsn1', false, $uploads->id],
+            ['UPLOADS_AWS_ENDPOINT', 'https://fsn1.your-objectstorage.com', false, $uploads->id],
+            ['UPLOADS_AWS_SECRET_ACCESS_KEY', 'bucket-secret/key', true, $uploads->id],
+            ['UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT', 'false', false, $uploads->id],
+        ], array_values(array_filter($this->env(), fn (array $row) => $row[3] === $uploads->id)));
+
+        app(DetachDatastore::class)->execute($uploads, $this->owner);
         app(DetachDatastore::class)->execute($bucket, $this->owner);
 
         $this->assertSame([0, 0, []], [DatastoreAttachment::query()->count(), Datastore::query()->count(), $this->env()]);
@@ -285,9 +299,9 @@ class ExternalResourcesTest extends TestCase
 
         $this->assertSame([
             ['postgres', 'standard', 'main', true, 'local'],
+            ['rustfs', 'standard', 'main', true, 'local'],
             ['mysql', 'standard', 'reports', false, 'local'],
             ['valkey', 'standard', null, false, 'local'],
-            ['rustfs', 'standard', null, false, 'local'],
         ], $preview->datastoreAttachments()->with('datastore.cluster')->orderBy('id')->get()
             ->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->datastore->source->value, $a->name, $a->is_default, $a->datastore->cluster?->name])->all());
         $this->assertSame(
@@ -303,7 +317,7 @@ class ExternalResourcesTest extends TestCase
             DatastoreKind::MYSQL => new SqlConnection($kind, 'mysql.example.com', 3306, 'shop', 'shop_app', 'p@ss/w0rd+1', 'main', isDefault: false),
             DatastoreKind::POSTGRES => new SqlConnection($kind, 'pg.example.com', 25060, 'reports', 'doadmin', 'pg:secret%', 'reports', isDefault: false),
             DatastoreKind::VALKEY => new KeyValueConnection('redis.example.com', 6380, 'redis-secret', tls: true),
-            DatastoreKind::RUSTFS => new BucketConnection('https://fsn1.your-objectstorage.com', 'fsn1', 'shop-uploads', 'AKIAEXTERNAL', 'bucket-secret/key', pathStyle: false),
+            DatastoreKind::RUSTFS => new BucketConnection('https://fsn1.your-objectstorage.com', 'fsn1', 'shop-uploads', 'AKIAEXTERNAL', 'bucket-secret/key', false, 'main', isDefault: false),
         };
     }
 

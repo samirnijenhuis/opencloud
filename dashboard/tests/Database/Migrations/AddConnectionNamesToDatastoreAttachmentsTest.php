@@ -31,6 +31,8 @@ class AddConnectionNamesToDatastoreAttachmentsTest extends TestCase
         parent::setUp();
 
         $this->migration = require database_path('migrations/2026_10_25_000001_add_connection_names_to_datastore_attachments.php');
+        // The bucket names came later and changed the same indexes, so they go back first.
+        (require database_path('migrations/2026_10_27_300001_add_bucket_names_to_datastore_attachments.php'))->down();
         $this->migration->down();
         $this->cluster = Cluster::factory()->create();
     }
@@ -68,7 +70,8 @@ class AddConnectionNamesToDatastoreAttachmentsTest extends TestCase
     /** @param  array<string, string>  $env */
     private function attachment(Environment $environment, DatastoreKind $kind, DatastoreSource $source, array $env): DatastoreAttachment
     {
-        $attachment = DatastoreAttachment::factory()->create([
+        // The factory fills the family, a column of a later migration, so the row goes in without it.
+        $attachment = DatastoreAttachment::query()->create([
             'datastore_id' => Datastore::factory()->for($this->cluster)->create(['kind' => $kind, 'source' => $source])->id,
             'environment_id' => $environment->id,
             'database_name' => "env_{$environment->id}",

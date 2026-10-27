@@ -26,7 +26,7 @@ interface Provisioner
      * Finds or creates the datastore row in the storage shape of this source, creates the attachment row, and queues
      * provision() after the commit. The action writes the env and the audit event afterwards.
      *
-     * @param  string|null  $name  the connection name of a database, null for the other families
+     * @param  string|null  $name  the name of a database or a bucket, null for a key-value store
      * @param  Connection|null  $given  the connection that the user typed, for a source that provisions nothing (the
      *                                  external source, later). The local and managed sources make their own.
      */

@@ -553,5 +553,239 @@
         "DB_USERNAME": "env_9_0b7ec688",
         "LOG_CHANNEL": "stderr",
         "MAIN_DB_URL": "postgres://env_9:swap-main-pass@postgres-4.oc-datastores.svc.cluster.local:5432/env_9"
+    },
+    "files": [
+        [
+            "AWS_ACCESS_KEY_ID",
+            "env-10",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "AWS_BUCKET",
+            "env-10",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "AWS_DEFAULT_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "AWS_ENDPOINT",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "AWS_SECRET_ACCESS_KEY",
+            "files-main-secret",
+            true,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "AWS_USE_PATH_STYLE_ENDPOINT",
+            "true",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "FILESYSTEM_DISK",
+            "s3",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "UPLOADS_AWS_ACCESS_KEY_ID",
+            "env-10-fb611de4",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "UPLOADS_AWS_BUCKET",
+            "env-10-fb611de4",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "UPLOADS_AWS_DEFAULT_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "UPLOADS_AWS_ENDPOINT",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "UPLOADS_AWS_SECRET_ACCESS_KEY",
+            "files-uploads-secret",
+            true,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT",
+            "true",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ]
+    ],
+    "files config lines": {
+        "51": null,
+        "52": "'uploads' => ['driver' => 's3', 'key' => env('UPLOADS_AWS_ACCESS_KEY_ID'), 'secret' => env('UPLOADS_AWS_SECRET_ACCESS_KEY'), 'region' => env('UPLOADS_AWS_DEFAULT_REGION'), 'bucket' => env('UPLOADS_AWS_BUCKET'), 'endpoint' => env('UPLOADS_AWS_ENDPOINT'), 'use_path_style_endpoint' => env('UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT', false)],"
+    },
+    "files after the default moves": [
+        [
+            "AWS_ACCESS_KEY_ID",
+            "env-10-fb611de4",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "AWS_BUCKET",
+            "env-10-fb611de4",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "AWS_DEFAULT_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "AWS_ENDPOINT",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "AWS_SECRET_ACCESS_KEY",
+            "files-uploads-secret",
+            true,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "AWS_USE_PATH_STYLE_ENDPOINT",
+            "true",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "FILESYSTEM_DISK",
+            "s3",
+            false,
+            "runtime",
+            "datastore",
+            52
+        ],
+        [
+            "MAIN_AWS_ACCESS_KEY_ID",
+            "env-10",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "MAIN_AWS_BUCKET",
+            "env-10",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "MAIN_AWS_DEFAULT_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "MAIN_AWS_ENDPOINT",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "MAIN_AWS_SECRET_ACCESS_KEY",
+            "files-main-secret",
+            true,
+            "runtime",
+            "datastore",
+            51
+        ],
+        [
+            "MAIN_AWS_USE_PATH_STYLE_ENDPOINT",
+            "true",
+            false,
+            "runtime",
+            "datastore",
+            51
+        ]
+    ],
+    "runtime files": {
+        "APP_DEBUG": "false",
+        "APP_ENV": "production",
+        "AWS_ACCESS_KEY_ID": "env-10-fb611de4",
+        "AWS_BUCKET": "env-10-fb611de4",
+        "AWS_DEFAULT_REGION": "us-east-1",
+        "AWS_ENDPOINT": "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+        "AWS_SECRET_ACCESS_KEY": "files-uploads-secret",
+        "AWS_USE_PATH_STYLE_ENDPOINT": "true",
+        "FILESYSTEM_DISK": "s3",
+        "LOG_CHANNEL": "stderr",
+        "MAIN_AWS_ACCESS_KEY_ID": "env-10",
+        "MAIN_AWS_BUCKET": "env-10",
+        "MAIN_AWS_DEFAULT_REGION": "us-east-1",
+        "MAIN_AWS_ENDPOINT": "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+        "MAIN_AWS_SECRET_ACCESS_KEY": "files-main-secret",
+        "MAIN_AWS_USE_PATH_STYLE_ENDPOINT": "true"
     }
 }

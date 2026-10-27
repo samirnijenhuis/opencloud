@@ -113,6 +113,27 @@ class RestoreInstallTest extends TestCase
         $this->assertTrue(RestoreState::load()->finished());
     }
 
+    public function test_each_bucket_of_an_environment_gets_its_bucket_and_user_again_and_one_copy_of_the_server_comes_back(): void
+    {
+        $env = $this->production->id;
+        $uploads = "env-{$env}-fb611de4";
+        DatastoreAttachment::factory()->for($this->rustfs)->for($this->production)->create(['name' => 'uploads', 'database_name' => $uploads, 'username' => $uploads, 'password' => 'uploads-secret', 'status' => DatastoreStatus::READY]);
+        $this->bucket->put("rustfs/{$this->rustfs->id}/{$uploads}/report.pdf", 'pdf');
+
+        $this->artisan('opencloud:restore')->assertExitCode(0);
+
+        $grants = collect($this->kubectl->calls)
+            ->filter(fn (array $call) => str_contains((string) end($call['args']), 'rc bucket create'))
+            ->map(fn (array $call) => preg_match('~bucket create --ignore-existing local/(\S+) .*user add local (\S+) ~s', end($call['args']), $names) === 1 ? [$names[1], $names[2]] : null)
+            ->values()->all();
+        $this->assertSame([["env-{$env}", "env-{$env}"], [$uploads, $uploads]], $grants);
+        $this->assertSame(['ready', 'ready'], DatastoreAttachment::query()->where('datastore_id', $this->rustfs->id)->orderBy('id')->pluck('status')->map->value->all());
+        $this->assertSame(
+            ["copy job/rustfs-{$this->rustfs->id}-copy-restore"],
+            array_values(array_filter($this->milestones(), fn (string $milestone) => str_starts_with($milestone, 'copy '))),
+        );
+    }
+
     public function test_old_deployments_of_the_local_cluster_are_retired_with_a_log_line(): void
     {
         $this->artisan('opencloud:restore')->assertExitCode(0);
