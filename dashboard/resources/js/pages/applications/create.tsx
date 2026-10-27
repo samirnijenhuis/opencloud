@@ -11,7 +11,7 @@ import { parseDotenv, sizeLabel, sizeText } from '@/lib/format';
 import { applicationTypeLabels, type ApplicationType, type EnvProfileKind, type ProcessValues, type Size, type SizeOption } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-import { Chip, envProfiles, presetText, type Preset } from './preset-form';
+import { Chip, envProfiles, presetText, type Preset } from './presets';
 
 type Cluster = { id: number; name: string; kind: string; ingress_ip: string | null };
 type EnvRow = { key: string; value: string; is_secret: boolean };

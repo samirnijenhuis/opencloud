@@ -10,7 +10,8 @@ import AppLayout from '@/layouts/app-layout';
 import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind, type EnvProfileKind } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-import { PresetForm, type Preset } from './preset-form';
+import { PresetForm } from './preset-form';
+import { type Preset } from './presets';
 
 type EnvironmentRow = {
     id: number;
