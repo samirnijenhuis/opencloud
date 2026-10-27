@@ -26,6 +26,9 @@ final class FakeTofu
     /** The subcommand that fails, for example "apply". */
     public ?string $failOn = null;
 
+    /** Limits $failOn to one stack kind, for example "bucket" for the stack bucket-3. Null means every stack. */
+    public ?string $failStack = null;
+
     /** How many calls of $failOn fail before one succeeds. */
     public int $failTimes = PHP_INT_MAX;
 
@@ -59,12 +62,14 @@ final class FakeTofu
             'variables' => is_file($varFile) ? json_decode(file_get_contents($varFile), true) : null,
         ];
 
-        if ($args[0] === $this->failOn && $this->failTimes-- > 0) {
+        $kind = strstr(basename($process->path), '-', true);
+
+        if ($args[0] === $this->failOn && ($this->failStack === null || $this->failStack === $kind) && $this->failTimes-- > 0) {
             return Process::describe()->output($this->lines[$args[0]] ?? [])->errorOutput($this->error)->exitCode(1);
         }
 
         if ($args[0] === 'output') {
-            $outputs = $this->outputsOf[strstr(basename($process->path), '-', true)] ?? $this->outputs;
+            $outputs = $this->outputsOf[$kind] ?? $this->outputs;
 
             return Process::result(json_encode(array_map(fn (mixed $value) => ['sensitive' => false, 'type' => 'string', 'value' => $value], $outputs)));
         }
