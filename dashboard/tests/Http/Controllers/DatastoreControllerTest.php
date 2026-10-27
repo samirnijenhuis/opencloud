@@ -220,7 +220,7 @@ class DatastoreControllerTest extends TestCase
         $this->assertSame(['DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME'], $reports->envVars()->orderBy('key')->pluck('key')->all());
 
         $this->actingAs($admin)->post("/datastore-attachments/{$valkey->id}/default")
-            ->assertSessionHasErrors(['default' => 'Only a MySQL or Postgres database can be the default.']);
+            ->assertSessionHasErrors(['default' => 'Only a database or a bucket can be the default.']);
     }
 
     public function test_a_developer_makes_a_database_the_default_on_an_unprotected_environment(): void

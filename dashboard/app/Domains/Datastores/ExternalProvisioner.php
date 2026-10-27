@@ -35,7 +35,7 @@ final class ExternalProvisioner implements Provisioner
         return null;
     }
 
-    /** Only the address of $given counts. The action decides the name and the default of a database. */
+    /** Only the address of $given counts. The action decides the name and the default of a database or a bucket. */
     public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null): DatastoreAttachment
     {
         $address = $this->address($given);
@@ -49,6 +49,7 @@ final class ExternalProvisioner implements Provisioner
         ]);
 
         return $environment->datastoreAttachments()->create([
+            'family' => $this->kind->family(),
             'name' => $name,
             'is_default' => $isDefault,
             ...$address,

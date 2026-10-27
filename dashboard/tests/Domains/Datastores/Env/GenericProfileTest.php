@@ -66,7 +66,7 @@ class GenericProfileTest extends TestCase
 
     public function test_a_bucket_sets_the_aws_sdk_names_and_no_framework_values(): void
     {
-        $connection = new BucketConnection('http://rustfs.internal:9000', 'us-east-1', 'env-7', 'env-7', 'bpw', pathStyle: true);
+        $connection = new BucketConnection('http://rustfs.internal:9000', 'us-east-1', 'env-7', 'env-7', 'bpw', true, 'main', isDefault: true);
 
         $this->assertEquals([
             'AWS_BUCKET' => EnvValue::plain('env-7'),
@@ -77,8 +77,22 @@ class GenericProfileTest extends TestCase
         ], $connection->envFor(new GenericProfile));
     }
 
+    public function test_another_bucket_sets_the_aws_sdk_names_with_its_name_as_a_prefix(): void
+    {
+        $connection = new BucketConnection('http://rustfs.internal:9000', 'us-east-1', 'env-7-fb611de4', 'env-7-fb611de4', 'upw', true, 'uploads', isDefault: false);
+
+        $this->assertEquals([
+            'UPLOADS_AWS_BUCKET' => EnvValue::plain('env-7-fb611de4'),
+            'UPLOADS_AWS_ENDPOINT_URL' => EnvValue::plain('http://rustfs.internal:9000'),
+            'UPLOADS_AWS_REGION' => EnvValue::plain('us-east-1'),
+            'UPLOADS_AWS_ACCESS_KEY_ID' => EnvValue::plain('env-7-fb611de4'),
+            'UPLOADS_AWS_SECRET_ACCESS_KEY' => EnvValue::secret('upw'),
+        ], $connection->envFor(new GenericProfile));
+    }
+
     public function test_a_database_needs_no_config_line(): void
     {
         $this->assertNull((new GenericProfile)->configLine(DatastoreKind::POSTGRES, 'reports'));
+        $this->assertNull((new GenericProfile)->configLine(DatastoreKind::RUSTFS, 'uploads'));
     }
 }

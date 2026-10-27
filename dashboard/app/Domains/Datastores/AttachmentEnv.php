@@ -32,7 +32,7 @@ final class AttachmentEnv
         }
     }
 
-    /** The config line that the canvas shows for a named database that is not the default, or null. */
+    /** The config line that the canvas shows for a database or a bucket that is not the default, or null. */
     public static function configLine(DatastoreAttachment $attachment): ?string
     {
         return $attachment->name !== null && ! $attachment->is_default

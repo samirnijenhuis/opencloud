@@ -70,9 +70,9 @@ final class ExternalConnectionForm
     public static function connection(DatastoreKind $kind, array $values, ?string $name): Connection
     {
         return match ($kind->family()) {
-            ResourceFamily::DATABASE => new SqlConnection($kind, $values['host'], (int) $values['port'], $values['database'], $values['username'], $values['password'], $name ?? DatabaseNames::FIRST_NAME, isDefault: false),
+            ResourceFamily::DATABASE => new SqlConnection($kind, $values['host'], (int) $values['port'], $values['database'], $values['username'], $values['password'], $name ?? ResourceFamily::FIRST_NAME, isDefault: false),
             ResourceFamily::KEY_VALUE => new KeyValueConnection($values['host'], (int) $values['port'], $values['password'] ?? null, (bool) ($values['tls'] ?? false)),
-            ResourceFamily::BUCKET => new BucketConnection(rtrim($values['endpoint'], '/'), $values['region'], $values['bucket'], $values['access_key_id'], $values['password'], (bool) ($values['path_style'] ?? false)),
+            ResourceFamily::BUCKET => new BucketConnection(rtrim($values['endpoint'], '/'), $values['region'], $values['bucket'], $values['access_key_id'], $values['password'], (bool) ($values['path_style'] ?? false), $name ?? ResourceFamily::FIRST_NAME, isDefault: false),
         };
     }
 

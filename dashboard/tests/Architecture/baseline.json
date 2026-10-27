@@ -80,7 +80,6 @@
         "app/Domains/Clusters/Jobs/TearDownCluster.php": 1,
         "app/Domains/Datastores/Actions/AttachDatastore.php": 1,
         "app/Domains/Datastores/Actions/DetachDatastore.php": 1,
-        "app/Domains/Datastores/Actions/SetDefaultDatabase.php": 1,
         "app/Domains/Datastores/ExternalProvisioner.php": 1,
         "app/Domains/Datastores/LocalProvisioner.php": 1,
         "app/Domains/Datastores/ManagedResource.php": 3,

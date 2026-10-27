@@ -4,6 +4,7 @@ namespace App\Domains\Datastores;
 
 use App\Domains\Clusters\DigitalOceanCluster;
 use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\ResourceFamily;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Models\Environment;
 use App\Support\Tofu\Runner;
@@ -37,7 +38,7 @@ final class ManagedDatabase implements ManagedStack
 
     public function names(Environment $environment, ?string $name): array
     {
-        return DatabaseNames::names($environment, $name ?? DatabaseNames::FIRST_NAME);
+        return DatabaseNames::names($environment, $name ?? ResourceFamily::FIRST_NAME);
     }
 
     public function apply(DatastoreAttachment $attachment): array

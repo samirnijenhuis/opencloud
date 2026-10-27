@@ -19,6 +19,7 @@ class DatastoreAttachmentFactory extends Factory
     {
         return [
             'datastore_id' => Datastore::factory(),
+            'family' => fn (array $attributes) => Datastore::query()->findOrFail($attributes['datastore_id'])->kind->family(),
             'environment_id' => Environment::factory(),
             'database_name' => fake()->unique()->lexify('db_??????'),
             'username' => fake()->unique()->lexify('user_??????'),

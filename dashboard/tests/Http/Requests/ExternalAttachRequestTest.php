@@ -56,7 +56,7 @@ class ExternalAttachRequestTest extends TestCase
         $this->assertSame([
             ['mysql', 'external', 'main', true, 'db.example.com', 3306, 'shop', 'shop_app', ' TYPED-db-secret ', false, null, false],
             ['valkey', 'external', null, false, '10.0.0.7', 6380, null, null, null, true, null, false],
-            ['rustfs', 'external', null, false, 'https://fsn1.your-objectstorage.com', null, 'shop-uploads', 'AKIATYPED', 'TYPED-bucket-secret', false, 'fsn1', true],
+            ['rustfs', 'external', 'main', true, 'https://fsn1.your-objectstorage.com', null, 'shop-uploads', 'AKIATYPED', 'TYPED-bucket-secret', false, 'fsn1', true],
         ], DatastoreAttachment::query()->with('datastore')->orderBy('id')->get()->map(fn (DatastoreAttachment $a) => [
             $a->datastore->kind->value, $a->datastore->source->value, $a->name, $a->is_default,
             $a->host, $a->port, $a->database_name, $a->username, $a->password, $a->tls, $a->region, $a->path_style,

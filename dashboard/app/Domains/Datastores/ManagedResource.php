@@ -66,6 +66,7 @@ final class ManagedResource implements Provisioner
         ]);
 
         $attachment = $environment->datastoreAttachments()->create([
+            'family' => $this->kind->family(),
             'name' => $name,
             'is_default' => $isDefault,
             ...$this->stack->names($environment, $name),

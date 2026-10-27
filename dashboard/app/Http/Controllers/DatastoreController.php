@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Actions\DetachDatastore;
-use App\Domains\Datastores\Actions\SetDefaultDatabase;
+use App\Domains\Datastores\Actions\SetDefaultAttachment;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Models\DatastoreAttachment;
@@ -53,12 +53,12 @@ class DatastoreController extends Controller
         return back();
     }
 
-    public function makeDefault(Request $request, DatastoreAttachment $attachment, SetDefaultDatabase $setDefaultDatabase): RedirectResponse
+    public function makeDefault(Request $request, DatastoreAttachment $attachment, SetDefaultAttachment $setDefaultAttachment): RedirectResponse
     {
         Gate::authorize('update', $attachment->environment);
 
         try {
-            $setDefaultDatabase->execute($attachment, $request->user());
+            $setDefaultAttachment->execute($attachment, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['default' => $e->getMessage()]);
         }

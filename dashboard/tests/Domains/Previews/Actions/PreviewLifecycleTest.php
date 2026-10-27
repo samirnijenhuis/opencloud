@@ -8,7 +8,7 @@ use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Actions\AttachDatastore;
-use App\Domains\Datastores\Actions\SetDefaultDatabase;
+use App\Domains\Datastores\Actions\SetDefaultAttachment;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Jobs\ProvisionDatastoreAttachment;
@@ -176,7 +176,7 @@ class PreviewLifecycleTest extends TestCase
         $production = $this->environment('production');
         $owner = User::factory()->owner()->create();
         $reports = app(AttachDatastore::class)->execute($production, $owner, DatastoreKind::POSTGRES, name: 'reports');
-        app(SetDefaultDatabase::class)->execute($reports, $owner);
+        app(SetDefaultAttachment::class)->execute($reports, $owner);
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
 

@@ -11,7 +11,7 @@ use App\Domains\Clusters\Enums\ClusterStatus;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Actions\DetachDatastore;
-use App\Domains\Datastores\Actions\SetDefaultDatabase;
+use App\Domains\Datastores\Actions\SetDefaultAttachment;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Enums\DatastoreStatus;
@@ -181,7 +181,7 @@ class ManagedDatabaseTest extends TestCase
         $reports = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, 'reports');
         $job = new ProvisionManagedDatabase($reports->fresh());
 
-        app(SetDefaultDatabase::class)->execute($reports, $owner);
+        app(SetDefaultAttachment::class)->execute($reports, $owner);
         $this->assertSame(['MAIN_DB_URL'], array_keys($this->envOf($environment)));
 
         $job->handle(app(Runner::class));

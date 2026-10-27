@@ -26,8 +26,8 @@ interface EnvProfile
     public function bucket(BucketConnection $connection): array;
 
     /**
-     * The line that the app adds to its own config to read a database that is not the default, or null when the
-     * env values are enough. It needs only the kind and the name, so a managed database shows it before its apply.
+     * The line that the app adds to its own config to read a database or a bucket that is not the default, or null
+     * when the env values are enough. It needs only the kind and the name, so a managed one shows it before its apply.
      */
     public function configLine(DatastoreKind $kind, string $name): ?string;
 }

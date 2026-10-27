@@ -6,31 +6,37 @@ use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Datastores\AttachmentEnv;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Members\Models\User;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\ConnectionInterface;
 use InvalidArgumentException;
 
-class SetDefaultDatabase
+class SetDefaultAttachment
 {
+    public function __construct(private ConnectionInterface $db) {}
+
     /**
-     * Makes the database the default of its environment. It gets the DB_* values, and the old default gets its
-     * <NAME>_DB_URL value. The app reads the change on the next deploy.
+     * Makes the database or the bucket the default of its family in the environment. It gets the default env values,
+     * and the old default gets the env values of a named one. The app reads the change on the next deploy.
      *
-     * @throws InvalidArgumentException for an attachment that is not a MySQL or Postgres database with a name
+     * @throws InvalidArgumentException for an attachment that is not a database or a bucket with a name
      */
     public function execute(DatastoreAttachment $attachment, User $by): void
     {
         if ($attachment->name === null) {
-            throw new InvalidArgumentException('Only a MySQL or Postgres database can be the default.');
+            throw new InvalidArgumentException('Only a database or a bucket can be the default.');
         }
 
-        DB::transaction(function () use ($attachment, $by) {
-            $previous = DatastoreAttachment::query()->where('environment_id', $attachment->environment_id)->where('is_default', true)->first();
+        $this->db->transaction(function () use ($attachment, $by) {
+            $previous = DatastoreAttachment::query()
+                ->where('environment_id', $attachment->environment_id)
+                ->where('family', $attachment->family)
+                ->where('is_default', true)
+                ->first();
 
             if ($previous?->is($attachment)) {
                 return;
             }
 
-            // One default per environment is a unique index, so the old default lets go first.
+            // One default per family and environment is a unique index, so the old default lets go first.
             $previous?->update(['is_default' => false]);
             $attachment->update(['is_default' => true]);
 

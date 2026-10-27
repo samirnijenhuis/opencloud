@@ -6,7 +6,8 @@ use App\Domains\Datastores\Env\EnvProfile;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 
 /**
- * One S3-compatible bucket (RustFS today) as the app reaches it. An environment has at most one, so it has no name.
+ * One S3-compatible bucket as the app reaches it, plus its place in the environment: the name and whether it is the
+ * default.
  */
 final readonly class BucketConnection implements Connection
 {
@@ -22,20 +23,23 @@ final readonly class BucketConnection implements Connection
         public string $accessKeyId,
         public string $secretAccessKey,
         public bool $pathStyle,
+        public string $name,
+        public bool $isDefault,
     ) {}
 
     /**
      * A managed or external bucket keeps its address on the attachment: the endpoint in host, the bucket in
      * database_name, and the key in username and password. A managed one has none before its apply. S3 SDKs need a
-     * region to sign, and most S3-compatible servers ignore it, so us-east-1 stands in when none is stored.
+     * region to sign, and most S3-compatible servers ignore it, so us-east-1 stands in when none is stored. A managed
+     * bucket has no name while OpenTofu destroys it, so it has no connection then.
      */
     public static function of(DatastoreAttachment $attachment): ?self
     {
-        if ($attachment->host === null) {
+        if ($attachment->host === null || $attachment->name === null) {
             return null;
         }
 
-        return new self($attachment->host, $attachment->region ?? 'us-east-1', $attachment->database_name, $attachment->username, $attachment->password, $attachment->path_style);
+        return new self($attachment->host, $attachment->region ?? 'us-east-1', $attachment->database_name, $attachment->username, $attachment->password, $attachment->path_style, $attachment->name, $attachment->is_default);
     }
 
     public function envFor(EnvProfile $profile): array

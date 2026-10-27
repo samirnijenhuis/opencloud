@@ -40,7 +40,7 @@ abstract class LocalProvisioner implements Provisioner
     abstract protected function server(Datastore $datastore): array;
 
     /**
-     * @param  string|null  $name  the connection name of a MySQL or Postgres database, null for the other kinds
+     * @param  string|null  $name  the name of a database or a bucket, null for a key-value store
      * @return array{database_name: ?string, username: ?string}
      */
     abstract protected function names(Environment $environment, ?string $name): array;
@@ -79,6 +79,7 @@ abstract class LocalProvisioner implements Provisioner
         );
 
         $attachment = $environment->datastoreAttachments()->create([
+            'family' => $this->kind()->family(),
             'name' => $name,
             'is_default' => $isDefault,
             ...$this->names($environment, $name),
