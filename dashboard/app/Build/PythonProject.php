@@ -17,10 +17,10 @@ final readonly class PythonProject
     public const DEFAULT_PYTHON = '3.14';
 
     /** When a repository has more than one, the first one wins. */
-    public const DEPENDENCY_FILES = ['uv.lock', 'poetry.lock', 'Pipfile.lock', 'requirements.txt', 'pyproject.toml'];
+    private const DEPENDENCY_FILES = ['uv.lock', 'poetry.lock', 'Pipfile.lock', 'requirements.txt', 'pyproject.toml'];
 
     /** A Flask or FastAPI app is the first "<name> = Flask(" or "<name> = FastAPI(" in these files. */
-    public const APP_FILES = ['app.py', 'main.py', 'wsgi.py', 'asgi.py', 'app/__init__.py', 'app/main.py'];
+    private const APP_FILES = ['app.py', 'main.py', 'wsgi.py', 'asgi.py', 'app/__init__.py', 'app/main.py'];
 
     private function __construct(private RepositoryFiles $files, private string $dependencyFile) {}
 
