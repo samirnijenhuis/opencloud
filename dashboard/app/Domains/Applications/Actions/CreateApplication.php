@@ -14,6 +14,7 @@ use App\Domains\Environments\Actions\AddProcess;
 use App\Domains\Environments\Actions\SetEnvVar;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
+use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Actions\AddDomain;
 use App\Domains\Routing\DefaultDomain;
@@ -47,7 +48,7 @@ class CreateApplication
      *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
      *     domains?: list<string>,
      *     database?: 'mysql'|'postgres'|'none',
-     *     processes?: list<array{name: string, command: string, instances?: int, exclusive?: bool}>,
+     *     processes?: list<array{name: string, kind: ProcessKind, command: string, schedule?: ?string}>,
      *     settings?: array<string, mixed>,
      * } $data
      */
@@ -99,10 +100,14 @@ class CreateApplication
 
             AuditEvent::record($by, 'application.created', $application, ['repository' => $application->repository, 'type' => $type->value]);
 
+            // A new process takes the size and the CPU target of web, with one instance. A scheduled process drops the instances.
             foreach ($processes as $process) {
-                $exclusive = $process['exclusive'] ?? false;
-                $this->addProcess->execute($production, $by, $process['name'], $process['command'], $process['instances'] ?? 1, $exclusive);
-                $this->addProcess->execute($template, $by, $process['name'], $process['command'], 1, $exclusive);
+                foreach ([$production, $template] as $environment) {
+                    $this->addProcess->execute(
+                        $environment, $by, $process['name'], $process['command'], $process['kind'], $process['schedule'] ?? null,
+                        $environment->size, 1, 1, $environment->cpu_target,
+                    );
+                }
             }
 
             foreach (array_diff_key($type->generatedSecrets(), array_flip(array_column($env, 'key'))) as $key => $value) {

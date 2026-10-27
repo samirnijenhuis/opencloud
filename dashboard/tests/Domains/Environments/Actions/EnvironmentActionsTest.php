@@ -16,6 +16,7 @@ use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Environments\Models\Process;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Actions\AddDomain;
 use App\Domains\Routing\Actions\RemoveDomain;
@@ -169,7 +170,7 @@ class EnvironmentActionsTest extends TestCase
 
     public function test_read_logs_reads_one_process_and_masks_secrets(): void
     {
-        $this->environment->processes()->create(['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 1, 'exclusive' => false]);
+        Process::factory()->for($this->environment)->create();
         $kubectl = FakeKubectl::install();
         $kubectl->respond('logs', new KubectlResult(0, "[pod/web-1/web] connecting with hunter22\n"));
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);

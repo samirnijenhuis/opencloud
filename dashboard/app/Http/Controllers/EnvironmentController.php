@@ -96,7 +96,9 @@ class EnvironmentController extends Controller
                 'cpu_millicores' => $size->cpuMillicores(),
                 'memory_mib' => $size->memoryMib(),
             ], Size::cases()),
-            'processes' => $environment->processes->map(fn (Process $process) => $process->only(['id', 'name', 'command', 'instances', 'exclusive'])),
+            'processes' => $environment->processes->map(fn (Process $process) => $process->only([
+                'id', 'name', 'kind', 'command', 'schedule', 'size', 'min_instances', 'max_instances', 'cpu_target',
+            ])),
             'domains' => $environment->domains()->orderBy('id')->get()->map(fn (Domain $domain) => [
                 'id' => $domain->id,
                 'hostname' => $domain->hostname,

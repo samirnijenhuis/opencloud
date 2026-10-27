@@ -35,6 +35,7 @@ class LiveStatusTest extends TestCase
             $this->deployment('web', replicas: 2, ready: 2),
             ['metadata' => ['name' => 'something-else', 'labels' => []], 'spec' => ['replicas' => 1], 'status' => []],
         ]));
+        $this->kubectl->respond('get cronjobs', $this->items([]));
         $this->kubectl->respond('get pods', $this->items([
             $this->pod('web-a', 'web', restarts: 1, cpu: '500m', memory: '512Mi'),
             $this->pod('web-b', 'web', restarts: 2, cpu: '500m', memory: '512Mi'),
@@ -53,11 +54,13 @@ class LiveStatusTest extends TestCase
                 ['name' => 'web', 'desired' => 2, 'ready' => 2, 'restarts' => 3, 'cpu_millicores' => 15, 'memory_mib' => 180],
                 ['name' => 'worker', 'desired' => 1, 'ready' => 0, 'restarts' => 0, 'cpu_millicores' => null, 'memory_mib' => null],
             ],
+            'scheduled' => [],
             'requests' => ['cpu_millicores' => 2250, 'memory_mib' => 2304],
             'checked_at' => '2026-10-24T12:00:00+00:00',
         ]);
         $this->assertSame([
             ['get', 'deployments', "--namespace={$namespace}", '-o', 'json'],
+            ['get', 'cronjobs', "--namespace={$namespace}", '-o', 'json'],
             ['get', 'pods', "--namespace={$namespace}", self::NOT_FINISHED, '-o', 'json'],
             ['get', '--raw', "/apis/metrics.k8s.io/v1beta1/namespaces/{$namespace}/pods"],
         ], array_column($this->kubectl->calls, 'args'));
@@ -67,6 +70,7 @@ class LiveStatusTest extends TestCase
     {
         $environment = $this->makeEnvironment();
         $this->kubectl->respond('get deployments', $this->items([$this->deployment('web', replicas: 1, ready: 1)]));
+        $this->kubectl->respond('get cronjobs', $this->items([]));
         $this->kubectl->respond('get pods', $this->items([$this->pod('web-a', 'web', restarts: 0, cpu: '500m', memory: '512Mi')]));
         $this->kubectl->respond('get --raw', new KubectlResult(1, '', 'Error from server (NotFound): the server could not find the requested resource'));
         $user = User::factory()->create();
@@ -74,14 +78,36 @@ class LiveStatusTest extends TestCase
         $first = $this->actingAs($user)->getJson("/environments/{$environment->id}/status")->json();
         $this->travel(9)->seconds();
         $this->actingAs($user)->getJson("/environments/{$environment->id}/status")->assertExactJson($first);
-        $this->assertCount(3, $this->kubectl->calls);
+        $this->assertCount(4, $this->kubectl->calls);
         $this->travel(2)->seconds();
         $this->actingAs($user)->getJson("/environments/{$environment->id}/status");
 
         $this->assertSame(['state' => 'ok', 'name' => 'web', 'cpu_millicores' => null, 'memory_mib' => null], [
             'state' => $first['state'], 'name' => $first['processes'][0]['name'], 'cpu_millicores' => $first['processes'][0]['cpu_millicores'], 'memory_mib' => $first['processes'][0]['memory_mib'],
         ]);
-        $this->assertCount(6, $this->kubectl->calls);
+        $this->assertCount(8, $this->kubectl->calls);
+    }
+
+    public function test_each_scheduled_process_reports_its_last_run_and_whether_that_run_failed(): void
+    {
+        $environment = $this->makeEnvironment();
+        $this->kubectl->respond('get deployments', $this->items([$this->deployment('web', replicas: 1, ready: 1)]));
+        $this->kubectl->respond('get cronjobs', $this->items([
+            $this->cronJob('scheduler', ['lastScheduleTime' => '2026-10-24T11:59:00Z', 'lastSuccessfulTime' => '2026-10-24T11:59:02Z']),
+            $this->cronJob('report', ['lastScheduleTime' => '2026-10-24T11:00:00Z', 'lastSuccessfulTime' => '2026-10-23T11:00:04Z']),
+            $this->cronJob('import', ['lastScheduleTime' => '2026-10-24T11:59:00Z', 'lastSuccessfulTime' => '2026-10-24T11:58:03Z', 'active' => [['name' => 'import-29000000']]]),
+            $this->cronJob('nightly', []),
+            ['metadata' => ['name' => 'backup', 'labels' => []], 'status' => ['lastScheduleTime' => '2026-10-24T03:00:00Z']],
+        ]));
+        $this->kubectl->respond('get pods', $this->items([]));
+        $this->kubectl->respond('get --raw', $this->items([]));
+
+        $this->actingAs(User::factory()->create())->getJson("/environments/{$environment->id}/status")->assertOk()->assertJsonPath('scheduled', [
+            ['name' => 'import', 'last_run_at' => '2026-10-24T11:59:00Z', 'last_run_failed' => false],
+            ['name' => 'nightly', 'last_run_at' => null, 'last_run_failed' => false],
+            ['name' => 'report', 'last_run_at' => '2026-10-24T11:00:00Z', 'last_run_failed' => true],
+            ['name' => 'scheduler', 'last_run_at' => '2026-10-24T11:59:00Z', 'last_run_failed' => false],
+        ]);
     }
 
     public function test_a_cluster_that_does_not_answer_gives_the_unknown_state(): void
@@ -94,6 +120,7 @@ class LiveStatusTest extends TestCase
             'state' => 'unknown',
             'error' => 'Opencloud could not read the status from the cluster.',
             'processes' => [],
+            'scheduled' => [],
             'requests' => null,
             'checked_at' => '2026-10-24T12:00:00+00:00',
         ]);
@@ -157,6 +184,15 @@ class LiveStatusTest extends TestCase
             'spec' => ['replicas' => $replicas],
             'status' => $ready === null ? ['replicas' => $replicas] : ['replicas' => $replicas, 'readyReplicas' => $ready],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $status
+     * @return array<string, mixed>
+     */
+    private function cronJob(string $process, array $status): array
+    {
+        return ['metadata' => ['name' => $process, 'labels' => ['opencloud.dev/process' => $process]], 'spec' => ['schedule' => '* * * * *'], 'status' => $status];
     }
 
     /** @return array<string, mixed> */

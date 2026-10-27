@@ -10,6 +10,7 @@ use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Models\Domain;
@@ -44,7 +45,7 @@ class ApplicationControllerTest extends TestCase
             'max_instances' => 3,
             'cpu_target' => 70,
             'deploy_commands' => ['php artisan migrate --force'],
-            'processes' => [['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 2, 'exclusive' => false]],
+            'processes' => [['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work', 'schedule' => null]],
             'env' => [],
             'database' => 'mysql',
             ...$overrides,
@@ -118,8 +119,8 @@ class ApplicationControllerTest extends TestCase
                         'uses_build_command' => true,
                         'deploy_commands' => ['php artisan migrate --force'],
                         'processes' => [
-                            ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
-                            ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
+                            ['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'schedule' => null],
+                            ['name' => 'scheduler', 'kind' => 'scheduled', 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *'],
                         ],
                         'database' => 'mysql',
                         'env_profile' => 'laravel',
@@ -209,7 +210,7 @@ class ApplicationControllerTest extends TestCase
                 ],
                 'domains' => ['shop.example.com'],
                 'database' => 'postgres',
-                'processes' => [['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 2, 'exclusive' => false]],
+                'processes' => [['name' => 'worker', 'kind' => ProcessKind::LONG_RUNNING, 'command' => 'php artisan queue:work', 'schedule' => null]],
                 'settings' => [
                     'size' => 's',
                     'min_instances' => 1,
@@ -286,8 +287,8 @@ class ApplicationControllerTest extends TestCase
     public static function presetForms(): array
     {
         $laravelProcesses = [
-            ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
-            ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
+            ['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'schedule' => null],
+            ['name' => 'scheduler', 'kind' => 'scheduled', 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *'],
         ];
 
         return [
@@ -393,15 +394,18 @@ class ApplicationControllerTest extends TestCase
     {
         $owner = User::factory()->owner()->create();
         $this->mock(CreateApplication::class)->shouldNotReceive('execute');
-        $row = fn (array $values) => ['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 1, 'exclusive' => false, ...$values];
+        $row = fn (array $values) => ['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work', 'schedule' => null, ...$values];
 
         $cases = [
             [[$row(['name' => 'web'])], ['processes.0.name' => 'Opencloud uses the names web, deploy, and command. Use a different name.']],
             [[$row(['name' => 'Queue Worker'])], ['processes.0.name' => 'Use 1 to 30 lowercase letters, digits, and dashes. Start and end with a letter or a digit.']],
             [[$row([]), $row(['command' => 'php artisan horizon'])], ['processes.1.name' => 'Two processes have this name. Give each process its own name.']],
             [[$row(['command' => ''])], ['processes.0.command' => 'Enter the command that starts the process.']],
-            [[$row(['instances' => 21])], ['processes.0.instances' => 'Use 1 to 20 instances.']],
-            [[$row([]), $row(['name' => 'scheduler', 'instances' => 2, 'exclusive' => true])], ['processes.1.instances' => 'An exclusive process runs exactly one instance.']],
+            [[$row(['kind' => 'cron'])], ['processes.0.kind' => 'Choose long-running or scheduled.']],
+            [[$row([]), $row(['name' => 'scheduler', 'kind' => 'scheduled', 'command' => 'php artisan schedule:run'])], ['processes.1.schedule' => 'Enter a schedule, for example * * * * * for each minute.']],
+            [[$row(['name' => 'scheduler', 'kind' => 'scheduled', 'schedule' => '0 0 L * *'])], [
+                'processes.0.schedule' => 'Enter a cron schedule with five fields, for example */5 * * * * for each five minutes. Kubernetes does not accept L, W, or #.',
+            ]],
         ];
 
         foreach ($cases as [$processes, $errors]) {

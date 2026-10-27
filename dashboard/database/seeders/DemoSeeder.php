@@ -21,6 +21,7 @@ use App\Domains\Environments\Enums\CommandRunStatus;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
@@ -100,7 +101,8 @@ class DemoSeeder extends Seeder
 
         foreach ($environments as $each) {
             foreach ($application->type->processes() as $process) {
-                $each->processes()->create($process);
+                $scaling = $process['kind'] === ProcessKind::LONG_RUNNING ? ['min_instances' => 1, 'max_instances' => 1, 'cpu_target' => $each->cpu_target] : [];
+                $each->processes()->create([...$process, 'size' => $each->size, ...$scaling]);
             }
         }
 

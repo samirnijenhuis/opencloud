@@ -1,8 +1,10 @@
 import { AppSheet } from '@/components/environment/app-sheet';
-import { AddButton, Block, Group, Row, Status, SubHeading, type Tone } from '@/components/environment/block';
+import { AddButton, Block, Group, Row, Status, type Tone } from '@/components/environment/block';
 import { Canvas } from '@/components/environment/canvas';
+import { instancesText } from '@/components/environment/compute-fields';
 import { DomainsSheet } from '@/components/environment/domains-sheet';
 import { EditorSheet } from '@/components/environment/editor-sheet';
+import { ProcessSheet, scheduleWords } from '@/components/environment/process-sheet';
 import { AddResourceMenu, namedTextsFor, ResourceSheet, statusLabels, statusTones } from '@/components/environment/resource-sheet';
 import {
     type Attachment,
@@ -21,8 +23,9 @@ import { useReloadWhileRunning } from '@/hooks/use-reload-while-running';
 import EnvironmentLayout from '@/layouts/environment-layout';
 import { duration, memoryText, shortSha, sizeLabel, sizeText, timeAgo, vcpu } from '@/lib/format';
 import { kindLabels as clusterKindLabels } from '@/pages/clusters/cluster-status';
+import { type Process, type Size, type SizeOption } from '@/types';
 import { Link, router } from '@inertiajs/react';
-import { Boxes, Database, ExternalLink, Globe, HardDrive, Plus, Server, ShieldCheck, Zap } from 'lucide-react';
+import { Boxes, CalendarClock, Database, ExternalLink, Globe, HardDrive, Plus, Server, ShieldCheck, SquareTerminal, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const resourceIcons = { mysql: Database, postgres: Database, valkey: Zap, rustfs: HardDrive } as const;
@@ -86,6 +89,77 @@ function readyState(status: LiveStatus | null, name: string): [Tone, string] {
     if (process.desired === 0) return ['off', '0/0'];
 
     return [process.ready === process.desired ? 'ok' : 'warn', `${process.ready}/${process.desired}`];
+}
+
+function sizeRow(sizes: SizeOption[], value: Size): string {
+    const size = sizes.find((option) => option.value === value);
+
+    return size ? `${sizeLabel(size.value)}, ${sizeText(size)}` : sizeLabel(value);
+}
+
+/** The ready count and, with a metrics server, the usage of one Deployment. */
+function LiveRows({ status, name }: { status: LiveStatus | null; name: string }) {
+    const [tone, ready] = readyState(status, name);
+    const metrics = status?.processes.find((each) => each.name === name);
+
+    return (
+        <>
+            <Row label="Ready">{tone === 'off' ? ready : <Status tone={tone}>{ready}</Status>}</Row>
+            {metrics?.cpu_millicores != null && metrics.memory_mib != null && (
+                <Row label="Usage">{`${vcpu(metrics.cpu_millicores)} vCPU, ${memoryText(metrics.memory_mib)}`}</Row>
+            )}
+        </>
+    );
+}
+
+function LastRun({ status, name }: { status: LiveStatus | null; name: string }) {
+    const run = status?.scheduled.find((each) => each.name === name);
+
+    if (!run) return <>-</>;
+    if (!run.last_run_at) return <Status tone="off">Not yet</Status>;
+
+    return (
+        <Status tone={run.last_run_failed ? 'bad' : 'ok'}>
+            {run.last_run_failed ? `Failed, ${timeAgo(run.last_run_at)}` : timeAgo(run.last_run_at)}
+        </Status>
+    );
+}
+
+/** One process on the canvas: a long-running process shows its instances, a scheduled one its schedule and last run. */
+function ProcessCard({ process, sizes, status, onOpen }: { process: Process; sizes: SizeOption[]; status: LiveStatus | null; onOpen: () => void }) {
+    const scheduled = process.kind === 'scheduled';
+    const known = status?.state !== 'ok' || (scheduled ? status.scheduled : status.processes).some((each) => each.name === process.name);
+
+    return (
+        <Block
+            icon={scheduled ? CalendarClock : SquareTerminal}
+            title={process.name}
+            aside={<span className="text-muted-foreground">{scheduled ? 'Scheduled' : 'Long-running'}</span>}
+            onOpen={onOpen}
+        >
+            <Row label="Command">
+                <code className="block truncate font-mono text-xs" title={process.command}>
+                    {process.command}
+                </code>
+            </Row>
+            {process.kind === 'scheduled' ? (
+                <>
+                    <Row label="Schedule">{scheduleWords(process.schedule) ?? <code className="font-mono text-xs">{process.schedule}</code>}</Row>
+                    <Row label="Size">{sizeRow(sizes, process.size)}</Row>
+                    <Row label="Last run">
+                        <LastRun status={status} name={process.name} />
+                    </Row>
+                </>
+            ) : (
+                <>
+                    <Row label="Size">{sizeRow(sizes, process.size)}</Row>
+                    <Row label="Instances">{instancesText(process)}</Row>
+                    <LiveRows status={status} name={process.name} />
+                </>
+            )}
+            {!known && <p className="text-muted-foreground px-3 py-1.5 text-xs">It starts on the next deploy.</p>}
+        </Block>
+    );
 }
 
 function HttpsSheet({ open, onClose, props }: { open: boolean; onClose: () => void; props: CanvasProps }) {
@@ -264,10 +338,7 @@ export default function EnvironmentShow(props: CanvasProps) {
 
     const [certTone, certText] = certificatesState(domains);
     const cloudflareCount = domains.filter((domain) => domain.dns_mode === 'cloudflare').length;
-    const autoscales = compute.max_instances > compute.min_instances;
-    const size = sizes.find((option) => option.value === compute.size);
     const statusUnknown = hasPods && status?.state === 'unknown';
-    const notRunning = status?.state === 'ok' && processes.some((process) => !status.processes.some((each) => each.name === process.name));
     const addResource = can.update && (
         <AddResourceMenu environmentId={environment.id} datastores={datastores}>
             <Button variant="ghost" size="sm">
@@ -327,51 +398,38 @@ export default function EnvironmentShow(props: CanvasProps) {
 
                     <Group column="cluster" label={cluster.name} aside={clusterKindLabels[cluster.kind]}>
                         <Block icon={Server} title="App" target onOpen={() => show({ kind: 'app', tab: 'general' })}>
-                            <Row label="Size">{size ? `${sizeLabel(size.value)}, ${sizeText(size)}` : sizeLabel(compute.size)}</Row>
-                            <Row label="Instances">
-                                {autoscales
-                                    ? `${compute.min_instances} to ${compute.max_instances} at ${compute.cpu_target}% CPU`
-                                    : compute.min_instances}
-                            </Row>
+                            <Row label="Size">{sizeRow(sizes, compute.size)}</Row>
+                            <Row label="Instances">{instancesText(compute)}</Row>
                             <Row label="Health check">
                                 <code className="font-mono text-xs">{compute.health_path}</code>
                             </Row>
-                            <SubHeading>
-                                <span className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_4rem] gap-2">
-                                    <span>Process</span>
-                                    <span className="text-right">Ready</span>
-                                    <span className="text-right">vCPU</span>
-                                    <span className="text-right">Memory</span>
-                                </span>
-                            </SubHeading>
-                            {['web', ...processes.map((process) => process.name)].map((name) => {
-                                const [tone, ready] = readyState(status, name);
-                                const metrics = status?.processes.find((each) => each.name === name);
-
-                                return (
-                                    <div
-                                        key={name}
-                                        className="grid grid-cols-[minmax(0,1fr)_3rem_3rem_4rem] items-center gap-2 px-3 py-1.5 text-sm tabular-nums"
-                                    >
-                                        <span className="truncate font-mono text-xs">{name}</span>
-                                        <span className="text-right">{tone === 'off' ? ready : <Status tone={tone}>{ready}</Status>}</span>
-                                        <span className="text-muted-foreground text-right">
-                                            {metrics?.cpu_millicores != null ? vcpu(metrics.cpu_millicores) : '-'}
-                                        </span>
-                                        <span className="text-muted-foreground text-right">
-                                            {metrics?.memory_mib != null ? memoryText(metrics.memory_mib) : '-'}
-                                        </span>
-                                    </div>
-                                );
-                            })}
+                            <LiveRows status={status} name="web" />
                             {statusUnknown && (
                                 <p className="text-muted-foreground px-3 py-1.5 text-xs">
                                     The live status is unknown right now. The dashboard cannot read it from the cluster.
                                 </p>
                             )}
-                            {notRunning && <p className="text-muted-foreground px-3 py-1.5 text-xs">A new process starts on the next deploy.</p>}
-                            {can.update && <AddButton onClick={() => show({ kind: 'app', tab: 'processes' })}>Add process</AddButton>}
                         </Block>
+                        {processes.map((process) => (
+                            <ProcessCard
+                                key={process.id}
+                                process={process}
+                                sizes={sizes}
+                                status={status}
+                                onOpen={() => show({ kind: 'process', id: process.id, tab: 'general' })}
+                            />
+                        ))}
+                        {can.update && (
+                            <button
+                                type="button"
+                                onClick={() => show({ kind: 'process', id: null, tab: 'general' })}
+                                className="bg-card/60 hover:bg-card text-muted-foreground hover:text-foreground focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-left text-sm outline-none focus-visible:ring-2"
+                            >
+                                <SquareTerminal className="size-4" />
+                                Add process
+                                <span className="ml-auto text-xs">Worker, scheduler, or a command</span>
+                            </button>
+                        )}
                     </Group>
 
                     <Group column="resources" label="Resources" className="border-transparent bg-transparent">
@@ -409,7 +467,7 @@ export default function EnvironmentShow(props: CanvasProps) {
                             </Button>
                         )}
                         {can.update && (
-                            <Button variant="ghost" size="sm" onClick={() => show({ kind: 'app', tab: 'processes' })}>
+                            <Button variant="ghost" size="sm" onClick={() => show({ kind: 'process', id: null, tab: 'general' })}>
                                 <Plus /> Process
                             </Button>
                         )}
@@ -471,7 +529,18 @@ export default function EnvironmentShow(props: CanvasProps) {
                 clusterName={cluster.name}
                 compute={compute}
                 sizes={sizes}
-                processes={processes}
+                canUpdate={can.update}
+                canDeploy={can.deploy && hasPods}
+            />
+            <ProcessSheet
+                open={open && sheet.kind === 'process'}
+                onClose={close}
+                tab={sheet.kind === 'process' ? sheet.tab : 'general'}
+                onTab={(tab) => sheet.kind === 'process' && setSheet({ ...sheet, tab })}
+                environmentId={environment.id}
+                process={sheet.kind === 'process' && sheet.id !== null ? processes.find((process) => process.id === sheet.id) : undefined}
+                compute={compute}
+                sizes={sizes}
                 canUpdate={can.update}
                 canDeploy={can.deploy && hasPods}
             />
