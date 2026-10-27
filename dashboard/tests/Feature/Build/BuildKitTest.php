@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Build;
 
-use App\Build\BuildKit;
-use App\Enums\ClusterKind;
-use App\Kube\FakeKubectl;
-use App\Kube\KubectlResult;
-use App\Models\Cluster;
+use App\Domains\Builds\BuildKit;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
 use Tests\TestCase;

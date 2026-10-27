@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests;
 
-use App\Clusters\ClusterProvider;
-use App\Clusters\ClusterProviders;
-use App\Models\Cluster;
+use App\Domains\Clusters\ClusterProvider;
+use App\Domains\Clusters\ClusterProviders;
+use App\Domains\Clusters\Models\Cluster;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

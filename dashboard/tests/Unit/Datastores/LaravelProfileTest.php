@@ -2,12 +2,12 @@
 
 namespace Tests\Unit\Datastores;
 
-use App\Datastores\BucketConnection;
-use App\Datastores\Env\EnvValue;
-use App\Datastores\Env\LaravelProfile;
-use App\Datastores\KeyValueConnection;
-use App\Datastores\SqlConnection;
-use App\Enums\DatastoreKind;
+use App\Domains\Datastores\BucketConnection;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Env\EnvValue;
+use App\Domains\Datastores\Env\LaravelProfile;
+use App\Domains\Datastores\KeyValueConnection;
+use App\Domains\Datastores\SqlConnection;
 use PHPUnit\Framework\TestCase;
 
 class LaravelProfileTest extends TestCase

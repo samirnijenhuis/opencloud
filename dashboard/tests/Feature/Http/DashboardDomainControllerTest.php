@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\Http;
 
-use App\Domains\DnsStatus;
-use App\Enums\ClusterKind;
-use App\Jobs\CheckDashboardDomain;
-use App\Jobs\SyncCaddy;
-use App\Models\AuditEvent;
-use App\Models\Cluster;
-use App\Models\DashboardDomain;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Jobs\CheckDashboardDomain;
+use App\Domains\Routing\Jobs\SyncCaddy;
+use App\Domains\Routing\Models\DashboardDomain;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\URL;

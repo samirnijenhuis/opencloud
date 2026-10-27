@@ -2,14 +2,14 @@
 
 namespace Tests\Feature\Build;
 
-use App\Build\Builder;
-use App\Deploy\DeploymentLog;
-use App\Enums\ApplicationType;
-use App\Enums\EnvVarAvailability;
-use App\Models\Application;
-use App\Models\Deployment;
-use App\Models\Environment;
-use App\Models\EnvVar;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Builds\Builder;
+use App\Domains\Deployments\DeploymentLog;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvVarAvailability;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\DataProvider;

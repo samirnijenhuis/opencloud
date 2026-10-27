@@ -2,21 +2,21 @@
 
 namespace Tests\Feature\Clusters;
 
-use App\Actions\ConnectCluster;
-use App\Actions\DisconnectCluster;
-use App\Actions\ReinstallClusterParts;
-use App\Clusters\ClusterStatus;
-use App\Domains\DnsResolver;
-use App\Enums\ClusterKind;
-use App\Jobs\InstallClusterParts;
-use App\Jobs\SyncCaddy;
-use App\Kube\FakeKubectl;
-use App\Kube\KubectlResult;
-use App\Models\Application;
-use App\Models\AuditEvent;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\User;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Clusters\Actions\ConnectCluster;
+use App\Domains\Clusters\Actions\DisconnectCluster;
+use App\Domains\Clusters\Actions\ReinstallClusterParts;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Jobs\InstallClusterParts;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Members\Models\User;
+use App\Domains\Routing\DnsResolver;
+use App\Domains\Routing\Jobs\SyncCaddy;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;

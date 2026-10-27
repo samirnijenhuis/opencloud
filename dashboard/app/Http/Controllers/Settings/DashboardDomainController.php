@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\RemoveDashboardDomain;
-use App\Actions\SetDashboardDomain;
-use App\Enums\Ability;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Routing\Actions\RemoveDashboardDomain;
+use App\Domains\Routing\Actions\SetDashboardDomain;
+use App\Domains\Routing\Jobs\CheckDashboardDomain;
+use App\Domains\Routing\Models\DashboardDomain;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DashboardDomainRequest;
-use App\Jobs\CheckDashboardDomain;
-use App\Models\DashboardDomain;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

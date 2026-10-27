@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Console;
 
-use App\Clusters\ClusterStatus;
-use App\Enums\ClusterKind;
-use App\Jobs\InstallClusterParts;
-use App\Models\AuditEvent;
-use App\Models\Cluster;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Jobs\InstallClusterParts;
+use App\Domains\Clusters\Models\Cluster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;

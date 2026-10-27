@@ -2,10 +2,10 @@
 
 namespace Tests\Unit\Build;
 
-use App\Build\PythonDockerfile;
-use App\Build\PythonProject;
-use App\Build\RepositoryDoesNotFit;
-use App\Build\RepositoryFiles;
+use App\Domains\Builds\Exceptions\RepositoryDoesNotFit;
+use App\Domains\Builds\PythonDockerfile;
+use App\Domains\Builds\PythonProject;
+use App\Domains\Builds\RepositoryFiles;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;

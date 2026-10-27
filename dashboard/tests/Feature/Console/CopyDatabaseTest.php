@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Console;
 
-use App\Models\Cluster;
-use App\Models\User;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use PDO;
 use Tests\TestCase;

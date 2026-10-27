@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Models;
 
-use App\Models\EnvVar;
+use App\Domains\Environments\Models\EnvVar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

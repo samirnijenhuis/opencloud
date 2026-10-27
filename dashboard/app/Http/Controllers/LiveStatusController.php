@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Environments\LiveStatus;
-use App\Models\Cluster;
-use App\Models\Environment;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Environments\LiveStatus;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 

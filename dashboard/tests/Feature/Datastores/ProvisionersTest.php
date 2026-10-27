@@ -2,22 +2,22 @@
 
 namespace Tests\Feature\Datastores;
 
-use App\Actions\AttachDatastore;
-use App\Clusters\ClusterStatus;
-use App\Datastores\DatastoreStatus;
-use App\Datastores\Provisioners;
-use App\Enums\ClusterKind;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
-use App\Enums\EnvVarSource;
-use App\Kube\FakeKubectl;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\Environment;
-use App\Models\EnvVar;
-use App\Models\ProviderCredential;
-use App\Models\User;
+use App\Domains\Applications\Models\Application;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Actions\AttachDatastore;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\Enums\DatastoreStatus;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Provisioners;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Models\User;
+use App\Support\Kube\FakeKubectl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
@@ -127,7 +127,7 @@ class ProvisionersTest extends TestCase
             'status' => 'ready',
             'connection' => $connection,
             'dumps' => $dumps,
-            'queued' => ['App\Jobs\ProvisionDatastoreAttachment' => 2, 'App\Jobs\RevokeDatastoreAccess' => 1],
+            'queued' => ['App\Domains\Datastores\Jobs\ProvisionDatastoreAttachment' => 2, 'App\Domains\Datastores\Jobs\RevokeDatastoreAccess' => 1],
             'kubectl calls' => true,
             'tofu' => [],
             'datastore kept' => true,
@@ -137,7 +137,7 @@ class ProvisionersTest extends TestCase
             'status' => 'ready',
             'connection' => $connection,
             'dumps' => false,
-            'queued' => ['App\Jobs\ProvisionManagedDatabase' => 2, 'App\Jobs\TearDownManagedDatabase' => 1],
+            'queued' => ['App\Domains\Datastores\Jobs\ProvisionManagedDatabase' => 2, 'App\Domains\Datastores\Jobs\TearDownManagedDatabase' => 1],
             'kubectl calls' => false,
             'tofu' => $tofu,
             'datastore kept' => false,
@@ -192,7 +192,7 @@ class ProvisionersTest extends TestCase
     public function test_only_the_registry_creates_a_local_provisioner(): void
     {
         $this->assertSame(
-            ['app/Datastores/Provisioners.php'],
+            ['app/Domains/Datastores/Provisioners.php'],
             $this->filesWhere(['app', 'routes'], fn (array $code, int $i) => strtolower($code[$i]) === 'new' && str_starts_with($this->shortName($code[$i + 1]), 'Local')),
         );
     }
@@ -211,8 +211,8 @@ class ProvisionersTest extends TestCase
     {
         // DestroyCluster refuses a cluster that still has managed databases. That is UI policy, not provisioning.
         $this->assertSame(
-            ['app/Actions/DestroyCluster.php'],
-            $this->filesWhere(['app/Actions', 'app/Jobs'], fn (array $code, int $i) => $this->shortName($code[$i]) === 'DatastoreSource'
+            ['app/Domains/Clusters/Actions/DestroyCluster.php'],
+            $this->filesWhere(['app/Domains/*/Actions', 'app/Domains/*/Jobs'], fn (array $code, int $i) => $this->shortName($code[$i]) === 'DatastoreSource'
                 && $code[$i + 1] === '::'
                 && $code[$i + 2] === 'Managed'),
         );
@@ -223,25 +223,25 @@ class ProvisionersTest extends TestCase
         $files = collect(Provisioners::table())
             ->reject(fn (array $row) => $row['source'] === DatastoreSource::External)
             ->map(fn (array $row) => str_replace(base_path().'/', '', (new ReflectionClass($row['provisioner']))->getFileName()))
-            ->merge(collect(Finder::create()->files()->name(['Managed*.php', 'Local*.php'])->in(app_path('Datastores')))->map(fn ($file) => str_replace(base_path().'/', '', $file->getPathname())))
+            ->merge(collect(Finder::create()->files()->name(['Managed*.php', 'Local*.php'])->in(app_path('Domains/Datastores')))->map(fn ($file) => str_replace(base_path().'/', '', $file->getPathname())))
             ->unique()
             ->sort()
             ->values();
 
         $this->assertSame(
             [
-                'app/Datastores/LocalMysql.php' => true,
-                'app/Datastores/LocalPostgres.php' => true,
-                'app/Datastores/LocalProvisioner.php' => true,
-                'app/Datastores/LocalRustfs.php' => true,
-                'app/Datastores/LocalSql.php' => true,
-                'app/Datastores/LocalValkey.php' => true,
-                'app/Datastores/ManagedBucket.php' => false,
-                'app/Datastores/ManagedDatabase.php' => false,
-                'app/Datastores/ManagedResource.php' => false,
-                'app/Datastores/ManagedResources.php' => false,
-                'app/Datastores/ManagedStack.php' => false,
-                'app/Datastores/ManagedValkey.php' => false,
+                'app/Domains/Datastores/LocalMysql.php' => true,
+                'app/Domains/Datastores/LocalPostgres.php' => true,
+                'app/Domains/Datastores/LocalProvisioner.php' => true,
+                'app/Domains/Datastores/LocalRustfs.php' => true,
+                'app/Domains/Datastores/LocalSql.php' => true,
+                'app/Domains/Datastores/LocalValkey.php' => true,
+                'app/Domains/Datastores/ManagedBucket.php' => false,
+                'app/Domains/Datastores/ManagedDatabase.php' => false,
+                'app/Domains/Datastores/ManagedResource.php' => false,
+                'app/Domains/Datastores/ManagedResources.php' => false,
+                'app/Domains/Datastores/ManagedStack.php' => false,
+                'app/Domains/Datastores/ManagedValkey.php' => false,
             ],
             $files->mapWithKeys(fn (string $file) => [$file => collect($this->code($file))->contains(fn (string $token) => str_contains($token, 'Kubectl'))])->all(),
         );
@@ -288,7 +288,7 @@ class ProvisionersTest extends TestCase
         return array_values(array_map(fn (array|string $token) => is_array($token) ? $token[1] : $token, $code));
     }
 
-    /** App\Datastores\LocalSql and \App\Datastores\LocalSql are both LocalSql. */
+    /** App\Domains\Datastores\LocalSql and \App\Domains\Datastores\LocalSql are both LocalSql. */
     private function shortName(string $token): string
     {
         return ltrim(strrchr('\\'.$token, '\\'), '\\');

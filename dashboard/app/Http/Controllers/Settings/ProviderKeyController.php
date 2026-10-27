@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\DeleteProviderCredential;
-use App\Actions\StoreProviderCredential;
-use App\CloudProviders\CheckResult;
-use App\CloudProviders\ProviderGuide;
-use App\CloudProviders\Providers;
+use App\Domains\CloudProviders\Actions\DeleteProviderCredential;
+use App\Domains\CloudProviders\Actions\StoreProviderCredential;
+use App\Domains\CloudProviders\CheckResult;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\CloudProviders\ProviderGuide;
+use App\Domains\CloudProviders\Providers;
 use App\Http\Controllers\Controller;
-use App\Models\ProviderCredential;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

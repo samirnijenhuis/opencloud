@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Enums\Ability;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Routing\Models\Domain;
 use App\Http\Controllers\Controller;
-use App\Models\AuditEvent;
-use App\Models\Domain;
-use App\Models\EnvVar;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

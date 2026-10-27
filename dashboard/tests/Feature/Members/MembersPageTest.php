@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Members;
 
-use App\Enums\Role;
-use App\Models\AuditEvent;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Members\Enums\Role;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;

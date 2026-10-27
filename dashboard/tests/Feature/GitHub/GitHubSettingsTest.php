@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\GitHub;
 
-use App\Models\AuditEvent;
-use App\Models\GithubApp;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\GitHub\Models\GithubApp;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;

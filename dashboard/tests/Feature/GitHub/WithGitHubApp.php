@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\GitHub;
 
-use App\Models\GithubApp;
+use App\Domains\GitHub\Models\GithubApp;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 

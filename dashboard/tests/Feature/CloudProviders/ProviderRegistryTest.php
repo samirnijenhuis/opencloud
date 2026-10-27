@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\CloudProviders;
 
-use App\CloudProviders\CheckResult;
-use App\CloudProviders\Providers;
+use App\Domains\CloudProviders\CheckResult;
+use App\Domains\CloudProviders\Providers;
 use Tests\TestCase;
 
 class ProviderRegistryTest extends TestCase

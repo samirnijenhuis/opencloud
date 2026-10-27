@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\GitHub\PullRequestEvent;
-use App\GitHub\PushEvent;
-use App\Jobs\DeployPush;
-use App\Jobs\SyncPreview;
-use App\Models\GithubApp;
+use App\Domains\Deployments\Jobs\DeployPush;
+use App\Domains\GitHub\Models\GithubApp;
+use App\Domains\GitHub\PullRequestEvent;
+use App\Domains\GitHub\PushEvent;
+use App\Domains\Previews\Jobs\SyncPreview;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;

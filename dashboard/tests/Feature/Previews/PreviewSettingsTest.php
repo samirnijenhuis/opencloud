@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Previews;
 
-use App\Enums\EnvironmentKind;
-use App\Models\Application;
-use App\Models\AuditEvent;
-use App\Models\Cluster;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;

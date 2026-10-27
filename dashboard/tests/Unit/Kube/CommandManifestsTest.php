@@ -2,14 +2,14 @@
 
 namespace Tests\Unit\Kube;
 
-use App\Enums\ClusterKind;
-use App\Enums\Size;
-use App\Kube\Manifests\CommandManifests;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\CommandRun;
-use App\Models\Deployment;
-use App\Models\Environment;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\CommandManifests;
+use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Models\CommandRun;
+use App\Domains\Environments\Models\Environment;
 use PHPUnit\Framework\TestCase;
 
 class CommandManifestsTest extends TestCase

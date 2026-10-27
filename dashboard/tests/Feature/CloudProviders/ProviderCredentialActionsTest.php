@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\CloudProviders;
 
-use App\Actions\DeleteProviderCredential;
-use App\Actions\StoreProviderCredential;
-use App\CloudProviders\CheckStatus;
-use App\Models\AuditEvent;
-use App\Models\ProviderCredential;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\CloudProviders\Actions\DeleteProviderCredential;
+use App\Domains\CloudProviders\Actions\StoreProviderCredential;
+use App\Domains\CloudProviders\Enums\CheckStatus;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;

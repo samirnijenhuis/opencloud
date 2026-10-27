@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Http;
 
-use App\Domains\DnsStatus;
-use App\Models\DashboardDomain;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Models\DashboardDomain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;

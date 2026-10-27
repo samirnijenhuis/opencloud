@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Environments;
 
-use App\Actions\SetEnvironmentColor;
-use App\Enums\EnvironmentKind;
-use App\Environments\EnvironmentColor;
-use App\Models\AuditEvent;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Environments\Actions\SetEnvironmentColor;
+use App\Domains\Environments\Enums\EnvironmentColor;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Feature\Http\BuildsEnvironments;

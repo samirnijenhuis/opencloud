@@ -2,17 +2,17 @@
 
 namespace Tests\Feature\Migrations;
 
-use App\Datastores\Env\EnvValue;
-use App\Datastores\Env\LaravelProfile;
-use App\Datastores\SqlConnection;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
-use App\Enums\EnvVarSource;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
-use App\Models\EnvVar;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\Env\EnvValue;
+use App\Domains\Datastores\Env\LaravelProfile;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Datastores\SqlConnection;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;

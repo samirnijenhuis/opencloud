@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Policies;
 
-use App\Enums\Role;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Environment;
-use App\Models\ProviderCredential;
-use App\Models\User;
+use App\Domains\Applications\Models\Application;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Enums\Role;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;

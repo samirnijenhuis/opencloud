@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Models;
 
-use App\Models\AuditEvent;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;

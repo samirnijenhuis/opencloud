@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\Jobs;
 
-use App\Domains\DnsResolver;
-use App\Domains\DnsStatus;
-use App\Enums\ClusterKind;
-use App\Jobs\CheckDashboardDomain;
-use App\Jobs\SyncCaddy;
-use App\Models\Cluster;
-use App\Models\DashboardDomain;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Routing\DnsResolver;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Jobs\CheckDashboardDomain;
+use App\Domains\Routing\Jobs\SyncCaddy;
+use App\Domains\Routing\Models\DashboardDomain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;

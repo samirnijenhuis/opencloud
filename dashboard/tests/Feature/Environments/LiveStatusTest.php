@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Environments;
 
-use App\Kube\FakeKubectl;
-use App\Kube\KubectlResult;
-use App\Models\User;
+use App\Domains\Members\Models\User;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\Feature\Http\BuildsEnvironments;

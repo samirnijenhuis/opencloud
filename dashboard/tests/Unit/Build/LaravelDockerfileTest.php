@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Build;
 
-use App\Build\LaravelDockerfile;
+use App\Domains\Builds\LaravelDockerfile;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;

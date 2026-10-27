@@ -77,10 +77,10 @@ echo "POST /clusters: $result"
 [[ $result == 302\ * ]] || { cat "$WORK/response"; exit 1; }
 CLUSTER_ID=${result##*/}
 
-cluster_status() { tinker "echo App\\Models\\Cluster::find($CLUSTER_ID)->status->value;"; }
+cluster_status() { tinker "echo App\\Domains\\Clusters\\Models\\Cluster::find($CLUSTER_ID)->status->value;"; }
 cluster_ready() { [[ $(cluster_status) == ready ]]; }
-wait_for 600 "the cluster becomes ready" cluster_ready || { tinker "echo App\\Models\\Cluster::find($CLUSTER_ID)->error;"; exit 1; }
-tinker "\$c = App\\Models\\Cluster::find($CLUSTER_ID); echo json_encode([\$c->name, \$c->status, \$c->ingress_ip, \$c->parts_version]);"
+wait_for 600 "the cluster becomes ready" cluster_ready || { tinker "echo App\\Domains\\Clusters\\Models\\Cluster::find($CLUSTER_ID)->error;"; exit 1; }
+tinker "\$c = App\\Domains\\Clusters\\Models\\Cluster::find($CLUSTER_ID); echo json_encode([\$c->name, \$c->status, \$c->ingress_ip, \$c->parts_version]);"
 on_b get pods,svc,pvc -n opencloud
 
 step "Create laravel/laravel on $B with MySQL and $HOST"
@@ -98,10 +98,10 @@ post /login '{"email":"owner@example.com","password":"correct-horse-battery"}'
 echo "POST /environments/$ENVIRONMENT_ID/deployments: $(post "/environments/$ENVIRONMENT_ID/deployments" '{}')"
 fi
 
-deployment_status() { tinker "echo App\\Models\\Environment::find($ENVIRONMENT_ID)->deployments()->latest('id')->first()->status->value;"; }
+deployment_status() { tinker "echo App\\Domains\\Environments\\Models\\Environment::find($ENVIRONMENT_ID)->deployments()->latest('id')->first()->status->value;"; }
 deployment_done() { [[ $(deployment_status) =~ ^(live|failed)$ ]]; }
 wait_for 1800 "the deployment finishes" deployment_done
-on_a -n opencloud exec deploy/dashboard -c web -- php artisan tinker --execute "echo App\\Models\\Environment::find($ENVIRONMENT_ID)->deployments()->latest('id')->first()->log;" >"$WORK/deployment.log" 2>&1 || true
+on_a -n opencloud exec deploy/dashboard -c web -- php artisan tinker --execute "echo App\\Domains\\Environments\\Models\\Environment::find($ENVIRONMENT_ID)->deployments()->latest('id')->first()->log;" >"$WORK/deployment.log" 2>&1 || true
 grep -E 'Copying|Building|live|failed' "$WORK/deployment.log" || true
 [[ $(deployment_status) == live ]] || { tail -40 "$WORK/deployment.log"; exit 1; }
 

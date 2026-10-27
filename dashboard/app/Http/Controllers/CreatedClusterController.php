@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\CreateCluster;
-use App\Actions\DestroyCluster;
-use App\Clusters\ClusterProviders;
+use App\Domains\Clusters\Actions\CreateCluster;
+use App\Domains\Clusters\Actions\DestroyCluster;
+use App\Domains\Clusters\ClusterProviders;
+use App\Domains\Clusters\Models\Cluster;
 use App\Http\Requests\CreateClusterRequest;
-use App\Models\Cluster;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

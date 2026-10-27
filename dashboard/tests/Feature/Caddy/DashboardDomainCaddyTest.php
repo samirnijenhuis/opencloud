@@ -2,14 +2,14 @@
 
 namespace Tests\Feature\Caddy;
 
-use App\Actions\RemoveDashboardDomain;
-use App\Caddy\CaddyConfig;
-use App\Domains\DnsStatus;
-use App\Enums\ClusterKind;
-use App\Jobs\SyncCaddy;
-use App\Models\Cluster;
-use App\Models\DashboardDomain;
-use App\Models\User;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Members\Models\User;
+use App\Domains\Routing\Actions\RemoveDashboardDomain;
+use App\Domains\Routing\CaddyConfig;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Jobs\SyncCaddy;
+use App\Domains\Routing\Models\DashboardDomain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;

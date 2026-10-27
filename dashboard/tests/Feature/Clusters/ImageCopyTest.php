@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\Clusters;
 
-use App\Enums\ApplicationType;
-use App\Enums\ClusterKind;
-use App\Enums\DeploymentStatus;
-use App\Jobs\RunDeployment;
-use App\Kube\FakeKubectl;
-use App\Kube\KubectlResult;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Deployment;
-use App\Models\Environment;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Jobs\RunDeployment;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Models\Environment;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;

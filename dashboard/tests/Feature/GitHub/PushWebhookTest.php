@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\GitHub;
 
-use App\Enums\EnvironmentKind;
-use App\Jobs\RunDeployment;
-use App\Models\Application;
-use App\Models\Deployment;
-use App\Models\Environment;
-use App\Models\GithubApp;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Deployments\Jobs\RunDeployment;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\GitHub\Models\GithubApp;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;

@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Deploy;
 
-use App\Deploy\DeploymentLog;
-use App\Models\Deployment;
+use App\Domains\Deployments\DeploymentLog;
+use App\Domains\Deployments\Models\Deployment;
 use App\Support\SecretMasker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;

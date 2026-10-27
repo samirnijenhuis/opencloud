@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Jobs;
 
-use App\Jobs\CheckLatestRelease;
-use App\Models\User;
+use App\Domains\Members\Models\User;
+use App\Domains\Upgrades\Jobs\CheckLatestRelease;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;

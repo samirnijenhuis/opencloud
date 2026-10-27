@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Enums\ClusterKind;
-use App\Models\Cluster;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

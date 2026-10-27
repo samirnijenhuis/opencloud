@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\Backups;
 
-use App\Enums\ClusterKind;
-use App\Enums\DatastoreKind;
-use App\Jobs\BackupDashboard;
-use App\Jobs\BackupDatastore;
-use App\Jobs\CopyBuckets;
-use App\Kube\FakeKubectl;
-use App\Models\BackupTarget;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\User;
+use App\Domains\Backups\Jobs\BackupDashboard;
+use App\Domains\Backups\Jobs\BackupDatastore;
+use App\Domains\Backups\Jobs\CopyBuckets;
+use App\Domains\Backups\Models\BackupTarget;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Members\Models\User;
+use App\Support\Kube\FakeKubectl;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\DatabaseMigrations;

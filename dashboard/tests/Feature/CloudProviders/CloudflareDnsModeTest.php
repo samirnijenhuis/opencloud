@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\CloudProviders;
 
-use App\Actions\AddDomain;
-use App\Actions\RemoveDomain;
-use App\Domains\DnsStatus;
-use App\Enums\DnsMode;
-use App\Jobs\CheckDomain;
-use App\Jobs\SyncCaddy;
-use App\Models\AuditEvent;
-use App\Models\Domain;
-use App\Models\ProviderCredential;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Members\Models\User;
+use App\Domains\Routing\Actions\AddDomain;
+use App\Domains\Routing\Actions\RemoveDomain;
+use App\Domains\Routing\Enums\DnsMode;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Jobs\CheckDomain;
+use App\Domains\Routing\Jobs\SyncCaddy;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;

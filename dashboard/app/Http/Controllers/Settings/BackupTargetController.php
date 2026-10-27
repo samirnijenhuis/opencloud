@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\DeleteBackupTarget;
-use App\Actions\StoreBackupTarget;
-use App\Enums\Ability;
+use App\Domains\Backups\Actions\DeleteBackupTarget;
+use App\Domains\Backups\Actions\StoreBackupTarget;
+use App\Domains\Backups\Models\BackupTarget;
+use App\Domains\Members\Enums\Ability;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BackupTargetRequest;
-use App\Models\BackupTarget;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

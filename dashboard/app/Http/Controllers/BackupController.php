@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\BackupNow;
-use App\Actions\RestoreBackup;
+use App\Domains\Backups\Actions\BackupNow;
+use App\Domains\Backups\Actions\RestoreBackup;
+use App\Domains\Backups\Models\Backup;
+use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Http\Requests\RestoreBackupRequest;
-use App\Models\Backup;
-use App\Models\DatastoreAttachment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

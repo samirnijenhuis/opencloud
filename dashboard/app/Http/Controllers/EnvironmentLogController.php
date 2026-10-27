@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\ReadLogs;
-use App\Enums\Ability;
+use App\Domains\Environments\Actions\ReadLogs;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Enums\Ability;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
-use App\Kube\KubectlException;
-use App\Models\Environment;
+use App\Support\Kube\KubectlException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

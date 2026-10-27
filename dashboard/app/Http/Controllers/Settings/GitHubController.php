@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\ConnectGitHubApp;
-use App\Enums\Ability;
-use App\GitHub\GitHubClient;
-use App\GitHub\Manifest;
+use App\Domains\GitHub\Actions\ConnectGitHubApp;
+use App\Domains\GitHub\GitHubClient;
+use App\Domains\GitHub\Manifest;
+use App\Domains\GitHub\Models\GithubApp;
+use App\Domains\Members\Enums\Ability;
 use App\Http\Controllers\Controller;
-use App\Models\GithubApp;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;

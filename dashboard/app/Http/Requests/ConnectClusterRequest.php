@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Clusters\ClusterRegistry;
-use App\Models\Cluster;
+use App\Domains\Clusters\ClusterRegistry;
+use App\Domains\Clusters\Models\Cluster;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ConnectClusterRequest extends FormRequest

@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\IssueInvite;
-use App\Actions\RevokeInvite;
-use App\Enums\Role;
+use App\Domains\Members\Actions\IssueInvite;
+use App\Domains\Members\Actions\RevokeInvite;
+use App\Domains\Members\Enums\Role;
+use App\Domains\Members\Models\Invite;
+use App\Domains\Members\Models\User;
 use App\Http\Controllers\Controller;
-use App\Models\Invite;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

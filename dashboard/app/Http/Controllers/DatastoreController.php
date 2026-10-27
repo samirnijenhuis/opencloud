@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\AttachDatastore;
-use App\Actions\DetachDatastore;
-use App\Actions\SetDefaultDatabase;
-use App\Enums\Ability;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
+use App\Domains\Datastores\Actions\AttachDatastore;
+use App\Domains\Datastores\Actions\DetachDatastore;
+use App\Domains\Datastores\Actions\SetDefaultDatabase;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Enums\Ability;
 use App\Http\Requests\AttachDatastoreRequest;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

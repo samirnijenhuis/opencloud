@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\EnvironmentKind;
-use App\Environments\DefaultDomain;
-use App\Models\Environment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Routing\DefaultDomain;
 use Illuminate\Console\Command;
 
 class AddDefaultDomains extends Command

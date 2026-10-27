@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Caddy;
 
-use App\Caddy\CaddyConfig;
+use App\Domains\Routing\CaddyConfig;
 use PHPUnit\Framework\TestCase;
 
 class CaddyConfigTest extends TestCase

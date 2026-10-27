@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Http;
 
-use App\Models\AuditEvent;
-use App\Models\Process;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Environments\Models\Process;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;

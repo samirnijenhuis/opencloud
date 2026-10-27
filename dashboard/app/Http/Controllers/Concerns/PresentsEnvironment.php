@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Concerns;
 
-use App\Enums\EnvironmentKind;
-use App\Models\Deployment;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
 
 trait PresentsEnvironment
 {

@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\SetEnvironmentColor;
-use App\Environments\EnvironmentColor;
-use App\Models\Environment;
+use App\Domains\Environments\Actions\SetEnvironmentColor;
+use App\Domains\Environments\Enums\EnvironmentColor;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

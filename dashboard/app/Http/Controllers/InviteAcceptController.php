@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\AcceptInvite;
-use App\Models\Invite;
-use App\Models\User;
+use App\Domains\Members\Actions\AcceptInvite;
+use App\Domains\Members\Models\Invite;
+use App\Domains\Members\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;

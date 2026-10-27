@@ -2,10 +2,10 @@
 
 namespace Database\Factories;
 
-use App\Enums\ApplicationType;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Presets\EnvProfileKind;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Enums\EnvProfileKind;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Models\Cluster;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

@@ -2,14 +2,14 @@
 
 namespace Tests\Feature\Actions;
 
-use App\Actions\AddProcess;
-use App\Actions\RemoveProcess;
-use App\Actions\UpdateProcess;
-use App\Models\Application;
-use App\Models\AuditEvent;
-use App\Models\Environment;
-use App\Models\Process;
-use App\Models\User;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Environments\Actions\AddProcess;
+use App\Domains\Environments\Actions\RemoveProcess;
+use App\Domains\Environments\Actions\UpdateProcess;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\Process;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;

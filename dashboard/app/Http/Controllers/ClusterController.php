@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\ConnectCluster;
-use App\Actions\DisconnectCluster;
-use App\Actions\ReinstallClusterParts;
-use App\Clusters\ClusterProvider;
-use App\Clusters\ClusterProviders;
-use App\Enums\ClusterKind;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Actions\ConnectCluster;
+use App\Domains\Clusters\Actions\DisconnectCluster;
+use App\Domains\Clusters\Actions\ReinstallClusterParts;
+use App\Domains\Clusters\ClusterProvider;
+use App\Domains\Clusters\ClusterProviders;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Models\Datastore;
 use App\Http\Requests\ConnectClusterRequest;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Datastore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

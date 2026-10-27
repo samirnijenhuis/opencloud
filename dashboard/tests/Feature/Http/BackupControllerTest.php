@@ -2,19 +2,19 @@
 
 namespace Tests\Feature\Http;
 
-use App\Actions\BackupNow;
-use App\Actions\RestoreBackup;
-use App\Backups\BackupStatus;
-use App\Datastores\DatastoreStatus;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
-use App\Jobs\BackupDatabase;
-use App\Jobs\RestoreDatabase;
-use App\Models\AuditEvent;
-use App\Models\Backup;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Backups\Actions\BackupNow;
+use App\Domains\Backups\Actions\RestoreBackup;
+use App\Domains\Backups\Enums\BackupStatus;
+use App\Domains\Backups\Jobs\BackupDatabase;
+use App\Domains\Backups\Jobs\RestoreDatabase;
+use App\Domains\Backups\Models\Backup;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\Enums\DatastoreStatus;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;

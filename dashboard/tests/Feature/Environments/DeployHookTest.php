@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\Environments;
 
-use App\Actions\DisableDeployHook;
-use App\Actions\EnableDeployHook;
-use App\Actions\RegenerateDeployHook;
-use App\Enums\DeploymentStatus;
-use App\Enums\EnvironmentKind;
-use App\Jobs\RunDeployment;
-use App\Models\AuditEvent;
-use App\Models\Deployment;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Deployments\Actions\DisableDeployHook;
+use App\Domains\Deployments\Actions\EnableDeployHook;
+use App\Domains\Deployments\Actions\RegenerateDeployHook;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Jobs\RunDeployment;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;

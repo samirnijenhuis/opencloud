@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Http;
 
-use App\Actions\DeleteBackupTarget;
-use App\Actions\StoreBackupTarget;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Backups\Actions\DeleteBackupTarget;
+use App\Domains\Backups\Actions\StoreBackupTarget;
+use App\Domains\Backups\Models\BackupTarget;
+use App\Domains\Members\Models\User;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Models\AuditEvent;
-use App\Models\BackupTarget;
-use App\Models\User;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;

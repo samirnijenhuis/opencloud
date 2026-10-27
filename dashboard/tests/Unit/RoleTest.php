@@ -2,8 +2,8 @@
 
 namespace Tests\Unit;
 
-use App\Enums\Ability;
-use App\Enums\Role;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Members\Enums\Role;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

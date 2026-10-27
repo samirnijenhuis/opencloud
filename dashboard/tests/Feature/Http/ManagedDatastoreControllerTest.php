@@ -2,22 +2,22 @@
 
 namespace Tests\Feature\Http;
 
-use App\Clusters\ClusterStatus;
-use App\Datastores\DatastoreStatus;
-use App\Enums\ClusterKind;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
-use App\Enums\EnvVarSource;
-use App\Jobs\ProvisionManagedDatabase;
-use App\Jobs\TearDownManagedDatabase;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
-use App\Models\EnvVar;
-use App\Models\ProviderCredential;
-use App\Models\User;
+use App\Domains\Applications\Models\Application;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\Enums\DatastoreStatus;
+use App\Domains\Datastores\Jobs\ProvisionManagedDatabase;
+use App\Domains\Datastores\Jobs\TearDownManagedDatabase;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;

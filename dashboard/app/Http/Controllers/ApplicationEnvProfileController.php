@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\UpdateApplicationEnvProfile;
+use App\Domains\Applications\Actions\UpdateApplicationEnvProfile;
+use App\Domains\Applications\Enums\EnvProfileKind;
+use App\Domains\Applications\Models\Application;
 use App\Http\Requests\UpdateApplicationEnvProfileRequest;
-use App\Models\Application;
-use App\Presets\EnvProfileKind;
 use Illuminate\Http\RedirectResponse;
 
 class ApplicationEnvProfileController extends Controller

@@ -2,11 +2,11 @@
 
 namespace Tests\Unit\Kube;
 
-use App\Enums\DatastoreKind;
-use App\Kube\Manifests\DatastoreManifests;
-use App\Models\BackupTarget;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
+use App\Domains\Backups\Models\BackupTarget;
+use App\Domains\Datastores\DatastoreManifests;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
 use Tests\TestCase;
 
 class DatastoreManifestsTest extends TestCase

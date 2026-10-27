@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\Ability;
+use App\Domains\Members\Enums\Ability;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RestoreBackupRequest extends FormRequest

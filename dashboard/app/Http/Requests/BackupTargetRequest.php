@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\Ability;
-use App\Models\BackupTarget;
+use App\Domains\Backups\Models\BackupTarget;
+use App\Domains\Members\Enums\Ability;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

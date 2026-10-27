@@ -2,18 +2,18 @@
 
 namespace Tests\Feature\Http;
 
-use App\Actions\AttachDatastore;
-use App\Actions\DetachDatastore;
-use App\Datastores\DatastoreStatus;
-use App\Enums\DatastoreKind;
-use App\Enums\EnvVarSource;
+use App\Domains\Backups\Models\BackupTarget;
+use App\Domains\Datastores\Actions\AttachDatastore;
+use App\Domains\Datastores\Actions\DetachDatastore;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreStatus;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Models\User;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Models\BackupTarget;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
-use App\Models\EnvVar;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;

@@ -2,9 +2,9 @@
 
 namespace App\Http\Middleware;
 
-use App\Enums\Ability;
-use App\Jobs\CheckLatestRelease;
-use App\Models\Application;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Upgrades\Jobs\CheckLatestRelease;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;

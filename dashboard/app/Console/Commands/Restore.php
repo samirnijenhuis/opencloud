@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\RunRestore;
-use App\Restore\RestoreState;
+use App\Domains\Restore\Jobs\RunRestore;
+use App\Domains\Restore\RestoreState;
 use Illuminate\Console\Command;
 
 class Restore extends Command

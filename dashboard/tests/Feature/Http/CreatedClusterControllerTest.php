@@ -2,14 +2,14 @@
 
 namespace Tests\Feature\Http;
 
-use App\Clusters\ClusterStatus;
-use App\Enums\ClusterKind;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Jobs\ProvisionCluster;
+use App\Domains\Clusters\Jobs\TearDownCluster;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Members\Models\User;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Jobs\ProvisionCluster;
-use App\Jobs\TearDownCluster;
-use App\Models\Cluster;
-use App\Models\ProviderCredential;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;

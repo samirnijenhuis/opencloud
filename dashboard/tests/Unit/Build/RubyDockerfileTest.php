@@ -2,10 +2,10 @@
 
 namespace Tests\Unit\Build;
 
-use App\Build\RepositoryDoesNotFit;
-use App\Build\RepositoryFiles;
-use App\Build\RubyDockerfile;
-use App\Build\RubyProject;
+use App\Domains\Builds\Exceptions\RepositoryDoesNotFit;
+use App\Domains\Builds\RepositoryFiles;
+use App\Domains\Builds\RubyDockerfile;
+use App\Domains\Builds\RubyProject;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;

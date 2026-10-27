@@ -2,8 +2,8 @@
 
 namespace Tests\Unit\Build;
 
-use App\Build\NodeProject;
-use App\Build\StaticDockerfile;
+use App\Domains\Builds\NodeProject;
+use App\Domains\Builds\StaticDockerfile;
 use PHPUnit\Framework\TestCase;
 
 class StaticDockerfileTest extends TestCase

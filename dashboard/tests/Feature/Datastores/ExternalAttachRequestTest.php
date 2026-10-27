@@ -2,15 +2,15 @@
 
 namespace Tests\Feature\Datastores;
 
-use App\Enums\ClusterKind;
-use App\Enums\DatastoreSource;
-use App\Kube\FakeKubectl;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
+use App\Support\Kube\FakeKubectl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;

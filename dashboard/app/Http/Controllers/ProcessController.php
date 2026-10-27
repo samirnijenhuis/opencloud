@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\AddProcess;
-use App\Actions\RemoveProcess;
-use App\Actions\UpdateProcess;
-use App\Models\Environment;
-use App\Models\Process;
+use App\Domains\Environments\Actions\AddProcess;
+use App\Domains\Environments\Actions\RemoveProcess;
+use App\Domains\Environments\Actions\UpdateProcess;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\Process;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

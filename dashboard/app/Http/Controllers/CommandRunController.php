@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\RunCommand;
-use App\Enums\Ability;
-use App\Models\CommandRun;
-use App\Models\Environment;
+use App\Domains\Environments\Actions\RunCommand;
+use App\Domains\Environments\Models\CommandRun;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Enums\Ability;
 use App\Support\SecretMasker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;

@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Jobs;
 
-use App\Jobs\BackupDatabase;
-use App\Jobs\ProvisionDatastoreAttachment;
-use App\Jobs\RestoreDatabase;
-use App\Models\Backup;
-use App\Models\DatastoreAttachment;
+use App\Domains\Backups\Jobs\BackupDatabase;
+use App\Domains\Backups\Jobs\RestoreDatabase;
+use App\Domains\Backups\Models\Backup;
+use App\Domains\Datastores\Jobs\ProvisionDatastoreAttachment;
+use App\Domains\Datastores\Models\DatastoreAttachment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

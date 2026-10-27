@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\UpdatePreviewSettings;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Previews\Actions\UpdatePreviewSettings;
 use App\Http\Requests\DomainRequest;
 use App\Http\Requests\StoreApplicationRequest;
-use App\Models\Application;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

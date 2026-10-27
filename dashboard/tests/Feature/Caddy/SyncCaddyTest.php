@@ -2,19 +2,19 @@
 
 namespace Tests\Feature\Caddy;
 
-use App\Clusters\ClusterStatus;
-use App\Domains\DnsStatus;
-use App\Enums\ClusterKind;
-use App\Enums\DeploymentStatus;
-use App\Enums\DnsMode;
-use App\Jobs\SyncCaddy;
-use App\Kube\FakeKubectl;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Deployment;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Models\ProviderCredential;
+use App\Domains\Applications\Models\Application;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Routing\Enums\DnsMode;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Jobs\SyncCaddy;
+use App\Domains\Routing\Models\Domain;
+use App\Support\Kube\FakeKubectl;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;

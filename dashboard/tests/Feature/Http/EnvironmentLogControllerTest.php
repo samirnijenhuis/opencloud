@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Http;
 
-use App\Kube\FakeKubectl;
-use App\Kube\KubectlException;
-use App\Kube\KubectlResult;
-use App\Models\EnvVar;
-use App\Models\User;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Models\User;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\KubectlException;
+use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;

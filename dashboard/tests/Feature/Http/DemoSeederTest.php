@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Http;
 
-use App\Models\Deployment;
-use App\Models\User;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Members\Models\User;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;

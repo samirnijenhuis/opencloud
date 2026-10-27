@@ -2,12 +2,12 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\ApplicationType;
-use App\Enums\EnvVarAvailability;
-use App\Enums\Size;
-use App\Models\Application;
-use App\Models\Process;
-use App\Presets\EnvProfileKind;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Enums\EnvProfileKind;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Environments\Enums\EnvVarAvailability;
+use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Models\Process;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

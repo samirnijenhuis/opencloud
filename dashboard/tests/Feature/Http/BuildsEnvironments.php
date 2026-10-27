@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Http;
 
-use App\Enums\ClusterKind;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Environment;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Environments\Models\Environment;
 
 trait BuildsEnvironments
 {

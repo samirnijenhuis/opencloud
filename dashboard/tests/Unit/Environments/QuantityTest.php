@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Environments;
 
-use App\Environments\Quantity;
+use App\Domains\Environments\Quantity;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\StartDeployment;
-use App\Enums\DeploymentStatus;
+use App\Domains\Deployments\Actions\StartDeployment;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Models\Environment;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
-use App\Models\Deployment;
-use App\Models\Environment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

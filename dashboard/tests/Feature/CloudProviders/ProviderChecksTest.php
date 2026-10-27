@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\CloudProviders;
 
-use App\CloudProviders\CheckStatus;
-use App\CloudProviders\Providers;
+use App\Domains\CloudProviders\Enums\CheckStatus;
+use App\Domains\CloudProviders\Providers;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;

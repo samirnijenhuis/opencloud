@@ -2,12 +2,12 @@
 
 namespace Tests\Feature\Kube;
 
-use App\Enums\ClusterKind;
-use App\Kube\FakeKubectl;
-use App\Kube\Kubectl;
-use App\Kube\KubectlException;
-use App\Kube\KubectlResult;
-use App\Models\Cluster;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\Kubectl;
+use App\Support\Kube\KubectlException;
+use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

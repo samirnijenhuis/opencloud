@@ -2,19 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\CreateApplication;
-use App\Enums\ApplicationType;
-use App\Enums\ClusterKind;
-use App\Enums\EnvironmentKind;
-use App\Enums\Size;
-use App\GitHub\RepositoryName;
+use App\Domains\Applications\Actions\CreateApplication;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Enums\EnvProfileKind;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\GitHub\RepositoryName;
+use App\Domains\Routing\Models\Domain;
 use App\Http\Requests\StoreApplicationRequest;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Deployment;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Presets\EnvProfileKind;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;

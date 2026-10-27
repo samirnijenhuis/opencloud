@@ -2,21 +2,21 @@
 
 namespace Tests\Feature\Environments;
 
-use App\Enums\ApplicationType;
-use App\Enums\ClusterKind;
-use App\Enums\DeploymentStatus;
-use App\Environments\CommandRunStatus;
-use App\Jobs\ExecuteCommandRun;
-use App\Kube\FakeKubectl;
-use App\Kube\KubectlException;
-use App\Kube\KubectlResult;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\CommandRun;
-use App\Models\Deployment;
-use App\Models\Environment;
-use App\Models\EnvVar;
-use App\Models\User;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\CommandRunStatus;
+use App\Domains\Environments\Jobs\ExecuteCommandRun;
+use App\Domains\Environments\Models\CommandRun;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Models\User;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\KubectlException;
+use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;

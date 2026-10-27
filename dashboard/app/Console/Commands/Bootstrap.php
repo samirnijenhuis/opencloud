@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Actions\ReinstallClusterParts;
-use App\Clusters\ClusterStatus;
-use App\Enums\ClusterKind;
-use App\Models\Cluster;
+use App\Domains\Clusters\Actions\ReinstallClusterParts;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Models\Cluster;
 use Illuminate\Console\Command;
 
 class Bootstrap extends Command

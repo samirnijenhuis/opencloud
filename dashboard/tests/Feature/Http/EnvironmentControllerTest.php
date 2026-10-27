@@ -2,17 +2,17 @@
 
 namespace Tests\Feature\Http;
 
-use App\Actions\UpdateEnvironmentSettings;
-use App\Domains\DnsStatus;
-use App\Enums\DeploymentStatus;
-use App\Enums\EnvironmentKind;
-use App\Enums\Size;
-use App\Environments\EnvironmentColor;
-use App\Models\AuditEvent;
-use App\Models\Deployment;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
+use App\Domains\Environments\Enums\EnvironmentColor;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;

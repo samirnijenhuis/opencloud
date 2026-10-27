@@ -2,13 +2,13 @@
 
 namespace App\Http\Requests;
 
-use App\Datastores\Connection;
-use App\Datastores\ExternalConnectionForm;
-use App\Datastores\Provisioners;
-use App\Enums\Ability;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
-use App\Enums\Role;
+use App\Domains\Datastores\Connection;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\ExternalConnectionForm;
+use App\Domains\Datastores\Provisioners;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Members\Enums\Role;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;

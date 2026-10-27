@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Domains;
 
-use App\Domains\CertificateProbe;
+use App\Domains\Routing\CertificateProbe;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

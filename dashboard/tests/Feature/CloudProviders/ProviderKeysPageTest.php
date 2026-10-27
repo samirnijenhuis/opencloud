@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\CloudProviders;
 
-use App\Models\ProviderCredential;
-use App\Models\User;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;

@@ -2,15 +2,15 @@
 
 namespace Tests\Feature\Http;
 
-use App\Clusters\ClusterStatus;
-use App\Enums\ClusterKind;
-use App\Jobs\InstallClusterParts;
-use App\Kube\FakeKubectl;
-use App\Kube\KubectlResult;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\User;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Jobs\InstallClusterParts;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Members\Models\User;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;

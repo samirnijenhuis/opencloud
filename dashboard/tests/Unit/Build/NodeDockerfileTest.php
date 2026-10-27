@@ -2,8 +2,8 @@
 
 namespace Tests\Unit\Build;
 
-use App\Build\NodeDockerfile;
-use App\Build\NodeProject;
+use App\Domains\Builds\NodeDockerfile;
+use App\Domains\Builds\NodeProject;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;

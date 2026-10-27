@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\DisableDeployHook;
-use App\Actions\EnableDeployHook;
-use App\Actions\RegenerateDeployHook;
-use App\Actions\TriggerDeployHook;
-use App\Environments\DeployHook;
-use App\Models\Environment;
+use App\Domains\Deployments\Actions\DisableDeployHook;
+use App\Domains\Deployments\Actions\EnableDeployHook;
+use App\Domains\Deployments\Actions\RegenerateDeployHook;
+use App\Domains\Deployments\Actions\TriggerDeployHook;
+use App\Domains\Deployments\DeployHook;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;

@@ -2,21 +2,21 @@
 
 namespace Tests\Feature\Http;
 
-use App\Datastores\AttachmentEnv;
-use App\Enums\ApplicationType;
-use App\Enums\ClusterKind;
-use App\Enums\DatastoreKind;
-use App\Enums\EnvironmentKind;
-use App\Enums\EnvVarSource;
-use App\Models\Application;
-use App\Models\AuditEvent;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
-use App\Models\EnvVar;
-use App\Models\User;
-use App\Presets\EnvProfileKind;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Enums\EnvProfileKind;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\AttachmentEnv;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;

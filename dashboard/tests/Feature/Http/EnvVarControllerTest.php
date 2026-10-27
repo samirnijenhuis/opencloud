@@ -2,14 +2,14 @@
 
 namespace Tests\Feature\Http;
 
-use App\Actions\DeleteEnvVar;
-use App\Actions\SetEnvVar;
-use App\Enums\EnvVarAvailability;
-use App\Enums\EnvVarSource;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Environments\Actions\DeleteEnvVar;
+use App\Domains\Environments\Actions\SetEnvVar;
+use App\Domains\Environments\Enums\EnvVarAvailability;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Models\User;
 use App\Http\Middleware\HandleInertiaRequests;
-use App\Models\AuditEvent;
-use App\Models\EnvVar;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;

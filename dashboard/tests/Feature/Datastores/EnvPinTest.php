@@ -2,21 +2,21 @@
 
 namespace Tests\Feature\Datastores;
 
-use App\Datastores\AttachmentEnv;
-use App\Datastores\BucketConnection;
-use App\Datastores\KeyValueConnection;
-use App\Datastores\Provisioners;
-use App\Datastores\SqlConnection;
-use App\Deploy\EnvironmentVariables;
-use App\Enums\ClusterKind;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
-use App\Models\EnvVar;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\AttachmentEnv;
+use App\Domains\Datastores\BucketConnection;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\KeyValueConnection;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Datastores\Provisioners;
+use App\Domains\Datastores\SqlConnection;
+use App\Domains\Deployments\EnvironmentVariables;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

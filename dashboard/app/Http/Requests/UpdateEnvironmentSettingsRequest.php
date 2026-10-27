@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Actions\UpdateEnvironmentSettings;
-use App\Enums\Size;
+use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
+use App\Domains\Environments\Enums\Size;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

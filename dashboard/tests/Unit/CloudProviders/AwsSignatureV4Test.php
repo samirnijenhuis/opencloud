@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\CloudProviders;
 
-use App\CloudProviders\AwsSignatureV4;
+use App\Domains\CloudProviders\AwsSignatureV4;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 

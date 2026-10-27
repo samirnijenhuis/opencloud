@@ -2,20 +2,20 @@
 
 namespace Tests\Feature\Deploy;
 
-use App\Datastores\AttachmentEnv;
-use App\Deploy\EnvironmentVariables;
-use App\Enums\ApplicationType;
-use App\Enums\DatastoreKind;
-use App\Enums\EnvVarAvailability;
-use App\Enums\EnvVarSource;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Models\EnvVar;
-use App\Presets\EnvProfileKind;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Enums\EnvProfileKind;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\AttachmentEnv;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Deployments\EnvironmentVariables;
+use App\Domains\Environments\Enums\EnvVarAvailability;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;

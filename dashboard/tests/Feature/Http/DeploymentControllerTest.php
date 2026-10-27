@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Http;
 
-use App\Actions\StartDeployment;
-use App\Enums\DeploymentStatus;
-use App\Jobs\RunDeployment;
-use App\Models\Deployment;
-use App\Models\User;
+use App\Domains\Deployments\Actions\StartDeployment;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Jobs\RunDeployment;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;

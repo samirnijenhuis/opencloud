@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Jobs;
 
-use App\Enums\DeploymentStatus;
-use App\Jobs\FailStuckDeployments;
-use App\Models\Deployment;
-use App\Models\Environment;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Jobs\FailStuckDeployments;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;

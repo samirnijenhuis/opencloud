@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Enums\DeploymentStatus as Status;
+use App\Domains\Deployments\Enums\DeploymentStatus as Status;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

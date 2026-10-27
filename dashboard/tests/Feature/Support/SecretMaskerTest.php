@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Support;
 
-use App\Enums\EnvVarSource;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
-use App\Models\EnvVar;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
 use App\Support\SecretMasker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;

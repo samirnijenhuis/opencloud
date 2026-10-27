@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\EnvVarAvailability;
-use App\Enums\EnvVarSource;
-use App\Models\Environment;
+use App\Domains\Environments\Enums\EnvVarAvailability;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

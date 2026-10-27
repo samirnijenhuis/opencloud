@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\Jobs;
 
-use App\Domains\CertificateProbe;
-use App\Domains\DnsStatus;
-use App\Jobs\CheckCertificates;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Domain;
-use App\Models\Environment;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Routing\CertificateProbe;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Jobs\CheckCertificates;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

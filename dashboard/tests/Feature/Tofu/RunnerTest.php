@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Tofu;
 
-use App\Models\Cluster;
-use App\Tofu\Runner;
-use App\Tofu\Stack;
+use App\Domains\Clusters\Models\Cluster;
+use App\Support\Tofu\Runner;
+use App\Support\Tofu\Stack;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Sleep;

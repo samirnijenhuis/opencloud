@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\Http;
 
-use App\Actions\AddDomain;
-use App\Actions\RemoveDomain;
-use App\Domains\DnsStatus;
-use App\Jobs\CheckDomain;
-use App\Jobs\SyncCaddy;
-use App\Models\Domain;
-use App\Models\User;
+use App\Domains\Members\Models\User;
+use App\Domains\Routing\Actions\AddDomain;
+use App\Domains\Routing\Actions\RemoveDomain;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Jobs\CheckDomain;
+use App\Domains\Routing\Jobs\SyncCaddy;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;

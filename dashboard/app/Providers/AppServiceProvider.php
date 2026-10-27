@@ -2,9 +2,9 @@
 
 namespace App\Providers;
 
-use App\Models\DashboardDomain;
-use App\Models\Deployment;
-use App\Observers\DeploymentObserver;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Previews\Observers\DeploymentObserver;
+use App\Domains\Routing\Models\DashboardDomain;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider

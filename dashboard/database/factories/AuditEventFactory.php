@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\AuditEvent;
+use App\Domains\Audit\Models\AuditEvent;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

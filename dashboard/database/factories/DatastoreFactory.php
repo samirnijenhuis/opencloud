@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Enums\DatastoreKind;
-use App\Models\Cluster;
-use App\Models\Datastore;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

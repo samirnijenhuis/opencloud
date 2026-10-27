@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Migrations;
 
-use App\Enums\ApplicationType;
-use App\Enums\EnvironmentKind;
-use App\Models\Application;
-use App\Models\Environment;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;

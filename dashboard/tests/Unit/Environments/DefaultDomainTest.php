@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Environments;
 
-use App\Environments\DefaultDomain;
+use App\Domains\Routing\DefaultDomain;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

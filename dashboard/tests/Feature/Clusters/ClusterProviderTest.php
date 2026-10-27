@@ -2,19 +2,19 @@
 
 namespace Tests\Feature\Clusters;
 
-use App\Clusters\ClusterProvider;
-use App\Clusters\ClusterProviders;
-use App\Clusters\ClusterStatus;
-use App\Clusters\DigitalOceanCluster;
-use App\Enums\ClusterKind;
-use App\Jobs\InstallClusterParts;
-use App\Jobs\ProvisionCluster;
-use App\Jobs\TearDownCluster;
-use App\Models\Cluster;
-use App\Models\ProviderCredential;
-use App\Models\User;
-use App\Tofu\Runner;
-use App\Tofu\Stack;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\Clusters\ClusterProvider;
+use App\Domains\Clusters\ClusterProviders;
+use App\Domains\Clusters\DigitalOceanCluster;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Jobs\InstallClusterParts;
+use App\Domains\Clusters\Jobs\ProvisionCluster;
+use App\Domains\Clusters\Jobs\TearDownCluster;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Members\Models\User;
+use App\Support\Tofu\Runner;
+use App\Support\Tofu\Stack;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;

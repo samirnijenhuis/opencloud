@@ -2,13 +2,13 @@
 
 namespace Tests\Feature\GitHub;
 
-use App\Build\Git;
-use App\Enums\DeploymentStatus;
-use App\Jobs\RunDeployment;
-use App\Kube\FakeKubectl;
-use App\Models\Application;
-use App\Models\Deployment;
-use App\Models\Environment;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Builds\Git;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Jobs\RunDeployment;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Models\Environment;
+use App\Support\Kube\FakeKubectl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Carbon;

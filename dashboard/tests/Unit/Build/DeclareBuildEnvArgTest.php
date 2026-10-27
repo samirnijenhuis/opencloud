@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Build;
 
-use App\Build\Builder;
+use App\Domains\Builds\Builder;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

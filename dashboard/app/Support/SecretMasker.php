@@ -2,8 +2,8 @@
 
 namespace App\Support;
 
-use App\Models\Environment;
-use App\Models\EnvVar;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
 
 final readonly class SecretMasker
 {

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Restore;
 
-use App\Restore\RestoreState;
+use App\Domains\Restore\RestoreState;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Encryption\Encrypter;
 use Illuminate\Support\Carbon;

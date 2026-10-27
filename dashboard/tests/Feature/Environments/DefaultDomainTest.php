@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\Environments;
 
-use App\Actions\CreateApplication;
-use App\Enums\ClusterKind;
-use App\Enums\EnvironmentKind;
-use App\Jobs\CheckDomain;
-use App\Models\Application;
-use App\Models\AuditEvent;
-use App\Models\Cluster;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Applications\Actions\CreateApplication;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
+use App\Domains\Routing\Jobs\CheckDomain;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;

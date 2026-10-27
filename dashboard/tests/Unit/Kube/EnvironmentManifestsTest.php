@@ -2,17 +2,17 @@
 
 namespace Tests\Unit\Kube;
 
-use App\Clusters\ClusterRegistry;
-use App\Enums\ApplicationType;
-use App\Enums\ClusterKind;
-use App\Enums\Size;
-use App\Kube\Manifests\EnvironmentManifests;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Deployment;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Models\Process;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\ClusterRegistry;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Deployments\EnvironmentManifests;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\Process;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Database\Eloquent\Collection;
 use PHPUnit\Framework\TestCase;
 use stdClass;

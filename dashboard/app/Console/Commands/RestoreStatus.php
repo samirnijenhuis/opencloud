@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Deployment;
-use App\Restore\RestoreState;
-use App\Restore\RestoreStep;
-use App\Restore\StepStatus;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Restore\Enums\RestoreStep;
+use App\Domains\Restore\Enums\StepStatus;
+use App\Domains\Restore\RestoreState;
 use Illuminate\Console\Command;
 
 class RestoreStatus extends Command

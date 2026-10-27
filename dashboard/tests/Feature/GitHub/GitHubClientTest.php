@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\GitHub;
 
-use App\GitHub\AppJwt;
-use App\GitHub\GitHubClient;
-use App\GitHub\RepositoryName;
+use App\Domains\GitHub\AppJwt;
+use App\Domains\GitHub\GitHubClient;
+use App\Domains\GitHub\RepositoryName;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;

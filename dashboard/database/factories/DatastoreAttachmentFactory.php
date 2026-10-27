@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Models\Datastore;
-use App\Models\DatastoreAttachment;
-use App\Models\Environment;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

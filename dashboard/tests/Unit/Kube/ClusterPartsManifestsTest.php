@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Kube;
 
-use App\Kube\Manifests\ClusterPartsManifests;
+use App\Domains\Clusters\ClusterPartsManifests;
 use PHPUnit\Framework\TestCase;
 
 class ClusterPartsManifestsTest extends TestCase
