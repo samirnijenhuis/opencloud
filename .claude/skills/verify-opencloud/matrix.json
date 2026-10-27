@@ -69,6 +69,18 @@
       "build_command": {},
       "deploy_commands": { "always": ["node deploy.js {cell}"] },
       "env": {}
+    },
+    "site": {
+      "branch": "site",
+      "type": "static",
+      "env_profile": "generic",
+      "verify_path": "/verify.json",
+      "checks": ["build"],
+      "databases": ["none"],
+      "caches": ["none"],
+      "build_command": {},
+      "deploy_commands": { "always": ["echo deploy-marker-{cell}"] },
+      "env": {}
     }
   },
   "sets": {
@@ -81,7 +93,8 @@
       "laravel-postgres-valkey",
       "laravel-sqlite-valkey",
       "laravel-mysqlpostgres-none",
-      "node-postgres-valkey"
+      "node-postgres-valkey",
+      "site-none-none"
     ]
   }
 }
