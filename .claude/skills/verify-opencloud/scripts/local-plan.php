@@ -1,8 +1,9 @@
 <?php
 
 // matrix.py local runs this. It asks the dashboard code of this checkout what a deploy of one cell gets: the Dockerfile
-// that Builder::prepare() writes into the app folder, the port, the env values of the preset and of each attachment,
-// and the datastore versions. So a local run builds and starts the app the way the cluster does.
+// that Builder::prepare() writes into the app folder, the key of the build values, the port, the env values of the
+// preset and of each attachment, and the datastore versions. So a local run builds and starts the app the way the
+// cluster does. A fixed key would let BuildKit reuse a layer that read the build values of another cell.
 
 use App\Build\Builder;
 use App\Datastores\KeyValueConnection;
@@ -23,7 +24,7 @@ $type = ApplicationType::from($input['type']);
 $profile = EnvProfileKind::from($input['env_profile'])->profile();
 $port = $type->choosesPort() ? ($input['port'] ?? $type->defaultPort()) : $type->defaultPort();
 $dockerfile = (new ReflectionMethod(Builder::class, 'prepare'))
-    ->invoke(new Builder, $type, $input['dir'], $input['build_secrets'], $input['build_command']);
+    ->invoke(new Builder, $type, $input['dir'], array_keys($input['build_env']), $input['build_command']);
 
 $env = $type->systemEnv($port, null);
 
@@ -39,6 +40,7 @@ foreach ($input['attachments'] as $a) {
 
 echo json_encode([
     'dockerfile' => $dockerfile,
+    'build_env_key' => Builder::buildEnvKey($input['build_env']),
     'port' => $port,
     'env' => [...$env, ...$type->generatedSecrets()],
     'versions' => DatastoreManifests::VERSIONS,

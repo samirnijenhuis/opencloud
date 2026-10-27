@@ -465,20 +465,20 @@ class LocalRun(CellRun):
         return found
 
     def drive(self):
-        cell, attachments = self.cell, self.attachments()
+        cell, attachments, build_env = self.cell, self.attachments(), {'VERIFY_BUILD': self.cell.id}
         with tempfile.TemporaryDirectory(prefix=f'{self.name}-') as work:
             app = Path(work) / 'app'
             fixture_tree(cell.fixture_name, cell.fixture, app)
             planned = subprocess.run(['php', str(SKILL / 'scripts' / 'local-plan.php'), json.dumps({
                 'dashboard': str(ROOT / 'dashboard'), 'dir': str(app), 'type': cell.fixture['type'], 'env_profile': cell.fixture['env_profile'],
-                'port': cell.fixture.get('port'), 'build_secrets': ['VERIFY_BUILD'], 'build_command': cell.fill(cell.pick('build_command')),
+                'port': cell.fixture.get('port'), 'build_env': build_env, 'build_command': cell.fill(cell.pick('build_command')),
                 'attachments': attachments,
             })], capture_output=True, text=True)
             if planned.returncode != 0:
                 raise RuntimeError(f'local-plan.php failed: {planned.stdout}{planned.stderr}')
             plan = json.loads(planned.stdout)
-            build = docker('build', '--progress=plain', '-f', str(app / plan['dockerfile']), '--build-arg', 'OPENCLOUD_BUILD_ENV=local',
-                           '--secret', 'id=VERIFY_BUILD,env=VERIFY_BUILD', '-t', self.name, str(app), env={'VERIFY_BUILD': cell.id})
+            build = docker('build', '--progress=plain', '-f', str(app / plan['dockerfile']), '--build-arg', f"OPENCLOUD_BUILD_ENV={plan['build_env_key']}",
+                           '--secret', 'id=VERIFY_BUILD,env=VERIFY_BUILD', '-t', self.name, str(app), env=build_env)
         self.save('build.log', build.stdout + build.stderr)
         if not self.check('the image builds with the Dockerfile of the preset', build.returncode == 0, f"{plan['dockerfile']}, see build.log"):
             print('\n'.join((build.stdout + build.stderr).splitlines()[-30:]))
