@@ -1,0 +1,19 @@
+{
+  "build_env_key": "9a1974041b367d6a3fb152b9cca42d013a1aac7566a241d455ff3465dfc6406d",
+  "dockerfile": ".opencloud.Dockerfile",
+  "env": {
+    "APP_DEBUG": "false",
+    "APP_ENV": "production",
+    "DATABASE_URL": "mysql://u:p@db:3306/app",
+    "LOG_CHANNEL": "stderr",
+    "REDIS_URL": "redis://:x@kv:6379",
+    "REPORTS_DATABASE_URL": "postgresql://u:p@pg:5432/r"
+  },
+  "port": 8080,
+  "versions": {
+    "mysql": "8.4",
+    "postgres": "17",
+    "rustfs": "1.0.3",
+    "valkey": "9.1"
+  }
+}
