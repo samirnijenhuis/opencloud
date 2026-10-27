@@ -33,6 +33,7 @@ use App\Support\SecretMasker;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Queue\Console\RestartCommand;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Validation\ValidationException;
@@ -300,7 +301,7 @@ final class RestoreInstall
 
             if ($wasVerified) {
                 // Workers read the root URL when they boot, and the old domain still points at the lost server.
-                Artisan::call('queue:restart');
+                Artisan::call(RestartCommand::class);
             }
         }
 

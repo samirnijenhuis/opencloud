@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Database;
+namespace Tests\Database\Seeders;
 
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Members\Models\User;

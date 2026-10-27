@@ -6,6 +6,7 @@ use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Jobs\SyncCaddy;
 use App\Domains\Routing\Models\DashboardDomain;
+use Illuminate\Queue\Console\RestartCommand;
 use Illuminate\Support\Facades\Artisan;
 
 class RemoveDashboardDomain
@@ -21,6 +22,6 @@ class RemoveDashboardDomain
         }
 
         // Workers read the root URL when they boot, so they restart to drop the old address.
-        Artisan::call('queue:restart');
+        Artisan::call(RestartCommand::class);
     }
 }

@@ -7,6 +7,7 @@ use App\Domains\Routing\Enums\DnsStatus;
 use App\Domains\Routing\Models\DashboardDomain;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Console\RestartCommand;
 use Illuminate\Support\Facades\Artisan;
 
 /**
@@ -37,7 +38,7 @@ class CheckDashboardDomain implements ShouldQueue
             }
 
             // Workers read the root URL when they boot, so they restart to pick up the new address.
-            Artisan::call('queue:restart');
+            Artisan::call(RestartCommand::class);
 
             return;
         }
