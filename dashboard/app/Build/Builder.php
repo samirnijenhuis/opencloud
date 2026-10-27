@@ -111,7 +111,7 @@ final class Builder
                 self::laravelComposer($dir), self::readJson("{$dir}/package.json"), $secrets, $buildCommand,
             )),
             ApplicationType::Node => self::generate($dir, self::NODE_IGNORE, NodeDockerfile::render(
-                self::nodeProject($dir) ?? throw new RuntimeException('The application uses the Node.js preset, but the repository has no package.json at its root.'),
+                self::nodeProject($dir) ?? throw new RepositoryDoesNotFit('The application uses the Node.js preset, but the repository has no package.json at its root.'),
                 $secrets,
                 $buildCommand,
             )),
@@ -139,14 +139,14 @@ final class Builder
     /**
      * @return array<string, mixed>
      *
-     * @throws RuntimeException when composer.json does not require laravel/framework
+     * @throws RepositoryDoesNotFit when composer.json does not require laravel/framework
      */
     private static function laravelComposer(string $dir): array
     {
         $composer = self::readJson("{$dir}/composer.json");
 
         if (! isset($composer['require']['laravel/framework'])) {
-            throw new RuntimeException('The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.');
+            throw new RepositoryDoesNotFit('The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.');
         }
 
         return $composer;
@@ -155,12 +155,12 @@ final class Builder
     /**
      * @param  list<string>  $secrets
      *
-     * @throws RuntimeException when the repository has no Dockerfile
+     * @throws RepositoryDoesNotFit when the repository has no Dockerfile
      */
     private static function repositoryDockerfile(string $dir, array $secrets): string
     {
         if (! is_file("{$dir}/Dockerfile")) {
-            throw new RuntimeException('The application uses the Dockerfile preset, but the repository has no Dockerfile at its root.');
+            throw new RepositoryDoesNotFit('The application uses the Dockerfile preset, but the repository has no Dockerfile at its root.');
         }
 
         if ($secrets === []) {

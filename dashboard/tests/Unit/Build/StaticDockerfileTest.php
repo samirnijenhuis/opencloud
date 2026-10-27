@@ -52,7 +52,7 @@ class StaticDockerfileTest extends TestCase
             COPY . .
             RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn --mount=type=secret,id=VITE_API,env=VITE_API npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile && pnpm run build
             # The site is the first of these folders that the build makes. A trailing /. follows a symlink, for example the dist of Nuxt.
-            RUN for dir in dist build out _site public; do if [ -d "$dir" ]; then mkdir /site && cp -R "$dir/." /site && exit 0; fi; done; echo 'opencloud: the build made no dist, build, out, _site, or public folder.' >&2; exit 1
+            RUN for dir in dist build out _site public; do if [ -d "$dir" ]; then mkdir /site && cp -R "$dir/." /site && exit 0; fi; done; echo 'opencloud: the build made no dist, build, out, _site, or public folder. To use another preset, create a new application with the same repository.' >&2; exit 1
 
 
             DOCKERFILE.self::NGINX."COPY --from=build /site /site\nEXPOSE 8080\n", StaticDockerfile::render($project, ['VITE_API']));

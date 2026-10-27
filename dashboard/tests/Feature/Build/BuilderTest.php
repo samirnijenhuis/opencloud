@@ -169,27 +169,27 @@ class BuilderTest extends TestCase
             'laravel without laravel/framework' => [
                 ApplicationType::Laravel,
                 ['composer.json' => '{"require":{"symfony/console":"^7"}}', 'Dockerfile' => "FROM php:8.4-cli\n"],
-                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.',
+                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework. To use another preset, create a new application with the same repository.',
             ],
             'laravel without composer.json' => [
                 ApplicationType::Laravel,
                 ['Dockerfile' => "FROM nginx:alpine\n"],
-                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework.',
+                'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework. To use another preset, create a new application with the same repository.',
             ],
             'node without package.json' => [
                 ApplicationType::Node,
                 ['Dockerfile' => "FROM node:24\n"],
-                'The application uses the Node.js preset, but the repository has no package.json at its root.',
+                'The application uses the Node.js preset, but the repository has no package.json at its root. To use another preset, create a new application with the same repository.',
             ],
             'node without a way to start' => [
                 ApplicationType::Node,
                 ['package.json' => '{"scripts":{"build":"tsc"}}'],
-                'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script.',
+                'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script. To use another preset, create a new application with the same repository.',
             ],
             'dockerfile without a Dockerfile' => [
                 ApplicationType::Dockerfile,
                 ['composer.json' => '{"require":{"laravel/framework":"^12.0"}}'],
-                'The application uses the Dockerfile preset, but the repository has no Dockerfile at its root.',
+                'The application uses the Dockerfile preset, but the repository has no Dockerfile at its root. To use another preset, create a new application with the same repository.',
             ],
         ];
     }

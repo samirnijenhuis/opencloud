@@ -91,7 +91,7 @@ class NodeDockerfileTest extends TestCase
         return [
             'no start script and no main' => [
                 ['scripts' => ['build' => 'tsc']],
-                'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script.',
+                'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script. To use another preset, create a new application with the same repository.',
             ],
             'a node version without an image' => [
                 ['engines' => ['node' => '14.x'], 'scripts' => ['start' => 'node server.js']],
