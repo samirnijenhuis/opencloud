@@ -16,6 +16,7 @@ import { DeploymentBadge, isRunning } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePoll } from '@/hooks/use-poll';
+import { useReloadWhileRunning } from '@/hooks/use-reload-while-running';
 import EnvironmentLayout from '@/layouts/environment-layout';
 import { duration, memoryText, shortSha, sizeLabel, sizeText, timeAgo, vcpu } from '@/lib/format';
 import { kindLabels as clusterKindLabels } from '@/pages/clusters/cluster-status';
@@ -217,6 +218,7 @@ export default function EnvironmentShow(props: CanvasProps) {
     const hasPods = environment.kind !== 'preview_template';
     const [status] = usePoll<LiveStatus>(hasPods ? route('environments.status', environment.id) : null, 10_000);
     const [capacity] = usePoll<Capacity>(route('clusters.capacity', cluster.id), 30_000);
+    useReloadWhileRunning(isRunning(environment.status), ['deployments', 'environment']);
 
     useEffect(() => {
         if (!datastores.polling) return;

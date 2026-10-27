@@ -11,6 +11,12 @@ enum DeploymentStatus: string
     case FAILED = 'failed';
     case SUPERSEDED = 'superseded';
 
+    /** A deployment runs from the queue until it is live or failed. The page polls while it runs. */
+    public function isRunning(): bool
+    {
+        return in_array($this, [self::QUEUED, self::BUILDING, self::DEPLOYING], true);
+    }
+
     public function canMoveTo(self $next): bool
     {
         $allowed = match ($this) {

@@ -1,11 +1,13 @@
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
+import { useReloadWhileRunning } from '@/hooks/use-reload-while-running';
 import EnvironmentLayout from '@/layouts/environment-layout';
 import { duration, shortSha, timeAgo } from '@/lib/format';
 import { type Deployment, type EnvironmentPageProps } from '@/types';
 import { Link } from '@inertiajs/react';
 
 export default function EnvironmentDeployments(props: EnvironmentPageProps & { deployments: Deployment[] }) {
-    const { deployments } = props;
+    const { deployments, environment } = props;
+    useReloadWhileRunning(isRunning(environment.status), ['deployments', 'environment']);
 
     return (
         <EnvironmentLayout page={props} tab="deployments" title="Deployments">

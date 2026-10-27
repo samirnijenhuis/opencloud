@@ -45,6 +45,13 @@ class DeploymentStatusTest extends TestCase
         $this->assertFalse(Status::SUPERSEDED->canMoveTo(Status::LIVE));
     }
 
+    public function test_a_deployment_runs_from_the_queue_until_it_is_live_or_failed(): void
+    {
+        $running = array_filter(Status::cases(), fn (Status $status) => $status->isRunning());
+
+        $this->assertSame([Status::QUEUED, Status::BUILDING, Status::DEPLOYING], array_values($running));
+    }
+
     public function test_a_deployment_cannot_skip_a_step(): void
     {
         $this->assertFalse(Status::QUEUED->canMoveTo(Status::LIVE));
