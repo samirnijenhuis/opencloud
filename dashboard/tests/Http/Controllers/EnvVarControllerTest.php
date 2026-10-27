@@ -3,6 +3,9 @@
 namespace Tests\Http\Controllers;
 
 use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Actions\DeleteEnvVar;
 use App\Domains\Environments\Actions\SetEnvVar;
 use App\Domains\Environments\Enums\EnvVarAvailability;
@@ -38,12 +41,36 @@ class EnvVarControllerTest extends TestCase
         $response->assertInertia(fn (Assert $page) => $page
             ->component('environments/settings')
             ->has('envVars', 4)
-            ->where('envVars.0', ['id' => $environment->envVars()->where('key', 'APP_ENV')->value('id'), 'key' => 'APP_ENV', 'source' => 'user', 'is_secret' => false, 'available_at' => 'runtime', 'value' => 'production'])
+            ->where('envVars.0', ['id' => $environment->envVars()->where('key', 'APP_ENV')->value('id'), 'key' => 'APP_ENV', 'source' => 'user', 'is_secret' => false, 'available_at' => 'runtime', 'resource' => null, 'value' => 'production'])
             ->where('envVars.3.key', 'STRIPE_SECRET')
             ->where('envVars.3.value', null)
             ->where('envVars.3.is_secret', true)
             ->where('envVars.1.source', 'datastore')
             ->where('envVars.1.value', null));
+    }
+
+    public function test_a_resource_value_names_the_resource_that_owns_it(): void
+    {
+        $environment = $this->makeEnvironment();
+        $cluster = $this->makeCluster();
+        $postgres = DatastoreAttachment::factory()->create([
+            'datastore_id' => Datastore::factory()->create(['cluster_id' => $cluster->id, 'kind' => DatastoreKind::POSTGRES])->id,
+            'environment_id' => $environment->id,
+            'name' => 'main',
+        ]);
+        $valkey = DatastoreAttachment::factory()->create([
+            'datastore_id' => Datastore::factory()->create(['cluster_id' => $cluster->id, 'kind' => DatastoreKind::VALKEY])->id,
+            'environment_id' => $environment->id,
+            'name' => null,
+        ]);
+        EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'source' => EnvVarSource::DATASTORE, 'datastore_attachment_id' => $postgres->id]);
+        EnvVar::factory()->for($environment)->create(['key' => 'REDIS_HOST', 'source' => EnvVarSource::DATASTORE, 'datastore_attachment_id' => $valkey->id]);
+        EnvVar::factory()->for($environment)->create(['key' => 'APP_ENV', 'value' => 'production']);
+
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/settings")->assertInertia(fn (Assert $page) => $page
+            ->where('envVars.0.resource', null)
+            ->where('envVars.1.resource', 'Postgres main')
+            ->where('envVars.2.resource', 'Valkey'));
     }
 
     public function test_the_inertia_json_response_never_contains_the_secret_either(): void

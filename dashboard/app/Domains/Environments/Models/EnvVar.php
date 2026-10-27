@@ -2,6 +2,7 @@
 
 namespace App\Domains\Environments\Models;
 
+use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
 use Database\Factories\EnvVarFactory;
@@ -53,5 +54,11 @@ class EnvVar extends Model
     public function environment(): BelongsTo
     {
         return $this->belongsTo(Environment::class);
+    }
+
+    /** @return BelongsTo<DatastoreAttachment, $this> */
+    public function datastoreAttachment(): BelongsTo
+    {
+        return $this->belongsTo(DatastoreAttachment::class);
     }
 }
