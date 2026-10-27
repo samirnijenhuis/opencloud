@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\ReadLogs;
-use App\Enums\Ability;
+use App\Domains\Environments\Actions\ReadLogs;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Enums\Ability;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
-use App\Kube\KubectlException;
-use App\Models\Environment;
+use App\Support\Kube\KubectlException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -37,7 +37,7 @@ class EnvironmentLogController extends Controller
         $validated = $request->validate(['process' => ['required', 'string', Rule::in($environment->processNames())]]);
 
         try {
-            return response()->json(['log' => $readLogs->handle($environment, $validated['process']), 'error' => null]);
+            return response()->json(['log' => $readLogs->execute($environment, $validated['process']), 'error' => null]);
         } catch (KubectlException) {
             return response()->json(['log' => '', 'error' => 'The logs are not available yet. Deploy the environment first.']);
         }
@@ -45,6 +45,6 @@ class EnvironmentLogController extends Controller
 
     private function authorizeLogs(Request $request): void
     {
-        abort_unless($request->user()->role->allows(Ability::ReadLogs), 403);
+        abort_unless($request->user()->role->allows(Ability::READ_LOGS), 403);
     }
 }

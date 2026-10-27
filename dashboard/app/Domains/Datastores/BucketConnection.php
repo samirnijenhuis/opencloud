@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Domains\Datastores;
+
+use App\Domains\Datastores\Env\EnvProfile;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+
+/**
+ * One S3-compatible bucket (RustFS today) as the app reaches it. An environment has at most one, so it has no name.
+ */
+final readonly class BucketConnection implements Connection
+{
+    /**
+     * @param  string  $endpoint  scheme, host, and port, for example http://rustfs-6.oc-datastores.svc.cluster.local:9000
+     * @param  string  $region  the region that the SDK signs with. RustFS ignores it.
+     * @param  bool  $pathStyle  true when the bucket goes in the path. A bucket host name in the cluster does not resolve.
+     */
+    public function __construct(
+        public string $endpoint,
+        public string $region,
+        public string $bucket,
+        public string $accessKeyId,
+        public string $secretAccessKey,
+        public bool $pathStyle,
+    ) {}
+
+    /**
+     * A managed or external bucket keeps its address on the attachment: the endpoint in host, the bucket in
+     * database_name, and the key in username and password. A managed one has none before its apply. S3 SDKs need a
+     * region to sign, and most S3-compatible servers ignore it, so us-east-1 stands in when none is stored.
+     */
+    public static function of(DatastoreAttachment $attachment): ?self
+    {
+        if ($attachment->host === null) {
+            return null;
+        }
+
+        return new self($attachment->host, $attachment->region ?? 'us-east-1', $attachment->database_name, $attachment->username, $attachment->password, $attachment->path_style);
+    }
+
+    public function envFor(EnvProfile $profile): array
+    {
+        return $profile->bucket($this);
+    }
+}

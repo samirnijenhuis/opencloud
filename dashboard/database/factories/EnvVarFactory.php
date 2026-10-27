@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Environment;
-use App\Models\EnvVar;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

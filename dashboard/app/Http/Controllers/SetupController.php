@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\CreateOwner;
-use App\Models\User;
+use App\Domains\Members\Actions\CreateOwner;
+use App\Domains\Members\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,7 +23,7 @@ class SetupController extends Controller
     {
         $this->ensureSetupIsOpen($token);
 
-        $owner = $createOwner->handle($request->validate(User::newAccountRules()));
+        $owner = $createOwner->execute($request->validate(User::newAccountRules()));
 
         Auth::login($owner);
         $request->session()->regenerate();

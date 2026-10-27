@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\CreateCluster;
-use App\Actions\DestroyCluster;
-use App\Clusters\ClusterProviders;
+use App\Domains\Clusters\Actions\CreateCluster;
+use App\Domains\Clusters\Actions\DestroyCluster;
+use App\Domains\Clusters\ClusterProviders;
+use App\Domains\Clusters\Models\Cluster;
 use App\Http\Requests\CreateClusterRequest;
-use App\Models\Cluster;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -39,7 +39,7 @@ class CreatedClusterController extends Controller
 
     public function store(CreateClusterRequest $request, CreateCluster $createCluster): RedirectResponse
     {
-        $cluster = $createCluster->handle($request->user(), $request->provider(), $request->cluster());
+        $cluster = $createCluster->execute($request->user(), $request->provider(), $request->cluster());
 
         return to_route('clusters.show', $cluster);
     }
@@ -53,7 +53,7 @@ class CreatedClusterController extends Controller
             ['confirm.required' => 'Type the name of the cluster to confirm.', 'confirm.in' => 'Type the name of the cluster to confirm.'],
         );
 
-        $destroyCluster->handle($cluster, $request->user());
+        $destroyCluster->execute($cluster, $request->user());
 
         return to_route('clusters.show', $cluster);
     }

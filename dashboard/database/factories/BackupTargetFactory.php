@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\BackupTarget;
+use App\Domains\Backups\Models\BackupTarget;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

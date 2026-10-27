@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\BackupNow;
-use App\Actions\RestoreBackup;
+use App\Domains\Backups\Actions\BackupNow;
+use App\Domains\Backups\Actions\RestoreBackup;
+use App\Domains\Backups\Models\Backup;
+use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Http\Requests\RestoreBackupRequest;
-use App\Models\Backup;
-use App\Models\DatastoreAttachment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -19,7 +19,7 @@ class BackupController extends Controller
         Gate::authorize('update', $attachment->environment);
 
         try {
-            $backupNow->handle($attachment, $request->user());
+            $backupNow->execute($attachment, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['backup' => $e->getMessage()]);
         }
@@ -30,7 +30,7 @@ class BackupController extends Controller
     public function restore(RestoreBackupRequest $request, Backup $backup, RestoreBackup $restoreBackup): RedirectResponse
     {
         try {
-            $restoreBackup->handle($backup, $request->user());
+            $restoreBackup->execute($backup, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['backup' => $e->getMessage()]);
         }

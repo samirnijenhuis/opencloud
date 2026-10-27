@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Presets\EnvProfileKind;
+use App\Domains\Applications\Enums\EnvProfileKind;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

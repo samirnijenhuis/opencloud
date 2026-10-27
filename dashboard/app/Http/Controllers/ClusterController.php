@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\ConnectCluster;
-use App\Actions\DisconnectCluster;
-use App\Actions\ReinstallClusterParts;
-use App\Clusters\ClusterProvider;
-use App\Clusters\ClusterProviders;
-use App\Enums\ClusterKind;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Actions\ConnectCluster;
+use App\Domains\Clusters\Actions\DisconnectCluster;
+use App\Domains\Clusters\Actions\ReinstallClusterParts;
+use App\Domains\Clusters\ClusterProvider;
+use App\Domains\Clusters\ClusterProviders;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Models\Datastore;
 use App\Http\Requests\ConnectClusterRequest;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Datastore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -41,7 +41,7 @@ class ClusterController extends Controller
 
     public function store(ConnectClusterRequest $request, ConnectCluster $connectCluster): RedirectResponse
     {
-        $cluster = $connectCluster->handle($request->user(), [...$request->validated(), 'registry_insecure' => $request->boolean('registry_insecure')]);
+        $cluster = $connectCluster->execute($request->user(), [...$request->validated(), 'registry_insecure' => $request->boolean('registry_insecure')]);
 
         return to_route('clusters.show', $cluster);
     }
@@ -51,7 +51,7 @@ class ClusterController extends Controller
         Gate::authorize('view', $cluster);
 
         $user = $request->user();
-        $local = $cluster->kind === ClusterKind::Local;
+        $local = $cluster->kind === ClusterKind::LOCAL;
 
         return Inertia::render('clusters/show', [
             'cluster' => [
@@ -75,7 +75,7 @@ class ClusterController extends Controller
                 'reinstall' => ! $local && $user->can('update', $cluster),
                 'disconnect' => ! $local && $user->can('delete', $cluster),
             ],
-            'created' => $cluster->kind === ClusterKind::Created ? [
+            'created' => $cluster->kind === ClusterKind::CREATED ? [
                 'provider' => $providers->find((string) $cluster->provider)?->label() ?? (string) $cluster->provider,
                 'region' => $cluster->region,
                 'node_size' => $cluster->node_size,
@@ -91,7 +91,7 @@ class ClusterController extends Controller
     {
         Gate::authorize('update', $cluster);
 
-        $reinstallClusterParts->handle($cluster, $request->user());
+        $reinstallClusterParts->execute($cluster, $request->user());
 
         return to_route('clusters.show', $cluster);
     }
@@ -100,7 +100,7 @@ class ClusterController extends Controller
     {
         Gate::authorize('delete', $cluster);
 
-        $disconnectCluster->handle($cluster, $request->user(), $request->boolean('remove_parts'));
+        $disconnectCluster->execute($cluster, $request->user(), $request->boolean('remove_parts'));
 
         return to_route('clusters.index');
     }

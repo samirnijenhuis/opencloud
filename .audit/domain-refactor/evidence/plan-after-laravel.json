@@ -1,0 +1,28 @@
+{
+  "build_env_key": "9a1974041b367d6a3fb152b9cca42d013a1aac7566a241d455ff3465dfc6406d",
+  "dockerfile": ".opencloud.Dockerfile",
+  "env": {
+    "APP_DEBUG": "false",
+    "APP_ENV": "production",
+    "CACHE_STORE": "redis",
+    "DB_CONNECTION": "mysql",
+    "DB_DATABASE": "app",
+    "DB_HOST": "db",
+    "DB_PASSWORD": "p",
+    "DB_PORT": "3306",
+    "DB_USERNAME": "u",
+    "LOG_CHANNEL": "stderr",
+    "REDIS_CLIENT": "phpredis",
+    "REDIS_HOST": "kv",
+    "REDIS_PASSWORD": "x",
+    "REDIS_PORT": "6379",
+    "REPORTS_DB_URL": "postgres://u:p@pg:5432/r"
+  },
+  "port": 8080,
+  "versions": {
+    "mysql": "8.4",
+    "postgres": "17",
+    "rustfs": "1.0.3",
+    "valkey": "9.1"
+  }
+}

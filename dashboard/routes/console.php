@@ -1,17 +1,17 @@
 <?php
 
-use App\Clusters\ClusterStatus;
-use App\Datastores\Capabilities;
-use App\Datastores\Provisioners;
-use App\Jobs\BackupDashboard;
-use App\Jobs\BackupDatastore;
-use App\Jobs\CheckCertificates;
-use App\Jobs\CheckLatestRelease;
-use App\Jobs\CopyBuckets;
-use App\Jobs\FailStuckDeployments;
-use App\Jobs\SyncCaddy;
-use App\Models\Cluster;
-use App\Models\Datastore;
+use App\Domains\Backups\Jobs\BackupDashboard;
+use App\Domains\Backups\Jobs\BackupDatastore;
+use App\Domains\Backups\Jobs\CopyBuckets;
+use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Capabilities;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Provisioners;
+use App\Domains\Deployments\Jobs\FailStuckDeployments;
+use App\Domains\Routing\Jobs\CheckCertificates;
+use App\Domains\Routing\Jobs\SyncCaddy;
+use App\Domains\Upgrades\Jobs\CheckLatestRelease;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -21,7 +21,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // The full config every five minutes repairs any drift, for example after a Caddy restart without its saved config.
-Schedule::call(fn () => Cluster::query()->where('status', ClusterStatus::Ready)->each(fn (Cluster $cluster) => SyncCaddy::dispatch($cluster)))
+Schedule::call(fn () => Cluster::query()->where('status', ClusterStatus::READY)->each(fn (Cluster $cluster) => SyncCaddy::dispatch($cluster)))
     ->name('sync-caddy')
     ->everyFiveMinutes();
 

@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\CloudProviders\Providers;
+use App\Domains\CloudProviders\Providers;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;

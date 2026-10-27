@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Enums\Role;
+use App\Domains\Members\Enums\Role;
+use App\Domains\Members\Models\User;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
-use App\Models\User;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -54,7 +54,7 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
-        if ($user->role === Role::Owner && User::query()->where('role', Role::Owner)->count() === 1) {
+        if ($user->role === Role::OWNER && User::query()->where('role', Role::OWNER)->count() === 1) {
             throw ValidationException::withMessages([
                 'password' => 'Make another member an owner before you delete the last owner account.',
             ]);

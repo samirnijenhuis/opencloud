@@ -2,9 +2,9 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\EnvVarAvailability;
-use App\Enums\EnvVarSource;
-use App\Models\Environment;
+use App\Domains\Environments\Enums\EnvVarAvailability;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,7 +24,7 @@ class EnvVarRequest extends FormRequest
         return [
             'key' => [
                 'required', 'string', 'max:255', 'regex:/^[A-Za-z_][A-Za-z0-9_]*$/',
-                Rule::notIn($environment->envVars()->where('source', EnvVarSource::Datastore)->pluck('key')->all()),
+                Rule::notIn($environment->envVars()->where('source', EnvVarSource::DATASTORE)->pluck('key')->all()),
             ],
             'value' => ['nullable', 'string', 'max:65535'],
             'is_secret' => ['boolean'],

@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\RemoveDashboardDomain;
-use App\Actions\SetDashboardDomain;
-use App\Enums\Ability;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Routing\Actions\RemoveDashboardDomain;
+use App\Domains\Routing\Actions\SetDashboardDomain;
+use App\Domains\Routing\Jobs\CheckDashboardDomain;
+use App\Domains\Routing\Models\DashboardDomain;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DashboardDomainRequest;
-use App\Jobs\CheckDashboardDomain;
-use App\Models\DashboardDomain;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -36,7 +36,7 @@ class DashboardDomainController extends Controller
 
     public function update(DashboardDomainRequest $request, SetDashboardDomain $setDashboardDomain): RedirectResponse
     {
-        $setDashboardDomain->handle($request->user(), $request->validated('hostname'));
+        $setDashboardDomain->execute($request->user(), $request->validated('hostname'));
 
         return back();
     }
@@ -61,7 +61,7 @@ class DashboardDomainController extends Controller
         $domain = DashboardDomain::current();
 
         if ($domain !== null) {
-            $removeDashboardDomain->handle($domain, $request->user());
+            $removeDashboardDomain->execute($domain, $request->user());
         }
 
         return back();
@@ -69,6 +69,6 @@ class DashboardDomainController extends Controller
 
     private function authorizeOwner(Request $request): void
     {
-        abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
+        abort_unless($request->user()->role->allows(Ability::MANAGE_CREDENTIALS), 403);
     }
 }

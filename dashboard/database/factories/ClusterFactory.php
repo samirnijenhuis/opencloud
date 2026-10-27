@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Enums\ClusterKind;
-use App\Models\Cluster;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,7 +18,7 @@ class ClusterFactory extends Factory
     {
         return [
             'name' => fake()->unique()->slug(2),
-            'kind' => ClusterKind::Connected,
+            'kind' => ClusterKind::CONNECTED,
             'provider' => null,
             'kubeconfig' => "apiVersion: v1\nkind: Config\n",
         ];

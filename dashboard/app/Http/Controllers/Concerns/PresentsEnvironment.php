@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Concerns;
 
-use App\Enums\EnvironmentKind;
-use App\Models\Deployment;
-use App\Models\Environment;
-use App\Models\User;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Models\User;
 
 trait PresentsEnvironment
 {
@@ -27,7 +27,7 @@ trait PresentsEnvironment
                 'type' => $application->type,
                 // The preview template is not a place to switch to. Its page opens from the application.
                 'environments' => $application->environments()
-                    ->where('kind', '!=', EnvironmentKind::PreviewTemplate)
+                    ->where('kind', '!=', EnvironmentKind::PREVIEW_TEMPLATE)
                     ->orderBy('id')
                     ->get()
                     ->map(fn (Environment $each) => ['id' => $each->id, 'name' => $each->name, 'kind' => $each->kind, 'color' => $each->color])

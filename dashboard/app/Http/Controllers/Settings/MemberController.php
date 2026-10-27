@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\ChangeMemberRole;
-use App\Actions\RemoveMember;
-use App\Enums\Role;
+use App\Domains\Members\Actions\ChangeMemberRole;
+use App\Domains\Members\Actions\RemoveMember;
+use App\Domains\Members\Enums\Role;
+use App\Domains\Members\Models\Invite;
+use App\Domains\Members\Models\User;
 use App\Http\Controllers\Controller;
-use App\Models\Invite;
-use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -47,7 +47,7 @@ class MemberController extends Controller
 
         $validated = $request->validate(['role' => ['required', Rule::enum(Role::class)]]);
 
-        $changeMemberRole->handle($user, $request->user(), Role::from($validated['role']));
+        $changeMemberRole->execute($user, $request->user(), Role::from($validated['role']));
 
         return to_route('members.index');
     }
@@ -56,7 +56,7 @@ class MemberController extends Controller
     {
         Gate::authorize('delete', $user);
 
-        $removeMember->handle($user, $request->user());
+        $removeMember->execute($user, $request->user());
 
         return to_route('members.index');
     }

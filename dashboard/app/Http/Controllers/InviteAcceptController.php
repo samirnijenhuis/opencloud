@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\AcceptInvite;
-use App\Models\Invite;
-use App\Models\User;
+use App\Domains\Members\Actions\AcceptInvite;
+use App\Domains\Members\Models\Invite;
+use App\Domains\Members\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -27,7 +27,7 @@ class InviteAcceptController extends Controller
     {
         $invite = Invite::findValid($token) ?? abort(404);
 
-        $member = $acceptInvite->handle($invite, $request->validate(User::newAccountRules()));
+        $member = $acceptInvite->execute($invite, $request->validate(User::newAccountRules()));
 
         Auth::login($member);
         $request->session()->regenerate();

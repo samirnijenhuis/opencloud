@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\RunCommand;
-use App\Enums\Ability;
-use App\Models\CommandRun;
-use App\Models\Environment;
+use App\Domains\Environments\Actions\RunCommand;
+use App\Domains\Environments\Models\CommandRun;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Members\Enums\Ability;
 use App\Support\SecretMasker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -42,7 +42,7 @@ class CommandRunController extends Controller
         Gate::authorize('update', $environment);
 
         $validated = $request->validate(['command' => ['required', 'string', 'max:2000']]);
-        $run = $runCommand->handle($environment, $request->user(), $validated['command']);
+        $run = $runCommand->execute($environment, $request->user(), $validated['command']);
 
         if ($request->wantsJson()) {
             return response()->json(['run' => $this->present($run->fresh(['user', 'deployment']), SecretMasker::forEnvironment($environment))], 201);
@@ -70,6 +70,6 @@ class CommandRunController extends Controller
     private function authorizeRead(Request $request, Environment $environment): void
     {
         Gate::authorize('view', $environment);
-        abort_unless($request->user()->role->allows(Ability::ReadLogs), 403);
+        abort_unless($request->user()->role->allows(Ability::READ_LOGS), 403);
     }
 }

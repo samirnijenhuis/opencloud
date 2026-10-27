@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\AddProcess;
-use App\Actions\RemoveProcess;
-use App\Actions\UpdateProcess;
-use App\Models\Environment;
-use App\Models\Process;
+use App\Domains\Environments\Actions\AddProcess;
+use App\Domains\Environments\Actions\RemoveProcess;
+use App\Domains\Environments\Actions\UpdateProcess;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\Process;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -18,7 +18,7 @@ class ProcessController extends Controller
         Gate::authorize('update', $environment);
 
         $data = $this->validated($request);
-        $addProcess->handle($environment, $request->user(), $data['name'], $data['command'], (int) $data['instances'], (bool) $data['exclusive']);
+        $addProcess->execute($environment, $request->user(), $data['name'], $data['command'], (int) $data['instances'], (bool) $data['exclusive']);
 
         return back();
     }
@@ -28,7 +28,7 @@ class ProcessController extends Controller
         Gate::authorize('update', $process->environment);
 
         $data = $this->validated($request);
-        $updateProcess->handle($process, $request->user(), $data['name'], $data['command'], (int) $data['instances'], (bool) $data['exclusive']);
+        $updateProcess->execute($process, $request->user(), $data['name'], $data['command'], (int) $data['instances'], (bool) $data['exclusive']);
 
         return back();
     }
@@ -37,7 +37,7 @@ class ProcessController extends Controller
     {
         Gate::authorize('update', $process->environment);
 
-        $removeProcess->handle($process, $request->user());
+        $removeProcess->execute($process, $request->user());
 
         return back();
     }

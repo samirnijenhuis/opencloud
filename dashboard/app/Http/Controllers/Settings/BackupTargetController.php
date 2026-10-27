@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\DeleteBackupTarget;
-use App\Actions\StoreBackupTarget;
-use App\Enums\Ability;
+use App\Domains\Backups\Actions\DeleteBackupTarget;
+use App\Domains\Backups\Actions\StoreBackupTarget;
+use App\Domains\Backups\Models\BackupTarget;
+use App\Domains\Members\Enums\Ability;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BackupTargetRequest;
-use App\Models\BackupTarget;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,7 +18,7 @@ class BackupTargetController extends Controller
 {
     public function edit(Request $request): Response
     {
-        abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
+        abort_unless($request->user()->role->allows(Ability::MANAGE_CREDENTIALS), 403);
 
         $target = BackupTarget::query()->latest('id')->first();
 
@@ -39,7 +39,7 @@ class BackupTargetController extends Controller
         $validated = $request->validated();
 
         try {
-            $storeBackupTarget->handle($request->user(), $validated['endpoint'], $validated['bucket'], $validated['access_key'] ?? null, $validated['secret_key'] ?? null, $validated['region'] ?? 'us-east-1', $request->boolean('path_style', true));
+            $storeBackupTarget->execute($request->user(), $validated['endpoint'], $validated['bucket'], $validated['access_key'] ?? null, $validated['secret_key'] ?? null, $validated['region'] ?? 'us-east-1', $request->boolean('path_style', true));
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['bucket' => $e->getMessage()]);
         }
@@ -49,12 +49,12 @@ class BackupTargetController extends Controller
 
     public function destroy(Request $request, DeleteBackupTarget $deleteBackupTarget): RedirectResponse
     {
-        abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
+        abort_unless($request->user()->role->allows(Ability::MANAGE_CREDENTIALS), 403);
 
         $target = BackupTarget::query()->latest('id')->first();
 
         if ($target !== null) {
-            $deleteBackupTarget->handle($target, $request->user());
+            $deleteBackupTarget->execute($target, $request->user());
         }
 
         return back();

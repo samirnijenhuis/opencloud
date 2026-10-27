@@ -2,35 +2,35 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\UpdateEnvironmentSettings;
-use App\Backups\BackupStatus;
-use App\CloudProviders\Providers;
-use App\Datastores\AttachmentEnv;
-use App\Datastores\Capabilities;
-use App\Datastores\DatastoreStatus;
-use App\Datastores\ExternalConnectionForm;
-use App\Datastores\ExternalField;
-use App\Datastores\Provisioners;
-use App\Domains\CloudflareDns;
-use App\Enums\Ability;
-use App\Enums\DatastoreKind;
-use App\Enums\DatastoreSource;
-use App\Enums\EnvVarSource;
-use App\Enums\Role;
-use App\Enums\Size;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Backups\Enums\BackupStatus;
+use App\Domains\Backups\Models\Backup;
+use App\Domains\Backups\Models\BackupTarget;
+use App\Domains\CloudProviders\Providers;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\AttachmentEnv;
+use App\Domains\Datastores\Capabilities;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\Enums\DatastoreStatus;
+use App\Domains\Datastores\ExternalConnectionForm;
+use App\Domains\Datastores\ExternalField;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Datastores\Provisioners;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
+use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Environments\Models\Process;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Members\Enums\Role;
+use App\Domains\Routing\CloudflareDns;
+use App\Domains\Routing\Models\Domain;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Http\Requests\AttachDatastoreRequest;
 use App\Http\Requests\UpdateEnvironmentSettingsRequest;
-use App\Models\AuditEvent;
-use App\Models\Backup;
-use App\Models\BackupTarget;
-use App\Models\Cluster;
-use App\Models\DatastoreAttachment;
-use App\Models\Deployment;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Models\EnvVar;
-use App\Models\Process;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -68,8 +68,8 @@ class EnvironmentController extends Controller
             ...$props,
             'can' => [
                 ...$props['can'],
-                'restore' => $role->allows(Ability::ChangeProtectedEnvironment),
-                'manage_credentials' => $role->allows(Ability::ManageCredentials),
+                'restore' => $role->allows(Ability::CHANGE_PROTECTED_ENVIRONMENT),
+                'manage_credentials' => $role->allows(Ability::MANAGE_CREDENTIALS),
             ],
             'cluster' => ['id' => $cluster->id, 'name' => $cluster->name, 'kind' => $cluster->kind, 'ingress_ip' => $cluster->ingress_ip],
             'tls_issuer' => config('opencloud.tls_issuer'),
@@ -106,7 +106,7 @@ class EnvironmentController extends Controller
 
         return Inertia::render('environments/commands', [
             ...$props,
-            'can' => [...$props['can'], 'read_logs' => $request->user()->role->allows(Ability::ReadLogs)],
+            'can' => [...$props['can'], 'read_logs' => $request->user()->role->allows(Ability::READ_LOGS)],
         ]);
     }
 
@@ -129,7 +129,7 @@ class EnvironmentController extends Controller
                 'source' => $envVar->source,
                 'is_secret' => $envVar->is_secret,
                 'available_at' => $envVar->available_at,
-                'value' => $envVar->source === EnvVarSource::User && ! $envVar->is_secret ? $envVar->value : null,
+                'value' => $envVar->source === EnvVarSource::USER && ! $envVar->is_secret ? $envVar->value : null,
             ]),
         ]);
     }
@@ -137,7 +137,7 @@ class EnvironmentController extends Controller
     public function update(UpdateEnvironmentSettingsRequest $request, Environment $environment, UpdateEnvironmentSettings $updateSettings): RedirectResponse
     {
         try {
-            $updateSettings->handle($environment, $request->user(), $request->settings());
+            $updateSettings->execute($environment, $request->user(), $request->settings());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['max_instances' => $e->getMessage()]);
         }
@@ -155,9 +155,9 @@ class EnvironmentController extends Controller
             'attachments' => $rows,
             'offers' => $this->offers($environment->application->cluster, $role, $attachments),
             'has_backup_target' => BackupTarget::query()->exists(),
-            'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::Pending, DatastoreStatus::Provisioning], true)
-                || $row['server']['status'] === DatastoreStatus::Destroying
-                || collect($row['backups'] ?? [])->contains('status', BackupStatus::Running)
+            'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::PENDING, DatastoreStatus::PROVISIONING], true)
+                || $row['server']['status'] === DatastoreStatus::DESTROYING
+                || collect($row['backups'] ?? [])->contains('status', BackupStatus::RUNNING)
                 || ($row['restore']['status'] ?? null) === 'running'),
         ];
     }
@@ -195,19 +195,19 @@ class EnvironmentController extends Controller
                 'label' => self::label($kind, $source, $capabilities),
                 'description' => self::PURPOSES[$family->value],
                 'group' => match ($source) {
-                    DatastoreSource::Standard => "In the cluster {$cluster->name}",
-                    DatastoreSource::Managed => "Managed by {$provider}",
-                    DatastoreSource::External => 'Bring your own',
+                    DatastoreSource::STANDARD => "In the cluster {$cluster->name}",
+                    DatastoreSource::MANAGED => "Managed by {$provider}",
+                    DatastoreSource::EXTERNAL => 'Bring your own',
                 },
                 'note' => match ($source) {
-                    DatastoreSource::Standard => null,
-                    DatastoreSource::Managed => ucfirst("{$provider} runs it and charges your account for it."),
-                    DatastoreSource::External => 'Opencloud stores the address and sets the env values. It does not back up the data.',
+                    DatastoreSource::STANDARD => null,
+                    DatastoreSource::MANAGED => ucfirst("{$provider} runs it and charges your account for it."),
+                    DatastoreSource::EXTERNAL => 'Opencloud stores the address and sets the env values. It does not back up the data.',
                 },
                 'refusal' => in_array($kind, $offered[$source->value], true)
                     ? AttachDatastoreRequest::sourceRefusal($role, $source)
                     : $capabilities->notOffered ?? $provisioner->refusalOn($cluster),
-                'fields' => $source === DatastoreSource::External
+                'fields' => $source === DatastoreSource::EXTERNAL
                     ? array_map(fn (ExternalField $field) => $field->toArray(), ExternalConnectionForm::fields($kind))
                     : [],
             ];
@@ -234,9 +234,9 @@ class EnvironmentController extends Controller
             'error' => $attachment->error,
             // The address of an external server is what the user typed, so its host may show. Its secret never does.
             'runs_on' => match ($datastore->source) {
-                DatastoreSource::Standard => $datastore->cluster->name,
-                DatastoreSource::Managed => self::providerName($datastore->cluster),
-                DatastoreSource::External => parse_url((string) $attachment->host, PHP_URL_HOST) ?: (string) $attachment->host,
+                DatastoreSource::STANDARD => $datastore->cluster->name,
+                DatastoreSource::MANAGED => self::providerName($datastore->cluster),
+                DatastoreSource::EXTERNAL => parse_url((string) $attachment->host, PHP_URL_HOST) ?: (string) $attachment->host,
             },
             'server' => [
                 'cluster' => $datastore->cluster?->name,
@@ -245,13 +245,13 @@ class EnvironmentController extends Controller
                 'error' => $datastore->error,
             ],
             'env_keys' => $attachment->envVars->pluck('key')->sort()->values(),
-            'detach_refusal' => $datastore->source === DatastoreSource::Managed && ! $role->allows(Ability::ManageCredentials)
+            'detach_refusal' => $datastore->source === DatastoreSource::MANAGED && ! $role->allows(Ability::MANAGE_CREDENTIALS)
                 ? 'Only an owner can destroy a managed resource.'
                 : null,
         ];
 
         // The provider backs up a managed resource itself, and the nightly dump cannot reach it.
-        if ($datastore->source === DatastoreSource::Managed) {
+        if ($datastore->source === DatastoreSource::MANAGED) {
             return [...$row, 'managed' => true, 'tofu_log' => $datastore->tofu_log];
         }
 
@@ -309,7 +309,7 @@ class EnvironmentController extends Controller
     private static function label(DatastoreKind $kind, DatastoreSource $source, Capabilities $capabilities): string
     {
         return $capabilities->label ?? match ($source) {
-            DatastoreSource::Managed => 'Managed '.self::KIND_NAMES[$kind->value],
+            DatastoreSource::MANAGED => 'Managed '.self::KIND_NAMES[$kind->value],
             default => self::KIND_NAMES[$kind->value],
         };
     }

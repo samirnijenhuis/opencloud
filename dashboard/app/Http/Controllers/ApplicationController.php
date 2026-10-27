@@ -2,19 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\CreateApplication;
-use App\Enums\ApplicationType;
-use App\Enums\ClusterKind;
-use App\Enums\EnvironmentKind;
-use App\Enums\Size;
-use App\GitHub\RepositoryName;
+use App\Domains\Applications\Actions\CreateApplication;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Enums\EnvProfileKind;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\GitHub\RepositoryName;
+use App\Domains\Routing\Models\Domain;
 use App\Http\Requests\StoreApplicationRequest;
-use App\Models\Application;
-use App\Models\Cluster;
-use App\Models\Deployment;
-use App\Models\Domain;
-use App\Models\Environment;
-use App\Presets\EnvProfileKind;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -72,7 +72,7 @@ class ApplicationController extends Controller
 
         return Inertia::render('applications/create', [
             'clusters' => $clusters,
-            'defaultClusterId' => ($clusters->firstWhere('kind', ClusterKind::Local) ?? $clusters->first())?->id,
+            'defaultClusterId' => ($clusters->firstWhere('kind', ClusterKind::LOCAL) ?? $clusters->first())?->id,
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,
                 'cpu_millicores' => $size->cpuMillicores(),
@@ -88,7 +88,7 @@ class ApplicationController extends Controller
         $user = $request->user();
 
         try {
-            $application = $createApplication->handle($user, [
+            $application = $createApplication->execute($user, [
                 'name' => $data['name'] ?? basename(preg_replace('/\.git$/', '', $data['repository'])),
                 'repository' => $data['repository'],
                 'cluster_id' => $data['cluster_id'],
@@ -133,7 +133,7 @@ class ApplicationController extends Controller
         Gate::authorize('view', $application);
 
         $environments = $application->environments()
-            ->where('kind', '!=', EnvironmentKind::PreviewTemplate)
+            ->where('kind', '!=', EnvironmentKind::PREVIEW_TEMPLATE)
             ->with(['domains' => fn ($query) => $query->orderBy('id')])
             ->get();
 
@@ -159,11 +159,11 @@ class ApplicationController extends Controller
                 'preview_domain' => $application->preview_domain,
                 'ingress_ip' => $application->cluster->ingress_ip,
                 'max_previews' => config('opencloud.max_previews'),
-                'template_id' => $application->environments()->where('kind', EnvironmentKind::PreviewTemplate)->value('id'),
+                'template_id' => $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->value('id'),
             ],
             'canUpdate' => $request->user()->can('update', $application),
             'environments' => $environments
-                ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::Permanent ? 1 : 2), $environment->name])
+                ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::PERMANENT ? 1 : 2), $environment->name])
                 ->map(fn (Environment $environment) => [
                     'id' => $environment->id,
                     'name' => $environment->name,

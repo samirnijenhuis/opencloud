@@ -5,13 +5,13 @@
 // preset and of each attachment, and the datastore versions. So a local run builds and starts the app the way the
 // cluster does. A fixed key would let BuildKit reuse a layer that read the build values of another cell.
 
-use App\Build\Builder;
-use App\Datastores\KeyValueConnection;
-use App\Datastores\SqlConnection;
-use App\Enums\ApplicationType;
-use App\Enums\DatastoreKind;
-use App\Kube\Manifests\DatastoreManifests;
-use App\Presets\EnvProfileKind;
+use App\Domains\Builds\Builder;
+use App\Domains\Datastores\KeyValueConnection;
+use App\Domains\Datastores\SqlConnection;
+use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\DatastoreManifests;
+use App\Domains\Applications\Enums\EnvProfileKind;
 use Illuminate\Contracts\Console\Kernel;
 
 $input = json_decode($argv[1], true, flags: JSON_THROW_ON_ERROR);

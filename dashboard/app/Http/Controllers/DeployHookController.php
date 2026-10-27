@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\DisableDeployHook;
-use App\Actions\EnableDeployHook;
-use App\Actions\RegenerateDeployHook;
-use App\Actions\TriggerDeployHook;
-use App\Environments\DeployHook;
-use App\Models\Environment;
+use App\Domains\Deployments\Actions\DisableDeployHook;
+use App\Domains\Deployments\Actions\EnableDeployHook;
+use App\Domains\Deployments\Actions\RegenerateDeployHook;
+use App\Domains\Deployments\Actions\TriggerDeployHook;
+use App\Domains\Deployments\DeployHook;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,7 +33,7 @@ class DeployHookController extends Controller
         Gate::authorize('update', $environment);
 
         try {
-            $enable->handle($environment, $request->user());
+            $enable->execute($environment, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['deploy_hook' => $e->getMessage()]);
         }
@@ -45,7 +45,7 @@ class DeployHookController extends Controller
     {
         Gate::authorize('update', $environment);
 
-        $regenerate->handle($environment, $request->user());
+        $regenerate->execute($environment, $request->user());
 
         return back();
     }
@@ -54,7 +54,7 @@ class DeployHookController extends Controller
     {
         Gate::authorize('update', $environment);
 
-        $disable->handle($environment, $request->user());
+        $disable->execute($environment, $request->user());
 
         return back();
     }
@@ -63,7 +63,7 @@ class DeployHookController extends Controller
     public function trigger(Request $request, string $token, TriggerDeployHook $trigger): JsonResponse
     {
         try {
-            $deployment = $trigger->handle($token, $request->ip());
+            $deployment = $trigger->execute($token, $request->ip());
         } catch (InvalidArgumentException|RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

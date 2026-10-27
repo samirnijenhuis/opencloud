@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Backup;
-use App\Models\Datastore;
+use App\Domains\Backups\Models\Backup;
+use App\Domains\Datastores\Models\Datastore;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

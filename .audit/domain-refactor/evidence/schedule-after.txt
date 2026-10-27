@@ -1,0 +1,7 @@
+
+  */5 * * * *  sync-caddy ....................... Next Due: 2 minutes from now
+  *   * * * *  App\Domains\Deployments\Jobs\FailStuckDeployments  Next Due: 35 seconds from now
+  *   * * * *  App\Domains\Routing\Jobs\CheckCertificates  Next Due: 35 seconds from now
+  0   0 * * *  App\Domains\Upgrades\Jobs\CheckLatestRelease  Next Due: 8 hours from now
+  0   3 * * *  nightly-backups ................... Next Due: 11 hours from now
+

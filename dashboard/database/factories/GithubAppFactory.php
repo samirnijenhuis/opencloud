@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\GithubApp;
+use App\Domains\GitHub\Models\GithubApp;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

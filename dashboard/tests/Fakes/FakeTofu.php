@@ -2,7 +2,7 @@
 
 namespace Tests\Fakes;
 
-use App\Tofu\Runner;
+use App\Support\Tofu\Runner;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
 

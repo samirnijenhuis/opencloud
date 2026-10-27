@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Enums\Role;
-use App\Models\Invite;
+use App\Domains\Members\Enums\Role;
+use App\Domains\Members\Models\Invite;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -19,7 +19,7 @@ class InviteFactory extends Factory
     {
         return [
             'token_hash' => Invite::hashToken(Str::random(48)),
-            'role' => Role::Developer,
+            'role' => Role::DEVELOPER,
             'expires_at' => now()->addDays(Invite::LIFETIME_DAYS),
         ];
     }

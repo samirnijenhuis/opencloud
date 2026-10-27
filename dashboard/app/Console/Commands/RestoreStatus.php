@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Deployment;
-use App\Restore\RestoreState;
-use App\Restore\RestoreStep;
-use App\Restore\StepStatus;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Restore\Enums\RestoreStep;
+use App\Domains\Restore\Enums\StepStatus;
+use App\Domains\Restore\RestoreState;
 use Illuminate\Console\Command;
 
 class RestoreStatus extends Command
@@ -41,7 +41,7 @@ class RestoreStatus extends Command
             $this->line("Deployment {$deployment->id} of {$deployment->environment->application->name}/{$deployment->environment->name}: {$deployment->status->value}");
         }
 
-        if (collect(RestoreStep::cases())->contains(fn (RestoreStep $step) => $state->status($step) === StepStatus::Failed)) {
+        if (collect(RestoreStep::cases())->contains(fn (RestoreStep $step) => $state->status($step) === StepStatus::FAILED)) {
             $this->line('A step failed. Fix the cause, then run: opencloud restore');
 
             return self::FAILURE;

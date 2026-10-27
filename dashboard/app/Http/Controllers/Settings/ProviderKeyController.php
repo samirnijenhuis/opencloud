@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\DeleteProviderCredential;
-use App\Actions\StoreProviderCredential;
-use App\CloudProviders\CheckResult;
-use App\CloudProviders\ProviderGuide;
-use App\CloudProviders\Providers;
+use App\Domains\CloudProviders\Actions\DeleteProviderCredential;
+use App\Domains\CloudProviders\Actions\StoreProviderCredential;
+use App\Domains\CloudProviders\CheckResult;
+use App\Domains\CloudProviders\Models\ProviderCredential;
+use App\Domains\CloudProviders\ProviderGuide;
+use App\Domains\CloudProviders\Providers;
 use App\Http\Controllers\Controller;
-use App\Models\ProviderCredential;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -53,7 +53,7 @@ class ProviderKeyController extends Controller
         ]);
         abort_unless(in_array($provider, Providers::keys(), true), 404);
 
-        $result = $store->handle($request->user(), $provider, $validated['token']);
+        $result = $store->execute($request->user(), $provider, $validated['token']);
 
         return $this->back($provider, $result);
     }
@@ -62,7 +62,7 @@ class ProviderKeyController extends Controller
     {
         Gate::authorize('update', $credential);
 
-        $result = $store->handle($request->user(), $credential->provider, $credential->token);
+        $result = $store->execute($request->user(), $credential->provider, $credential->token);
 
         return $this->back($credential->provider, $result);
     }
@@ -71,7 +71,7 @@ class ProviderKeyController extends Controller
     {
         Gate::authorize('delete', $credential);
 
-        $delete->handle($credential, $request->user());
+        $delete->execute($credential, $request->user());
 
         return to_route('provider-keys.index');
     }

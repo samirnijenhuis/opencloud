@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\ProviderCredential;
+use App\Domains\CloudProviders\Models\ProviderCredential;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

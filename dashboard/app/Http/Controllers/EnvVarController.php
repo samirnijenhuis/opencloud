@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\DeleteEnvVar;
-use App\Actions\SetEnvVar;
-use App\Enums\EnvVarAvailability;
+use App\Domains\Environments\Actions\DeleteEnvVar;
+use App\Domains\Environments\Actions\SetEnvVar;
+use App\Domains\Environments\Enums\EnvVarAvailability;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
 use App\Http\Requests\EnvVarRequest;
-use App\Models\Environment;
-use App\Models\EnvVar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -26,7 +26,7 @@ class EnvVarController extends Controller
         $validated = $request->validated();
 
         try {
-            $setEnvVar->handle(
+            $setEnvVar->execute(
                 $environment,
                 $request->user(),
                 $validated['key'],
@@ -46,7 +46,7 @@ class EnvVarController extends Controller
         Gate::authorize('update', $envVar->environment);
 
         try {
-            $deleteEnvVar->handle($envVar, $request->user());
+            $deleteEnvVar->execute($envVar, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['key' => $e->getMessage()]);
         }

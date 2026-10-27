@@ -2,9 +2,9 @@
 
 namespace App\Http\Middleware;
 
-use App\Enums\Ability;
-use App\Jobs\CheckLatestRelease;
-use App\Models\Application;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Upgrades\Jobs\CheckLatestRelease;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -50,13 +50,13 @@ class HandleInertiaRequests extends Middleware
             ],
             'can' => [
                 'create_application' => $request->user()?->can('create', Application::class) ?? false,
-                'manage_credentials' => $request->user()?->role->allows(Ability::ManageCredentials) ?? false,
-                'view_audit_log' => $request->user()?->role->allows(Ability::ManageApplications) ?? false,
+                'manage_credentials' => $request->user()?->role->allows(Ability::MANAGE_CREDENTIALS) ?? false,
+                'view_audit_log' => $request->user()?->role->allows(Ability::MANAGE_APPLICATIONS) ?? false,
             ],
             // Guests do not learn the version, because it tells an attacker which known bugs apply.
             'opencloud' => fn () => $request->user() === null ? null : [
                 'version' => config('opencloud.version'),
-                'update' => $request->user()->role->allows(Ability::UpgradeOpencloud) ? CheckLatestRelease::newerRelease() : null,
+                'update' => $request->user()->role->allows(Ability::UPGRADE_OPENCLOUD) ? CheckLatestRelease::newerRelease() : null,
             ],
         ]);
     }

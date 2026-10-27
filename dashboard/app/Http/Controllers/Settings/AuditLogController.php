@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Enums\Ability;
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Members\Enums\Ability;
+use App\Domains\Routing\Models\Domain;
 use App\Http\Controllers\Controller;
-use App\Models\AuditEvent;
-use App\Models\Domain;
-use App\Models\EnvVar;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -16,7 +17,7 @@ class AuditLogController extends Controller
 {
     public function index(Request $request): Response
     {
-        abort_unless($request->user()->role->allows(Ability::ManageApplications), 403);
+        abort_unless($request->user()->role->allows(Ability::MANAGE_APPLICATIONS), 403);
 
         return Inertia::render('settings/audit', [
             'events' => AuditEvent::query()
@@ -39,7 +40,7 @@ class AuditLogController extends Controller
             return null;
         }
 
-        $type = str(class_basename($event->subject_type))->snake(' ')->lower()->toString();
+        $type = str(class_basename(Relation::getMorphedModel($event->subject_type) ?? $event->subject_type))->snake(' ')->lower()->toString();
         $subject = $event->subject;
 
         if (! $subject instanceof Model) {

@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Backups\BackupDisk;
-use App\Restore\DashboardBackup;
-use App\Restore\RestoreState;
+use App\Domains\Backups\BackupDisk;
+use App\Domains\Restore\DashboardBackup;
+use App\Domains\Restore\RestoreState;
 use App\Support\SecretMasker;
 use Dotenv\Dotenv;
 use Illuminate\Console\Command;

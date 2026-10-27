@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Enums\EnvironmentKind;
-use App\Models\Application;
-use App\Models\Environment;
+use App\Domains\Applications\Models\Application;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Models\Environment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -20,7 +20,7 @@ class EnvironmentFactory extends Factory
         return [
             'application_id' => Application::factory(),
             'name' => fake()->unique()->slug(1),
-            'kind' => EnvironmentKind::Permanent,
+            'kind' => EnvironmentKind::PERMANENT,
             'branch' => 'main',
         ];
     }

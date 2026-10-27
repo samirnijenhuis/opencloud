@@ -72,8 +72,8 @@ dashboard_php() {
 mysql_value() {
     local machine=$1 query=$2 pod database
     read -r pod database < <(dashboard_php "$machine" <<'PHP'
-$attachment = App\Models\DatastoreAttachment::query()->whereHas('datastore', fn ($q) => $q->where('kind', 'mysql'))->sole();
-echo App\Kube\Manifests\DatastoreManifests::serverPod($attachment->datastore), ' ', $attachment->database_name, "\n";
+$attachment = App\Domains\Datastores\Models\DatastoreAttachment::query()->whereHas('datastore', fn ($q) => $q->where('kind', 'mysql'))->sole();
+echo App\Domains\Datastores\DatastoreManifests::serverPod($attachment->datastore), ' ', $attachment->database_name, "\n";
 PHP
     )
     kc "$machine" -n oc-datastores exec "$pod" -c mysql -- \
@@ -83,7 +83,7 @@ PHP
 # Prints the status of the newest deployment of production, and its commit.
 production_deployment() {
     dashboard_php "$1" <<PHP
-\$deployment = App\Models\Deployment::query()->whereHas('environment', fn (\$q) => \$q->where('name', 'production'))->latest('id')->first();
+\$deployment = App\Domains\Deployments\Models\Deployment::query()->whereHas('environment', fn (\$q) => \$q->where('name', 'production'))->latest('id')->first();
 echo \$deployment?->status->value ?? 'none', ' ', \$deployment?->commit_sha ?? 'none', "\n";
 PHP
 }
@@ -96,12 +96,12 @@ deploy_production() {
         status=$(wait_for_production "$machine" "$limit")
         [[ $status == failed ]] || break
         dashboard_php "$machine" >&2 <<'PHP'
-$log = App\Models\Deployment::query()->latest('id')->value('log') ?? '';
+$log = App\Domains\Deployments\Models\Deployment::query()->latest('id')->value('log') ?? '';
 echo implode("\n", array_slice(explode("\n", trim($log)), -20)), "\n";
 PHP
         [[ $attempt == 2 ]] || dashboard_php "$machine" >/dev/null <<'PHP'
-$production = App\Models\Environment::where('name', 'production')->sole();
-app(App\Actions\StartDeployment::class)->handle($production, null, $production->deployments()->latest('id')->value('commit_sha'));
+$production = App\Domains\Environments\Models\Environment::where('name', 'production')->sole();
+app(App\Domains\Deployments\Actions\StartDeployment::class)->handle($production, null, $production->deployments()->latest('id')->value('commit_sha'));
 PHP
     done
     echo "$status $attempt"
@@ -177,13 +177,13 @@ send POST "${setup_url#"$BASE"}" --data-urlencode name=Owner --data-urlencode "e
     --data-urlencode "password=$PASSWORD" --data-urlencode "password_confirmation=$PASSWORD" >/dev/null
 
 dashboard_php "$MACHINE_A" >"$WORK/create.log" 2>&1 <<PHP
-\$owner = App\Models\User::where('email', '$EMAIL')->sole();
-app(App\Actions\StoreBackupTarget::class)->handle(\$owner, 'http://$S3_HOST:$S3_PORT', '$BUCKET', '$S3_ACCESS_KEY', '$S3_SECRET_KEY');
-app(App\Actions\CreateApplication::class)->handle(\$owner, [
+\$owner = App\Domains\Members\Models\User::where('email', '$EMAIL')->sole();
+app(App\Domains\Backups\Actions\StoreBackupTarget::class)->handle(\$owner, 'http://$S3_HOST:$S3_PORT', '$BUCKET', '$S3_ACCESS_KEY', '$S3_SECRET_KEY');
+app(App\Domains\Applications\Actions\CreateApplication::class)->handle(\$owner, [
     'name' => '$APPLICATION',
     'repository' => '$REPOSITORY',
     'branch' => '$BRANCH',
-    'cluster_id' => App\Models\Cluster::where('kind', 'local')->value('id'),
+    'cluster_id' => App\Domains\Clusters\Models\Cluster::where('kind', 'local')->value('id'),
     'database' => 'mysql',
 ]);
 echo 'created', "\n";
@@ -206,13 +206,13 @@ record "machine A has the row $PROOF_EMAIL in the MySQL database of production" 
 
 # 2. Back up to the bucket, then save the APP_KEY and lose machine A. The backup target exists since step 1.
 dashboard_php "$MACHINE_A" >"$WORK/backup.log" 2>&1 <<PHP
-\$owner = App\Models\User::where('email', '$EMAIL')->sole();
-\$attachment = App\Models\DatastoreAttachment::query()->whereHas('datastore', fn (\$q) => \$q->where('kind', 'mysql'))->sole();
-app(App\Actions\BackupNow::class)->handle(\$attachment, \$owner);
+\$owner = App\Domains\Members\Models\User::where('email', '$EMAIL')->sole();
+\$attachment = App\Domains\Datastores\Models\DatastoreAttachment::query()->whereHas('datastore', fn (\$q) => \$q->where('kind', 'mysql'))->sole();
+app(App\Domains\Backups\Actions\BackupNow::class)->handle(\$attachment, \$owner);
 for (\$i = 0; \$i < 120 && \$attachment->backups()->where('status', 'done')->doesntExist(); \$i++) {
     sleep(2);
 }
-App\Jobs\BackupDashboard::dispatchSync();
+App\Domains\Backups\Jobs\BackupDashboard::dispatchSync();
 PHP
 listing=$(s3 "http://127.0.0.1:$S3_PORT/$BUCKET?list-type=2&prefix=backups/")
 ok=0
@@ -302,8 +302,8 @@ record "machine B deploys the old commit ${LIVE_SHA:0:12} and it goes live (stat
 
 HOSTNAME_UNDER_TEST=$APPLICATION.$IP.sslip.io
 dashboard_php "$MACHINE_B" >"$WORK/domain.log" 2>&1 <<PHP
-\$production = App\Models\Environment::where('name', 'production')->sole();
-app(App\Actions\AddDomain::class)->handle(\$production, App\Models\User::where('email', '$EMAIL')->sole(), '$HOSTNAME_UNDER_TEST');
+\$production = App\Domains\Environments\Models\Environment::where('name', 'production')->sole();
+app(App\Domains\Routing\Actions\AddDomain::class)->handle(\$production, App\Domains\Members\Models\User::where('email', '$EMAIL')->sole(), '$HOSTNAME_UNDER_TEST');
 PHP
 code=000
 for _ in $(seq 1 60); do
