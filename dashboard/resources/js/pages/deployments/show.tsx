@@ -1,7 +1,7 @@
 import { DeploymentSteps } from '@/components/deployment-steps';
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useReloadWhileRunning } from '@/hooks/use-reload-while-running';
+import { useDeploymentPoll } from '@/hooks/use-deployment-poll';
 import EnvironmentLayout from '@/layouts/environment-layout';
 import { duration, shortSha } from '@/lib/format';
 import { type Deployment, type DeploymentStep, type EnvironmentPageProps } from '@/types';
@@ -14,7 +14,7 @@ type Props = EnvironmentPageProps & { deployment: Deployment; steps: DeploymentS
 export default function DeploymentShow(props: Props) {
     const { deployment, steps, environment, waiting_for } = props;
     const running = isRunning(deployment.status);
-    useReloadWhileRunning(running, ['deployment', 'steps', 'environment', 'waiting_for']);
+    useDeploymentPoll(running, ['deployment', 'steps', 'environment', 'waiting_for']);
 
     return (
         <EnvironmentLayout page={props} tab="deployments" title={`Deployment ${shortSha(deployment.commit_sha)}`}>

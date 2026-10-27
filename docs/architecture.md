@@ -133,7 +133,7 @@ In the Laravel preset, BuildKit cache mounts keep the Composer and npm downloads
 
 `App\Domains\Deployments\Jobs\RunDeployment` runs one deployment from start to end. It builds, runs the deploy commands in a Kubernetes Job, applies the manifests, waits for the rollout, and syncs Caddy. If a step fails, the deployment becomes `failed`, and the old live deployment stays live.
 
-`DeploymentStatus::isRunning()` is true for `queued`, `building`, and `deploying`. The dashboard polls while the latest deployment of an environment runs. The deployment page, the canvas, and the deployments tab reload only their `deployment`, `deployments`, `steps`, and `environment` props every 2 seconds, so each status badge moves to `live` or `failed` without a reload.
+`DeploymentStatus::isRunning()` is true for `queued`, `building`, and `deploying`. The dashboard polls while the latest deployment of an environment runs. The deployment page, the canvas, and the deployments tab reload only their `deployment`, `deployments`, `steps`, and `environment` props every 2 seconds, so each status badge moves to `live` or `failed` without a reload. While no deployment runs, the canvas and the deployments tab reload the same props every 10 seconds, because a push, a deploy hook, or another tab can start a deployment that the open page does not know. The hook `useDeploymentPoll` holds both intervals.
 
 ### Deployment steps
 
