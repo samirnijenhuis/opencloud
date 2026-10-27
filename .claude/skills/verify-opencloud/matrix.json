@@ -70,6 +70,19 @@
       "deploy_commands": { "always": ["node deploy.js {cell}"] },
       "env": {}
     },
+    "python": {
+      "branch": "python",
+      "type": "python",
+      "env_profile": "generic",
+      "verify_path": "/verify",
+      "checks": ["marker", "build", "secret", "db", "extra", "cache"],
+      "databases": ["none", "mysql", "postgres", "mysqlpostgres"],
+      "caches": ["none", "valkey"],
+      "database_in_create_form": true,
+      "build_command": { "always": "echo \"$VERIFY_BUILD\" > build-marker" },
+      "deploy_commands": { "always": ["python deploy.py {cell}"] },
+      "env": {}
+    },
     "site": {
       "branch": "site",
       "type": "static",
@@ -94,7 +107,8 @@
       "laravel-sqlite-valkey",
       "laravel-mysqlpostgres-none",
       "node-postgres-valkey",
-      "site-none-none"
+      "site-none-none",
+      "python-mysql-valkey"
     ]
   }
 }
