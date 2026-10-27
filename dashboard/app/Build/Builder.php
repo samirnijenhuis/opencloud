@@ -36,6 +36,8 @@ final class Builder
 
     private const PYTHON_IGNORE = ".git\n.venv\n";
 
+    private const RUBY_IGNORE = ".git\nvendor/bundle\n";
+
     /**
      * @return string the image reference
      *
@@ -119,6 +121,11 @@ final class Builder
             )),
             ApplicationType::Python => self::generate($dir, self::PYTHON_IGNORE, PythonDockerfile::render(
                 PythonProject::in(RepositoryFiles::in($dir)) ?? throw new RepositoryDoesNotFit('The application uses the Python preset, but the repository has no uv.lock, poetry.lock, Pipfile.lock, requirements.txt, or pyproject.toml at its root.'),
+                $secrets,
+                $buildCommand,
+            )),
+            ApplicationType::Ruby => self::generate($dir, self::RUBY_IGNORE, RubyDockerfile::render(
+                RubyProject::in(RepositoryFiles::in($dir)) ?? throw new RepositoryDoesNotFit('The application uses the Ruby preset, but the repository has no Gemfile at its root.'),
                 $secrets,
                 $buildCommand,
             )),

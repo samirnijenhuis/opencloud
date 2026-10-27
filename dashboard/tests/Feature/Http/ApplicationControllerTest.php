@@ -144,6 +144,16 @@ class ApplicationControllerTest extends TestCase
                         'env_profile' => 'generic',
                     ],
                     [
+                        'value' => 'ruby',
+                        'port' => 3000,
+                        'chooses_port' => true,
+                        'uses_build_command' => true,
+                        'deploy_commands' => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'],
+                        'processes' => [],
+                        'database' => 'none',
+                        'env_profile' => 'generic',
+                    ],
+                    [
                         'value' => 'static',
                         'port' => 8080,
                         'chooses_port' => false,
@@ -273,6 +283,10 @@ class ApplicationControllerTest extends TestCase
             'python with postgres' => [
                 ['type' => 'python', 'env_profile' => 'generic', 'port' => 8000, 'deploy_commands' => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], 'processes' => [], 'database' => 'postgres'],
                 ['python', 'generic', 8000, ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], '/', [], ['SECRET_KEY'], ['postgres']],
+            ],
+            'ruby with mysql and its own port' => [
+                ['type' => 'ruby', 'env_profile' => 'generic', 'port' => 9292, 'deploy_commands' => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], 'processes' => [], 'database' => 'mysql'],
+                ['ruby', 'generic', 9292, ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], '/', [], ['SECRET_KEY_BASE'], ['mysql']],
             ],
             'static' => [
                 ['type' => 'static', 'env_profile' => 'generic', 'port' => null, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],

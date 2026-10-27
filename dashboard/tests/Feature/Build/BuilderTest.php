@@ -149,6 +149,32 @@ class BuilderTest extends TestCase
         $this->assertSame([".git\n.venv\n"], $processes->dockerignores);
     }
 
+    public function test_the_ruby_preset_writes_a_dockerfile_from_the_gemfile_and_the_rails_files(): void
+    {
+        $processes = FakeProcesses::install();
+        $processes->repository = [
+            'Gemfile' => "source \"https://rubygems.org\"\nruby \"3.3.6\"\ngem \"rails\", \"~> 8.1\"\ngem \"propshaft\"\n",
+            'config.ru' => "require_relative \"config/environment\"\nrun Rails.application\n",
+            'bin/rails' => "#!/usr/bin/env ruby\n",
+            'config/application.rb' => "module Shop\nend\n",
+            'package.json' => '{"scripts":{"start":"node server.js"}}',
+        ];
+        $deployment = $this->deployment('acme/shop', ApplicationType::Ruby);
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertContains('filename=.opencloud.Dockerfile', $processes->commands()[3]);
+        $this->assertSame([
+            'FROM ruby:3.3.6',
+            'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
+            'RUN --mount=type=cache,target=/usr/local/bundle/cache bundle install',
+            'RUN SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile',
+            'ENTRYPOINT ["/usr/bin/tini", "--"]',
+            'CMD ["sh", "-c", "exec bin/rails server -b 0.0.0.0 -p $PORT"]',
+        ], array_values(preg_grep('/^(FROM|RUN|ENTRYPOINT|CMD) /', explode("\n", $processes->dockerfiles[0]))));
+        $this->assertSame([".git\nvendor/bundle\n"], $processes->dockerignores);
+    }
+
     public function test_the_static_preset_serves_a_repository_without_package_json_and_ignores_the_build_command(): void
     {
         $processes = FakeProcesses::install();
@@ -219,6 +245,11 @@ class BuilderTest extends TestCase
                 ApplicationType::Python,
                 ['app.py' => "app = Flask(__name__)\n", 'package.json' => '{"scripts":{"start":"node server.js"}}'],
                 'The application uses the Python preset, but the repository has no uv.lock, poetry.lock, Pipfile.lock, requirements.txt, or pyproject.toml at its root. To use another preset, create a new application with the same repository.',
+            ],
+            'ruby without a Gemfile' => [
+                ApplicationType::Ruby,
+                ['Gemfile.lock' => "GEM\n", 'config.ru' => "run App\n"],
+                'The application uses the Ruby preset, but the repository has no Gemfile at its root. To use another preset, create a new application with the same repository.',
             ],
             'dockerfile without a Dockerfile' => [
                 ApplicationType::Dockerfile,

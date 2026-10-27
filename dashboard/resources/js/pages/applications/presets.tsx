@@ -26,6 +26,10 @@ export const presetText: Record<ApplicationType, { hint: string; buildCommand: s
         hint: 'A Procfile, or Django, Flask, or FastAPI',
         buildCommand: 'Optional extra step after the install, for example python manage.py collectstatic --noinput',
     },
+    ruby: {
+        hint: 'A Procfile, or Rails or Rack',
+        buildCommand: 'Optional extra step after the install and the Rails assets, for example bin/rails sitemap:create',
+    },
     static: {
         hint: 'nginx serves the files or the build output',
         buildCommand: 'Not used. The build script of package.json builds the site.',

@@ -118,6 +118,7 @@ class CreateApplicationTest extends TestCase
     {
         return [
             'python' => [ApplicationType::Python, 'SECRET_KEY', '/^[0-9a-f]{64}$/'],
+            'ruby' => [ApplicationType::Ruby, 'SECRET_KEY_BASE', '/^[0-9a-f]{128}$/'],
         ];
     }
 

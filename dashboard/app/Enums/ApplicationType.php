@@ -13,6 +13,7 @@ enum ApplicationType: string
     case Laravel = 'laravel';
     case Node = 'node';
     case Python = 'python';
+    case Ruby = 'ruby';
     case Static = 'static';
     case Dockerfile = 'dockerfile';
 
@@ -22,15 +23,16 @@ enum ApplicationType: string
             self::Laravel, self::Static, self::Dockerfile => 8080,
             self::Node => 3000,
             self::Python => 8000,
+            self::Ruby => 3000,
         };
     }
 
-    /** The generated Laravel and static images always listen on 8080. A Node or Python app listens on PORT, and a Dockerfile app where its Dockerfile says. */
+    /** The generated Laravel and static images always listen on 8080. A Node, Python, or Ruby app listens on PORT, and a Dockerfile app where its Dockerfile says. */
     public function choosesPort(): bool
     {
         return match ($this) {
             self::Laravel, self::Static => false,
-            self::Node, self::Python, self::Dockerfile => true,
+            self::Node, self::Python, self::Ruby, self::Dockerfile => true,
         };
     }
 
@@ -39,7 +41,7 @@ enum ApplicationType: string
     {
         return match ($this) {
             self::Laravel => '/up',
-            self::Node, self::Python, self::Static, self::Dockerfile => '/',
+            self::Node, self::Python, self::Ruby, self::Static, self::Dockerfile => '/',
         };
     }
 
@@ -51,7 +53,7 @@ enum ApplicationType: string
                 ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
                 ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
             ],
-            self::Node, self::Python, self::Static, self::Dockerfile => [],
+            self::Node, self::Python, self::Ruby, self::Static, self::Dockerfile => [],
         };
     }
 
@@ -65,15 +67,16 @@ enum ApplicationType: string
         return match ($this) {
             self::Laravel => ['php artisan migrate --force'],
             self::Python => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'],
+            self::Ruby => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'],
             self::Node, self::Static, self::Dockerfile => [],
         };
     }
 
-    /** The Laravel, Node, and Python images run the build command after the build. A static site builds with its build script. */
+    /** The Laravel, Node, Python, and Ruby images run the build command after the build. A static site builds with its build script. */
     public function usesBuildCommand(): bool
     {
         return match ($this) {
-            self::Laravel, self::Node, self::Python => true,
+            self::Laravel, self::Node, self::Python, self::Ruby => true,
             self::Static, self::Dockerfile => false,
         };
     }
@@ -83,7 +86,7 @@ enum ApplicationType: string
     {
         return match ($this) {
             self::Laravel => 'mysql',
-            self::Node, self::Python, self::Static, self::Dockerfile => 'none',
+            self::Node, self::Python, self::Ruby, self::Static, self::Dockerfile => 'none',
         };
     }
 
@@ -91,13 +94,14 @@ enum ApplicationType: string
     {
         return match ($this) {
             self::Laravel => EnvProfileKind::Laravel,
-            self::Node, self::Python, self::Static, self::Dockerfile => EnvProfileKind::Generic,
+            self::Node, self::Python, self::Ruby, self::Static, self::Dockerfile => EnvProfileKind::Generic,
         };
     }
 
     /**
      * The env values that opencloud sets. A datastore value or a user value with the same key wins. The preset does not
-     * know the framework, so every Python app gets the Django values. Other apps ignore them.
+     * know the framework, so every Python app gets the Django values and every Ruby app the Rails values. Other apps
+     * ignore them.
      *
      * @param  list<string>  $hostnames  the domains of the environment, oldest first
      * @return array<string, string>
@@ -114,6 +118,10 @@ enum ApplicationType: string
                 'PYTHONUNBUFFERED' => '1', 'DEBUG' => 'false', ...$port, ...$url,
                 ...($hostnames === [] ? [] : ['ALLOWED_HOSTS' => implode(',', $hostnames)]),
             ],
+            self::Ruby => [
+                'RACK_ENV' => 'production', 'RAILS_ENV' => 'production', 'RAILS_LOG_TO_STDOUT' => '1', 'RAILS_SERVE_STATIC_FILES' => '1',
+                ...$port, ...$url,
+            ],
             self::Static, self::Dockerfile => [...$port, ...$url],
         };
     }
@@ -129,6 +137,7 @@ enum ApplicationType: string
         return match ($this) {
             self::Laravel => ['APP_KEY' => 'base64:'.base64_encode(random_bytes(32))],
             self::Python => ['SECRET_KEY' => bin2hex(random_bytes(32))],
+            self::Ruby => ['SECRET_KEY_BASE' => bin2hex(random_bytes(64))],
             self::Node, self::Static, self::Dockerfile => [],
         };
     }
