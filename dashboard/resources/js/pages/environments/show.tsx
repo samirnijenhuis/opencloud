@@ -2,7 +2,7 @@ import { AppSheet } from '@/components/environment/app-sheet';
 import { AddButton, Block, Group, Row, Status, SubHeading, type Tone } from '@/components/environment/block';
 import { DomainsSheet } from '@/components/environment/domains-sheet';
 import { EditorSheet } from '@/components/environment/editor-sheet';
-import { AddResourceMenu, ResourceSheet, statusLabels, statusTones } from '@/components/environment/resource-sheet';
+import { AddResourceMenu, namedTextsFor, ResourceSheet, statusLabels, statusTones } from '@/components/environment/resource-sheet';
 import {
     type Attachment,
     type CanvasProps,
@@ -183,6 +183,7 @@ function CapacityBar({ clusterName, capacity, requests }: { clusterName: string;
 
 function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: () => void }) {
     const lastBackup = attachment.backups?.find((backup) => backup.status === 'done');
+    const named = namedTextsFor(attachment);
 
     return (
         <Block
@@ -191,8 +192,8 @@ function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: 
             aside={<Status tone={statusTones[attachment.status]}>{statusLabels[attachment.status]}</Status>}
             onOpen={onOpen}
         >
-            {attachment.name && (
-                <Row label="Connection">
+            {named && attachment.name && (
+                <Row label={named.heading}>
                     <span className="inline-flex max-w-full items-center gap-1.5">
                         <code className="truncate font-mono text-xs">{attachment.name}</code>
                         {attachment.is_default && (

@@ -37,13 +37,14 @@ export type Attachment = {
     id: number;
     kind: DatastoreKind;
     source: DatastoreSource;
+    family: ResourceFamily;
     /** The name that the backend gives it, for example "Postgres" or "External MySQL". */
     label: string;
-    /** The connection name of a database. Another family, and a managed database that is being destroyed, have none. */
+    /** The name of a database or a bucket. A key-value store, and a managed one that is being destroyed, have none. */
     name: string | null;
-    /** The default database sets the default env values. Each other database sets one URL value. */
+    /** The default of a family sets the default env values. Each other database or bucket sets its own values. */
     is_default: boolean;
-    /** The line for the database config of the app, for a database that is not the default, or null. */
+    /** The line for the database or disk config of the app, for one that is not the default, or null. */
     config_line: string | null;
     status: DatastoreStatus;
     error: string | null;
@@ -77,8 +78,8 @@ export type Offer = {
     kind: DatastoreKind;
     source: DatastoreSource;
     family: ResourceFamily;
-    /** A database has a connection name, and the first one is the default. */
-    named: boolean;
+    /** The name field of a database or a bucket, or null for a key-value store. The first one of a family starts as "main". */
+    name_field: { label: string; placeholder: string; value: string; description: string } | null;
     label: string;
     description: string;
     /** The heading of the source in the menu. */

@@ -28,6 +28,7 @@ import {
     type DatastoreStatus,
     type Datastores,
     type Offer,
+    type ResourceFamily,
 } from './types';
 
 export const statusLabels: Record<DatastoreStatus, string> = {
@@ -75,7 +76,7 @@ const sourceTexts: Record<
         verb: 'Detach',
         detach: () => 'The app loses access. The data stays on the server.',
         confirm: (attachment) =>
-            `The app loses its access and the env values it set are removed. The data stays on the server. ${attachment.name ? 'Attach a database with the same kind and name again to use it.' : 'Attach the same kind again to use it.'}`,
+            `The app loses its access and the env values it set are removed. The data stays on the server. ${attachment.name ? `Attach a ${attachment.family} with the same kind and name again to use it.` : 'Attach the same kind again to use it.'}`,
     },
     managed: {
         where: (attachment) => `${attachment.runs_on} runs it for this environment.`,
@@ -91,6 +92,40 @@ const sourceTexts: Record<
         confirm: () => 'The app loses its access and the env values it set are removed. Opencloud does not touch the data on your server.',
     },
 };
+
+/** What the sheet says about the name and the default of each family with names. */
+const namedTexts: Record<
+    Exclude<ResourceFamily, 'key_value'>,
+    {
+        heading: string;
+        isDefault: string;
+        keepsTheDefault: string;
+        configHint: (name: string) => string;
+        noConfigLine: string;
+        oldDefault: (name: string) => string;
+    }
+> = {
+    database: {
+        heading: 'Connection',
+        isDefault: 'This is the default database. The default env values point to it.',
+        keepsTheDefault: 'This is the default database. Make another database the default first.',
+        configHint: (name) => `Add this line to the connections in config/database.php. Then use DB::connection('${name}') in the app.`,
+        noConfigLine: 'The app reaches this database through its URL value.',
+        oldDefault: (name) => `${name} gets one URL value instead, and the app needs a line in its database config to use it.`,
+    },
+    bucket: {
+        heading: 'Bucket',
+        isDefault: 'This is the default bucket. The default env values point to it.',
+        keepsTheDefault: 'This is the default bucket. Make another bucket the default first.',
+        configHint: (name) => `Add this line to the disks in config/filesystems.php. Then use Storage::disk('${name}') in the app.`,
+        noConfigLine: 'The app reaches this bucket through its env values with its name as a prefix.',
+        oldDefault: (name) =>
+            `${name} gets env values with the prefix ${name.toUpperCase()}_ instead, and the app needs a disk in config/filesystems.php to use it.`,
+    },
+};
+
+/** The texts of a database or a bucket, or null for a key-value store, which has no name. */
+export const namedTextsFor = (attachment: Attachment) => (attachment.family === 'key_value' ? null : namedTexts[attachment.family]);
 
 type OfferGroup = { source: DatastoreSource; heading: string; offers: Offer[]; refusal: string | null };
 
@@ -168,9 +203,7 @@ export function AddResourceMenu({ environmentId, datastores, children }: { envir
 
             <Dialog open={choice !== null} onOpenChange={(next) => !next && setChoice(null)}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
-                    {choice && (
-                        <AddResourceForm environmentId={environmentId} datastores={datastores} offer={choice} onClose={() => setChoice(null)} />
-                    )}
+                    {choice && <AddResourceForm environmentId={environmentId} offer={choice} onClose={() => setChoice(null)} />}
                 </DialogContent>
             </Dialog>
         </>
@@ -305,8 +338,10 @@ export function ResourceSheet({
 
     const text = sourceTexts[attachment.source];
     const title = [attachment.label, attachment.server.version].filter(Boolean).join(' ');
-    const currentDefault = datastores.attachments.find((each) => each.is_default);
-    const keepsTheDefault = attachment.is_default && datastores.attachments.some((each) => each.id !== attachment.id && each.name !== null);
+    const named = namedTextsFor(attachment);
+    const sameFamily = datastores.attachments.filter((each) => each.family === attachment.family);
+    const currentDefault = sameFamily.find((each) => each.is_default);
+    const keepsTheDefault = named !== null && attachment.is_default && sameFamily.some((each) => each.id !== attachment.id && each.name !== null);
     const canDetach = canUpdate && !keepsTheDefault && attachment.server.status !== 'destroying' && attachment.detach_refusal === null;
 
     const makeDefault = () => {
@@ -395,11 +430,11 @@ export function ResourceSheet({
                     <p className="text-sm break-words text-red-600 dark:text-red-400">{attachment.error}</p>
                 )}
 
-                {attachment.name !== null && (
+                {named && attachment.name !== null && (
                     <section className="space-y-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <h3 className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                                Connection
+                                {named.heading}
                                 <code className="bg-muted truncate rounded px-1.5 py-0.5 font-mono text-xs">{attachment.name}</code>
                                 {attachment.is_default && <Badge variant="outline">Default</Badge>}
                             </h3>
@@ -410,17 +445,14 @@ export function ResourceSheet({
                             )}
                         </div>
                         {attachment.is_default ? (
-                            <p className="text-muted-foreground text-sm">This is the default database. The default env values point to it.</p>
+                            <p className="text-muted-foreground text-sm">{named.isDefault}</p>
                         ) : attachment.config_line ? (
                             <>
-                                <p className="text-muted-foreground text-sm">
-                                    Add this line to the connections in config/database.php. Then use DB::connection(&apos;{attachment.name}&apos;) in
-                                    the app.
-                                </p>
+                                <p className="text-muted-foreground text-sm">{named.configHint(attachment.name)}</p>
                                 <CopyLine text={attachment.config_line} />
                             </>
                         ) : (
-                            <p className="text-muted-foreground text-sm">The app reaches this database through its URL value.</p>
+                            <p className="text-muted-foreground text-sm">{named.noConfigLine}</p>
                         )}
                         <InputError message={errors.default} />
                     </section>
@@ -482,7 +514,7 @@ export function ResourceSheet({
                             {!canUpdate
                                 ? 'Only an admin or an owner can change the resources of a protected environment.'
                                 : keepsTheDefault
-                                  ? 'This is the default database. Make another database the default first.'
+                                  ? named.keepsTheDefault
                                   : (attachment.detach_refusal ?? 'OpenTofu destroys it now.')}
                         </p>
                     )}
@@ -514,8 +546,7 @@ export function ResourceSheet({
                         <DialogTitle>Make {attachment.name} the default?</DialogTitle>
                         <DialogDescription>
                             On the next deploy, the default env values point to {attachment.name}.
-                            {currentDefault?.name &&
-                                ` ${currentDefault.name} gets one URL value instead, and the app needs a line in its database config to use it.`}
+                            {named && currentDefault?.name && ` ${named.oldDefault(currentDefault.name)}`}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

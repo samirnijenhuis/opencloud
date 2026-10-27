@@ -13,6 +13,7 @@ use App\Domains\Datastores\Capabilities;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Enums\DatastoreStatus;
+use App\Domains\Datastores\Enums\ResourceFamily;
 use App\Domains\Datastores\ExternalConnectionForm;
 use App\Domains\Datastores\ExternalField;
 use App\Domains\Datastores\Models\DatastoreAttachment;
@@ -50,10 +51,26 @@ class EnvironmentController extends Controller
     private const RESTORE_ACTIONS = ['backup.restore_requested', 'backup.restored', 'backup.restore_failed'];
 
     /** The name of a kind when its capabilities give no label. */
-    private const KIND_NAMES = ['mysql' => 'MySQL', 'postgres' => 'Postgres', 'valkey' => 'Valkey', 'rustfs' => 'RustFS'];
+    private const KIND_NAMES = ['mysql' => 'MySQL', 'postgres' => 'Postgres', 'valkey' => 'Valkey', 'rustfs' => 'RustFS bucket'];
 
     /** What each family is for, whatever the source. */
     private const PURPOSES = ['database' => 'A SQL database', 'key_value' => 'Cache, queues, and sessions', 'bucket' => 'S3 storage for files'];
+
+    /** The name field of the add dialog for each named family, and what the dialog says about the first one and a later one. */
+    private const NAME_FIELDS = [
+        'database' => [
+            'label' => 'Connection name',
+            'placeholder' => 'reports',
+            'first' => 'This is the first database of the environment, so it is the default.',
+            'later' => 'The default database keeps its env values. The app reaches this database through one URL value.',
+        ],
+        'bucket' => [
+            'label' => 'Name',
+            'placeholder' => 'uploads',
+            'first' => 'This is the first bucket of the environment, so it is the default.',
+            'later' => 'The default bucket keeps its env values. This bucket gets its own env values with its name as a prefix.',
+        ],
+    ];
 
     /** The canvas: the network, the app, and the resources of one environment, each with the data its sheet edits. */
     public function show(Request $request, Environment $environment): Response
@@ -179,7 +196,7 @@ class EnvironmentController extends Controller
         foreach (Provisioners::table() as ['kind' => $kind, 'source' => $source, 'provisioner' => $provisioner]) {
             $family = $kind->family();
 
-            // An environment has one attachment of each family other than databases.
+            // An environment has one key-value store, and as many databases and buckets as it needs.
             if (! $family->isNamed() && $taken->contains($family)) {
                 continue;
             }
@@ -191,7 +208,7 @@ class EnvironmentController extends Controller
                 'kind' => $kind,
                 'source' => $source,
                 'family' => $family,
-                'named' => $family->isNamed(),
+                'name_field' => $family->isNamed() ? self::nameField($family, $attachments) : null,
                 'label' => self::label($kind, $source, $capabilities),
                 'description' => self::PURPOSES[$family->value],
                 'group' => match ($source) {
@@ -216,6 +233,25 @@ class EnvironmentController extends Controller
         return $offers;
     }
 
+    /**
+     * The first database or bucket of an environment is the default, so its dialog starts with the name "main".
+     *
+     * @param  Collection<int, DatastoreAttachment>  $attachments
+     * @return array{label: string, placeholder: string, value: string, description: string}
+     */
+    private static function nameField(ResourceFamily $family, Collection $attachments): array
+    {
+        $texts = self::NAME_FIELDS[$family->value];
+        $first = ! $attachments->contains(fn (DatastoreAttachment $attachment) => $attachment->family === $family && $attachment->name !== null);
+
+        return [
+            'label' => $texts['label'],
+            'placeholder' => $texts['placeholder'],
+            'value' => $first ? ResourceFamily::FIRST_NAME : '',
+            'description' => $first ? $texts['first'] : $texts['later'],
+        ];
+    }
+
     /** @return array<string, mixed> */
     private function presentAttachment(DatastoreAttachment $attachment, Role $role): array
     {
@@ -225,10 +261,11 @@ class EnvironmentController extends Controller
             'id' => $attachment->id,
             'kind' => $datastore->kind,
             'source' => $datastore->source,
+            'family' => $attachment->family,
             'label' => self::label($datastore->kind, $datastore->source, $capabilities),
             'name' => $attachment->name,
             'is_default' => $attachment->is_default,
-            // The default sets the DB_* values that Laravel reads by itself. Each other database needs this line.
+            // The default sets the values that Laravel reads by itself. Each other database or bucket needs this line.
             'config_line' => AttachmentEnv::configLine($attachment),
             'status' => $attachment->status,
             'error' => $attachment->error,
