@@ -134,6 +134,16 @@ class ApplicationControllerTest extends TestCase
                         'env_profile' => 'generic',
                     ],
                     [
+                        'value' => 'python',
+                        'port' => 8000,
+                        'chooses_port' => true,
+                        'uses_build_command' => true,
+                        'deploy_commands' => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'],
+                        'processes' => [],
+                        'database' => 'none',
+                        'env_profile' => 'generic',
+                    ],
+                    [
                         'value' => 'static',
                         'port' => 8080,
                         'chooses_port' => false,
@@ -259,6 +269,10 @@ class ApplicationControllerTest extends TestCase
             'node with postgres' => [
                 ['type' => 'node', 'env_profile' => 'generic', 'port' => 3000, 'deploy_commands' => ['npx prisma migrate deploy'], 'processes' => [], 'database' => 'postgres'],
                 ['node', 'generic', 3000, ['npx prisma migrate deploy'], '/', [], [], ['postgres']],
+            ],
+            'python with postgres' => [
+                ['type' => 'python', 'env_profile' => 'generic', 'port' => 8000, 'deploy_commands' => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], 'processes' => [], 'database' => 'postgres'],
+                ['python', 'generic', 8000, ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], '/', [], ['SECRET_KEY'], ['postgres']],
             ],
             'static' => [
                 ['type' => 'static', 'env_profile' => 'generic', 'port' => null, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],

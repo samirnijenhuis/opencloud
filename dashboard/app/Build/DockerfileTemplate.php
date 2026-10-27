@@ -32,6 +32,16 @@ final class DockerfileTemplate
     }
 
     /**
+     * The JSON form of CMD, which runs the command without a shell around it.
+     *
+     * @param  list<string>  $command
+     */
+    public static function execForm(array $command): string
+    {
+        return '['.implode(', ', array_map(fn (string $arg) => json_encode($arg, JSON_UNESCAPED_SLASHES), $command)).']';
+    }
+
+    /**
      * The mounts that put each build value in the env of one RUN.
      *
      * @param  list<string>  $keys

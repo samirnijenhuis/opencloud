@@ -22,6 +22,10 @@ export const presetText: Record<ApplicationType, { hint: string; buildCommand: s
         hint: 'The build and start scripts of package.json',
         buildCommand: 'Optional extra step after the build script, for example npx prisma generate',
     },
+    python: {
+        hint: 'A Procfile, or Django, Flask, or FastAPI',
+        buildCommand: 'Optional extra step after the install, for example python manage.py collectstatic --noinput',
+    },
     static: {
         hint: 'nginx serves the files or the build output',
         buildCommand: 'Not used. The build script of package.json builds the site.',

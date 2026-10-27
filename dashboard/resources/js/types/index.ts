@@ -69,11 +69,12 @@ export type SizeOption = { value: Size; cpu_millicores: number; memory_mib: numb
 export type ProcessValues = { name: string; command: string; instances: number; exclusive: boolean };
 
 /** The preset of an application. The server stores it as the application type. */
-export type ApplicationType = 'laravel' | 'node' | 'static' | 'dockerfile';
+export type ApplicationType = 'laravel' | 'node' | 'python' | 'static' | 'dockerfile';
 
 export const applicationTypeLabels: Record<ApplicationType, string> = {
     laravel: 'Laravel',
     node: 'Node.js',
+    python: 'Python',
     static: 'Static site',
     dockerfile: 'Dockerfile',
 };

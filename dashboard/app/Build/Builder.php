@@ -34,6 +34,8 @@ final class Builder
     /** Files that a Node image or a static site never needs. A static site without a build serves the repository root. */
     private const NODE_IGNORE = ".git\nnode_modules\n";
 
+    private const PYTHON_IGNORE = ".git\n.venv\n";
+
     /**
      * @return string the image reference
      *
@@ -112,6 +114,11 @@ final class Builder
             )),
             ApplicationType::Node => self::generate($dir, self::NODE_IGNORE, NodeDockerfile::render(
                 self::nodeProject($dir) ?? throw new RepositoryDoesNotFit('The application uses the Node.js preset, but the repository has no package.json at its root.'),
+                $secrets,
+                $buildCommand,
+            )),
+            ApplicationType::Python => self::generate($dir, self::PYTHON_IGNORE, PythonDockerfile::render(
+                PythonProject::in(RepositoryFiles::in($dir)) ?? throw new RepositoryDoesNotFit('The application uses the Python preset, but the repository has no uv.lock, poetry.lock, Pipfile.lock, requirements.txt, or pyproject.toml at its root.'),
                 $secrets,
                 $buildCommand,
             )),

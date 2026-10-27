@@ -23,6 +23,7 @@ use App\Models\Process;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
@@ -110,6 +111,32 @@ class CreateApplicationTest extends TestCase
         $audit = AuditEvent::all()->toJson();
         $this->assertStringNotContainsString('sk_live_123456', $audit);
         $this->assertStringNotContainsString(substr($appKey, 7), $audit);
+    }
+
+    /** @return array<string, array{ApplicationType, string, string}> */
+    public static function generatedSecrets(): array
+    {
+        return [
+            'python' => [ApplicationType::Python, 'SECRET_KEY', '/^[0-9a-f]{64}$/'],
+        ];
+    }
+
+    #[DataProvider('generatedSecrets')]
+    public function test_a_new_app_gets_the_generated_secret_of_its_preset_and_the_preview_template_does_not(ApplicationType $type, string $key, string $pattern): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+
+        $application = app(CreateApplication::class)->handle(User::factory()->create(), [
+            'name' => 'api',
+            'repository' => 'acme/api',
+            'cluster_id' => Cluster::factory()->create()->id,
+            'type' => $type,
+        ]);
+
+        $vars = $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => $e->envVars()->get()->map(fn (EnvVar $v) => [$v->key, $v->is_secret, $v->available_at])->all())->all();
+        $this->assertSame([[[$key, true, EnvVarAvailability::Runtime]], []], $vars);
+        $this->assertMatchesRegularExpression($pattern, $application->environments()->where('name', 'production')->sole()->envVars()->sole()->value);
     }
 
     public function test_the_database_choice_attaches_postgres_or_nothing(): void

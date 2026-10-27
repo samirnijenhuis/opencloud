@@ -120,6 +120,35 @@ class BuilderTest extends TestCase
         $this->assertSame([".git\nnode_modules\n"], $processes->dockerignores);
     }
 
+    public function test_the_python_preset_writes_a_dockerfile_from_the_dependency_file_and_the_procfile(): void
+    {
+        $processes = FakeProcesses::install();
+        $processes->repository = [
+            'requirements.txt' => "flask==3.1\ngunicorn==23.0\n",
+            'runtime.txt' => "python-3.9\n",
+            'Procfile' => "web: gunicorn shop.wsgi:app --bind 0.0.0.0:\$PORT\n",
+            'package.json' => '{"scripts":{"start":"node server.js"}}',
+        ];
+        $deployment = $this->deployment('acme/shop', ApplicationType::Python);
+        $deployment->environment->update(['build_command' => 'flask --app shop assets build']);
+        EnvVar::factory()->for($deployment->environment)->create(['key' => 'PIP_INDEX_URL', 'value' => 'https://pypi.example.com/simple', 'available_at' => EnvVarAvailability::Build]);
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertContains('filename=.opencloud.Dockerfile', $processes->commands()[3]);
+        $this->assertContains('id=PIP_INDEX_URL,env=PIP_INDEX_URL', $processes->commands()[3]);
+        $this->assertSame([
+            'FROM python:3.14',
+            'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
+            'RUN python -m venv /opt/venv',
+            'RUN --mount=type=cache,target=/root/.cache --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL pip install -r requirements.txt',
+            'RUN --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL flask --app shop assets build',
+            'ENTRYPOINT ["/usr/bin/tini", "--"]',
+            'CMD ["sh", "-c", "exec gunicorn shop.wsgi:app --bind 0.0.0.0:$PORT"]',
+        ], array_values(preg_grep('/^(FROM|RUN|ENTRYPOINT|CMD) /', explode("\n", $processes->dockerfiles[0]))));
+        $this->assertSame([".git\n.venv\n"], $processes->dockerignores);
+    }
+
     public function test_the_static_preset_serves_a_repository_without_package_json_and_ignores_the_build_command(): void
     {
         $processes = FakeProcesses::install();
@@ -185,6 +214,11 @@ class BuilderTest extends TestCase
                 ApplicationType::Node,
                 ['package.json' => '{"scripts":{"build":"tsc"}}'],
                 'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script. To use another preset, create a new application with the same repository.',
+            ],
+            'python without a dependency file' => [
+                ApplicationType::Python,
+                ['app.py' => "app = Flask(__name__)\n", 'package.json' => '{"scripts":{"start":"node server.js"}}'],
+                'The application uses the Python preset, but the repository has no uv.lock, poetry.lock, Pipfile.lock, requirements.txt, or pyproject.toml at its root. To use another preset, create a new application with the same repository.',
             ],
             'dockerfile without a Dockerfile' => [
                 ApplicationType::Dockerfile,
