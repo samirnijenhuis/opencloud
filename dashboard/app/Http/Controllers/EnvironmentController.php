@@ -123,12 +123,13 @@ class EnvironmentController extends Controller
                 'deploy_commands' => $environment->deploy_commands,
             ],
             // Only a plain user value goes to the browser. A secret and a datastore value never do.
-            'envVars' => $environment->envVars()->orderBy('key')->get()->map(fn (EnvVar $envVar) => [
+            'envVars' => $environment->envVars()->with('datastoreAttachment.datastore')->orderBy('key')->get()->map(fn (EnvVar $envVar) => [
                 'id' => $envVar->id,
                 'key' => $envVar->key,
                 'source' => $envVar->source,
                 'is_secret' => $envVar->is_secret,
                 'available_at' => $envVar->available_at,
+                'resource' => $envVar->datastoreAttachment === null ? null : $this->resourceName($envVar->datastoreAttachment),
                 'value' => $envVar->source === EnvVarSource::USER && ! $envVar->is_secret ? $envVar->value : null,
             ]),
         ]);
@@ -304,6 +305,15 @@ class EnvironmentController extends Controller
             'at' => $event->created_at->toIso8601String(),
             'error' => $event->action === 'backup.restore_failed' ? ($event->context['error'] ?? null) : null,
         ];
+    }
+
+    /** The name that the canvas shows for a resource: its label and its connection name, for example "Postgres main". */
+    private function resourceName(DatastoreAttachment $attachment): string
+    {
+        $datastore = $attachment->datastore;
+        $label = self::label($datastore->kind, $datastore->source, Provisioners::of($datastore)->capabilities());
+
+        return trim("{$label} {$attachment->name}");
     }
 
     private static function label(DatastoreKind $kind, DatastoreSource $source, Capabilities $capabilities): string

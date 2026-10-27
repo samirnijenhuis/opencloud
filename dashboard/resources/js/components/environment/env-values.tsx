@@ -15,6 +15,7 @@ export type EnvVar = {
     source: 'user' | 'datastore';
     is_secret: boolean;
     available_at: Availability;
+    resource: string | null;
     value: string | null;
 };
 
@@ -73,7 +74,7 @@ export function EnvValues({ environmentId, envVars, canUpdate }: { environmentId
                                     <td className="p-3 font-mono">{envVar.key}</td>
                                     <td className="p-3">
                                         {envVar.source === 'datastore' ? (
-                                            <span className="text-muted-foreground">Set by a resource. Read only.</span>
+                                            <span className="text-muted-foreground">Set by {envVar.resource ?? 'a resource'}. Read only.</span>
                                         ) : envVar.is_secret ? (
                                             <Badge variant="secondary">Secret, set</Badge>
                                         ) : (
