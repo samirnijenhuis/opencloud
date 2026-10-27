@@ -1,6 +1,7 @@
+import { type CanvasColumn, useCanvas } from '@/components/environment/canvas';
 import { cn } from '@/lib/utils';
 import { type LucideIcon, Plus } from 'lucide-react';
-import { type ReactNode } from 'react';
+import { type ReactNode, useId } from 'react';
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'off';
 
@@ -22,9 +23,21 @@ export function Status({ tone, children }: { tone: Tone; children: ReactNode }) 
 }
 
 /** A labeled area on the canvas, for example the network or a cluster. */
-export function Group({ label, aside, children, className }: { label: ReactNode; aside?: ReactNode; children: ReactNode; className?: string }) {
+export function Group({
+    label,
+    aside,
+    column,
+    children,
+    className,
+}: {
+    label: ReactNode;
+    aside?: ReactNode;
+    column: CanvasColumn;
+    children: ReactNode;
+    className?: string;
+}) {
     return (
-        <section className={cn('bg-muted/80 border-border/70 space-y-2.5 rounded-xl border p-2.5', className)}>
+        <section data-column={column} className={cn('bg-muted/80 border-border/70 space-y-2.5 rounded-xl border p-2.5', className)}>
             <header className="text-muted-foreground flex items-center justify-between gap-2 px-1.5 pt-0.5 text-xs">
                 <span className="truncate">{label}</span>
                 {aside && <span className="shrink-0">{aside}</span>}
@@ -34,27 +47,45 @@ export function Group({ label, aside, children, className }: { label: ReactNode;
     );
 }
 
-/** A card that opens its sheet. The header is the button, so the add buttons inside stay separate controls. */
+/**
+ * A card that opens its sheet. The header is the button, so the add buttons inside stay separate controls.
+ * The canvas draws the lines of a block. `target` marks the block that takes the HTTP traffic.
+ */
 export function Block({
     icon: Icon,
     title,
     aside,
+    target,
     onOpen,
     children,
 }: {
     icon: LucideIcon;
     title: string;
     aside?: ReactNode;
+    target?: boolean;
     onOpen: () => void;
     children?: ReactNode;
 }) {
+    const id = useId();
+    const { lit, setActive } = useCanvas();
+
     return (
         <div
+            data-block={id}
+            data-http-target={target ? '' : undefined}
             onClick={onOpen}
-            className="bg-card hover:border-foreground/25 cursor-pointer overflow-hidden rounded-lg border shadow-xs transition-colors"
+            onPointerEnter={() => setActive(id)}
+            onPointerLeave={() => setActive(null)}
+            onFocus={() => setActive(id)}
+            onBlur={() => setActive(null)}
+            className={cn(
+                'bg-card relative z-[1] cursor-pointer overflow-hidden rounded-lg border shadow-xs transition-colors',
+                lit.has(id) ? 'border-blue-500' : 'hover:border-foreground/25',
+            )}
         >
             <button
                 type="button"
+                data-block-header
                 onClick={(e) => {
                     e.stopPropagation();
                     onOpen();
@@ -74,7 +105,7 @@ export function Row({ label, children, className }: { label: ReactNode; children
     return (
         <div className={cn('flex items-center justify-between gap-3 px-3 py-1.5 text-sm', className)}>
             <span className="text-muted-foreground min-w-0 truncate">{label}</span>
-            <span className="min-w-0 text-right">{children}</span>
+            <span className="max-w-[70%] shrink-0 truncate text-right">{children}</span>
         </div>
     );
 }

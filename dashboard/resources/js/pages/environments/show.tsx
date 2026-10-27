@@ -1,5 +1,6 @@
 import { AppSheet } from '@/components/environment/app-sheet';
 import { AddButton, Block, Group, Row, Status, SubHeading, type Tone } from '@/components/environment/block';
+import { Canvas } from '@/components/environment/canvas';
 import { DomainsSheet } from '@/components/environment/domains-sheet';
 import { EditorSheet } from '@/components/environment/editor-sheet';
 import { AddResourceMenu, ResourceSheet, statusLabels, statusTones } from '@/components/environment/resource-sheet';
@@ -20,7 +21,7 @@ import EnvironmentLayout from '@/layouts/environment-layout';
 import { duration, memoryText, shortSha, sizeLabel, sizeText, timeAgo, vcpu } from '@/lib/format';
 import { kindLabels as clusterKindLabels } from '@/pages/clusters/cluster-status';
 import { Link, router } from '@inertiajs/react';
-import { Boxes, Database, Globe, HardDrive, Plus, Server, ShieldCheck, Zap } from 'lucide-react';
+import { Boxes, Database, ExternalLink, Globe, HardDrive, Plus, Server, ShieldCheck, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const resourceIcons = { mysql: Database, postgres: Database, valkey: Zap, rustfs: HardDrive } as const;
@@ -38,6 +39,32 @@ function domainState(domain: Domain): [Tone, string] {
     if (domain.certificate_status !== 'issued') return ['warn', 'Issuing'];
 
     return ['ok', 'Live'];
+}
+
+/** The domain that the header link opens: the first live one, and a custom domain before the free generated one. */
+const liveDomain = (domains: Domain[]) =>
+    domains.find((domain) => !domain.generated && domainState(domain)[0] === 'ok') ?? domains.find((domain) => domainState(domain)[0] === 'ok');
+
+function VisitSite({ domains }: { domains: Domain[] }) {
+    const domain = liveDomain(domains);
+
+    if (!domain) {
+        return (
+            <span title="No domain is live yet. Add a domain, or wait for its certificate.">
+                <Button variant="outline" disabled>
+                    <ExternalLink /> Visit site
+                </Button>
+            </span>
+        );
+    }
+
+    return (
+        <Button variant="outline" asChild>
+            <a href={`https://${domain.hostname}`} target="_blank" rel="noreferrer" title={domain.hostname}>
+                <ExternalLink /> Visit site
+            </a>
+        </Button>
+    );
 }
 
 function certificatesState(domains: Domain[]): [Tone, string] {
@@ -247,10 +274,10 @@ export default function EnvironmentShow(props: CanvasProps) {
     );
 
     return (
-        <EnvironmentLayout page={props} tab="environment" title="Environment">
-            <div className="@container relative rounded-xl border bg-neutral-50/70 bg-[radial-gradient(var(--color-neutral-300)_1px,transparent_1px)] bg-[size:14px_14px] p-4 pb-20 sm:p-6 sm:pb-20 dark:bg-neutral-950 dark:bg-[radial-gradient(var(--color-neutral-800)_1px,transparent_1px)]">
-                <div className="mx-auto grid max-w-md grid-cols-1 gap-6 @4xl:max-w-none @4xl:grid-cols-[minmax(0,1fr)_1.75rem_minmax(0,1.1fr)_1.75rem_minmax(0,1fr)] @4xl:items-start @4xl:gap-0">
-                    <Group label="Network" aside="Caddy">
+        <EnvironmentLayout page={props} tab="environment" title="Environment" actions={<VisitSite domains={domains} />}>
+            <Canvas className="@container rounded-xl border bg-neutral-50/70 bg-[radial-gradient(var(--color-neutral-300)_1px,transparent_1px)] bg-[size:14px_14px] p-4 pb-20 sm:p-6 sm:pb-20 dark:bg-neutral-950 dark:bg-[radial-gradient(var(--color-neutral-800)_1px,transparent_1px)]">
+                <div className="mx-auto grid max-w-md grid-cols-1 gap-6 @4xl:max-w-none @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)] @4xl:items-start @4xl:gap-x-7">
+                    <Group column="network" label="Network" aside="Caddy">
                         <Block icon={ShieldCheck} title="HTTPS" onOpen={() => show({ kind: 'https' })}>
                             <Row label="Certificates">
                                 <Status tone={certTone}>{certText}</Status>
@@ -272,9 +299,16 @@ export default function EnvironmentShow(props: CanvasProps) {
                                     <Row
                                         key={domain.id}
                                         label={
-                                            <span className="text-foreground" title={domain.hostname}>
+                                            <a
+                                                href={`https://${domain.hostname}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                title={domain.hostname}
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="text-foreground focus-visible:ring-ring rounded-sm outline-none hover:underline focus-visible:ring-2"
+                                            >
                                                 {domain.hostname}
-                                            </span>
+                                            </a>
                                         }
                                     >
                                         <span className="flex items-center gap-2">
@@ -288,10 +322,8 @@ export default function EnvironmentShow(props: CanvasProps) {
                         </Block>
                     </Group>
 
-                    <Connector />
-
-                    <Group label={cluster.name} aside={clusterKindLabels[cluster.kind]}>
-                        <Block icon={Server} title="App" onOpen={() => show({ kind: 'app', tab: 'general' })}>
+                    <Group column="cluster" label={cluster.name} aside={clusterKindLabels[cluster.kind]}>
+                        <Block icon={Server} title="App" target onOpen={() => show({ kind: 'app', tab: 'general' })}>
                             <Row label="Size">{size ? `${sizeLabel(size.value)}, ${sizeText(size)}` : sizeLabel(compute.size)}</Row>
                             <Row label="Instances">
                                 {autoscales
@@ -339,9 +371,7 @@ export default function EnvironmentShow(props: CanvasProps) {
                         </Block>
                     </Group>
 
-                    <Connector />
-
-                    <Group label="Resources" className="border-transparent bg-transparent">
+                    <Group column="resources" label="Resources" className="border-transparent bg-transparent">
                         {datastores.attachments.map((attachment) => (
                             <ResourceCard key={attachment.id} attachment={attachment} onOpen={() => show({ kind: 'resource', id: attachment.id })} />
                         ))}
@@ -383,7 +413,7 @@ export default function EnvironmentShow(props: CanvasProps) {
                         {addResource}
                     </div>
                 )}
-            </div>
+            </Canvas>
 
             {hasPods && <CapacityBar clusterName={cluster.name} capacity={capacity} requests={status?.requests ?? null} />}
 
@@ -454,14 +484,5 @@ export default function EnvironmentShow(props: CanvasProps) {
                 canManageCredentials={can.manage_credentials}
             />
         </EnvironmentLayout>
-    );
-}
-
-/** A line between two columns of the canvas, at the height of the first block header. */
-function Connector() {
-    return (
-        <div aria-hidden className="relative hidden @4xl:block">
-            <span className="bg-foreground/20 absolute inset-x-0 top-[3.65rem] h-px" />
-        </div>
     );
 }

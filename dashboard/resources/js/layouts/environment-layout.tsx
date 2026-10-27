@@ -82,11 +82,13 @@ export default function EnvironmentLayout({
     page,
     tab,
     title,
+    actions,
     children,
 }: {
     page: EnvironmentPageProps;
     tab: EnvironmentTab | null;
     title: string;
+    actions?: React.ReactNode;
     children: React.ReactNode;
 }) {
     const { application, environment, can } = page;
@@ -158,7 +160,10 @@ export default function EnvironmentLayout({
                         </div>
                     </div>
 
-                    {can.deploy && environment.kind !== 'preview_template' && <DeployButton environmentId={environment.id} />}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {actions}
+                        {can.deploy && environment.kind !== 'preview_template' && <DeployButton environmentId={environment.id} />}
+                    </div>
                 </div>
 
                 {errors.deploy && <p className="text-sm text-red-600 dark:text-red-400">{errors.deploy}</p>}
