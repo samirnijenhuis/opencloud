@@ -104,7 +104,7 @@ class PythonDockerfileTest extends TestCase
             'the python_full_version of the Pipfile is exact' => [['Pipfile.lock' => '{}', 'Pipfile' => "[requires]\npython_full_version = \"3.12.4\"\n"], '3.12.4'],
             'a range that allows the default' => [$pyproject('>=3.10'), '3.14'],
             'a range below the default gets its highest version' => [$pyproject('>=3.10,<3.13'), '3.12'],
-            'a compatible release' => [$pyproject('~=3.15.0'), '3.15'],
+            'a compatible release' => [$pyproject('~= 3.15.0'), '3.15'],
             'a wildcard' => [$pyproject('==3.11.*'), '3.11'],
             'a range that Composer cannot parse gets the default' => [$pyproject('>=3.8,!=3.9.*'), '3.14'],
         ];
@@ -188,11 +188,14 @@ class PythonDockerfileTest extends TestCase
     {
         try {
             PythonDockerfile::render(self::project($files));
-            $this->fail('The render did not fail.');
         } catch (RuntimeException $e) {
             $this->assertSame($message, $e->getMessage());
             $this->assertSame(str_ends_with($message, 'same repository.'), $e instanceof RepositoryDoesNotFit);
+
+            return;
         }
+
+        $this->fail('The render did not fail.');
     }
 
     public function test_a_repository_without_a_dependency_file_is_no_python_project(): void

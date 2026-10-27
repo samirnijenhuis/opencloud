@@ -28,7 +28,7 @@ final class RuntimeVersion
 
         try {
             // Ruby writes "~> 3.3" and Python "~=3.3" for what Composer writes "~3.3". Composer writes "3.12.*" without "==".
-            $constraint = $parser->parseConstraints(str_replace(['~>', '~=', '===', '=='], ['~', '~', '', ''], $requested));
+            $constraint = $parser->parseConstraints(preg_replace(['/~[>=]\s*/', '/={2,3}\s*/'], ['~', ''], $requested));
         } catch (UnexpectedValueException) {
             return $default;
         }
