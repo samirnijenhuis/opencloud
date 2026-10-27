@@ -183,7 +183,10 @@ export default function ApplicationCreate({
                         <InputError message={errors.cluster_id} />
                     </Row>
 
-                    <Row label="Preset" hint="The defaults for the kind of app. You can change each one below.">
+                    <Row
+                        label="Preset"
+                        hint="The defaults for the kind of app. You can change each default below. You cannot change the preset later."
+                    >
                         <div className="flex flex-wrap gap-2">
                             {presets.map((each) => (
                                 <Chip key={each.value} selected={data.type === each.value} onClick={() => changePreset(each)}>
