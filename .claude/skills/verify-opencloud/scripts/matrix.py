@@ -5,12 +5,14 @@
   matrix.py fixtures sync|check         push the fixture apps to their branches, or compare them
   matrix.py list [--set S] [--only P]   print the cells that a run would drive
   matrix.py run [--set S] [--only P]    drive the cells and write the evidence to .verify/runs/<run id>/
+  matrix.py local [--set S] [--only P]  build and run the cells in Docker on this computer, with no machine
 """
 import argparse
 import fnmatch
 import hashlib
 import html
 import json
+import os
 import re
 import secrets
 import shutil
@@ -358,7 +360,7 @@ class CellRun:
             time.sleep(5)
             status, page = fetch(self.url + '/')
         self.save(f'step-{step}-page.html', page)
-        self.check(f'step {step}: the page answers 200 over HTTPS', status == 200 and '<title>' in page, f'{status} {self.url}/')
+        self.check(f'step {step}: the page answers 200 over {self.url.split(":")[0].upper()}', status == 200 and '<title>' in page, f'{status} {self.url}/')
 
         status, text = fetch(self.url + fixture['verify_path'])
         self.save(f'step-{step}-verify.json', text)
@@ -424,6 +426,101 @@ def run(args):
     passed = sum(1 for r in rows if r[1] == 'pass')
     print(f'\n{passed} of {len(rows)} cells pass. Evidence: {out}')
     return 0 if passed == len(rows) else 1
+
+
+def docker(*args, env=None):
+    return subprocess.run(['docker', *args], capture_output=True, text=True, errors='replace', env=None if env is None else {**os.environ, **env})
+
+
+# A password with URL characters, so a fixture must decode the URLs that the env profile encodes.
+LOCAL_PASSWORD = 'pa:ss@w/rd+1'
+LOCAL_SERVERS = {
+    'mysql': {'image': 'mysql', 'port': 3306, 'args': ['-e', 'MYSQL_RANDOM_ROOT_PASSWORD=yes', '-e', 'MYSQL_DATABASE=verify', '-e', 'MYSQL_USER=verify', '-e', f'MYSQL_PASSWORD={LOCAL_PASSWORD}'],
+              'command': [], 'ready': ['mysqladmin', 'ping', '-h', '127.0.0.1', '-u', 'verify', f'-p{LOCAL_PASSWORD}']},
+    'postgres': {'image': 'postgres', 'port': 5432, 'args': ['-e', 'POSTGRES_DB=verify', '-e', 'POSTGRES_USER=verify', '-e', f'POSTGRES_PASSWORD={LOCAL_PASSWORD}'],
+                 'command': [], 'ready': ['pg_isready', '-h', '127.0.0.1', '-U', 'verify']},
+    'valkey': {'image': 'valkey/valkey', 'port': 6379, 'args': [], 'command': ['valkey-server', '--requirepass', LOCAL_PASSWORD],
+               'ready': ['valkey-cli', '--no-auth-warning', '-a', LOCAL_PASSWORD, 'ping']},
+}
+
+
+class LocalRun(CellRun):
+    """
+    Runs one cell in Docker on this computer, after step 2 of a real run: the image from the Dockerfile that the preset of
+    this checkout writes, the datastores of the cell, three runs of the deploy commands, and the web container. Then the
+    same checks as steps 2 and 3. It proves a fixture before a matrix run, and it needs no machine.
+    """
+
+    def __init__(self, cell, out):
+        super().__init__(None, None, cell, out)
+        self.name = f'oc-verify-local-{cell.id}'
+
+    def attachments(self):
+        cell = self.cell
+        sql = {'mysql': [('mysql', 'main')], 'postgres': [('postgres', 'main')], 'mysqlpostgres': [('mysql', 'main'), ('postgres', 'reports')]}.get(cell.db, [])
+        found = [{'kind': kind, 'host': f'{self.name}-{kind}', 'port': LOCAL_SERVERS[kind]['port'], 'database': 'verify', 'username': 'verify',
+                  'password': LOCAL_PASSWORD, 'name': name, 'default': name == 'main'} for kind, name in sql]
+        if cell.cache == 'valkey':
+            found.append({'kind': 'valkey', 'host': f'{self.name}-valkey', 'port': 6379, 'password': LOCAL_PASSWORD})
+        return found
+
+    def drive(self):
+        cell, attachments = self.cell, self.attachments()
+        with tempfile.TemporaryDirectory(prefix=f'{self.name}-') as work:
+            app = Path(work) / 'app'
+            fixture_tree(cell.fixture_name, cell.fixture, app)
+            planned = subprocess.run(['php', str(SKILL / 'scripts' / 'local-plan.php'), json.dumps({
+                'dashboard': str(ROOT / 'dashboard'), 'dir': str(app), 'type': cell.fixture['type'], 'env_profile': cell.fixture['env_profile'],
+                'port': cell.fixture.get('port'), 'build_secrets': ['VERIFY_BUILD'], 'build_command': cell.fill(cell.pick('build_command')),
+                'attachments': attachments,
+            })], capture_output=True, text=True)
+            if planned.returncode != 0:
+                raise RuntimeError(f'local-plan.php failed: {planned.stdout}{planned.stderr}')
+            plan = json.loads(planned.stdout)
+            build = docker('build', '--progress=plain', '-f', str(app / plan['dockerfile']), '--build-arg', 'OPENCLOUD_BUILD_ENV=local',
+                           '--secret', 'id=VERIFY_BUILD,env=VERIFY_BUILD', '-t', self.name, str(app), env={'VERIFY_BUILD': cell.id})
+        self.save('build.log', build.stdout + build.stderr)
+        if not self.check('the image builds with the Dockerfile of the preset', build.returncode == 0, f"{plan['dockerfile']}, see build.log"):
+            print('\n'.join((build.stdout + build.stderr).splitlines()[-30:]))
+            return
+
+        env = {**plan['env'], 'VERIFY_MARKER': f'{cell.id}-v2', **{k: cell.fill(v) for k, v in cell.env(2).items()}, 'VERIFY_SECRET': self.secret}
+        pass_env = [arg for key in env for arg in ('-e', key)]
+        try:
+            docker('network', 'create', self.name)
+            for a in attachments:
+                server = LOCAL_SERVERS[a['kind']]
+                docker('run', '-d', '--name', a['host'], '--network', self.name, *server['args'], f"{server['image']}:{plan['versions'][a['kind']]}", *server['command'])
+            for a in attachments:
+                start = time.time()
+                while docker('exec', a['host'], *LOCAL_SERVERS[a['kind']]['ready']).returncode != 0 and time.time() - start < 180:
+                    time.sleep(2)
+                self.check(f"the local {a['kind']} server answers", time.time() - start < 180, f'after {round(time.time() - start)}s')
+            commands = ' && '.join(cell.fill(c) for c in cell.pick('deploy_commands') or [])
+            for step in (1, 2, 3):
+                deploy = docker('run', '--rm', '--network', self.name, *pass_env, '--entrypoint', 'sh', self.name, '-c', commands, env=env)
+                self.save(f'deployment-{step}.log', deploy.stdout + deploy.stderr)
+                self.check(f'deployment {step} ran the deploy commands', deploy.returncode == 0 and f'deploy-marker-{cell.id}' in deploy.stdout, f'exit {deploy.returncode}')
+            docker('run', '-d', '--name', f'{self.name}-web', '--network', self.name, *pass_env, '-p', f"127.0.0.1::{plan['port']}", self.name, env=env)
+            address = docker('port', f'{self.name}-web', f"{plan['port']}/tcp").stdout.split()
+            if not self.check('the web container publishes its port', address, plan['port']):
+                return
+            self.url = f'http://{address[0]}'
+            self.verify_step(2)
+            self.verify_step(3)
+        finally:
+            logs = docker('logs', f'{self.name}-web')
+            self.save('web.log', logs.stdout + logs.stderr)
+            docker('rm', '-f', f'{self.name}-web', *(a['host'] for a in attachments))
+            docker('network', 'rm', self.name)
+            docker('rmi', self.name)
+
+
+def local(args):
+    out = RUNS / time.strftime('%Y%m%d-%H%M%S-local')
+    verdicts = [LocalRun(Cell(cell_id), out / cell_id).run() for cell_id in cells_for(args.set, args.only)]
+    print(f"\n{verdicts.count('pass')} of {len(verdicts)} cells pass locally. Evidence: {out}")
+    return 0 if verdicts.count('pass') == len(verdicts) else 1
 
 
 def doctor(_args):
@@ -507,7 +604,7 @@ def main():
     fixture_parser = commands.add_parser('fixtures')
     fixture_parser.add_argument('action', choices=['sync', 'check'])
     fixture_parser.set_defaults(func=fixtures)
-    for name, func in (('list', None), ('run', run)):
+    for name, func in (('list', None), ('run', run), ('local', local)):
         sub = commands.add_parser(name)
         sub.add_argument('--set', default='smoke', choices=['smoke', 'full'], help='smoke covers each value of each fixture at least once; full is every cell')
         sub.add_argument('--only', action='append', default=[], help='keep the cells that match this glob, for example "php-*"')
