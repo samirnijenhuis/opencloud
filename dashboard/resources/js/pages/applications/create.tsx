@@ -98,9 +98,9 @@ export default function ApplicationCreate({
 
     const processErrors = (index: number) => ({
         name: errors[`processes.${index}.name` as keyof typeof errors],
+        kind: errors[`processes.${index}.kind` as keyof typeof errors],
         command: errors[`processes.${index}.command` as keyof typeof errors],
-        instances: errors[`processes.${index}.instances` as keyof typeof errors],
-        exclusive: errors[`processes.${index}.exclusive` as keyof typeof errors],
+        schedule: errors[`processes.${index}.schedule` as keyof typeof errors],
     });
 
     const setEnv = (index: number, change: Partial<EnvRow>) => {
@@ -275,7 +275,10 @@ export default function ApplicationCreate({
                         <InputError message={errors.deploy_commands} />
                     </Row>
 
-                    <Row label="Processes" hint="Each runs next to web with the same image and env. An exclusive process runs exactly one copy.">
+                    <Row
+                        label="Processes"
+                        hint="Each runs next to web with the same image, env, and size. A long-running process runs all the time. A scheduled process runs on a cron schedule."
+                    >
                         {data.processes.length > 0 && (
                             <ul className="space-y-2">
                                 {data.processes.map((row, index) => (
@@ -303,7 +306,7 @@ export default function ApplicationCreate({
                             type="button"
                             size="sm"
                             variant="secondary"
-                            onClick={() => setData('processes', [...data.processes, { name: '', command: '', instances: 1, exclusive: false }])}
+                            onClick={() => setData('processes', [...data.processes, { name: '', kind: 'long_running', command: '', schedule: null }])}
                         >
                             Add a process
                         </Button>

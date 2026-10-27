@@ -1,8 +1,7 @@
 import InputError from '@/components/input-error';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { type ProcessValues } from '@/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { type ProcessKind, type ProcessValues } from '@/types';
 import { type ReactNode } from 'react';
 
 type Props = {
@@ -13,8 +12,10 @@ type Props = {
     children?: ReactNode;
 };
 
-/** The inputs of one process. The children go at the end of the row, for example a remove button. */
+/** The inputs of one process. A scheduled process also has a schedule. The children go at the end of the row, for example a remove button. */
 export default function ProcessFields({ value, onChange, errors = {}, disabled = false, children }: Props) {
+    const scheduled = value.kind === 'scheduled';
+
     return (
         <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -26,38 +27,45 @@ export default function ProcessFields({ value, onChange, errors = {}, disabled =
                     disabled={disabled}
                     onChange={(e) => onChange({ name: e.target.value })}
                 />
+                <Select
+                    value={value.kind}
+                    disabled={disabled}
+                    onValueChange={(kind: ProcessKind) =>
+                        onChange(kind === 'scheduled' ? { kind, schedule: value.schedule || '* * * * *' } : { kind })
+                    }
+                >
+                    <SelectTrigger className="w-36" aria-label="Kind">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="long_running">Long-running</SelectItem>
+                        <SelectItem value="scheduled">Scheduled</SelectItem>
+                    </SelectContent>
+                </Select>
                 <Input
                     aria-label="Command"
                     className="min-w-48 flex-1 font-mono text-sm"
-                    placeholder="php artisan queue:work"
+                    placeholder={scheduled ? 'php artisan schedule:run' : 'php artisan queue:work'}
                     value={value.command}
                     disabled={disabled}
                     onChange={(e) => onChange({ command: e.target.value })}
                 />
-                <Input
-                    aria-label="Instances"
-                    type="number"
-                    min={1}
-                    max={20}
-                    className="w-20"
-                    value={value.instances}
-                    disabled={disabled || value.exclusive}
-                    onChange={(e) => onChange({ instances: Number(e.target.value) })}
-                />
-                <Label className="flex items-center gap-1.5 text-sm font-normal">
-                    <Checkbox
-                        checked={value.exclusive}
+                {scheduled && (
+                    <Input
+                        aria-label="Schedule"
+                        className="w-32 font-mono text-sm"
+                        placeholder="* * * * *"
+                        value={value.schedule ?? ''}
                         disabled={disabled}
-                        onCheckedChange={(checked) => onChange(checked === true ? { exclusive: true, instances: 1 } : { exclusive: false })}
+                        onChange={(e) => onChange({ schedule: e.target.value })}
                     />
-                    Exclusive
-                </Label>
+                )}
                 {children}
             </div>
             <InputError message={errors.name} />
+            <InputError message={errors.kind} />
             <InputError message={errors.command} />
-            <InputError message={errors.instances} />
-            <InputError message={errors.exclusive} />
+            <InputError message={errors.schedule} />
         </div>
     );
 }

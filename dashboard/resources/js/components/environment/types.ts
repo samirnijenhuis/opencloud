@@ -125,10 +125,14 @@ export type ProcessStatus = {
     memory_mib: number | null;
 };
 
+/** The last run of a scheduled process. A process that never ran has no time. */
+export type ScheduledStatus = { name: string; last_run_at: string | null; last_run_failed: boolean };
+
 export type LiveStatus = {
     state: 'ok' | 'unknown';
     error: string | null;
     processes: ProcessStatus[];
+    scheduled: ScheduledStatus[];
     requests: Resources | null;
     checked_at: string;
 };
@@ -142,7 +146,12 @@ export type Capacity = {
     checked_at: string;
 };
 
-export type AppTab = 'general' | 'autoscaling' | 'processes';
+export type AppTab = 'general' | 'autoscaling';
 
-/** The open side sheet. Only one is open at a time. */
-export type Sheet = { kind: 'https' } | { kind: 'domains'; adding: boolean } | { kind: 'app'; tab: AppTab } | { kind: 'resource'; id: number };
+/** The open side sheet. Only one is open at a time. A process sheet without an id adds a new process. */
+export type Sheet =
+    | { kind: 'https' }
+    | { kind: 'domains'; adding: boolean }
+    | { kind: 'app'; tab: AppTab }
+    | { kind: 'process'; id: number | null; tab: AppTab }
+    | { kind: 'resource'; id: number };

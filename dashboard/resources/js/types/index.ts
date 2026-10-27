@@ -65,8 +65,11 @@ export type Size = 'xs' | 's' | 'm' | 'l';
 
 export type SizeOption = { value: Size; cpu_millicores: number; memory_mib: number };
 
-/** A long-running command next to web. An exclusive process runs exactly one instance. */
-export type ProcessValues = { name: string; command: string; instances: number; exclusive: boolean };
+/** A long-running process runs all the time as a Deployment. A scheduled process runs on its schedule as a CronJob. */
+export type ProcessKind = 'long_running' | 'scheduled';
+
+/** The values of one process in the create form. Each new process takes the size of web and 1 instance. */
+export type ProcessValues = { name: string; kind: ProcessKind; command: string; schedule: string | null };
 
 /** The preset of an application. The server stores it as the application type. */
 export type ApplicationType = 'laravel' | 'node' | 'python' | 'ruby' | 'static' | 'dockerfile';
@@ -83,7 +86,11 @@ export const applicationTypeLabels: Record<ApplicationType, string> = {
 /** The env names that a database, Valkey, or a bucket sets: the Laravel names, or URLs that most other frameworks read. */
 export type EnvProfileKind = 'laravel' | 'generic';
 
-export type Process = ProcessValues & { id: number };
+/** A process of an environment. Only a long-running process has instances, and only a scheduled process has a schedule. */
+export type Process = { id: number; name: string; command: string; size: Size } & (
+    | { kind: 'long_running'; schedule: null; min_instances: number; max_instances: number; cpu_target: number }
+    | { kind: 'scheduled'; schedule: string; min_instances: null; max_instances: null; cpu_target: null }
+);
 
 export interface Deployment {
     id: number;
