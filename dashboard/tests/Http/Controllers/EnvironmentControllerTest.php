@@ -43,11 +43,11 @@ class EnvironmentControllerTest extends TestCase
     {
         $environment = $this->makeEnvironment(attributes: ['size' => Size::M, 'min_instances' => 2, 'max_instances' => 5, 'cpu_target' => 60, 'health_path' => '/healthz']);
         $author = User::factory()->create(['name' => 'Dev']);
-        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Superseded, 'commit_sha' => str_repeat('1', 40)]);
-        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Live, 'commit_sha' => str_repeat('a', 40)]);
-        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Failed, 'commit_sha' => str_repeat('c', 40)]);
-        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Building, 'commit_sha' => str_repeat('b', 40), 'triggered_by' => $author->id]);
-        $free = Domain::factory()->for($environment)->create(['hostname' => 'shop-production.203.0.113.10.sslip.io', 'generated' => true, 'dns_status' => DnsStatus::Ok, 'certificate_status' => 'issued']);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::SUPERSEDED, 'commit_sha' => str_repeat('1', 40)]);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::LIVE, 'commit_sha' => str_repeat('a', 40)]);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::FAILED, 'commit_sha' => str_repeat('c', 40)]);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::BUILDING, 'commit_sha' => str_repeat('b', 40), 'triggered_by' => $author->id]);
+        $free = Domain::factory()->for($environment)->create(['hostname' => 'shop-production.203.0.113.10.sslip.io', 'generated' => true, 'dns_status' => DnsStatus::OK, 'certificate_status' => 'issued']);
         Domain::factory()->for($environment)->create(['hostname' => 'shop.example.com']);
 
         $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}")
@@ -99,9 +99,9 @@ class EnvironmentControllerTest extends TestCase
     {
         $production = $this->makeEnvironment();
         $application = $production->application;
-        $staging = Environment::factory()->for($application)->create(['name' => 'staging', 'color' => EnvironmentColor::Green]);
-        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate]);
-        $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::Preview, 'color' => EnvironmentColor::Gray]);
+        $staging = Environment::factory()->for($application)->create(['name' => 'staging', 'color' => EnvironmentColor::GREEN]);
+        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
+        $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'color' => EnvironmentColor::GRAY]);
         $this->makeEnvironment(false, 'other-application');
 
         $this->actingAs(User::factory()->create())->get("/environments/{$staging->id}/deployments")

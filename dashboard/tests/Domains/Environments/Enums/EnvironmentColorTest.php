@@ -19,12 +19,12 @@ class EnvironmentColorTest extends TestCase
 
     public function test_a_permanent_environment_starts_blue_and_previews_start_gray(): void
     {
-        $colors = collect([EnvironmentKind::Permanent, EnvironmentKind::Preview, EnvironmentKind::PreviewTemplate])
+        $colors = collect([EnvironmentKind::PERMANENT, EnvironmentKind::PREVIEW, EnvironmentKind::PREVIEW_TEMPLATE])
             ->map(fn (EnvironmentKind $kind) => Environment::factory()->create(['kind' => $kind])->fresh()->color)
             ->all();
 
-        $this->assertSame([EnvironmentColor::Blue, EnvironmentColor::Gray, EnvironmentColor::Gray], $colors);
-        $this->assertSame(EnvironmentColor::Purple, Environment::factory()->create(['color' => 'purple'])->fresh()->color);
+        $this->assertSame([EnvironmentColor::BLUE, EnvironmentColor::GRAY, EnvironmentColor::GRAY], $colors);
+        $this->assertSame(EnvironmentColor::PURPLE, Environment::factory()->create(['color' => 'purple'])->fresh()->color);
     }
 
     public function test_the_action_stores_the_color_and_records_the_change_once(): void
@@ -32,8 +32,8 @@ class EnvironmentColorTest extends TestCase
         $environment = $this->makeEnvironment();
         $owner = User::factory()->owner()->create();
 
-        app(SetEnvironmentColor::class)->execute($environment, $owner, EnvironmentColor::Red);
-        app(SetEnvironmentColor::class)->execute($environment, $owner, EnvironmentColor::Red);
+        app(SetEnvironmentColor::class)->execute($environment, $owner, EnvironmentColor::RED);
+        app(SetEnvironmentColor::class)->execute($environment, $owner, EnvironmentColor::RED);
 
         $this->assertSame('red', $environment->fresh()->getRawOriginal('color'));
         $this->assertSame(
@@ -53,7 +53,7 @@ class EnvironmentColorTest extends TestCase
         $this->actingAs(User::factory()->admin()->create())->patch("/environments/{$production->id}/color", ['color' => 'green'])->assertRedirect();
         $this->actingAs($developer)->patch("/environments/{$staging->id}/color", ['color' => 'pink'])->assertSessionHasErrors('color');
 
-        $this->assertSame([EnvironmentColor::Green, EnvironmentColor::Sky], [$production->fresh()->color, $staging->fresh()->color]);
+        $this->assertSame([EnvironmentColor::GREEN, EnvironmentColor::SKY], [$production->fresh()->color, $staging->fresh()->color]);
         $this->actingAs($developer)->get("/environments/{$staging->id}")
             ->assertInertia(fn (Assert $page) => $page->where('environment.color', 'sky'));
     }

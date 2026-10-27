@@ -22,7 +22,7 @@ final class ExternalConnectionForm
     public static function fields(DatastoreKind $kind): array
     {
         return match ($kind->family()) {
-            ResourceFamily::Database => [
+            ResourceFamily::DATABASE => [
                 self::host('db.example.com'),
                 self::port($kind),
                 // The database name goes into a URL without encoding, so it has no character that a URL reserves.
@@ -30,13 +30,13 @@ final class ExternalConnectionForm
                 new ExternalField('username', 'User', 'text', true, ['string', 'max:255', 'regex:/^\S+\z/'], 'Enter the user name without spaces.'),
                 new ExternalField('password', 'Password', 'secret', true, ['string', 'max:1024'], 'Enter the password of the user.'),
             ],
-            ResourceFamily::KeyValue => [
+            ResourceFamily::KEY_VALUE => [
                 self::host('cache.example.com'),
                 self::port($kind),
                 new ExternalField('password', 'Password', 'secret', false, ['string', 'max:1024'], 'Use at most 1024 characters for the password.', help: 'Leave it empty when the server has no password.'),
                 new ExternalField('tls', 'Use TLS', 'toggle', false, ['boolean'], 'Turn TLS on or off.', value: false),
             ],
-            ResourceFamily::Bucket => [
+            ResourceFamily::BUCKET => [
                 new ExternalField('endpoint', 'Endpoint URL', 'text', true, ['string', 'max:255', 'url:http,https', 'regex:~^https?://[^/?#@\s]+/?\z~'], 'Enter the endpoint URL with http:// or https:// and no path, for example https://s3.eu-central-1.amazonaws.com.', placeholder: 'https://s3.eu-central-1.amazonaws.com'),
                 new ExternalField('region', 'Region', 'text', true, ['string', 'regex:/^[a-z0-9-]{1,64}\z/'], 'Enter the region with lowercase letters, digits, and dashes, for example eu-central-1.', value: 'us-east-1', help: 'S3 clients sign each request with it. Most S3-compatible servers ignore it.'),
                 new ExternalField('bucket', 'Bucket', 'text', true, ['string', 'regex:/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]\z/'], 'Enter the bucket name with 3 to 63 lowercase letters, digits, dots, and dashes.', placeholder: 'shop-uploads'),
@@ -70,9 +70,9 @@ final class ExternalConnectionForm
     public static function connection(DatastoreKind $kind, array $values, ?string $name): Connection
     {
         return match ($kind->family()) {
-            ResourceFamily::Database => new SqlConnection($kind, $values['host'], (int) $values['port'], $values['database'], $values['username'], $values['password'], $name ?? DatabaseNames::FIRST_NAME, isDefault: false),
-            ResourceFamily::KeyValue => new KeyValueConnection($values['host'], (int) $values['port'], $values['password'] ?? null, (bool) ($values['tls'] ?? false)),
-            ResourceFamily::Bucket => new BucketConnection(rtrim($values['endpoint'], '/'), $values['region'], $values['bucket'], $values['access_key_id'], $values['password'], (bool) ($values['path_style'] ?? false)),
+            ResourceFamily::DATABASE => new SqlConnection($kind, $values['host'], (int) $values['port'], $values['database'], $values['username'], $values['password'], $name ?? DatabaseNames::FIRST_NAME, isDefault: false),
+            ResourceFamily::KEY_VALUE => new KeyValueConnection($values['host'], (int) $values['port'], $values['password'] ?? null, (bool) ($values['tls'] ?? false)),
+            ResourceFamily::BUCKET => new BucketConnection(rtrim($values['endpoint'], '/'), $values['region'], $values['bucket'], $values['access_key_id'], $values['password'], (bool) ($values['path_style'] ?? false)),
         };
     }
 

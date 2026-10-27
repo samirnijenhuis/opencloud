@@ -42,7 +42,7 @@ final class DatabaseBackups
             'database_name' => $attachment->database_name,
             'disk' => $diskName,
             'location' => self::folder($attachment).'/'.now()->format(self::TIME_FORMAT).'.sql.gz',
-            'status' => BackupStatus::Running,
+            'status' => BackupStatus::RUNNING,
         ]);
         $dump = tmpfile();
 
@@ -50,10 +50,10 @@ final class DatabaseBackups
             $this->dumps($attachment)->dump($attachment, $dump);
             rewind($dump);
             $disk->writeStream($backup->location, $dump);
-            $backup->update(['status' => BackupStatus::Done, 'size' => $disk->size($backup->location)]);
+            $backup->update(['status' => BackupStatus::DONE, 'size' => $disk->size($backup->location)]);
         } catch (Throwable $e) {
             $this->deleteFile($disk, $backup->location);
-            $backup->update(['status' => BackupStatus::Failed, 'error' => (new SecretMasker(array_filter([$datastore->root_password, $attachment->password])))->mask($e->getMessage())]);
+            $backup->update(['status' => BackupStatus::FAILED, 'error' => (new SecretMasker(array_filter([$datastore->root_password, $attachment->password])))->mask($e->getMessage())]);
 
             return $backup;
         } finally {
@@ -77,7 +77,7 @@ final class DatabaseBackups
         $attachment = $backup->currentAttachment() ?? throw new InvalidArgumentException('The database of this backup is no longer attached.');
         $before = $this->backup($attachment, prune: false);
 
-        if ($before->status === BackupStatus::Failed) {
+        if ($before->status === BackupStatus::FAILED) {
             throw new RuntimeException("The backup before the restore failed, so the restore did not start. {$before->error}");
         }
 
@@ -100,7 +100,7 @@ final class DatabaseBackups
             ->where('database_name', $attachment->database_name)
             ->orderByDesc('id')
             ->get();
-        $oldestKept = $backups->where('status', BackupStatus::Done)->values()->get(self::KEEP - 1);
+        $oldestKept = $backups->where('status', BackupStatus::DONE)->values()->get(self::KEEP - 1);
 
         if ($oldestKept === null) {
             return;

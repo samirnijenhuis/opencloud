@@ -14,13 +14,13 @@ final class EnvironmentVariables
     /** @return array<string, string> sorted by key */
     public static function runtime(Environment $environment): array
     {
-        return self::merge(self::systemDefaults($environment), $environment, [EnvVarAvailability::Runtime, EnvVarAvailability::Both]);
+        return self::merge(self::systemDefaults($environment), $environment, [EnvVarAvailability::RUNTIME, EnvVarAvailability::BOTH]);
     }
 
     /** @return array<string, string> sorted by key */
     public static function build(Environment $environment): array
     {
-        return self::merge([], $environment, [EnvVarAvailability::Build, EnvVarAvailability::Both]);
+        return self::merge([], $environment, [EnvVarAvailability::BUILD, EnvVarAvailability::BOTH]);
     }
 
     /**
@@ -32,7 +32,7 @@ final class EnvironmentVariables
     {
         $vars = $environment->envVars()->whereIn('available_at', $availability)->get();
 
-        foreach ([EnvVarSource::Datastore, EnvVarSource::User] as $source) {
+        foreach ([EnvVarSource::DATASTORE, EnvVarSource::USER] as $source) {
             foreach ($vars->where('source', $source) as $var) {
                 $env[$var->key] = (string) $var->value;
             }

@@ -20,12 +20,12 @@ class PolicyTest extends TestCase
     public static function environmentUpdates(): array
     {
         return [
-            'owner, protected' => [Role::Owner, true, true],
-            'owner, unprotected' => [Role::Owner, false, true],
-            'admin, protected' => [Role::Admin, true, true],
-            'admin, unprotected' => [Role::Admin, false, true],
-            'developer, protected' => [Role::Developer, true, false],
-            'developer, unprotected' => [Role::Developer, false, true],
+            'owner, protected' => [Role::OWNER, true, true],
+            'owner, unprotected' => [Role::OWNER, false, true],
+            'admin, protected' => [Role::ADMIN, true, true],
+            'admin, unprotected' => [Role::ADMIN, false, true],
+            'developer, protected' => [Role::DEVELOPER, true, false],
+            'developer, unprotected' => [Role::DEVELOPER, false, true],
         ];
     }
 
@@ -43,7 +43,7 @@ class PolicyTest extends TestCase
     public static function roleRights(): array
     {
         return [
-            'owner' => [Role::Owner, [
+            'owner' => [Role::OWNER, [
                 'create application' => true,
                 'delete application' => true,
                 'create environment' => true,
@@ -53,7 +53,7 @@ class PolicyTest extends TestCase
                 'create provider credential' => true,
                 'invite member' => true,
             ]],
-            'admin' => [Role::Admin, [
+            'admin' => [Role::ADMIN, [
                 'create application' => true,
                 'delete application' => true,
                 'create environment' => true,
@@ -63,7 +63,7 @@ class PolicyTest extends TestCase
                 'create provider credential' => false,
                 'invite member' => false,
             ]],
-            'developer' => [Role::Developer, [
+            'developer' => [Role::DEVELOPER, [
                 'create application' => false,
                 'delete application' => false,
                 'create environment' => false,

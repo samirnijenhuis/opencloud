@@ -40,16 +40,16 @@ class AddConnectionNamesToDatastoreAttachmentsTest extends TestCase
         $shop = Environment::factory()->create();
         $blog = Environment::factory()->create();
         $pending = Environment::factory()->create();
-        $mysql = $this->attachment($shop, DatastoreKind::Mysql, DatastoreSource::Standard, [
+        $mysql = $this->attachment($shop, DatastoreKind::MYSQL, DatastoreSource::STANDARD, [
             'DB_CONNECTION' => 'mysql', 'DB_HOST' => 'mysql-1.oc-datastores.svc.cluster.local', 'DB_PORT' => '3306',
             'DB_DATABASE' => "env_{$shop->id}", 'DB_USERNAME' => "env_{$shop->id}", 'DB_PASSWORD' => 'shop-password',
         ]);
-        $valkey = $this->attachment($shop, DatastoreKind::Valkey, DatastoreSource::Standard, ['REDIS_HOST' => 'valkey-2.oc-datastores.svc.cluster.local']);
-        $managed = $this->attachment($blog, DatastoreKind::Postgres, DatastoreSource::Managed, [
+        $valkey = $this->attachment($shop, DatastoreKind::VALKEY, DatastoreSource::STANDARD, ['REDIS_HOST' => 'valkey-2.oc-datastores.svc.cluster.local']);
+        $managed = $this->attachment($blog, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, [
             'DB_CONNECTION' => 'pgsql', 'DB_HOST' => 'private-db.ondigitalocean.com', 'DB_PORT' => '25060',
             'DB_DATABASE' => "env_{$blog->id}", 'DB_USERNAME' => "env_{$blog->id}", 'DB_PASSWORD' => 'blog-password',
         ]);
-        $unapplied = $this->attachment($pending, DatastoreKind::Postgres, DatastoreSource::Managed, []);
+        $unapplied = $this->attachment($pending, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, []);
         $before = [$this->envOf($mysql), $this->envOf($managed)];
 
         $this->migration->up();
@@ -81,7 +81,7 @@ class AddConnectionNamesToDatastoreAttachmentsTest extends TestCase
                 'key' => $key,
                 'value' => $value,
                 'is_secret' => $key === 'DB_PASSWORD',
-                'source' => EnvVarSource::Datastore,
+                'source' => EnvVarSource::DATASTORE,
                 'datastore_attachment_id' => $attachment->id,
             ]);
         }

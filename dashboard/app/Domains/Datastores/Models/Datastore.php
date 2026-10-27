@@ -24,7 +24,7 @@ class Datastore extends Model
     protected $hidden = ['root_password', 'tofu_log'];
 
     protected $attributes = [
-        'source' => DatastoreSource::Standard->value,
+        'source' => DatastoreSource::STANDARD->value,
         'status' => 'pending',
     ];
 

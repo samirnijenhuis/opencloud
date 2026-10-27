@@ -62,7 +62,7 @@ class RunDeployment implements ShouldQueue
         $deployment = $this->deployment;
         $log = DeploymentLog::for($deployment);
 
-        if ($deployment->status !== DeploymentStatus::Queued) {
+        if ($deployment->status !== DeploymentStatus::QUEUED) {
             // The lock keeps a second run out while the first one lives. So this run follows a run that died midway, and those steps cannot resume.
             $this->markFailed($deployment, $log, 'The worker stopped during the deployment.');
 
@@ -91,10 +91,10 @@ class RunDeployment implements ShouldQueue
         $application = $environment->application;
 
         $deployment->started_at = now();
-        $deployment->moveTo(DeploymentStatus::Building);
+        $deployment->moveTo(DeploymentStatus::BUILDING);
 
         $deployment->image = ImageCopy::toCluster($deployment, $builder->build($deployment, $log), $log);
-        $deployment->moveTo(DeploymentStatus::Deploying);
+        $deployment->moveTo(DeploymentStatus::DEPLOYING);
 
         $this->waitForDatastores($environment, $log);
 
@@ -124,12 +124,12 @@ class RunDeployment implements ShouldQueue
             // The database allows one live deployment per environment, so the old one moves first.
             Deployment::query()
                 ->where('environment_id', $deployment->environment_id)
-                ->where('status', DeploymentStatus::Live)
+                ->where('status', DeploymentStatus::LIVE)
                 ->get()
-                ->each(fn (Deployment $previous) => $previous->moveTo(DeploymentStatus::Superseded));
+                ->each(fn (Deployment $previous) => $previous->moveTo(DeploymentStatus::SUPERSEDED));
 
             $deployment->finished_at = now();
-            $deployment->moveTo(DeploymentStatus::Live);
+            $deployment->moveTo(DeploymentStatus::LIVE);
         });
 
         $log->write('The deployment is live.');
@@ -169,14 +169,14 @@ class RunDeployment implements ShouldQueue
 
         while (true) {
             $attachments = $environment->datastoreAttachments()->with('datastore')->get();
-            $failed = $attachments->first(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::Failed);
+            $failed = $attachments->first(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::FAILED);
 
             if ($failed !== null) {
                 throw new RuntimeException("The {$failed->datastore->kind->value} datastore failed. {$failed->error}");
             }
 
             $waiting = $attachments
-                ->reject(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::Ready)
+                ->reject(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::READY)
                 ->map(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->value)
                 ->implode(', ');
 
@@ -294,7 +294,7 @@ class RunDeployment implements ShouldQueue
         $environment = $deployment->environment;
         $application = $environment->application;
 
-        if ($application->type !== ApplicationType::Laravel) {
+        if ($application->type !== ApplicationType::LARAVEL) {
             return;
         }
 
@@ -315,12 +315,12 @@ class RunDeployment implements ShouldQueue
     {
         $deployment->refresh();
 
-        if (! $deployment->status->canMoveTo(DeploymentStatus::Failed)) {
+        if (! $deployment->status->canMoveTo(DeploymentStatus::FAILED)) {
             return;
         }
 
         $log->write("The deployment failed. {$reason}");
         $deployment->finished_at = now();
-        $deployment->moveTo(DeploymentStatus::Failed);
+        $deployment->moveTo(DeploymentStatus::FAILED);
     }
 }

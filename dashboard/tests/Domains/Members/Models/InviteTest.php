@@ -39,14 +39,14 @@ class InviteTest extends TestCase
     public function test_an_owner_gets_a_link_once_and_the_database_keeps_only_a_hash(): void
     {
         $this->freezeSecond();
-        $link = $this->createInviteLink(Role::Admin);
+        $link = $this->createInviteLink(Role::ADMIN);
 
         $this->assertMatchesRegularExpression('#^http://localhost/invites/[A-Za-z0-9]{48}$#', $link);
         $token = basename($link);
 
         $invite = Invite::sole();
         $this->assertSame(hash('sha256', $token), $invite->token_hash);
-        $this->assertSame(Role::Admin, $invite->role);
+        $this->assertSame(Role::ADMIN, $invite->role);
         $this->assertSame(now()->addDays(7)->toDateTimeString(), $invite->expires_at->toDateTimeString());
         $this->assertSame(['invite.created'], AuditEvent::pluck('action')->all());
     }
@@ -77,7 +77,7 @@ class InviteTest extends TestCase
 
     public function test_accepting_an_invite_creates_the_member_with_the_invited_role(): void
     {
-        $link = $this->createInviteLink(Role::Admin);
+        $link = $this->createInviteLink(Role::ADMIN);
 
         $this->get($link)
             ->assertOk()
@@ -86,7 +86,7 @@ class InviteTest extends TestCase
         $this->post($link, self::NEW_MEMBER)->assertRedirect('/dashboard');
 
         $member = User::where('email', 'grace@example.com')->sole();
-        $this->assertSame(Role::Admin, $member->role);
+        $this->assertSame(Role::ADMIN, $member->role);
         $this->assertAuthenticatedAs($member);
         $this->assertSame(0, Invite::count());
         $this->assertSame(['invite.created', 'member.joined'], AuditEvent::orderBy('id')->pluck('action')->all());
@@ -94,7 +94,7 @@ class InviteTest extends TestCase
 
     public function test_a_used_invite_gives_404(): void
     {
-        $link = $this->createInviteLink(Role::Developer);
+        $link = $this->createInviteLink(Role::DEVELOPER);
         $this->post($link, self::NEW_MEMBER)->assertRedirect('/dashboard');
         $this->post('/logout');
 
@@ -106,7 +106,7 @@ class InviteTest extends TestCase
 
     public function test_an_expired_invite_gives_404(): void
     {
-        $link = $this->createInviteLink(Role::Developer);
+        $link = $this->createInviteLink(Role::DEVELOPER);
 
         $this->travel(7)->days();
         $this->travel(1)->second();
@@ -118,7 +118,7 @@ class InviteTest extends TestCase
 
     public function test_an_invite_works_until_it_expires(): void
     {
-        $link = $this->createInviteLink(Role::Developer);
+        $link = $this->createInviteLink(Role::DEVELOPER);
 
         $this->travel(7)->days();
         $this->travel(-1)->second();
@@ -146,7 +146,7 @@ class InviteTest extends TestCase
 
     public function test_a_failed_accept_keeps_the_invite(): void
     {
-        $link = $this->createInviteLink(Role::Developer);
+        $link = $this->createInviteLink(Role::DEVELOPER);
         $taken = User::factory()->create()->email;
 
         $this->post($link, [...self::NEW_MEMBER, 'email' => $taken])->assertSessionHasErrors('email');

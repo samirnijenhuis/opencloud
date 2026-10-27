@@ -43,9 +43,9 @@ final class ExternalProvisioner implements Provisioner
         $datastore = Datastore::query()->create([
             'cluster_id' => null,
             'kind' => $this->kind,
-            'source' => DatastoreSource::External,
+            'source' => DatastoreSource::EXTERNAL,
             'version' => '',
-            'status' => DatastoreStatus::Ready,
+            'status' => DatastoreStatus::READY,
         ]);
 
         return $environment->datastoreAttachments()->create([
@@ -53,7 +53,7 @@ final class ExternalProvisioner implements Provisioner
             'is_default' => $isDefault,
             ...$address,
             'datastore_id' => $datastore->id,
-            'status' => DatastoreStatus::Ready,
+            'status' => DatastoreStatus::READY,
         ]);
     }
 
@@ -74,14 +74,14 @@ final class ExternalProvisioner implements Provisioner
             AuditEvent::record($by, 'datastore.detached', $environment, [
                 'datastore_id' => $datastore->id,
                 'kind' => $datastore->kind->value,
-                'source' => DatastoreSource::External->value,
+                'source' => DatastoreSource::EXTERNAL->value,
             ]);
         });
     }
 
     public function provision(DatastoreAttachment $attachment): void
     {
-        $attachment->update(['status' => DatastoreStatus::Ready, 'error' => null]);
+        $attachment->update(['status' => DatastoreStatus::READY, 'error' => null]);
     }
 
     public function release(Datastore $datastore, array $attachment, bool $destroyData): void {}
@@ -89,18 +89,18 @@ final class ExternalProvisioner implements Provisioner
     public function connection(DatastoreAttachment $attachment): ?Connection
     {
         return match ($this->kind->family()) {
-            ResourceFamily::Database => SqlConnection::of($attachment),
-            ResourceFamily::KeyValue => KeyValueConnection::of($attachment),
-            ResourceFamily::Bucket => BucketConnection::of($attachment),
+            ResourceFamily::DATABASE => SqlConnection::of($attachment),
+            ResourceFamily::KEY_VALUE => KeyValueConnection::of($attachment),
+            ResourceFamily::BUCKET => BucketConnection::of($attachment),
         };
     }
 
     public function capabilities(): Capabilities
     {
         $noDumps = match ($this->kind->family()) {
-            ResourceFamily::Database => 'Opencloud does not back up a database that you run yourself.',
-            ResourceFamily::KeyValue => 'Opencloud does not back up a key-value store that you run yourself.',
-            ResourceFamily::Bucket => 'Opencloud does not copy a bucket that you run yourself.',
+            ResourceFamily::DATABASE => 'Opencloud does not back up a database that you run yourself.',
+            ResourceFamily::KEY_VALUE => 'Opencloud does not back up a key-value store that you run yourself.',
+            ResourceFamily::BUCKET => 'Opencloud does not copy a bucket that you run yourself.',
         };
 
         return new Capabilities($noDumps, label: $this->label);
@@ -124,13 +124,13 @@ final class ExternalProvisioner implements Provisioner
                 'username' => $given->username,
                 'password' => $given->password,
             ],
-            $given instanceof KeyValueConnection && $family === ResourceFamily::KeyValue => [
+            $given instanceof KeyValueConnection && $family === ResourceFamily::KEY_VALUE => [
                 'host' => $given->host,
                 'port' => $given->port,
                 'password' => $given->password,
                 'tls' => $given->tls,
             ],
-            $given instanceof BucketConnection && $family === ResourceFamily::Bucket => [
+            $given instanceof BucketConnection && $family === ResourceFamily::BUCKET => [
                 'host' => $given->endpoint,
                 'region' => $given->region,
                 'database_name' => $given->bucket,

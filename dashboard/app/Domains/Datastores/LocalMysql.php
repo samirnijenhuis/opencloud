@@ -17,7 +17,7 @@ final class LocalMysql extends LocalSql
 
     protected function kind(): DatastoreKind
     {
-        return DatastoreKind::Mysql;
+        return DatastoreKind::MYSQL;
     }
 
     protected function container(): string

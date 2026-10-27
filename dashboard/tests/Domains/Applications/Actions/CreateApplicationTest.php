@@ -40,7 +40,7 @@ class CreateApplicationTest extends TestCase
         $processes = FakeProcesses::install();
         $processes->lsRemote = self::SHA."\trefs/heads/main\n";
         $owner = User::factory()->create();
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
 
         $application = app(CreateApplication::class)->execute($owner, [
             'name' => 'shop',
@@ -58,14 +58,14 @@ class CreateApplicationTest extends TestCase
             ['git', 'ls-remote', '--symref', 'https://github.com/acme/shop.git', 'HEAD'],
             ['git', 'ls-remote', 'https://github.com/acme/shop.git', 'refs/heads/main'],
         ], $processes->commands());
-        $this->assertSame(['shop', 'acme/shop', ApplicationType::Laravel, 8080], [$application->name, $application->repository, $application->type, $application->fresh()->port]);
+        $this->assertSame(['shop', 'acme/shop', ApplicationType::LARAVEL, 8080], [$application->name, $application->repository, $application->type, $application->fresh()->port]);
 
         $environments = $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => [
             $e->name, $e->kind, $e->is_protected, $e->branch, $e->deploy_commands,
         ])->all();
         $this->assertSame([
-            ['production', EnvironmentKind::Permanent, true, 'main', ['php artisan migrate --force']],
-            ['preview-template', EnvironmentKind::PreviewTemplate, false, null, ['php artisan migrate --force']],
+            ['production', EnvironmentKind::PERMANENT, true, 'main', ['php artisan migrate --force']],
+            ['preview-template', EnvironmentKind::PREVIEW_TEMPLATE, false, null, ['php artisan migrate --force']],
         ], $environments);
 
         $production = $application->environments()->where('name', 'production')->sole();
@@ -75,22 +75,22 @@ class CreateApplicationTest extends TestCase
         ];
         $this->assertSame([$defaults, $defaults], $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => self::processes($e))->all());
 
-        $env = $production->envVars()->where('source', EnvVarSource::User)->orderBy('key')->get()->map(fn (EnvVar $v) => [$v->key, $v->is_secret, $v->available_at, $v->source])->all();
+        $env = $production->envVars()->where('source', EnvVarSource::USER)->orderBy('key')->get()->map(fn (EnvVar $v) => [$v->key, $v->is_secret, $v->available_at, $v->source])->all();
         $this->assertSame([
-            ['APP_KEY', true, EnvVarAvailability::Runtime, EnvVarSource::User],
-            ['COMPOSER_AUTH', true, EnvVarAvailability::Build, EnvVarSource::User],
-            ['MAIL_MAILER', false, EnvVarAvailability::Runtime, EnvVarSource::User],
-            ['STRIPE_SECRET', true, EnvVarAvailability::Runtime, EnvVarSource::User],
+            ['APP_KEY', true, EnvVarAvailability::RUNTIME, EnvVarSource::USER],
+            ['COMPOSER_AUTH', true, EnvVarAvailability::BUILD, EnvVarSource::USER],
+            ['MAIL_MAILER', false, EnvVarAvailability::RUNTIME, EnvVarSource::USER],
+            ['STRIPE_SECRET', true, EnvVarAvailability::RUNTIME, EnvVarSource::USER],
         ], $env);
         $appKey = $production->envVars()->where('key', 'APP_KEY')->sole()->value;
         $this->assertMatchesRegularExpression('/^base64:[A-Za-z0-9+\/]{43}=$/', $appKey);
         $this->assertSame(32, strlen(base64_decode(substr($appKey, 7))));
 
         $attachment = $production->datastoreAttachments()->sole();
-        $this->assertSame([DatastoreKind::Mysql, "env_{$production->id}", DatastoreStatus::Pending], [$attachment->datastore->kind, $attachment->database_name, $attachment->status]);
+        $this->assertSame([DatastoreKind::MYSQL, "env_{$production->id}", DatastoreStatus::PENDING], [$attachment->datastore->kind, $attachment->database_name, $attachment->status]);
         $this->assertSame(
             ['DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME'],
-            $production->envVars()->where('source', EnvVarSource::Datastore)->orderBy('key')->pluck('key')->all(),
+            $production->envVars()->where('source', EnvVarSource::DATASTORE)->orderBy('key')->pluck('key')->all(),
         );
         Queue::assertPushed(ProvisionDatastoreAttachment::class, fn (ProvisionDatastoreAttachment $job) => $job->attachment->is($attachment));
 
@@ -98,7 +98,7 @@ class CreateApplicationTest extends TestCase
         Queue::assertPushed(CheckDomain::class, fn (CheckDomain $job) => $job->domain->hostname === 'shop.example.com');
 
         $deployment = $production->deployments()->sole();
-        $this->assertSame([self::SHA, DeploymentStatus::Queued, $owner->id], [$deployment->commit_sha, $deployment->status, $deployment->triggered_by]);
+        $this->assertSame([self::SHA, DeploymentStatus::QUEUED, $owner->id], [$deployment->commit_sha, $deployment->status, $deployment->triggered_by]);
         Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->is($deployment));
 
         $this->assertSame(
@@ -117,8 +117,8 @@ class CreateApplicationTest extends TestCase
     public static function generatedSecrets(): array
     {
         return [
-            'python' => [ApplicationType::Python, 'SECRET_KEY', '/^[0-9a-f]{64}$/'],
-            'ruby' => [ApplicationType::Ruby, 'SECRET_KEY_BASE', '/^[0-9a-f]{128}$/'],
+            'python' => [ApplicationType::PYTHON, 'SECRET_KEY', '/^[0-9a-f]{64}$/'],
+            'ruby' => [ApplicationType::RUBY, 'SECRET_KEY_BASE', '/^[0-9a-f]{128}$/'],
         ];
     }
 
@@ -136,7 +136,7 @@ class CreateApplicationTest extends TestCase
         ]);
 
         $vars = $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => $e->envVars()->get()->map(fn (EnvVar $v) => [$v->key, $v->is_secret, $v->available_at])->all())->all();
-        $this->assertSame([[[$key, true, EnvVarAvailability::Runtime]], []], $vars);
+        $this->assertSame([[[$key, true, EnvVarAvailability::RUNTIME]], []], $vars);
         $this->assertMatchesRegularExpression($pattern, $application->environments()->where('name', 'production')->sole()->envVars()->sole()->value);
     }
 
@@ -155,7 +155,7 @@ class CreateApplicationTest extends TestCase
         $postgres = $create('blog', 'postgres');
         $none = $create('docs', 'none');
 
-        $this->assertSame([DatastoreKind::Postgres], $postgres->datastoreAttachments()->get()->map(fn ($attachment) => $attachment->datastore->kind)->all());
+        $this->assertSame([DatastoreKind::POSTGRES], $postgres->datastoreAttachments()->get()->map(fn ($attachment) => $attachment->datastore->kind)->all());
         $this->assertSame('pgsql', $postgres->envVars()->where('key', 'DB_CONNECTION')->sole()->value);
         $this->assertSame(0, $none->datastoreAttachments()->count());
         $this->assertSame(['APP_KEY'], $none->envVars()->pluck('key')->all());
@@ -264,7 +264,7 @@ class CreateApplicationTest extends TestCase
         $worker = $create('jobs', ['processes' => [['name' => 'queue', 'command' => 'node queue.js', 'instances' => 2]]]);
 
         $production = $application->environments()->where('name', 'production')->sole();
-        $this->assertSame([ApplicationType::Dockerfile, 3000], [$application->type, $application->port]);
+        $this->assertSame([ApplicationType::DOCKERFILE, 3000], [$application->type, $application->port]);
         $this->assertSame([[], '/'], [$production->deploy_commands, $production->health_path]);
         $this->assertSame(0, $production->envVars()->count());
         $this->assertSame([], self::processes($production));

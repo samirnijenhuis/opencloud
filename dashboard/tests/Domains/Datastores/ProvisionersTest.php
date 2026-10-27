@@ -67,9 +67,9 @@ class ProvisionersTest extends TestCase
         ProviderCredential::factory()->create(['provider' => 'digitalocean', 'token' => 'dop_v1_FAKE_TOKEN_provisioners']);
         $this->cluster = Cluster::factory()->create([
             'name' => 'ams3-prod',
-            'kind' => ClusterKind::Created,
+            'kind' => ClusterKind::CREATED,
             'provider' => 'digitalocean',
-            'status' => ClusterStatus::Ready,
+            'status' => ClusterStatus::READY,
             'region' => 'ams3',
             'provider_cluster_id' => 'c0ffee00-1111',
             'provider_vpc_id' => 'vpc-2222',
@@ -90,7 +90,7 @@ class ProvisionersTest extends TestCase
 
         foreach (Provisioners::table() as ['kind' => $kind, 'source' => $source, 'provisioner' => $provisioner]) {
             // The external arm needs a typed address. ExternalResourcesTest runs each of its methods.
-            if ($source === DatastoreSource::External) {
+            if ($source === DatastoreSource::EXTERNAL) {
                 continue;
             }
 
@@ -166,17 +166,17 @@ class ProvisionersTest extends TestCase
         $this->tofu->failTimes = 1;
         $this->tofu->error = 'Error: Error creating database cluster: 422 You have reached the database cluster limit';
 
-        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::POSTGRES, DatastoreSource::MANAGED);
 
         $failed = 'tofu apply failed. Error: Error creating database cluster: 422 You have reached the database cluster limit';
-        $this->assertSame([DatastoreStatus::Failed, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
+        $this->assertSame([DatastoreStatus::FAILED, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
         $this->assertSame([], $this->envOf($environment));
 
-        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed, 'main');
+        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, 'main');
 
         $id = $environment->id;
         $this->assertTrue($again->is($attachment));
-        $this->assertSame([DatastoreStatus::Ready, null, DatastoreStatus::Ready], [$attachment->fresh()->status, $attachment->fresh()->error, $attachment->datastore->fresh()->status]);
+        $this->assertSame([DatastoreStatus::READY, null, DatastoreStatus::READY], [$attachment->fresh()->status, $attachment->fresh()->error, $attachment->datastore->fresh()->status]);
         $this->assertSame([
             'DB_CONNECTION' => ['pgsql', false],
             'DB_DATABASE' => ["env_{$id}", false],
@@ -214,14 +214,14 @@ class ProvisionersTest extends TestCase
             ['app/Domains/Clusters/Actions/DestroyCluster.php'],
             $this->filesWhere(['app/Domains/*/Actions', 'app/Domains/*/Jobs'], fn (array $code, int $i) => $this->shortName($code[$i]) === 'DatastoreSource'
                 && $code[$i + 1] === '::'
-                && $code[$i + 2] === 'Managed'),
+                && $code[$i + 2] === 'MANAGED'),
         );
     }
 
     public function test_only_the_local_provisioner_names_kubectl(): void
     {
         $files = collect(Provisioners::table())
-            ->reject(fn (array $row) => $row['source'] === DatastoreSource::External)
+            ->reject(fn (array $row) => $row['source'] === DatastoreSource::EXTERNAL)
             ->map(fn (array $row) => str_replace(base_path().'/', '', (new ReflectionClass($row['provisioner']))->getFileName()))
             ->merge(collect(Finder::create()->files()->name(['Managed*.php', 'Local*.php'])->in(app_path('Domains/Datastores')))->map(fn ($file) => str_replace(base_path().'/', '', $file->getPathname())))
             ->unique()
@@ -297,7 +297,7 @@ class ProvisionersTest extends TestCase
     /** @return array<string, array{0: string, 1: bool}> */
     private function envOf(Environment $environment): array
     {
-        return $environment->envVars()->where('source', EnvVarSource::Datastore)->orderBy('key')->get()
+        return $environment->envVars()->where('source', EnvVarSource::DATASTORE)->orderBy('key')->get()
             ->mapWithKeys(fn (EnvVar $var) => [$var->key => [$var->value, $var->is_secret]])
             ->all();
     }

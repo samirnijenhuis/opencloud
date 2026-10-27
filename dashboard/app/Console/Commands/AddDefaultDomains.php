@@ -16,7 +16,7 @@ class AddDefaultDomains extends Command
     public function handle(DefaultDomain $defaultDomain): int
     {
         Environment::query()
-            ->where('kind', EnvironmentKind::Permanent)
+            ->where('kind', EnvironmentKind::PERMANENT)
             ->with('application.cluster')
             ->orderBy('id')
             ->each(function (Environment $environment) use ($defaultDomain) {

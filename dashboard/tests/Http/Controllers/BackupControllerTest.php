@@ -33,8 +33,8 @@ class BackupControllerTest extends TestCase
         parent::setUp();
 
         $environment = $this->makeEnvironment();
-        $datastore = Datastore::factory()->create(['cluster_id' => $this->makeCluster()->id, 'kind' => DatastoreKind::Postgres, 'status' => DatastoreStatus::Ready->value]);
-        $this->attachment = DatastoreAttachment::factory()->create(['datastore_id' => $datastore->id, 'environment_id' => $environment->id, 'database_name' => 'shop_production', 'status' => DatastoreStatus::Ready]);
+        $datastore = Datastore::factory()->create(['cluster_id' => $this->makeCluster()->id, 'kind' => DatastoreKind::POSTGRES, 'status' => DatastoreStatus::READY->value]);
+        $this->attachment = DatastoreAttachment::factory()->create(['datastore_id' => $datastore->id, 'environment_id' => $environment->id, 'database_name' => 'shop_production', 'status' => DatastoreStatus::READY]);
     }
 
     private function backup(array $attributes = []): Backup
@@ -51,7 +51,7 @@ class BackupControllerTest extends TestCase
     {
         $old = $this->backup(['size' => 2048]);
         $new = $this->backup(['disk' => 's3', 'size' => 4096]);
-        $this->backup(['status' => BackupStatus::Running, 'size' => null]);
+        $this->backup(['status' => BackupStatus::RUNNING, 'size' => null]);
         AuditEvent::record(User::factory()->create(), 'backup.restored', $old, ['database_name' => 'shop_production']);
         AuditEvent::record(User::factory()->create(), 'backup.restore_failed', $new, ['database_name' => 'shop_production', 'error' => 'The dump is damaged.']);
 
@@ -142,7 +142,7 @@ class BackupControllerTest extends TestCase
 
     public function test_a_restore_refusal_is_shown(): void
     {
-        $backup = $this->backup(['status' => BackupStatus::Failed]);
+        $backup = $this->backup(['status' => BackupStatus::FAILED]);
 
         $this->actingAs(User::factory()->owner()->create())->post("/backups/{$backup->id}/restore", ['confirm' => true])
             ->assertSessionHasErrors(['backup' => 'Only a finished backup can be restored.']);
@@ -175,8 +175,8 @@ class BackupControllerTest extends TestCase
 
     private function managedAttachment(): DatastoreAttachment
     {
-        $datastore = Datastore::factory()->create(['cluster_id' => $this->attachment->datastore->cluster_id, 'kind' => DatastoreKind::Postgres, 'source' => DatastoreSource::Managed, 'status' => DatastoreStatus::Ready->value]);
+        $datastore = Datastore::factory()->create(['cluster_id' => $this->attachment->datastore->cluster_id, 'kind' => DatastoreKind::POSTGRES, 'source' => DatastoreSource::MANAGED, 'status' => DatastoreStatus::READY->value]);
 
-        return DatastoreAttachment::factory()->create(['datastore_id' => $datastore->id, 'environment_id' => $this->attachment->environment_id, 'database_name' => 'managed_production', 'status' => DatastoreStatus::Ready]);
+        return DatastoreAttachment::factory()->create(['datastore_id' => $datastore->id, 'environment_id' => $this->attachment->environment_id, 'database_name' => 'managed_production', 'status' => DatastoreStatus::READY]);
     }
 }

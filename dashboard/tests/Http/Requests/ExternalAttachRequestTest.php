@@ -40,7 +40,7 @@ class ExternalAttachRequestTest extends TestCase
 
         Queue::fake();
         FakeKubectl::install();
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create(['is_protected' => true]);
         $this->owner = User::factory()->owner()->create();
     }
@@ -146,7 +146,7 @@ class ExternalAttachRequestTest extends TestCase
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $attachment = DatastoreAttachment::query()->with('datastore')->sole();
-        $this->assertSame([DatastoreSource::Standard, 'env_'.$this->environment->id], [$attachment->datastore->source, $attachment->database_name]);
+        $this->assertSame([DatastoreSource::STANDARD, 'env_'.$this->environment->id], [$attachment->datastore->source, $attachment->database_name]);
         $this->assertNotSame(' TYPED-db-secret ', $attachment->password);
     }
 

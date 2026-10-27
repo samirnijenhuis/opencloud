@@ -19,7 +19,7 @@ class ClusterAndAuditControllerTest extends TestCase
     {
         Cluster::factory()->create([
             'name' => 'local',
-            'kind' => ClusterKind::Local,
+            'kind' => ClusterKind::LOCAL,
             'ingress_ip' => '203.0.113.10',
             'status' => 'ready',
             'parts_version' => '1.2.0',

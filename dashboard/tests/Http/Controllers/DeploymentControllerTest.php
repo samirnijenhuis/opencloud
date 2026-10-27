@@ -24,9 +24,9 @@ class DeploymentControllerTest extends TestCase
     {
         $environment = $this->makeEnvironment();
         $dev = User::factory()->create(['name' => 'Dev']);
-        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Superseded]);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::SUPERSEDED]);
         Deployment::factory()->for($environment)->create([
-            'status' => DeploymentStatus::Live,
+            'status' => DeploymentStatus::LIVE,
             'triggered_by' => $dev->id,
             'started_at' => now()->subMinutes(3),
             'finished_at' => now()->subMinutes(1),
@@ -46,7 +46,7 @@ class DeploymentControllerTest extends TestCase
     public function test_a_deployment_page_has_the_log_and_the_warning(): void
     {
         $deployment = Deployment::factory()->for($this->makeEnvironment())->create([
-            'status' => DeploymentStatus::Deploying,
+            'status' => DeploymentStatus::DEPLOYING,
             'log' => "2026-10-23T10:00:00Z Cloning\n2026-10-23T10:00:05Z Building\n",
             'warning' => 'The health check was slow.',
         ]);
@@ -64,9 +64,9 @@ class DeploymentControllerTest extends TestCase
     public function test_a_queued_deployment_names_the_build_it_waits_for(): void
     {
         $shop = $this->makeEnvironment();
-        $running = Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::Building]);
-        Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::Queued]);
-        $mine = Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::Queued]);
+        $running = Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::BUILDING]);
+        Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::QUEUED]);
+        $mine = Deployment::factory()->for($shop)->create(['status' => DeploymentStatus::QUEUED]);
         $user = User::factory()->create();
 
         $this->actingAs($user)->get("/deployments/{$mine->id}")
@@ -125,7 +125,7 @@ class DeploymentControllerTest extends TestCase
         $this->actingAs($admin)->post("/environments/{$environment->id}/deployments")->assertRedirect();
 
         $deployment = Deployment::sole();
-        $this->assertSame([DeploymentStatus::Queued, self::SHA, $admin->id], [$deployment->status, $deployment->commit_sha, $deployment->triggered_by]);
+        $this->assertSame([DeploymentStatus::QUEUED, self::SHA, $admin->id], [$deployment->status, $deployment->commit_sha, $deployment->triggered_by]);
         Queue::assertPushed(RunDeployment::class);
     }
 

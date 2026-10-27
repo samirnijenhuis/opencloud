@@ -48,12 +48,12 @@ class CommandManifestsTest extends TestCase
                     ],
                 ],
             ],
-        ], (new CommandManifests($this->commandRun(new Cluster(['kind' => ClusterKind::Local]))))->job());
+        ], (new CommandManifests($this->commandRun(new Cluster(['kind' => ClusterKind::LOCAL]))))->job());
     }
 
     public function test_a_cluster_with_its_own_registry_pulls_with_the_pull_secret(): void
     {
-        $cluster = new Cluster(['kind' => ClusterKind::Connected, 'registry_url' => '192.0.2.5:5000/team', 'registry_username' => 'robot']);
+        $cluster = new Cluster(['kind' => ClusterKind::CONNECTED, 'registry_url' => '192.0.2.5:5000/team', 'registry_username' => 'robot']);
 
         $spec = (new CommandManifests($this->commandRun($cluster)))->job()['spec']['template']['spec'];
 

@@ -23,10 +23,10 @@ class CheckDashboardDomainTest extends TestCase
     public static function answers(): array
     {
         return [
-            'the ingress ip' => [['203.0.113.10'], DnsStatus::Ok, true],
-            'cloudflare only' => [['104.16.132.229'], DnsStatus::Proxied, true],
-            'another host' => [['198.51.100.1'], DnsStatus::Wrong, false],
-            'no records' => [[], DnsStatus::Missing, false],
+            'the ingress ip' => [['203.0.113.10'], DnsStatus::OK, true],
+            'cloudflare only' => [['104.16.132.229'], DnsStatus::PROXIED, true],
+            'another host' => [['198.51.100.1'], DnsStatus::WRONG, false],
+            'no records' => [[], DnsStatus::MISSING, false],
         ];
     }
 
@@ -35,7 +35,7 @@ class CheckDashboardDomainTest extends TestCase
     public function test_the_status_follows_the_a_records_and_a_pass_syncs_the_local_cluster(array $addresses, DnsStatus $expected, bool $passes): void
     {
         Queue::fake();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'ingress_ip' => '203.0.113.10']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'ingress_ip' => '203.0.113.10']);
         $domain = DashboardDomain::create(['hostname' => 'admin.example.com']);
         $this->app->instance(DnsResolver::class, new class($addresses) extends DnsResolver
         {
@@ -69,7 +69,7 @@ class CheckDashboardDomainTest extends TestCase
     public function test_the_last_try_does_not_release_again(): void
     {
         Queue::fake();
-        Cluster::factory()->create(['kind' => ClusterKind::Local, 'ingress_ip' => '203.0.113.10']);
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'ingress_ip' => '203.0.113.10']);
         $domain = DashboardDomain::create(['hostname' => 'admin.example.com']);
 
         $job = (new CheckDashboardDomain($domain))->withFakeQueueInteractions();

@@ -18,7 +18,7 @@ class BuildKitTest extends TestCase
     public function test_the_address_is_the_running_buildkit_pod_through_kubectl_exec(): void
     {
         config(['opencloud.buildkit_addr' => null]);
-        Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $fake = FakeKubectl::install()->respond('get pods', new KubectlResult(0, json_encode(['items' => [
             ['metadata' => ['name' => 'buildkitd-old', 'deletionTimestamp' => '2026-10-23T10:00:00Z'], 'status' => ['phase' => 'Running']],
             ['metadata' => ['name' => 'buildkitd-new'], 'status' => ['phase' => 'Pending']],
@@ -35,7 +35,7 @@ class BuildKitTest extends TestCase
         $this->assertSame('tcp://127.0.0.1:1234', BuildKit::address());
 
         config(['opencloud.buildkit_addr' => '']);
-        Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         FakeKubectl::install()->respond('get pods', new KubectlResult(0, '{"items":[]}'));
 
         $this->expectException(RuntimeException::class);

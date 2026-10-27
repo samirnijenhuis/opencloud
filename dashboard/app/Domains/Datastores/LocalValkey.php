@@ -18,7 +18,7 @@ final class LocalValkey extends LocalProvisioner
 
     protected function kind(): DatastoreKind
     {
-        return DatastoreKind::Valkey;
+        return DatastoreKind::VALKEY;
     }
 
     protected function sharedServer(): bool

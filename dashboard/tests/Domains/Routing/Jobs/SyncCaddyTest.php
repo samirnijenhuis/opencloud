@@ -29,18 +29,18 @@ class SyncCaddyTest extends TestCase
     {
         config(['opencloud.tls_issuer' => 'internal']);
         $fake = FakeKubectl::install();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $other = Cluster::factory()->create(['name' => 'do-ams3']);
 
-        $live = $this->environment($local, DeploymentStatus::Live);
-        Domain::factory()->for($live)->create(['hostname' => 'shop.example.com', 'dns_status' => DnsStatus::Ok]);
-        Domain::factory()->for($live)->create(['hostname' => 'cdn.example.com', 'dns_status' => DnsStatus::Proxied]);
+        $live = $this->environment($local, DeploymentStatus::LIVE);
+        Domain::factory()->for($live)->create(['hostname' => 'shop.example.com', 'dns_status' => DnsStatus::OK]);
+        Domain::factory()->for($live)->create(['hostname' => 'cdn.example.com', 'dns_status' => DnsStatus::PROXIED]);
         Domain::factory()->for($live)->create(['hostname' => 'pending.example.com']);
-        Domain::factory()->for($live)->create(['hostname' => 'wrong.example.com', 'dns_status' => DnsStatus::Wrong]);
-        $notLive = $this->environment($local, DeploymentStatus::Failed);
-        Domain::factory()->for($notLive)->create(['hostname' => 'failed.example.com', 'dns_status' => DnsStatus::Ok]);
-        $elsewhere = $this->environment($other, DeploymentStatus::Live);
-        Domain::factory()->for($elsewhere)->create(['hostname' => 'other.example.com', 'dns_status' => DnsStatus::Ok]);
+        Domain::factory()->for($live)->create(['hostname' => 'wrong.example.com', 'dns_status' => DnsStatus::WRONG]);
+        $notLive = $this->environment($local, DeploymentStatus::FAILED);
+        Domain::factory()->for($notLive)->create(['hostname' => 'failed.example.com', 'dns_status' => DnsStatus::OK]);
+        $elsewhere = $this->environment($other, DeploymentStatus::LIVE);
+        Domain::factory()->for($elsewhere)->create(['hostname' => 'other.example.com', 'dns_status' => DnsStatus::OK]);
 
         SyncCaddy::dispatch($local);
 
@@ -64,10 +64,10 @@ class SyncCaddyTest extends TestCase
     {
         config(['opencloud.tls_issuer' => 'acme', 'opencloud.acme_email' => null]);
         $fake = FakeKubectl::install();
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
-        $live = $this->environment($cluster, DeploymentStatus::Live);
-        Domain::factory()->for($live)->create(['hostname' => 'app.example.com', 'dns_status' => DnsStatus::Proxied, 'dns_mode' => DnsMode::Cloudflare]);
-        Domain::factory()->for($live)->create(['hostname' => 'manual.example.org', 'dns_status' => DnsStatus::Ok]);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
+        $live = $this->environment($cluster, DeploymentStatus::LIVE);
+        Domain::factory()->for($live)->create(['hostname' => 'app.example.com', 'dns_status' => DnsStatus::PROXIED, 'dns_mode' => DnsMode::CLOUDFLARE]);
+        Domain::factory()->for($live)->create(['hostname' => 'manual.example.org', 'dns_status' => DnsStatus::OK]);
         ProviderCredential::factory()->create(['provider' => 'cloudflare', 'token' => 'cf-token']);
 
         SyncCaddy::dispatch($cluster);
@@ -83,10 +83,10 @@ class SyncCaddyTest extends TestCase
     public function test_the_scheduler_syncs_every_ready_cluster_every_five_minutes(): void
     {
         Queue::fake();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local', 'status' => ClusterStatus::Ready]);
-        $other = Cluster::factory()->create(['name' => 'do-ams3', 'status' => ClusterStatus::Ready]);
-        Cluster::factory()->create(['name' => 'still-installing', 'status' => ClusterStatus::Installing]);
-        Cluster::factory()->create(['name' => 'broken', 'status' => ClusterStatus::Failed]);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local', 'status' => ClusterStatus::READY]);
+        $other = Cluster::factory()->create(['name' => 'do-ams3', 'status' => ClusterStatus::READY]);
+        Cluster::factory()->create(['name' => 'still-installing', 'status' => ClusterStatus::INSTALLING]);
+        Cluster::factory()->create(['name' => 'broken', 'status' => ClusterStatus::FAILED]);
 
         $event = collect(app(Schedule::class)->events())->first(fn (Event $event) => $event->description === 'sync-caddy');
         $this->assertSame('*/5 * * * *', $event->expression);

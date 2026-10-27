@@ -8,20 +8,20 @@ namespace App\Domains\Applications\Enums;
  */
 enum ApplicationType: string
 {
-    case Laravel = 'laravel';
-    case Node = 'node';
-    case Python = 'python';
-    case Ruby = 'ruby';
-    case Static = 'static';
-    case Dockerfile = 'dockerfile';
+    case LARAVEL = 'laravel';
+    case NODE = 'node';
+    case PYTHON = 'python';
+    case RUBY = 'ruby';
+    case STATIC = 'static';
+    case DOCKERFILE = 'dockerfile';
 
     public function defaultPort(): int
     {
         return match ($this) {
-            self::Laravel, self::Static, self::Dockerfile => 8080,
-            self::Node => 3000,
-            self::Python => 8000,
-            self::Ruby => 3000,
+            self::LARAVEL, self::STATIC, self::DOCKERFILE => 8080,
+            self::NODE => 3000,
+            self::PYTHON => 8000,
+            self::RUBY => 3000,
         };
     }
 
@@ -29,8 +29,8 @@ enum ApplicationType: string
     public function choosesPort(): bool
     {
         return match ($this) {
-            self::Laravel, self::Static => false,
-            self::Node, self::Python, self::Ruby, self::Dockerfile => true,
+            self::LARAVEL, self::STATIC => false,
+            self::NODE, self::PYTHON, self::RUBY, self::DOCKERFILE => true,
         };
     }
 
@@ -38,8 +38,8 @@ enum ApplicationType: string
     public function healthPath(): string
     {
         return match ($this) {
-            self::Laravel => '/up',
-            self::Node, self::Python, self::Ruby, self::Static, self::Dockerfile => '/',
+            self::LARAVEL => '/up',
+            self::NODE, self::PYTHON, self::RUBY, self::STATIC, self::DOCKERFILE => '/',
         };
     }
 
@@ -47,11 +47,11 @@ enum ApplicationType: string
     public function processes(): array
     {
         return match ($this) {
-            self::Laravel => [
+            self::LARAVEL => [
                 ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
                 ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
             ],
-            self::Node, self::Python, self::Ruby, self::Static, self::Dockerfile => [],
+            self::NODE, self::PYTHON, self::RUBY, self::STATIC, self::DOCKERFILE => [],
         };
     }
 
@@ -63,10 +63,10 @@ enum ApplicationType: string
     public function deployCommands(): array
     {
         return match ($this) {
-            self::Laravel => ['php artisan migrate --force'],
-            self::Python => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'],
-            self::Ruby => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'],
-            self::Node, self::Static, self::Dockerfile => [],
+            self::LARAVEL => ['php artisan migrate --force'],
+            self::PYTHON => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'],
+            self::RUBY => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'],
+            self::NODE, self::STATIC, self::DOCKERFILE => [],
         };
     }
 
@@ -74,8 +74,8 @@ enum ApplicationType: string
     public function usesBuildCommand(): bool
     {
         return match ($this) {
-            self::Laravel, self::Node, self::Python, self::Ruby => true,
-            self::Static, self::Dockerfile => false,
+            self::LARAVEL, self::NODE, self::PYTHON, self::RUBY => true,
+            self::STATIC, self::DOCKERFILE => false,
         };
     }
 
@@ -83,8 +83,8 @@ enum ApplicationType: string
     public function imageRunsTini(): bool
     {
         return match ($this) {
-            self::Node, self::Python, self::Ruby => true,
-            self::Laravel, self::Static, self::Dockerfile => false,
+            self::NODE, self::PYTHON, self::RUBY => true,
+            self::LARAVEL, self::STATIC, self::DOCKERFILE => false,
         };
     }
 
@@ -92,16 +92,16 @@ enum ApplicationType: string
     public function database(): string
     {
         return match ($this) {
-            self::Laravel => 'mysql',
-            self::Node, self::Python, self::Ruby, self::Static, self::Dockerfile => 'none',
+            self::LARAVEL => 'mysql',
+            self::NODE, self::PYTHON, self::RUBY, self::STATIC, self::DOCKERFILE => 'none',
         };
     }
 
     public function envProfile(): EnvProfileKind
     {
         return match ($this) {
-            self::Laravel => EnvProfileKind::Laravel,
-            self::Node, self::Python, self::Ruby, self::Static, self::Dockerfile => EnvProfileKind::Generic,
+            self::LARAVEL => EnvProfileKind::LARAVEL,
+            self::NODE, self::PYTHON, self::RUBY, self::STATIC, self::DOCKERFILE => EnvProfileKind::GENERIC,
         };
     }
 
@@ -119,17 +119,17 @@ enum ApplicationType: string
         $port = ['PORT' => (string) $port];
 
         return match ($this) {
-            self::Laravel => ['APP_ENV' => 'production', 'APP_DEBUG' => 'false', 'LOG_CHANNEL' => 'stderr', ...$url],
-            self::Node => ['NODE_ENV' => 'production', ...$port, ...$url],
-            self::Python => [
+            self::LARAVEL => ['APP_ENV' => 'production', 'APP_DEBUG' => 'false', 'LOG_CHANNEL' => 'stderr', ...$url],
+            self::NODE => ['NODE_ENV' => 'production', ...$port, ...$url],
+            self::PYTHON => [
                 'PYTHONUNBUFFERED' => '1', 'DEBUG' => 'false', ...$port, ...$url,
                 ...($hostnames === [] ? [] : ['ALLOWED_HOSTS' => implode(',', $hostnames)]),
             ],
-            self::Ruby => [
+            self::RUBY => [
                 'RACK_ENV' => 'production', 'RAILS_ENV' => 'production', 'RAILS_LOG_TO_STDOUT' => '1', 'RAILS_SERVE_STATIC_FILES' => '1',
                 ...$port, ...$url,
             ],
-            self::Static, self::Dockerfile => [...$port, ...$url],
+            self::STATIC, self::DOCKERFILE => [...$port, ...$url],
         };
     }
 
@@ -142,10 +142,10 @@ enum ApplicationType: string
     public function generatedSecrets(): array
     {
         return match ($this) {
-            self::Laravel => ['APP_KEY' => 'base64:'.base64_encode(random_bytes(32))],
-            self::Python => ['SECRET_KEY' => bin2hex(random_bytes(32))],
-            self::Ruby => ['SECRET_KEY_BASE' => bin2hex(random_bytes(64))],
-            self::Node, self::Static, self::Dockerfile => [],
+            self::LARAVEL => ['APP_KEY' => 'base64:'.base64_encode(random_bytes(32))],
+            self::PYTHON => ['SECRET_KEY' => bin2hex(random_bytes(32))],
+            self::RUBY => ['SECRET_KEY_BASE' => bin2hex(random_bytes(64))],
+            self::NODE, self::STATIC, self::DOCKERFILE => [],
         };
     }
 }

@@ -49,7 +49,7 @@ class ClusterControllerTest extends TestCase
         }
 
         $this->assertSame(1, Cluster::query()->count());
-        $this->assertSame(ClusterStatus::Ready, $cluster->fresh()->status);
+        $this->assertSame(ClusterStatus::READY, $cluster->fresh()->status);
         $this->assertSame([], $this->kubectl->calls);
         Queue::assertNothingPushed();
     }
@@ -63,7 +63,7 @@ class ClusterControllerTest extends TestCase
 
         $cluster = Cluster::query()->where('name', 'fra1')->sole();
         $response->assertRedirect("/clusters/{$cluster->id}");
-        $this->assertSame(['registry.example.com/team', false, ClusterStatus::Installing], [$cluster->registry_url, $cluster->registry_insecure, $cluster->status]);
+        $this->assertSame(['registry.example.com/team', false, ClusterStatus::INSTALLING], [$cluster->registry_url, $cluster->registry_insecure, $cluster->status]);
         Queue::assertPushed(InstallClusterParts::class);
     }
 
@@ -85,7 +85,7 @@ class ClusterControllerTest extends TestCase
 
     public function test_the_cluster_page_shows_the_state_and_the_applications_but_never_the_secrets(): void
     {
-        $cluster = $this->cluster(['status' => ClusterStatus::Failed, 'error' => 'Caddy did not start in 15 minutes.']);
+        $cluster = $this->cluster(['status' => ClusterStatus::FAILED, 'error' => 'Caddy did not start in 15 minutes.']);
         $application = Application::factory()->for($cluster)->create(['name' => 'shop', 'repository' => 'https://github.com/acme/shop']);
         $datastore = Datastore::factory()->for($cluster)->create(['kind' => 'mysql']);
         $owner = User::factory()->owner()->create();
@@ -119,7 +119,7 @@ class ClusterControllerTest extends TestCase
 
     public function test_the_local_cluster_page_offers_no_reinstall_or_disconnect(): void
     {
-        $local = $this->cluster(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = $this->cluster(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
 
         $this->actingAs(User::factory()->owner()->create())->get("/clusters/{$local->id}")
             ->assertInertia(fn (Assert $page) => $page->where('can', ['reinstall' => false, 'disconnect' => false]));
@@ -133,7 +133,7 @@ class ClusterControllerTest extends TestCase
         $idle = $this->cluster(['name' => 'ams3']);
 
         $this->actingAs($owner)->post("/clusters/{$busy->id}/reinstall")->assertRedirect("/clusters/{$busy->id}");
-        $this->assertSame(ClusterStatus::Installing, $busy->fresh()->status);
+        $this->assertSame(ClusterStatus::INSTALLING, $busy->fresh()->status);
 
         $this->actingAs($owner)->from("/clusters/{$busy->id}")->delete("/clusters/{$busy->id}", ['remove_parts' => true])
             ->assertRedirect("/clusters/{$busy->id}")
@@ -167,7 +167,7 @@ class ClusterControllerTest extends TestCase
         return Cluster::factory()->create([
             'name' => 'fra1',
             'kubeconfig' => self::KUBECONFIG,
-            'status' => ClusterStatus::Ready,
+            'status' => ClusterStatus::READY,
             'ingress_ip' => '203.0.113.20',
             'parts_version' => '1.4.0',
             'registry_url' => 'registry.example.com',

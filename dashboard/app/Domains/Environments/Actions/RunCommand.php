@@ -26,7 +26,7 @@ class RunCommand
             throw ValidationException::withMessages(['command' => 'Enter a command.']);
         }
 
-        $live = $environment->deployments()->where('status', DeploymentStatus::Live)->first();
+        $live = $environment->deployments()->where('status', DeploymentStatus::LIVE)->first();
 
         if ($live === null) {
             throw ValidationException::withMessages(['command' => 'The environment has no live deployment. Deploy it first.']);

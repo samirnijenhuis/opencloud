@@ -30,13 +30,13 @@ class EnvironmentVariablesTest extends TestCase
         $environment = Environment::factory()->create();
         Domain::factory()->for($environment)->create(['hostname' => 'shop.example.com']);
         Domain::factory()->for($environment)->create(['hostname' => 'www.shop.example.com']);
-        $this->envVar($environment, 'DB_HOST', 'mysql.oc-datastores.svc.cluster.local', EnvVarSource::Datastore);
-        $this->envVar($environment, 'DB_PASSWORD', 'from-datastore', EnvVarSource::Datastore);
-        $this->envVar($environment, 'DB_PASSWORD', 'from-user', EnvVarSource::User);
-        $this->envVar($environment, 'APP_DEBUG', 'true', EnvVarSource::User);
-        $this->envVar($environment, 'LOG_CHANNEL', 'datastore-says', EnvVarSource::Datastore);
-        $this->envVar($environment, 'COMPOSER_AUTH', '{"github-oauth":{}}', EnvVarSource::User, EnvVarAvailability::Build);
-        $this->envVar($environment, 'NPM_TOKEN', 'npm-123', EnvVarSource::User, EnvVarAvailability::Both);
+        $this->envVar($environment, 'DB_HOST', 'mysql.oc-datastores.svc.cluster.local', EnvVarSource::DATASTORE);
+        $this->envVar($environment, 'DB_PASSWORD', 'from-datastore', EnvVarSource::DATASTORE);
+        $this->envVar($environment, 'DB_PASSWORD', 'from-user', EnvVarSource::USER);
+        $this->envVar($environment, 'APP_DEBUG', 'true', EnvVarSource::USER);
+        $this->envVar($environment, 'LOG_CHANNEL', 'datastore-says', EnvVarSource::DATASTORE);
+        $this->envVar($environment, 'COMPOSER_AUTH', '{"github-oauth":{}}', EnvVarSource::USER, EnvVarAvailability::BUILD);
+        $this->envVar($environment, 'NPM_TOKEN', 'npm-123', EnvVarSource::USER, EnvVarAvailability::BOTH);
 
         $this->assertSame([
             'APP_DEBUG' => 'true',
@@ -68,12 +68,12 @@ class EnvironmentVariablesTest extends TestCase
     public static function presets(): array
     {
         return [
-            'laravel' => [ApplicationType::Laravel, 8080, ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'APP_URL' => 'https://api.example.com', 'LOG_CHANNEL' => 'stderr']],
-            'node' => [ApplicationType::Node, 3000, ['APP_URL' => 'https://api.example.com', 'NODE_ENV' => 'production', 'PORT' => '3000']],
-            'ruby' => [ApplicationType::Ruby, 3000, ['APP_URL' => 'https://api.example.com', 'PORT' => '3000', 'RACK_ENV' => 'production', 'RAILS_ENV' => 'production', 'RAILS_LOG_TO_STDOUT' => '1', 'RAILS_SERVE_STATIC_FILES' => '1']],
-            'python' => [ApplicationType::Python, 8000, ['ALLOWED_HOSTS' => 'api.example.com,www.example.com', 'APP_URL' => 'https://api.example.com', 'DEBUG' => 'false', 'PORT' => '8000', 'PYTHONUNBUFFERED' => '1']],
-            'static' => [ApplicationType::Static, 8080, ['APP_URL' => 'https://api.example.com', 'PORT' => '8080']],
-            'dockerfile' => [ApplicationType::Dockerfile, 3000, ['APP_URL' => 'https://api.example.com', 'PORT' => '3000']],
+            'laravel' => [ApplicationType::LARAVEL, 8080, ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'APP_URL' => 'https://api.example.com', 'LOG_CHANNEL' => 'stderr']],
+            'node' => [ApplicationType::NODE, 3000, ['APP_URL' => 'https://api.example.com', 'NODE_ENV' => 'production', 'PORT' => '3000']],
+            'ruby' => [ApplicationType::RUBY, 3000, ['APP_URL' => 'https://api.example.com', 'PORT' => '3000', 'RACK_ENV' => 'production', 'RAILS_ENV' => 'production', 'RAILS_LOG_TO_STDOUT' => '1', 'RAILS_SERVE_STATIC_FILES' => '1']],
+            'python' => [ApplicationType::PYTHON, 8000, ['ALLOWED_HOSTS' => 'api.example.com,www.example.com', 'APP_URL' => 'https://api.example.com', 'DEBUG' => 'false', 'PORT' => '8000', 'PYTHONUNBUFFERED' => '1']],
+            'static' => [ApplicationType::STATIC, 8080, ['APP_URL' => 'https://api.example.com', 'PORT' => '8080']],
+            'dockerfile' => [ApplicationType::DOCKERFILE, 3000, ['APP_URL' => 'https://api.example.com', 'PORT' => '3000']],
         ];
     }
 
@@ -91,7 +91,7 @@ class EnvironmentVariablesTest extends TestCase
 
     public function test_a_python_app_without_a_domain_gets_no_url_and_no_allowed_hosts(): void
     {
-        $application = Application::factory()->create(['type' => ApplicationType::Python, 'port' => 8000]);
+        $application = Application::factory()->create(['type' => ApplicationType::PYTHON, 'port' => 8000]);
         $environment = Environment::factory()->for($application)->create();
 
         $this->assertSame(['DEBUG' => 'false', 'PORT' => '8000', 'PYTHONUNBUFFERED' => '1'], EnvironmentVariables::runtime($environment));
@@ -99,9 +99,9 @@ class EnvironmentVariablesTest extends TestCase
 
     public function test_a_user_port_beats_the_port_of_the_application(): void
     {
-        $application = Application::factory()->create(['type' => ApplicationType::Dockerfile, 'port' => 3000]);
+        $application = Application::factory()->create(['type' => ApplicationType::DOCKERFILE, 'port' => 3000]);
         $environment = Environment::factory()->for($application)->create();
-        $this->envVar($environment, 'PORT', '4000', EnvVarSource::User);
+        $this->envVar($environment, 'PORT', '4000', EnvVarSource::USER);
 
         $this->assertSame(['PORT' => '4000'], EnvironmentVariables::runtime($environment));
     }
@@ -110,7 +110,7 @@ class EnvironmentVariablesTest extends TestCase
     {
         $environment = Environment::factory()->create();
         $other = Environment::factory()->for($environment->application)->create();
-        $this->envVar($other, 'SECRET_OF_OTHER', 'nope', EnvVarSource::User);
+        $this->envVar($other, 'SECRET_OF_OTHER', 'nope', EnvVarSource::USER);
 
         $this->assertArrayNotHasKey('SECRET_OF_OTHER', EnvironmentVariables::runtime($environment));
         $this->assertSame(['SECRET_OF_OTHER' => 'nope'], array_intersect_key(EnvironmentVariables::runtime($other), ['SECRET_OF_OTHER' => true]));
@@ -118,8 +118,8 @@ class EnvironmentVariablesTest extends TestCase
 
     public function test_the_env_profile_of_the_application_names_the_database_values(): void
     {
-        $laravel = $this->environmentWithMysql(Application::factory()->create(['env_profile' => EnvProfileKind::Laravel]));
-        $generic = $this->environmentWithMysql(Application::factory()->create(['env_profile' => EnvProfileKind::Generic]));
+        $laravel = $this->environmentWithMysql(Application::factory()->create(['env_profile' => EnvProfileKind::LARAVEL]));
+        $generic = $this->environmentWithMysql(Application::factory()->create(['env_profile' => EnvProfileKind::GENERIC]));
 
         $this->assertSame([
             'DB_CONNECTION' => 'mysql',
@@ -139,14 +139,14 @@ class EnvironmentVariablesTest extends TestCase
 
         $application = Application::sole();
 
-        $this->assertSame(EnvProfileKind::Laravel, $application->env_profile);
+        $this->assertSame(EnvProfileKind::LARAVEL, $application->env_profile);
         $this->assertSame(['DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME'], array_keys($this->datastoreValues($this->environmentWithMysql($application))));
     }
 
     private function environmentWithMysql(Application $application): Environment
     {
         $environment = Environment::factory()->for($application)->create();
-        $datastore = Datastore::factory()->for($application->cluster)->create(['kind' => DatastoreKind::Mysql]);
+        $datastore = Datastore::factory()->for($application->cluster)->create(['kind' => DatastoreKind::MYSQL]);
         $attachment = DatastoreAttachment::factory()->for($datastore)->for($environment)->create([
             'name' => 'main',
             'is_default' => true,
@@ -164,10 +164,10 @@ class EnvironmentVariablesTest extends TestCase
     /** @return array<string, string> */
     private function datastoreValues(Environment $environment): array
     {
-        return $environment->envVars()->where('source', EnvVarSource::Datastore)->orderBy('key')->pluck('value', 'key')->all();
+        return $environment->envVars()->where('source', EnvVarSource::DATASTORE)->orderBy('key')->pluck('value', 'key')->all();
     }
 
-    private function envVar(Environment $environment, string $key, string $value, EnvVarSource $source, EnvVarAvailability $availableAt = EnvVarAvailability::Runtime): void
+    private function envVar(Environment $environment, string $key, string $value, EnvVarSource $source, EnvVarAvailability $availableAt = EnvVarAvailability::RUNTIME): void
     {
         EnvVar::factory()->for($environment)->create([
             'key' => $key,

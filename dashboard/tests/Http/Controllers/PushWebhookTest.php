@@ -89,8 +89,8 @@ class PushWebhookTest extends TestCase
         Environment::factory()->for($shop)->create(['name' => 'production', 'branch' => 'main']);
         Environment::factory()->for($shop)->create(['name' => 'staging', 'branch' => 'staging']);
         Environment::factory()->for($shop)->create(['name' => 'manual', 'branch' => 'main', 'auto_deploy' => false]);
-        Environment::factory()->for($shop)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate, 'branch' => 'main']);
-        Environment::factory()->for($shop)->create(['name' => 'pr-3', 'kind' => EnvironmentKind::Preview, 'branch' => 'main', 'pr_number' => 3]);
+        Environment::factory()->for($shop)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => 'main']);
+        Environment::factory()->for($shop)->create(['name' => 'pr-3', 'kind' => EnvironmentKind::PREVIEW, 'branch' => 'main', 'pr_number' => 3]);
         Environment::factory()->for($copy)->create(['name' => 'production', 'branch' => 'main']);
         Environment::factory()->for($other)->create(['name' => 'production', 'branch' => 'main']);
     }

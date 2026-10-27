@@ -23,7 +23,7 @@ class CheckCertificates implements ShouldBeUniqueUntilProcessing, ShouldQueue
     public function handle(CertificateProbe $probe): void
     {
         Domain::query()
-            ->whereIn('dns_status', [DnsStatus::Ok, DnsStatus::Proxied])
+            ->whereIn('dns_status', [DnsStatus::OK, DnsStatus::PROXIED])
             ->with('environment.application.cluster')
             ->each(function (Domain $domain) use ($probe) {
                 $address = $domain->environment->application->cluster->ingress_ip;

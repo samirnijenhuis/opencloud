@@ -66,9 +66,9 @@ class ManagedDatabaseTest extends TestCase
         ProviderCredential::factory()->create(['provider' => 'digitalocean', 'token' => self::TOKEN]);
         $this->cluster = Cluster::factory()->create([
             'name' => 'ams3-prod',
-            'kind' => ClusterKind::Created,
+            'kind' => ClusterKind::CREATED,
             'provider' => 'digitalocean',
-            'status' => ClusterStatus::Ready,
+            'status' => ClusterStatus::READY,
             'region' => 'ams3',
             'provider_cluster_id' => 'c0ffee00-1111',
             'provider_vpc_id' => 'vpc-2222',
@@ -87,10 +87,10 @@ class ManagedDatabaseTest extends TestCase
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
 
-        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::MYSQL, DatastoreSource::MANAGED);
 
         $datastore = $attachment->datastore;
-        $this->assertSame([DatastoreSource::Managed, DatastoreKind::Mysql, '8', $this->cluster->id], [$datastore->source, $datastore->kind, $datastore->version, $datastore->cluster_id]);
+        $this->assertSame([DatastoreSource::MANAGED, DatastoreKind::MYSQL, '8', $this->cluster->id], [$datastore->source, $datastore->kind, $datastore->version, $datastore->cluster_id]);
         $this->assertSame(["env_{$environment->id}", "env_{$environment->id}", null], [$attachment->database_name, $attachment->username, $attachment->password]);
         $this->assertSame(0, $environment->envVars()->count());
         $job = Queue::pushed(ProvisionManagedDatabase::class)->sole();
@@ -102,28 +102,28 @@ class ManagedDatabaseTest extends TestCase
 
     public function test_a_key_without_a_right_does_not_offer_the_managed_resources_that_need_it(): void
     {
-        $this->assertSame([DatastoreKind::Postgres, DatastoreKind::Valkey, DatastoreKind::Rustfs], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
+        $this->assertSame([DatastoreKind::POSTGRES, DatastoreKind::VALKEY, DatastoreKind::RUSTFS], Provisioners::offered(DatastoreSource::MANAGED, $this->cluster));
 
         ProviderCredential::query()->update(['missing_rights' => ['vpc']]);
-        $this->assertSame([DatastoreKind::Postgres, DatastoreKind::Valkey, DatastoreKind::Rustfs], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
+        $this->assertSame([DatastoreKind::POSTGRES, DatastoreKind::VALKEY, DatastoreKind::RUSTFS], Provisioners::offered(DatastoreSource::MANAGED, $this->cluster));
 
         ProviderCredential::query()->update(['missing_rights' => ['vpc', 'database']]);
-        $this->assertSame([DatastoreKind::Rustfs], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
+        $this->assertSame([DatastoreKind::RUSTFS], Provisioners::offered(DatastoreSource::MANAGED, $this->cluster));
 
         ProviderCredential::query()->update(['missing_rights' => ['spaces_key']]);
-        $this->assertSame([DatastoreKind::Postgres, DatastoreKind::Valkey], Provisioners::offered(DatastoreSource::Managed, $this->cluster));
+        $this->assertSame([DatastoreKind::POSTGRES, DatastoreKind::VALKEY], Provisioners::offered(DatastoreSource::MANAGED, $this->cluster));
 
-        $this->assertRefused($this->environment(), DatastoreKind::Rustfs, 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.');
+        $this->assertRefused($this->environment(), DatastoreKind::RUSTFS, 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.');
 
         ProviderCredential::query()->update(['missing_rights' => ['database']]);
-        $this->assertRefused($this->environment(), DatastoreKind::Postgres, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
-        $this->assertRefused($this->environment(), DatastoreKind::Valkey, 'Managed Valkey needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
+        $this->assertRefused($this->environment(), DatastoreKind::POSTGRES, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
+        $this->assertRefused($this->environment(), DatastoreKind::VALKEY, 'Managed Valkey needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
     }
 
     public function test_the_apply_writes_the_same_laravel_env_values_as_the_standard_engine(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::MYSQL, DatastoreSource::MANAGED);
 
         (new ProvisionManagedDatabase($attachment))->handle(app(Runner::class));
 
@@ -150,7 +150,7 @@ class ManagedDatabaseTest extends TestCase
             'DB_PORT' => ['25060', false],
             'DB_USERNAME' => ['env_1', false],
         ], $this->envOf($environment));
-        $this->assertSame([DatastoreStatus::Ready, DatastoreStatus::Ready], [$attachment->fresh()->status, $datastore->fresh()->status]);
+        $this->assertSame([DatastoreStatus::READY, DatastoreStatus::READY], [$attachment->fresh()->status, $datastore->fresh()->status]);
         $this->assertSame('DO_GENERATED_PASSWORD_SECRET', $attachment->fresh()->password);
     }
 
@@ -158,8 +158,8 @@ class ManagedDatabaseTest extends TestCase
     {
         $environment = $this->environment();
         $this->tofu->outputs = [...self::OUTPUTS, 'password' => 'DO/pass+word'];
-        app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed);
-        $reports = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed, 'reports');
+        app(AttachDatastore::class)->execute($environment, null, DatastoreKind::POSTGRES, DatastoreSource::MANAGED);
+        $reports = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, 'reports');
 
         $this->assertSame(['reports', false, "env_{$environment->id}_reports", "env_{$environment->id}_0b7ec688"], [$reports->name, $reports->is_default, $reports->database_name, $reports->username]);
         $this->assertSame([], $this->envOf($environment));
@@ -177,8 +177,8 @@ class ManagedDatabaseTest extends TestCase
     {
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
-        $main = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres);
-        $reports = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed, 'reports');
+        $main = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::POSTGRES);
+        $reports = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, 'reports');
         $job = new ProvisionManagedDatabase($reports->fresh());
 
         app(SetDefaultDatabase::class)->execute($reports, $owner);
@@ -202,20 +202,20 @@ class ManagedDatabaseTest extends TestCase
     {
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
-        $managed = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed);
+        $managed = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::POSTGRES, DatastoreSource::MANAGED);
         (new ProvisionManagedDatabase($managed))->handle(app(Runner::class));
 
         app(DetachDatastore::class)->execute($managed->fresh(), $owner);
-        $standard = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres);
+        $standard = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::POSTGRES);
 
-        $this->assertSame([null, false, DatastoreStatus::Destroying], [$managed->fresh()->name, $managed->fresh()->is_default, $managed->datastore->fresh()->status]);
+        $this->assertSame([null, false, DatastoreStatus::DESTROYING], [$managed->fresh()->name, $managed->fresh()->is_default, $managed->datastore->fresh()->status]);
         $this->assertSame(['main', true], [$standard->name, $standard->is_default]);
     }
 
     public function test_postgres_uses_the_pg_engine_and_the_pgsql_connection(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::POSTGRES, DatastoreSource::MANAGED);
 
         (new ProvisionManagedDatabase($attachment))->handle(app(Runner::class));
 
@@ -226,18 +226,18 @@ class ManagedDatabaseTest extends TestCase
     public function test_a_failed_apply_fails_both_records_and_attach_again_retries_with_opentofu(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::MYSQL, DatastoreSource::MANAGED);
         $this->tofu->failOn = 'apply';
         $this->tofu->error = 'Error: Error creating database cluster: 422 You have reached the database cluster limit';
 
         (new ProvisionManagedDatabase($attachment))->handle(app(Runner::class));
 
         $expected = 'tofu apply failed. Error: Error creating database cluster: 422 You have reached the database cluster limit';
-        $this->assertSame([DatastoreStatus::Failed, $expected], [$attachment->fresh()->status, $attachment->fresh()->error]);
-        $this->assertSame([DatastoreStatus::Failed, $expected], [$attachment->datastore->fresh()->status, $attachment->datastore->fresh()->error]);
+        $this->assertSame([DatastoreStatus::FAILED, $expected], [$attachment->fresh()->status, $attachment->fresh()->error]);
+        $this->assertSame([DatastoreStatus::FAILED, $expected], [$attachment->datastore->fresh()->status, $attachment->datastore->fresh()->error]);
         $this->assertSame(0, $environment->envVars()->count());
 
-        $again = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Mysql, name: 'main');
+        $again = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::MYSQL, name: 'main');
 
         $this->assertTrue($again->is($attachment));
         $this->assertCount(2, Queue::pushed(ProvisionManagedDatabase::class));
@@ -246,27 +246,27 @@ class ManagedDatabaseTest extends TestCase
 
     public function test_managed_is_refused_for_other_clusters_and_without_a_key(): void
     {
-        $connected = Application::factory()->for(Cluster::factory()->create(['status' => ClusterStatus::Ready]))->create();
-        $this->assertRefused(Environment::factory()->for($connected)->create(), DatastoreKind::Mysql, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
-        $this->assertRefused(Environment::factory()->for($connected)->create(), DatastoreKind::Rustfs, 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.');
+        $connected = Application::factory()->for(Cluster::factory()->create(['status' => ClusterStatus::READY]))->create();
+        $this->assertRefused(Environment::factory()->for($connected)->create(), DatastoreKind::MYSQL, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
+        $this->assertRefused(Environment::factory()->for($connected)->create(), DatastoreKind::RUSTFS, 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.');
 
         ProviderCredential::query()->delete();
-        $this->assertRefused($this->environment(), DatastoreKind::Mysql, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
-        $this->assertRefused($this->environment(), DatastoreKind::Valkey, 'Managed Valkey needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
+        $this->assertRefused($this->environment(), DatastoreKind::MYSQL, 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
+        $this->assertRefused($this->environment(), DatastoreKind::VALKEY, 'Managed Valkey needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.');
     }
 
     public function test_detach_removes_the_env_values_now_and_destroys_the_database_with_opentofu(): void
     {
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
-        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::MYSQL, DatastoreSource::MANAGED);
         (new ProvisionManagedDatabase($attachment))->handle(app(Runner::class));
         $datastore = $attachment->datastore;
 
         app(DetachDatastore::class)->execute($attachment->fresh(), $owner);
 
         $this->assertSame(0, $environment->envVars()->count());
-        $this->assertSame(DatastoreStatus::Destroying, $datastore->fresh()->status);
+        $this->assertSame(DatastoreStatus::DESTROYING, $datastore->fresh()->status);
         $this->assertNotNull($attachment->fresh());
         $job = Queue::pushed(TearDownManagedDatabase::class)->sole();
         $this->assertSame('builds', $job->queue);
@@ -288,7 +288,7 @@ class ManagedDatabaseTest extends TestCase
     public function test_a_failed_destroy_keeps_the_records_with_the_error(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::MYSQL, DatastoreSource::MANAGED);
         Provisioners::of($attachment->datastore)->detach($attachment, null, destroyData: true);
         $this->tofu->failOn = 'destroy';
         $this->tofu->error = 'Error: Error deleting database cluster: 500';
@@ -296,14 +296,14 @@ class ManagedDatabaseTest extends TestCase
         Queue::pushed(TearDownManagedDatabase::class)->sole()->handle(app(Runner::class));
 
         $datastore = $attachment->datastore->fresh();
-        $this->assertSame([DatastoreStatus::Failed, 'The destroy failed. tofu destroy failed. Error: Error deleting database cluster: 500'], [$datastore->status, $datastore->error]);
+        $this->assertSame([DatastoreStatus::FAILED, 'The destroy failed. tofu destroy failed. Error: Error deleting database cluster: 500'], [$datastore->status, $datastore->error]);
         $this->assertNotNull($attachment->fresh());
     }
 
     public function test_the_nightly_dump_skips_managed_databases(): void
     {
-        $standard = Datastore::factory()->for($this->cluster)->create(['kind' => DatastoreKind::Mysql]);
-        Datastore::factory()->for($this->cluster)->create(['kind' => DatastoreKind::Mysql, 'source' => DatastoreSource::Managed]);
+        $standard = Datastore::factory()->for($this->cluster)->create(['kind' => DatastoreKind::MYSQL]);
+        Datastore::factory()->for($this->cluster)->create(['kind' => DatastoreKind::MYSQL, 'source' => DatastoreSource::MANAGED]);
 
         collect(app(Schedule::class)->events())->first(fn ($event) => $event->description === 'nightly-backups')->run($this->app);
 
@@ -318,7 +318,7 @@ class ManagedDatabaseTest extends TestCase
     /** @return array<string, array{0: string, 1: bool}> */
     private function envOf(Environment $environment): array
     {
-        return $environment->envVars()->where('source', EnvVarSource::Datastore)->orderBy('key')->get()
+        return $environment->envVars()->where('source', EnvVarSource::DATASTORE)->orderBy('key')->get()
             ->mapWithKeys(fn (EnvVar $var) => [$var->key => [$var->value, $var->is_secret]])
             ->all();
     }
@@ -326,7 +326,7 @@ class ManagedDatabaseTest extends TestCase
     private function assertRefused(Environment $environment, DatastoreKind $kind, string $message): void
     {
         try {
-            app(AttachDatastore::class)->execute($environment, null, $kind, DatastoreSource::Managed);
+            app(AttachDatastore::class)->execute($environment, null, $kind, DatastoreSource::MANAGED);
             $this->fail('The attach was not refused.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame($message, $e->getMessage());

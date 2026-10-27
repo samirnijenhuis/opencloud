@@ -22,7 +22,7 @@ class ConnectCluster
      */
     public function execute(User $by, array $data): Cluster
     {
-        $cluster = new Cluster([...$data, 'kind' => ClusterKind::Connected, 'status' => ClusterStatus::Installing]);
+        $cluster = new Cluster([...$data, 'kind' => ClusterKind::CONNECTED, 'status' => ClusterStatus::INSTALLING]);
         self::check($cluster);
         $cluster->save();
 

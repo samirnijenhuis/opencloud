@@ -21,12 +21,12 @@ class FailStuckDeployments implements ShouldQueue
     public function handle(): void
     {
         Deployment::query()
-            ->whereIn('status', [DeploymentStatus::Building, DeploymentStatus::Deploying])
+            ->whereIn('status', [DeploymentStatus::BUILDING, DeploymentStatus::DEPLOYING])
             ->where('updated_at', '<', now()->subMinutes(self::STALE_MINUTES))
             ->each(function (Deployment $deployment) {
                 DeploymentLog::for($deployment)->write('The worker stopped during this deployment.');
                 $deployment->finished_at = now();
-                $deployment->moveTo(DeploymentStatus::Failed);
+                $deployment->moveTo(DeploymentStatus::FAILED);
             });
     }
 }

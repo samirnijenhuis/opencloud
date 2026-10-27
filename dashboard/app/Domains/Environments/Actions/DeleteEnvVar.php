@@ -13,7 +13,7 @@ class DeleteEnvVar
     /** @throws InvalidArgumentException for a datastore value, which leaves with its datastore */
     public function execute(EnvVar $envVar, User $by): void
     {
-        if ($envVar->source !== EnvVarSource::User) {
+        if ($envVar->source !== EnvVarSource::USER) {
             throw new InvalidArgumentException("{$envVar->key} comes from a datastore. Detach the datastore to remove it.");
         }
 

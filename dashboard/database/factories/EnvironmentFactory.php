@@ -20,7 +20,7 @@ class EnvironmentFactory extends Factory
         return [
             'application_id' => Application::factory(),
             'name' => fake()->unique()->slug(1),
-            'kind' => EnvironmentKind::Permanent,
+            'kind' => EnvironmentKind::PERMANENT,
             'branch' => 'main',
         ];
     }

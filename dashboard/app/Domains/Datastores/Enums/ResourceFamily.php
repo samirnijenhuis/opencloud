@@ -8,9 +8,9 @@ namespace App\Domains\Datastores\Enums;
  */
 enum ResourceFamily: string
 {
-    case Database = 'database';
-    case KeyValue = 'key_value';
-    case Bucket = 'bucket';
+    case DATABASE = 'database';
+    case KEY_VALUE = 'key_value';
+    case BUCKET = 'bucket';
 
     /**
      * An environment can have several databases, each with a connection name, and one of them is the default. It has
@@ -18,6 +18,6 @@ enum ResourceFamily: string
      */
     public function isNamed(): bool
     {
-        return $this === self::Database;
+        return $this === self::DATABASE;
     }
 }

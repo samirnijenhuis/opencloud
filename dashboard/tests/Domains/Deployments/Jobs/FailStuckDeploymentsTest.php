@@ -19,18 +19,18 @@ class FailStuckDeploymentsTest extends TestCase
     {
         $environment = Environment::factory()->create();
         $this->travelTo(Carbon::parse('2026-10-23 10:00:00'));
-        $building = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Building]);
-        $deploying = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Deploying]);
-        $queued = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Queued]);
-        $live = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Live]);
+        $building = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::BUILDING]);
+        $deploying = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::DEPLOYING]);
+        $queued = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::QUEUED]);
+        $live = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::LIVE]);
         $this->travelTo(Carbon::parse('2026-10-23 10:02:00'));
-        $recent = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Building]);
+        $recent = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::BUILDING]);
 
         $this->travelTo(Carbon::parse('2026-10-23 11:11:00'));
         FailStuckDeployments::dispatchSync();
 
         $this->assertSame(
-            [DeploymentStatus::Failed, DeploymentStatus::Failed, DeploymentStatus::Queued, DeploymentStatus::Live, DeploymentStatus::Building],
+            [DeploymentStatus::FAILED, DeploymentStatus::FAILED, DeploymentStatus::QUEUED, DeploymentStatus::LIVE, DeploymentStatus::BUILDING],
             [$building->fresh()->status, $deploying->fresh()->status, $queued->fresh()->status, $live->fresh()->status, $recent->fresh()->status],
         );
         $this->assertSame("2026-10-23T11:11:00Z The worker stopped during this deployment.\n", $building->fresh()->log);

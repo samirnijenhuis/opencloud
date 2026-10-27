@@ -297,7 +297,7 @@ class EnvironmentManifestsTest extends TestCase
     public function test_a_dockerfile_app_runs_its_own_processes(): void
     {
         $queue = new Process(['name' => 'queue', 'command' => 'node queue.js', 'instances' => 2, 'exclusive' => false]);
-        $manifests = $this->manifests(type: ApplicationType::Dockerfile, processes: [$queue]);
+        $manifests = $this->manifests(type: ApplicationType::DOCKERFILE, processes: [$queue]);
 
         $workloads = $manifests->workloads($this->deployment());
 
@@ -312,7 +312,7 @@ class EnvironmentManifestsTest extends TestCase
     {
         $worker = new Process(['name' => 'worker', 'command' => 'node worker.js', 'instances' => 1, 'exclusive' => false]);
 
-        $container = $this->manifests(type: ApplicationType::Node, processes: [$worker])
+        $container = $this->manifests(type: ApplicationType::NODE, processes: [$worker])
             ->workloads($this->deployment())[1]['spec']['template']['spec']['containers'][0];
 
         $this->assertSame([['sh', '-c', 'exec node worker.js'], false], [$container['args'], array_key_exists('command', $container)]);
@@ -359,11 +359,11 @@ class EnvironmentManifestsTest extends TestCase
      * @param  list<Process>  $processes
      * @param  list<Domain>  $domains
      */
-    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::Laravel, int $port = 8080, ?Cluster $cluster = null, array $processes = [], array $domains = []): EnvironmentManifests
+    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::LARAVEL, int $port = 8080, ?Cluster $cluster = null, array $processes = [], array $domains = []): EnvironmentManifests
     {
         $application = new Application(['type' => $type, 'port' => $port]);
         $application->id = 3;
-        $application->setRelation('cluster', $cluster ?? new Cluster(['kind' => ClusterKind::Local]));
+        $application->setRelation('cluster', $cluster ?? new Cluster(['kind' => ClusterKind::LOCAL]));
 
         $environment = new Environment(['name' => 'production', ...$attributes]);
         $environment->id = 7;
@@ -379,7 +379,7 @@ class EnvironmentManifestsTest extends TestCase
     private function clusterWithRegistry(): Cluster
     {
         return new Cluster([
-            'kind' => ClusterKind::Connected,
+            'kind' => ClusterKind::CONNECTED,
             'registry_url' => '192.0.2.5:5000/team',
             'registry_username' => 'robot',
             'registry_insecure' => true,

@@ -72,7 +72,7 @@ class ApplicationController extends Controller
 
         return Inertia::render('applications/create', [
             'clusters' => $clusters,
-            'defaultClusterId' => ($clusters->firstWhere('kind', ClusterKind::Local) ?? $clusters->first())?->id,
+            'defaultClusterId' => ($clusters->firstWhere('kind', ClusterKind::LOCAL) ?? $clusters->first())?->id,
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,
                 'cpu_millicores' => $size->cpuMillicores(),
@@ -133,7 +133,7 @@ class ApplicationController extends Controller
         Gate::authorize('view', $application);
 
         $environments = $application->environments()
-            ->where('kind', '!=', EnvironmentKind::PreviewTemplate)
+            ->where('kind', '!=', EnvironmentKind::PREVIEW_TEMPLATE)
             ->with(['domains' => fn ($query) => $query->orderBy('id')])
             ->get();
 
@@ -159,11 +159,11 @@ class ApplicationController extends Controller
                 'preview_domain' => $application->preview_domain,
                 'ingress_ip' => $application->cluster->ingress_ip,
                 'max_previews' => config('opencloud.max_previews'),
-                'template_id' => $application->environments()->where('kind', EnvironmentKind::PreviewTemplate)->value('id'),
+                'template_id' => $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->value('id'),
             ],
             'canUpdate' => $request->user()->can('update', $application),
             'environments' => $environments
-                ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::Permanent ? 1 : 2), $environment->name])
+                ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::PERMANENT ? 1 : 2), $environment->name])
                 ->map(fn (Environment $environment) => [
                     'id' => $environment->id,
                     'name' => $environment->name,

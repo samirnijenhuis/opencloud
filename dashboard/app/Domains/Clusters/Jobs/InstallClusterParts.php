@@ -51,7 +51,7 @@ class InstallClusterParts implements ShouldQueue
         $running = ($caddy['status']['availableReplicas'] ?? 0) >= 1;
 
         if ($ip !== null && $running) {
-            $cluster->update(['status' => ClusterStatus::Ready, 'error' => null, 'ingress_ip' => $ip, 'parts_version' => config('opencloud.version')]);
+            $cluster->update(['status' => ClusterStatus::READY, 'error' => null, 'ingress_ip' => $ip, 'parts_version' => config('opencloud.version')]);
             SyncCaddy::dispatch($cluster);
 
             return;
@@ -97,6 +97,6 @@ class InstallClusterParts implements ShouldQueue
 
     private function markFailed(Cluster $cluster, string $error): void
     {
-        $cluster->update(['status' => ClusterStatus::Failed, 'error' => $error]);
+        $cluster->update(['status' => ClusterStatus::FAILED, 'error' => $error]);
     }
 }

@@ -51,7 +51,7 @@ class ClusterController extends Controller
         Gate::authorize('view', $cluster);
 
         $user = $request->user();
-        $local = $cluster->kind === ClusterKind::Local;
+        $local = $cluster->kind === ClusterKind::LOCAL;
 
         return Inertia::render('clusters/show', [
             'cluster' => [
@@ -75,7 +75,7 @@ class ClusterController extends Controller
                 'reinstall' => ! $local && $user->can('update', $cluster),
                 'disconnect' => ! $local && $user->can('delete', $cluster),
             ],
-            'created' => $cluster->kind === ClusterKind::Created ? [
+            'created' => $cluster->kind === ClusterKind::CREATED ? [
                 'provider' => $providers->find((string) $cluster->provider)?->label() ?? (string) $cluster->provider,
                 'region' => $cluster->region,
                 'node_size' => $cluster->node_size,

@@ -37,7 +37,7 @@ class SecretMaskerTest extends TestCase
             'key' => 'REPORTS_DB_URL',
             'value' => 'postgres://env_1_0b7ec688:p%40ss%2Fword-xyz@postgres-1.oc-datastores.svc.cluster.local:5432/env_1_reports',
             'is_secret' => true,
-            'source' => EnvVarSource::Datastore,
+            'source' => EnvVarSource::DATASTORE,
         ]);
 
         $masker = SecretMasker::forEnvironment($environment);

@@ -23,7 +23,7 @@ class SetEnvVar
             throw new InvalidArgumentException("{$key} is not a valid env name. Use letters, digits, and underscores.");
         }
 
-        $envVar = $environment->envVars()->firstOrNew(['key' => $key, 'source' => EnvVarSource::User]);
+        $envVar = $environment->envVars()->firstOrNew(['key' => $key, 'source' => EnvVarSource::USER]);
         $keepsSecret = $value === null && $envVar->exists && $envVar->is_secret;
 
         if ($keepsSecret && ! $isSecret) {

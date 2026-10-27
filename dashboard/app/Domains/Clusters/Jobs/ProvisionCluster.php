@@ -38,7 +38,7 @@ class ProvisionCluster implements ShouldQueue
     public function handle(Runner $runner, ClusterProviders $providers): void
     {
         $cluster = $this->cluster;
-        $cluster->update(['status' => ClusterStatus::Provisioning, 'error' => null, 'tofu_log' => null]);
+        $cluster->update(['status' => ClusterStatus::PROVISIONING, 'error' => null, 'tofu_log' => null]);
 
         $provider = $providers->for($cluster->provider);
 
@@ -50,12 +50,12 @@ class ProvisionCluster implements ShouldQueue
             return;
         }
 
-        $cluster->update([...$provider->attributes($outputs), 'status' => ClusterStatus::Installing]);
+        $cluster->update([...$provider->attributes($outputs), 'status' => ClusterStatus::INSTALLING]);
         InstallClusterParts::dispatch($cluster);
     }
 
     public function failed(?Throwable $e): void
     {
-        $this->cluster->update(['status' => ClusterStatus::Failed, 'error' => $e?->getMessage() ?? 'The OpenTofu run failed.']);
+        $this->cluster->update(['status' => ClusterStatus::FAILED, 'error' => $e?->getMessage() ?? 'The OpenTofu run failed.']);
     }
 }

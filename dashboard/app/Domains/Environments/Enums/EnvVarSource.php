@@ -4,6 +4,6 @@ namespace App\Domains\Environments\Enums;
 
 enum EnvVarSource: string
 {
-    case User = 'user';
-    case Datastore = 'datastore';
+    case USER = 'user';
+    case DATASTORE = 'datastore';
 }

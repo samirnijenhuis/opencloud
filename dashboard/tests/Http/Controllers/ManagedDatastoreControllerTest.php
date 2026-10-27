@@ -38,9 +38,9 @@ class ManagedDatastoreControllerTest extends TestCase
         Queue::fake();
         ProviderCredential::factory()->create(['provider' => 'digitalocean', 'token' => self::TOKEN]);
         $cluster = Cluster::factory()->create([
-            'kind' => ClusterKind::Created,
+            'kind' => ClusterKind::CREATED,
             'provider' => 'digitalocean',
-            'status' => ClusterStatus::Ready,
+            'status' => ClusterStatus::READY,
             'region' => 'ams3',
             'provider_cluster_id' => 'c0ffee00-1111',
             'provider_vpc_id' => 'vpc-2222',
@@ -66,7 +66,7 @@ class ManagedDatastoreControllerTest extends TestCase
             ['rustfs', 'Spaces bucket', 'Managed by DigitalOcean', 'DigitalOcean runs it and charges your account for it.', 'Only an owner can add a managed resource.'],
         ], $this->managedOffers(User::factory()->admin()->create(), $url));
 
-        $local = Environment::factory()->for(Application::factory()->for(Cluster::factory()->create(['kind' => ClusterKind::Local])))->create();
+        $local = Environment::factory()->for(Application::factory()->for(Cluster::factory()->create(['kind' => ClusterKind::LOCAL])))->create();
         $refusal = 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.';
         $this->assertSame([
             ['mysql', 'Managed MySQL', 'Managed by a cloud provider', 'A cloud provider runs it and charges your account for it.', $mysqlOnly],
@@ -87,7 +87,7 @@ class ManagedDatastoreControllerTest extends TestCase
         $this->assertSame(0, Datastore::count());
         $this->actingAs(User::factory()->owner()->create())->post($url, ['kind' => 'postgres', 'source' => 'managed'])->assertRedirect();
 
-        $this->assertSame([DatastoreSource::Managed, DatastoreKind::Postgres], [Datastore::query()->sole()->source, Datastore::query()->sole()->kind]);
+        $this->assertSame([DatastoreSource::MANAGED, DatastoreKind::POSTGRES], [Datastore::query()->sole()->source, Datastore::query()->sole()->kind]);
         Queue::assertPushed(ProvisionManagedDatabase::class);
     }
 
@@ -110,7 +110,7 @@ class ManagedDatastoreControllerTest extends TestCase
 
         $this->actingAs($owner)->delete($url, ['confirm' => true])->assertRedirect();
 
-        $this->assertSame(DatastoreStatus::Destroying, $attachment->datastore->fresh()->status);
+        $this->assertSame(DatastoreStatus::DESTROYING, $attachment->datastore->fresh()->status);
         Queue::assertPushed(TearDownManagedDatabase::class);
     }
 
@@ -118,8 +118,8 @@ class ManagedDatastoreControllerTest extends TestCase
     {
         $attachment = $this->managedAttachment();
         $attachment->datastore->update(['tofu_log' => "2026-10-23T00:00:00Z digitalocean_database_cluster.this: Creation complete\n"]);
-        EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'DO_GENERATED_PASSWORD_SECRET', 'is_secret' => true, 'source' => EnvVarSource::Datastore, 'datastore_attachment_id' => $attachment->id]);
-        EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'value' => 'private-db.example.ondigitalocean.com', 'source' => EnvVarSource::Datastore, 'datastore_attachment_id' => $attachment->id]);
+        EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'DO_GENERATED_PASSWORD_SECRET', 'is_secret' => true, 'source' => EnvVarSource::DATASTORE, 'datastore_attachment_id' => $attachment->id]);
+        EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'value' => 'private-db.example.ondigitalocean.com', 'source' => EnvVarSource::DATASTORE, 'datastore_attachment_id' => $attachment->id]);
 
         $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}")->assertOk();
 
@@ -144,7 +144,7 @@ class ManagedDatastoreControllerTest extends TestCase
     public function test_the_page_polls_while_a_managed_database_is_destroyed(): void
     {
         $attachment = $this->managedAttachment();
-        $attachment->datastore->update(['status' => DatastoreStatus::Destroying]);
+        $attachment->datastore->update(['status' => DatastoreStatus::DESTROYING]);
 
         $this->actingAs(User::factory()->owner()->create())->get("/environments/{$this->environment->id}")
             ->assertInertia(fn (Assert $page) => $page->where('datastores.polling', true)->where('datastores.attachments.0.server.status', 'destroying'));
@@ -163,10 +163,10 @@ class ManagedDatastoreControllerTest extends TestCase
     private function managedAttachment(): DatastoreAttachment
     {
         $datastore = Datastore::factory()->for($this->environment->application->cluster)->create([
-            'kind' => DatastoreKind::Mysql,
-            'source' => DatastoreSource::Managed,
+            'kind' => DatastoreKind::MYSQL,
+            'source' => DatastoreSource::MANAGED,
             'version' => '8',
-            'status' => DatastoreStatus::Ready,
+            'status' => DatastoreStatus::READY,
         ]);
 
         return DatastoreAttachment::factory()->create([
@@ -175,7 +175,7 @@ class ManagedDatastoreControllerTest extends TestCase
             'database_name' => "env_{$this->environment->id}",
             'username' => "env_{$this->environment->id}",
             'password' => 'DO_GENERATED_PASSWORD_SECRET',
-            'status' => DatastoreStatus::Ready,
+            'status' => DatastoreStatus::READY,
         ]);
     }
 }

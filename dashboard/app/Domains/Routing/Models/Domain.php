@@ -19,8 +19,8 @@ class Domain extends Model
     protected $fillable = ['environment_id', 'hostname', 'dns_status', 'dns_mode', 'certificate_status', 'dns_found', 'dns_checked_at', 'cloudflare_zone_id', 'cloudflare_record_id', 'generated'];
 
     protected $attributes = [
-        'dns_status' => DnsStatus::Pending->value,
-        'dns_mode' => DnsMode::Manual->value,
+        'dns_status' => DnsStatus::PENDING->value,
+        'dns_mode' => DnsMode::MANUAL->value,
         'certificate_status' => 'pending',
         'generated' => false,
     ];

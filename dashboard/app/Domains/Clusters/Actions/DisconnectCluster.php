@@ -20,7 +20,7 @@ class DisconnectCluster
      */
     public function execute(Cluster $cluster, User $by, bool $removeParts): void
     {
-        if ($cluster->kind === ClusterKind::Local) {
+        if ($cluster->kind === ClusterKind::LOCAL) {
             throw ValidationException::withMessages(['cluster' => 'The local cluster runs the dashboard, so it cannot be disconnected.']);
         }
 

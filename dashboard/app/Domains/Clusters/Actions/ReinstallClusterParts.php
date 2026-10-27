@@ -21,15 +21,15 @@ class ReinstallClusterParts
      */
     public function execute(Cluster $cluster, ?User $by): void
     {
-        if ($cluster->kind === ClusterKind::Local) {
+        if ($cluster->kind === ClusterKind::LOCAL) {
             throw ValidationException::withMessages(['cluster' => 'The installer manages the parts of the local cluster. Run opencloud upgrade on the server.']);
         }
 
-        $cluster->update(['status' => ClusterStatus::Installing, 'error' => null]);
+        $cluster->update(['status' => ClusterStatus::INSTALLING, 'error' => null]);
 
         AuditEvent::record($by, 'cluster.parts_reinstalled', $cluster, ['name' => $cluster->name]);
 
         // For a created cluster, the OpenTofu apply runs first. It repairs a failed create and changes nothing otherwise.
-        $cluster->kind === ClusterKind::Created ? ProvisionCluster::dispatch($cluster) : InstallClusterParts::dispatch($cluster);
+        $cluster->kind === ClusterKind::CREATED ? ProvisionCluster::dispatch($cluster) : InstallClusterParts::dispatch($cluster);
     }
 }

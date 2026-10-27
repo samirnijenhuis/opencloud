@@ -21,7 +21,7 @@ class BuildKit
             return $configured;
         }
 
-        $local = Cluster::query()->where('kind', ClusterKind::Local)->firstOrFail();
+        $local = Cluster::query()->where('kind', ClusterKind::LOCAL)->firstOrFail();
         $pods = Kubectl::for($local)->get('pods', namespace: 'opencloud', selector: ['app.kubernetes.io/name' => 'buildkitd'])['items'] ?? [];
 
         foreach ($pods as $pod) {

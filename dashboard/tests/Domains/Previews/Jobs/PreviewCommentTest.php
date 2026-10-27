@@ -33,11 +33,11 @@ class PreviewCommentTest extends TestCase
 
         FakeProcesses::install()->withLaravelRepository();
         FakeKubectl::install()->respond('exec deploy/web', new KubectlResult(0, 'HTTP/1.1 200 OK'));
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $application = Application::factory()->for($cluster)->create(['repository' => 'acme/shop']);
         $this->preview = Environment::factory()->for($application)->create([
             'name' => 'pr-12',
-            'kind' => EnvironmentKind::Preview,
+            'kind' => EnvironmentKind::PREVIEW,
             'pr_number' => 12,
             'branch' => 'feature/login',
         ]);
@@ -85,7 +85,7 @@ class PreviewCommentTest extends TestCase
 
         RunDeployment::dispatchSync($deployment);
 
-        $this->assertSame(DeploymentStatus::Live, $deployment->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $deployment->fresh()->status);
         $this->assertNull($this->preview->fresh()->pr_comment_id);
         Log::shouldHaveReceived('warning')->withArgs(fn (string $message) => $message === 'Opencloud could not post the preview URL on acme/shop#12.')->once();
     }
@@ -93,7 +93,7 @@ class PreviewCommentTest extends TestCase
     public function test_a_permanent_environment_that_goes_live_posts_no_comment(): void
     {
         $this->fakeGitHub();
-        $this->preview->update(['kind' => EnvironmentKind::Permanent, 'pr_number' => null]);
+        $this->preview->update(['kind' => EnvironmentKind::PERMANENT, 'pr_number' => null]);
 
         RunDeployment::dispatchSync($this->deployment('abcdef1234567890abcdef1234567890abcdef12'));
 

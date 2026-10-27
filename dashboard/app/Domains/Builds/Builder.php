@@ -112,26 +112,26 @@ final class Builder
     private function prepare(ApplicationType $type, string $dir, array $secrets, ?string $buildCommand): string
     {
         return match ($type) {
-            ApplicationType::Laravel => self::generate($dir, self::LARAVEL_IGNORE, LaravelDockerfile::fromConfig()->render(
+            ApplicationType::LARAVEL => self::generate($dir, self::LARAVEL_IGNORE, LaravelDockerfile::fromConfig()->render(
                 self::laravelComposer($dir), self::readJson("{$dir}/package.json"), $secrets, $buildCommand,
             )),
-            ApplicationType::Node => self::generate($dir, self::NODE_IGNORE, NodeDockerfile::render(
+            ApplicationType::NODE => self::generate($dir, self::NODE_IGNORE, NodeDockerfile::render(
                 self::nodeProject($dir) ?? throw new RepositoryDoesNotFit('The application uses the Node.js preset, but the repository has no package.json at its root.'),
                 $secrets,
                 $buildCommand,
             )),
-            ApplicationType::Python => self::generate($dir, self::PYTHON_IGNORE, PythonDockerfile::render(
+            ApplicationType::PYTHON => self::generate($dir, self::PYTHON_IGNORE, PythonDockerfile::render(
                 PythonProject::in(RepositoryFiles::in($dir)) ?? throw new RepositoryDoesNotFit('The application uses the Python preset, but the repository has no uv.lock, poetry.lock, Pipfile.lock, requirements.txt, or pyproject.toml at its root.'),
                 $secrets,
                 $buildCommand,
             )),
-            ApplicationType::Ruby => self::generate($dir, self::RUBY_IGNORE, RubyDockerfile::render(
+            ApplicationType::RUBY => self::generate($dir, self::RUBY_IGNORE, RubyDockerfile::render(
                 RubyProject::in(RepositoryFiles::in($dir)) ?? throw new RepositoryDoesNotFit('The application uses the Ruby preset, but the repository has no Gemfile at its root.'),
                 $secrets,
                 $buildCommand,
             )),
-            ApplicationType::Static => self::generate($dir, self::NODE_IGNORE, StaticDockerfile::render(self::nodeProject($dir), $secrets)),
-            ApplicationType::Dockerfile => self::repositoryDockerfile($dir, $secrets),
+            ApplicationType::STATIC => self::generate($dir, self::NODE_IGNORE, StaticDockerfile::render(self::nodeProject($dir), $secrets)),
+            ApplicationType::DOCKERFILE => self::repositoryDockerfile($dir, $secrets),
         };
     }
 

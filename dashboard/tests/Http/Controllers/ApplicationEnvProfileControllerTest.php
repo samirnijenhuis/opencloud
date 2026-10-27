@@ -37,19 +37,19 @@ class ApplicationEnvProfileControllerTest extends TestCase
     {
         parent::setUp();
 
-        $cluster = Cluster::factory()->create(['id' => 1, 'name' => 'local', 'kind' => ClusterKind::Local]);
-        $this->application = Application::factory()->for($cluster)->create(['id' => 1, 'name' => 'shop', 'type' => ApplicationType::Laravel, 'env_profile' => EnvProfileKind::Laravel, 'port' => 8080]);
+        $cluster = Cluster::factory()->create(['id' => 1, 'name' => 'local', 'kind' => ClusterKind::LOCAL]);
+        $this->application = Application::factory()->for($cluster)->create(['id' => 1, 'name' => 'shop', 'type' => ApplicationType::LARAVEL, 'env_profile' => EnvProfileKind::LARAVEL, 'port' => 8080]);
         $this->production = Environment::factory()->for($this->application)->create(['id' => 7, 'name' => 'production']);
-        $this->preview = Environment::factory()->for($this->application)->create(['id' => 8, 'name' => 'pr-12', 'kind' => EnvironmentKind::Preview, 'pr_number' => 12]);
-        $this->template = Environment::factory()->for($this->application)->create(['id' => 9, 'name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate, 'branch' => null]);
+        $this->preview = Environment::factory()->for($this->application)->create(['id' => 8, 'name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
+        $this->template = Environment::factory()->for($this->application)->create(['id' => 9, 'name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
     }
 
     public function test_an_owner_changes_the_env_names_and_every_environment_gets_the_url_names(): void
     {
-        $mysql = Datastore::factory()->for($this->application->cluster)->create(['id' => 3, 'kind' => DatastoreKind::Mysql]);
-        $postgres = Datastore::factory()->for($this->application->cluster)->create(['id' => 4, 'kind' => DatastoreKind::Postgres]);
-        $valkey = Datastore::factory()->for($this->application->cluster)->create(['id' => 5, 'kind' => DatastoreKind::Valkey]);
-        $rustfs = Datastore::factory()->for($this->application->cluster)->create(['id' => 6, 'kind' => DatastoreKind::Rustfs]);
+        $mysql = Datastore::factory()->for($this->application->cluster)->create(['id' => 3, 'kind' => DatastoreKind::MYSQL]);
+        $postgres = Datastore::factory()->for($this->application->cluster)->create(['id' => 4, 'kind' => DatastoreKind::POSTGRES]);
+        $valkey = Datastore::factory()->for($this->application->cluster)->create(['id' => 5, 'kind' => DatastoreKind::VALKEY]);
+        $rustfs = Datastore::factory()->for($this->application->cluster)->create(['id' => 6, 'kind' => DatastoreKind::RUSTFS]);
         $attachments = [
             $this->attachment(21, $mysql, $this->production, 'main', true, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7', 'env_7', 'main-pass'),
             $this->attachment(22, $postgres, $this->production, 'reports', false, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_7_reports', 'env_7_reports', 'reports-pass'),
@@ -62,7 +62,7 @@ class ApplicationEnvProfileControllerTest extends TestCase
             AttachmentEnv::write($attachment);
         }
 
-        $this->production->envVars()->create(['key' => 'MAIL_MAILER', 'value' => 'log', 'source' => EnvVarSource::User]);
+        $this->production->envVars()->create(['key' => 'MAIL_MAILER', 'value' => 'log', 'source' => EnvVarSource::USER]);
 
         $this->assertSame([
             'AWS_ACCESS_KEY_ID' => ['env-7', false, 25],
@@ -108,7 +108,7 @@ class ApplicationEnvProfileControllerTest extends TestCase
         $this->assertSame([], $this->rows($this->template));
 
         $this->application->refresh();
-        $this->assertSame([ApplicationType::Laravel, EnvProfileKind::Generic, 8080], [$this->application->type, $this->application->env_profile, $this->application->port]);
+        $this->assertSame([ApplicationType::LARAVEL, EnvProfileKind::GENERIC, 8080], [$this->application->type, $this->application->env_profile, $this->application->port]);
         $this->assertSame(
             ['application.env_profile_updated', ['from' => 'laravel', 'to' => 'generic']],
             [AuditEvent::sole()->action, AuditEvent::sole()->context],
@@ -120,7 +120,7 @@ class ApplicationEnvProfileControllerTest extends TestCase
 
     public function test_a_save_with_the_same_env_names_changes_nothing(): void
     {
-        $mysql = Datastore::factory()->for($this->application->cluster)->create(['id' => 3, 'kind' => DatastoreKind::Mysql]);
+        $mysql = Datastore::factory()->for($this->application->cluster)->create(['id' => 3, 'kind' => DatastoreKind::MYSQL]);
         $attachment = $this->attachment(21, $mysql, $this->production, 'main', true, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7', 'env_7', 'main-pass');
         AttachmentEnv::write($attachment);
         $this->production->envVars()->where('key', 'DB_HOST')->sole()->update(['value' => 'edited-by-hand']);
@@ -140,14 +140,14 @@ class ApplicationEnvProfileControllerTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->application->refresh();
-        $this->assertSame([ApplicationType::Laravel, EnvProfileKind::Generic, 8080], [$this->application->type, $this->application->env_profile, $this->application->port]);
+        $this->assertSame([ApplicationType::LARAVEL, EnvProfileKind::GENERIC, 8080], [$this->application->type, $this->application->env_profile, $this->application->port]);
         $this->assertSame(['from' => 'laravel', 'to' => 'generic'], AuditEvent::sole()->context);
 
         $this->patch("/applications/{$this->application->id}/env-profile", ['type' => 'node', 'port' => 3000])
             ->assertSessionHasErrors(['env_profile' => 'The env profile field is required.']);
 
         $this->application->refresh();
-        $this->assertSame([ApplicationType::Laravel, 8080], [$this->application->type, $this->application->port]);
+        $this->assertSame([ApplicationType::LARAVEL, 8080], [$this->application->type, $this->application->port]);
         $this->assertSame(1, AuditEvent::query()->count());
     }
 
@@ -157,14 +157,14 @@ class ApplicationEnvProfileControllerTest extends TestCase
             ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'generic'])
             ->assertForbidden();
 
-        $this->assertSame(EnvProfileKind::Laravel, $this->application->fresh()->env_profile);
+        $this->assertSame(EnvProfileKind::LARAVEL, $this->application->fresh()->env_profile);
         $this->assertSame(0, AuditEvent::query()->count());
 
         $this->actingAs(User::factory()->admin()->create())
             ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'generic'])
             ->assertSessionHasNoErrors();
 
-        $this->assertSame(EnvProfileKind::Generic, $this->application->fresh()->env_profile);
+        $this->assertSame(EnvProfileKind::GENERIC, $this->application->fresh()->env_profile);
     }
 
     public function test_a_bad_env_profile_is_refused(): void
@@ -173,7 +173,7 @@ class ApplicationEnvProfileControllerTest extends TestCase
             ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'rails'])
             ->assertSessionHasErrors(['env_profile' => 'The selected env profile is invalid.']);
 
-        $this->assertSame(EnvProfileKind::Laravel, $this->application->fresh()->env_profile);
+        $this->assertSame(EnvProfileKind::LARAVEL, $this->application->fresh()->env_profile);
         $this->assertSame(0, AuditEvent::query()->count());
     }
 
@@ -183,7 +183,7 @@ class ApplicationEnvProfileControllerTest extends TestCase
             ->patch("/applications/{$this->application->id}/preset", ['type' => 'node', 'env_profile' => 'generic'])
             ->assertNotFound();
 
-        $this->assertSame(ApplicationType::Laravel, $this->application->fresh()->type);
+        $this->assertSame(ApplicationType::LARAVEL, $this->application->fresh()->type);
     }
 
     public function test_the_application_page_gets_the_preset_and_the_env_names(): void

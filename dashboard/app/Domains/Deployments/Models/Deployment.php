@@ -20,7 +20,7 @@ class Deployment extends Model
     protected $fillable = ['environment_id', 'commit_sha', 'image', 'status', 'triggered_by', 'started_at', 'finished_at', 'warning'];
 
     protected $attributes = [
-        'status' => DeploymentStatus::Queued->value,
+        'status' => DeploymentStatus::QUEUED->value,
     ];
 
     protected function casts(): array

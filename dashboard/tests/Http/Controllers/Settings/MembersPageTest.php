@@ -50,7 +50,7 @@ class MembersPageTest extends TestCase
         $this->actingAs($owner)->patch("/settings/members/{$developer->id}", ['role' => 'admin'])
             ->assertRedirect('/settings/members');
 
-        $this->assertSame(Role::Admin, $developer->fresh()->role);
+        $this->assertSame(Role::ADMIN, $developer->fresh()->role);
         $event = AuditEvent::sole();
         $this->assertSame('member.role_changed', $event->action);
         $this->assertSame(['from' => 'developer', 'to' => 'admin'], $event->context);
@@ -62,7 +62,7 @@ class MembersPageTest extends TestCase
 
         $this->actingAs($owner)->patch("/settings/members/{$owner->id}", ['role' => 'developer'])->assertForbidden();
 
-        $this->assertSame(Role::Owner, $owner->fresh()->role);
+        $this->assertSame(Role::OWNER, $owner->fresh()->role);
     }
 
     public function test_a_role_must_be_a_known_role(): void
@@ -72,7 +72,7 @@ class MembersPageTest extends TestCase
 
         $this->actingAs($owner)->patch("/settings/members/{$developer->id}", ['role' => 'root'])->assertSessionHasErrors('role');
 
-        $this->assertSame(Role::Developer, $developer->fresh()->role);
+        $this->assertSame(Role::DEVELOPER, $developer->fresh()->role);
     }
 
     public function test_an_admin_cannot_change_roles_or_remove_members(): void
@@ -83,7 +83,7 @@ class MembersPageTest extends TestCase
         $this->actingAs($admin)->patch("/settings/members/{$developer->id}", ['role' => 'owner'])->assertForbidden();
         $this->actingAs($admin)->delete("/settings/members/{$developer->id}")->assertForbidden();
 
-        $this->assertSame(Role::Developer, $developer->fresh()->role);
+        $this->assertSame(Role::DEVELOPER, $developer->fresh()->role);
     }
 
     public function test_the_owner_removes_a_member(): void

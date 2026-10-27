@@ -13,7 +13,7 @@ trait BuildsEnvironments
 
     protected function makeCluster(): Cluster
     {
-        return $this->cluster ??= Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local', 'ingress_ip' => '203.0.113.10']);
+        return $this->cluster ??= Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local', 'ingress_ip' => '203.0.113.10']);
     }
 
     /** @param  array<string, mixed>  $attributes */

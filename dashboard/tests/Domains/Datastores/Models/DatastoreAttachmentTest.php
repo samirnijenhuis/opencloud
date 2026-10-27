@@ -49,7 +49,7 @@ class DatastoreAttachmentTest extends TestCase
         parent::setUp();
 
         $this->kubectl = FakeKubectl::install();
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create();
         $this->owner = User::factory()->create();
         Str::createRandomStringsUsing(fn (int $length) => $length === 32 ? 'pass'.count($this->kubectl->calls) : Str::password($length));
@@ -70,14 +70,14 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_mysql_gets_a_server_then_a_database_and_a_user_with_rights_on_that_database_only(): void
     {
-        $attachment = $this->attach(DatastoreKind::Mysql);
+        $attachment = $this->attach(DatastoreKind::MYSQL);
         $datastore = $attachment->datastore->fresh();
         $id = $datastore->id;
         $env = $this->environment->id;
 
-        $this->assertSame([DatastoreKind::Mysql, '8.4', DatastoreStatus::Ready, 'pass0'], [$datastore->kind, $datastore->version, $datastore->status, $datastore->root_password]);
+        $this->assertSame([DatastoreKind::MYSQL, '8.4', DatastoreStatus::READY, 'pass0'], [$datastore->kind, $datastore->version, $datastore->status, $datastore->root_password]);
         $this->assertSame(['provisioning', 'ready'], $this->statuses);
-        $this->assertSame(["env_{$env}", "env_{$env}", 'pass0', DatastoreStatus::Ready, null], [$attachment->database_name, $attachment->username, $attachment->password, $attachment->fresh()->status, $attachment->fresh()->error]);
+        $this->assertSame(["env_{$env}", "env_{$env}", 'pass0', DatastoreStatus::READY, null], [$attachment->database_name, $attachment->username, $attachment->password, $attachment->fresh()->status, $attachment->fresh()->error]);
         $this->assertSame([
             self::APPLY,
             ['rollout', 'status', "statefulset/mysql-{$id}", '--namespace=oc-datastores', '--timeout=600s'],
@@ -105,7 +105,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_postgres_gets_a_role_and_a_database_that_other_roles_cannot_connect_to(): void
     {
-        $attachment = $this->attach(DatastoreKind::Postgres);
+        $attachment = $this->attach(DatastoreKind::POSTGRES);
         $id = $attachment->datastore_id;
         $name = "env_{$this->environment->id}";
 
@@ -132,7 +132,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_rustfs_gets_a_bucket_and_a_user_whose_policy_allows_that_bucket_only(): void
     {
-        $attachment = $this->attach(DatastoreKind::Rustfs);
+        $attachment = $this->attach(DatastoreKind::RUSTFS);
         $id = $attachment->datastore_id;
         $name = "env-{$this->environment->id}";
 
@@ -161,11 +161,11 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_valkey_runs_one_server_per_attachment(): void
     {
-        $attachment = $this->attach(DatastoreKind::Valkey);
+        $attachment = $this->attach(DatastoreKind::VALKEY);
         $name = "valkey-{$attachment->id}";
 
         $this->assertNull($attachment->datastore->fresh()->root_password);
-        $this->assertSame([null, null, null, false, DatastoreStatus::Ready], [$attachment->name, $attachment->database_name, $attachment->username, $attachment->is_default, $attachment->fresh()->status]);
+        $this->assertSame([null, null, null, false, DatastoreStatus::READY], [$attachment->name, $attachment->database_name, $attachment->username, $attachment->is_default, $attachment->fresh()->status]);
         $this->assertSame([
             self::APPLY,
             self::APPLY,
@@ -185,17 +185,17 @@ class DatastoreAttachmentTest extends TestCase
     {
         $this->kubectl->respond('exec', new KubectlResult(1, '', "psql:<stdin>:2: ERROR:  syntax error\nLINE 1: ALTER ROLE \"env_1\" WITH LOGIN PASSWORD 'pass0';"));
 
-        $attachment = $this->attach(DatastoreKind::Postgres);
+        $attachment = $this->attach(DatastoreKind::POSTGRES);
 
         $this->assertSame(['provisioning', 'failed'], $this->statuses);
-        $this->assertSame(DatastoreStatus::Ready, $attachment->datastore->fresh()->status);
+        $this->assertSame(DatastoreStatus::READY, $attachment->datastore->fresh()->status);
         $this->assertSame(
             "psql:<stdin>:2: ERROR:  syntax error\nLINE 1: ALTER ROLE \"env_1\" WITH LOGIN PASSWORD '********';",
             $attachment->fresh()->error,
         );
 
         $this->kubectl->respond('exec', new KubectlResult(0));
-        $again = $this->attach(DatastoreKind::Postgres, 'main');
+        $again = $this->attach(DatastoreKind::POSTGRES, 'main');
 
         $this->assertTrue($again->is($attachment));
         $this->assertSame(['provisioning', 'failed', 'provisioning', 'ready'], $this->statuses);
@@ -206,19 +206,19 @@ class DatastoreAttachmentTest extends TestCase
     {
         $this->kubectl->respond('rollout status', new KubectlResult(1, '', 'error: timed out waiting for the condition'));
 
-        $attachment = $this->attach(DatastoreKind::Mysql);
+        $attachment = $this->attach(DatastoreKind::MYSQL);
 
         $datastore = $attachment->datastore->fresh();
-        $this->assertSame([DatastoreStatus::Failed, 'error: timed out waiting for the condition'], [$datastore->status, $datastore->error]);
-        $this->assertSame([DatastoreStatus::Failed, 'error: timed out waiting for the condition'], [$attachment->fresh()->status, $attachment->fresh()->error]);
+        $this->assertSame([DatastoreStatus::FAILED, 'error: timed out waiting for the condition'], [$datastore->status, $datastore->error]);
+        $this->assertSame([DatastoreStatus::FAILED, 'error: timed out waiting for the condition'], [$attachment->fresh()->status, $attachment->fresh()->error]);
         $this->assertSame([], $this->kubectl->callsStartingWith('exec'));
     }
 
     public function test_the_first_database_is_the_default_main_and_a_later_one_gets_one_url_value(): void
     {
-        $main = $this->attach(DatastoreKind::Mysql);
-        $reports = $this->attach(DatastoreKind::Postgres, 'reports');
-        $analytics = $this->attach(DatastoreKind::Mysql, 'analytics');
+        $main = $this->attach(DatastoreKind::MYSQL);
+        $reports = $this->attach(DatastoreKind::POSTGRES, 'reports');
+        $analytics = $this->attach(DatastoreKind::MYSQL, 'analytics');
         $env = $this->environment->id;
         $mysql = $main->datastore_id;
         $postgres = $reports->datastore_id;
@@ -254,10 +254,10 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_the_url_encodes_the_user_and_the_password_and_laravel_reads_them_back(): void
     {
-        $this->attach(DatastoreKind::Mysql);
+        $this->attach(DatastoreKind::MYSQL);
         Str::createRandomStringsUsing(fn () => 'p@ss:w/rd?#%&+ é');
 
-        $reports = $this->attach(DatastoreKind::Mysql, 'reports');
+        $reports = $this->attach(DatastoreKind::MYSQL, 'reports');
 
         $env = $this->environment->id;
         $url = $this->environmentEnv()['REPORTS_DB_URL'][0];
@@ -272,7 +272,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_a_first_database_with_a_name_of_its_own_is_the_default(): void
     {
-        $reports = $this->attach(DatastoreKind::Postgres, 'reports');
+        $reports = $this->attach(DatastoreKind::POSTGRES, 'reports');
         $env = $this->environment->id;
 
         $this->assertSame(['reports', true], [$reports->name, $reports->is_default]);
@@ -284,21 +284,21 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_the_name_rules_refuse_a_missing_bad_reserved_or_taken_name(): void
     {
-        $this->attach(DatastoreKind::Mysql);
+        $this->attach(DatastoreKind::MYSQL);
         $format = 'Use 1 to 30 lowercase letters, digits, and underscores. Start with a letter.';
 
         foreach ([
-            [DatastoreKind::Postgres, null, 'This environment already has a database. Give the new database a name.'],
-            [DatastoreKind::Postgres, 'Reports', $format],
-            [DatastoreKind::Postgres, '1reports', $format],
-            [DatastoreKind::Postgres, 'my-reports', $format],
-            [DatastoreKind::Postgres, "reports\n", $format],
-            [DatastoreKind::Postgres, '', $format],
-            [DatastoreKind::Postgres, str_repeat('a', 31), $format],
-            [DatastoreKind::Postgres, 'pgsql', 'Laravel already has a connection with the name pgsql. Use a different name.'],
-            [DatastoreKind::Mysql, 'mariadb', 'Laravel already has a connection with the name mariadb. Use a different name.'],
-            [DatastoreKind::Postgres, 'main', 'This environment already has a database with the name main.'],
-            [DatastoreKind::Mysql, 'main', 'This environment already has a database with the name main.'],
+            [DatastoreKind::POSTGRES, null, 'This environment already has a database. Give the new database a name.'],
+            [DatastoreKind::POSTGRES, 'Reports', $format],
+            [DatastoreKind::POSTGRES, '1reports', $format],
+            [DatastoreKind::POSTGRES, 'my-reports', $format],
+            [DatastoreKind::POSTGRES, "reports\n", $format],
+            [DatastoreKind::POSTGRES, '', $format],
+            [DatastoreKind::POSTGRES, str_repeat('a', 31), $format],
+            [DatastoreKind::POSTGRES, 'pgsql', 'Laravel already has a connection with the name pgsql. Use a different name.'],
+            [DatastoreKind::MYSQL, 'mariadb', 'Laravel already has a connection with the name mariadb. Use a different name.'],
+            [DatastoreKind::POSTGRES, 'main', 'This environment already has a database with the name main.'],
+            [DatastoreKind::MYSQL, 'main', 'This environment already has a database with the name main.'],
         ] as [$kind, $name, $message]) {
             try {
                 $this->attach($kind, $name);
@@ -309,13 +309,13 @@ class DatastoreAttachmentTest extends TestCase
         }
 
         $this->assertSame(1, DatastoreAttachment::count());
-        $this->assertSame(str_repeat('a', 30), $this->attach(DatastoreKind::Postgres, str_repeat('a', 30))->name);
+        $this->assertSame(str_repeat('a', 30), $this->attach(DatastoreKind::POSTGRES, str_repeat('a', 30))->name);
     }
 
     public function test_make_default_swaps_the_env_values_of_the_old_and_the_new_default(): void
     {
-        $main = $this->attach(DatastoreKind::Mysql);
-        $reports = $this->attach(DatastoreKind::Postgres, 'reports');
+        $main = $this->attach(DatastoreKind::MYSQL);
+        $reports = $this->attach(DatastoreKind::POSTGRES, 'reports');
         $env = $this->environment->id;
 
         app(SetDefaultDatabase::class)->execute($reports, $this->owner);
@@ -339,7 +339,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_only_a_database_can_be_the_default(): void
     {
-        $valkey = $this->attach(DatastoreKind::Valkey);
+        $valkey = $this->attach(DatastoreKind::VALKEY);
 
         $this->expectExceptionObject(new InvalidArgumentException('Only a MySQL or Postgres database can be the default.'));
 
@@ -348,9 +348,9 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_the_default_is_detached_only_as_the_last_database(): void
     {
-        $main = $this->attach(DatastoreKind::Mysql);
-        $reports = $this->attach(DatastoreKind::Postgres, 'reports');
-        $this->attach(DatastoreKind::Valkey);
+        $main = $this->attach(DatastoreKind::MYSQL);
+        $reports = $this->attach(DatastoreKind::POSTGRES, 'reports');
+        $this->attach(DatastoreKind::VALKEY);
 
         try {
             app(DetachDatastore::class)->execute($main, $this->owner);
@@ -365,16 +365,16 @@ class DatastoreAttachmentTest extends TestCase
         app(DetachDatastore::class)->execute($main->fresh(), $this->owner);
         $this->assertSame(['CACHE_STORE', 'REDIS_CLIENT', 'REDIS_HOST', 'REDIS_PASSWORD', 'REDIS_PORT'], array_keys($this->environmentEnv()));
 
-        $again = $this->attach(DatastoreKind::Postgres);
+        $again = $this->attach(DatastoreKind::POSTGRES);
         $this->assertSame(['main', true], [$again->name, $again->is_default]);
     }
 
     public function test_environments_share_the_server_of_a_kind(): void
     {
-        $first = $this->attach(DatastoreKind::Mysql);
+        $first = $this->attach(DatastoreKind::MYSQL);
         $other = Environment::factory()->for($this->environment->application)->create();
 
-        $second = app(AttachDatastore::class)->execute($other, $this->owner, DatastoreKind::Mysql);
+        $second = app(AttachDatastore::class)->execute($other, $this->owner, DatastoreKind::MYSQL);
 
         $this->assertSame($first->datastore_id, $second->datastore_id);
         $this->assertSame(["env_{$this->environment->id}", "env_{$other->id}"], [$first->database_name, $second->database_name]);
@@ -382,9 +382,9 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_a_user_value_beats_the_datastore_value_with_the_same_key(): void
     {
-        app(SetEnvVar::class)->execute($this->environment, $this->owner, 'DB_HOST', 'db.example.com', false, EnvVarAvailability::Runtime);
+        app(SetEnvVar::class)->execute($this->environment, $this->owner, 'DB_HOST', 'db.example.com', false, EnvVarAvailability::RUNTIME);
 
-        $this->attach(DatastoreKind::Mysql);
+        $this->attach(DatastoreKind::MYSQL);
 
         $env = EnvironmentVariables::runtime($this->environment);
         $this->assertSame(['db.example.com', 'pass0'], [$env['DB_HOST'], $env['DB_PASSWORD']]);
@@ -392,8 +392,8 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_detaching_mysql_drops_the_user_and_the_env_values_and_keeps_the_database(): void
     {
-        $attachment = $this->attach(DatastoreKind::Mysql);
-        app(SetEnvVar::class)->execute($this->environment, $this->owner, 'DB_HOST', 'db.example.com', false, EnvVarAvailability::Runtime);
+        $attachment = $this->attach(DatastoreKind::MYSQL);
+        app(SetEnvVar::class)->execute($this->environment, $this->owner, 'DB_HOST', 'db.example.com', false, EnvVarAvailability::RUNTIME);
         $this->kubectl->calls = [];
         $env = $this->environment->id;
 
@@ -410,7 +410,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_destroying_mysql_also_drops_the_database(): void
     {
-        $attachment = $this->attach(DatastoreKind::Mysql);
+        $attachment = $this->attach(DatastoreKind::MYSQL);
         $this->kubectl->calls = [];
         $env = $this->environment->id;
 
@@ -422,7 +422,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_detaching_postgres_moves_the_tables_to_postgres_before_it_drops_the_role(): void
     {
-        $attachment = $this->attach(DatastoreKind::Postgres);
+        $attachment = $this->attach(DatastoreKind::POSTGRES);
         $name = "env_{$this->environment->id}";
         $this->kubectl->calls = [];
 
@@ -443,7 +443,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_destroying_postgres_drops_the_database_and_the_role(): void
     {
-        $attachment = $this->attach(DatastoreKind::Postgres);
+        $attachment = $this->attach(DatastoreKind::POSTGRES);
         $name = "env_{$this->environment->id}";
         $this->kubectl->calls = [];
 
@@ -457,12 +457,12 @@ class DatastoreAttachmentTest extends TestCase
         $name = "env-{$this->environment->id}";
         $script = fn (array $calls) => $calls[0]['args'][array_key_last($calls[0]['args'])];
 
-        $attachment = $this->attach(DatastoreKind::Rustfs);
+        $attachment = $this->attach(DatastoreKind::RUSTFS);
         $this->kubectl->calls = [];
         app(DetachDatastore::class)->execute($attachment, $this->owner);
         $detach = $script($this->kubectl->calls);
 
-        $attachment = $this->attach(DatastoreKind::Rustfs);
+        $attachment = $this->attach(DatastoreKind::RUSTFS);
         $this->kubectl->calls = [];
         Provisioners::of($attachment->datastore)->detach($attachment, $this->owner, destroyData: true);
 
@@ -483,14 +483,14 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_detaching_valkey_removes_the_server_and_destroying_also_removes_the_volume(): void
     {
-        $attachment = $this->attach(DatastoreKind::Valkey);
+        $attachment = $this->attach(DatastoreKind::VALKEY);
         $name = "valkey-{$attachment->id}";
         $this->kubectl->calls = [];
 
         app(DetachDatastore::class)->execute($attachment, $this->owner);
         $detached = array_column($this->kubectl->calls, 'args');
 
-        $attachment = $this->attach(DatastoreKind::Valkey);
+        $attachment = $this->attach(DatastoreKind::VALKEY);
         $this->kubectl->calls = [];
         Provisioners::of($attachment->datastore)->detach($attachment, $this->owner, destroyData: true);
 

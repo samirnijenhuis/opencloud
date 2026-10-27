@@ -17,7 +17,7 @@ final class LocalPostgres extends LocalSql
 
     protected function kind(): DatastoreKind
     {
-        return DatastoreKind::Postgres;
+        return DatastoreKind::POSTGRES;
     }
 
     protected function container(): string

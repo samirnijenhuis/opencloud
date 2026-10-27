@@ -4,6 +4,6 @@ namespace App\Domains\Routing\Enums;
 
 enum DnsMode: string
 {
-    case Manual = 'manual';
-    case Cloudflare = 'cloudflare';
+    case MANUAL = 'manual';
+    case CLOUDFLARE = 'cloudflare';
 }

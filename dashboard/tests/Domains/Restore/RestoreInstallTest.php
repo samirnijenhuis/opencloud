@@ -63,25 +63,25 @@ class RestoreInstallTest extends TestCase
 
         // The records of the lost server, as the dashboard copy of the night before brings them back.
         $this->travelTo(Carbon::parse('2026-10-22 10:00:00'));
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local', 'ingress_ip' => '203.0.113.20']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local', 'ingress_ip' => '203.0.113.20']);
         BackupTarget::factory()->create(['bucket' => 'oc-backups']);
         $shop = Application::factory()->for($local)->create(['name' => 'shop']);
         $this->production = Environment::factory()->for($shop)->create(['name' => 'production']);
-        Deployment::factory()->for($this->production)->create(['status' => DeploymentStatus::Failed]);
-        Deployment::factory()->for($this->production)->create(['status' => DeploymentStatus::Live, 'commit_sha' => self::LIVE_SHA]);
+        Deployment::factory()->for($this->production)->create(['status' => DeploymentStatus::FAILED]);
+        Deployment::factory()->for($this->production)->create(['status' => DeploymentStatus::LIVE, 'commit_sha' => self::LIVE_SHA]);
         $staging = Environment::factory()->for($shop)->create(['name' => 'staging']);
-        Deployment::factory()->for($staging)->create(['status' => DeploymentStatus::Building]);
-        $preview = Environment::factory()->for($shop)->create(['name' => 'pr-7', 'kind' => EnvironmentKind::Preview]);
-        Deployment::factory()->for($preview)->create(['status' => DeploymentStatus::Live]);
+        Deployment::factory()->for($staging)->create(['status' => DeploymentStatus::BUILDING]);
+        $preview = Environment::factory()->for($shop)->create(['name' => 'pr-7', 'kind' => EnvironmentKind::PREVIEW]);
+        Deployment::factory()->for($preview)->create(['status' => DeploymentStatus::LIVE]);
         $elsewhere = Environment::factory()->for(Application::factory()->for(Cluster::factory()->create(['name' => 'eu']))->create(['name' => 'api']))->create(['name' => 'production']);
-        Deployment::factory()->for($elsewhere)->create(['status' => DeploymentStatus::Live]);
+        Deployment::factory()->for($elsewhere)->create(['status' => DeploymentStatus::LIVE]);
 
-        $this->mysql = Datastore::factory()->for($local)->create(['kind' => DatastoreKind::Mysql, 'status' => DatastoreStatus::Ready, 'root_password' => 'mysql-root-pw']);
-        $this->rustfs = Datastore::factory()->for($local)->create(['kind' => DatastoreKind::Rustfs, 'version' => '1.0.3', 'status' => DatastoreStatus::Ready, 'root_password' => 'rustfs-root-pw']);
+        $this->mysql = Datastore::factory()->for($local)->create(['kind' => DatastoreKind::MYSQL, 'status' => DatastoreStatus::READY, 'root_password' => 'mysql-root-pw']);
+        $this->rustfs = Datastore::factory()->for($local)->create(['kind' => DatastoreKind::RUSTFS, 'version' => '1.0.3', 'status' => DatastoreStatus::READY, 'root_password' => 'rustfs-root-pw']);
         $env = $this->production->id;
-        DatastoreAttachment::factory()->for($this->mysql)->for($this->production)->create(['database_name' => "env_{$env}", 'username' => "env_{$env}", 'status' => DatastoreStatus::Ready]);
-        DatastoreAttachment::factory()->for($this->rustfs)->for($this->production)->create(['database_name' => "env-{$env}", 'username' => "env-{$env}", 'status' => DatastoreStatus::Ready]);
-        Domain::factory()->for($this->production)->create(['hostname' => 'shop.example.com', 'dns_status' => DnsStatus::Ok]);
+        DatastoreAttachment::factory()->for($this->mysql)->for($this->production)->create(['database_name' => "env_{$env}", 'username' => "env_{$env}", 'status' => DatastoreStatus::READY]);
+        DatastoreAttachment::factory()->for($this->rustfs)->for($this->production)->create(['database_name' => "env-{$env}", 'username' => "env-{$env}", 'status' => DatastoreStatus::READY]);
+        Domain::factory()->for($this->production)->create(['hostname' => 'shop.example.com', 'dns_status' => DnsStatus::OK]);
 
         $this->tuesdayDump = gzencode("INSERT INTO orders VALUES (2);\n");
         $this->bucket->put("backups/{$this->mysql->id}/{$env}/20261021-030000.sql.gz", gzencode("INSERT INTO orders VALUES (1);\n"));
@@ -138,7 +138,7 @@ class RestoreInstallTest extends TestCase
 
         $this->artisan('opencloud:restore')->assertExitCode(0);
         $afterFailure = $this->statuses();
-        $failure = RestoreState::load()->detail(RestoreStep::RestoreBuckets);
+        $failure = RestoreState::load()->detail(RestoreStep::RESTORE_BUCKETS);
         Queue::assertNothingPushed();
 
         $this->kubectl->respond('wait --for=condition=complete', new KubectlResult(0, 'condition met'));
@@ -175,7 +175,7 @@ class RestoreInstallTest extends TestCase
     public function test_the_domains_check_again_and_a_cloudflare_record_points_at_the_new_server(): void
     {
         ProviderCredential::factory()->create(['provider' => 'cloudflare', 'token' => 'cf-token', 'details' => ['zones' => [['id' => 'zone-1', 'name' => 'example.org']]]]);
-        Domain::factory()->for($this->production)->create(['hostname' => 'www.example.org', 'dns_mode' => DnsMode::Cloudflare, 'dns_status' => DnsStatus::Proxied]);
+        Domain::factory()->for($this->production)->create(['hostname' => 'www.example.org', 'dns_mode' => DnsMode::CLOUDFLARE, 'dns_status' => DnsStatus::PROXIED]);
         Http::fake([
             'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records?*' => Http::response(['success' => true, 'result' => [['id' => 'rec-1', 'content' => '198.51.100.1', 'proxied' => true]]]),
             'https://api.cloudflare.com/client/v4/zones/zone-1/dns_records/rec-1' => Http::response(['success' => true, 'result' => ['id' => 'rec-1']]),
@@ -188,7 +188,7 @@ class RestoreInstallTest extends TestCase
         $this->assertSame(['shop.example.com', 'www.example.org'], Queue::pushed(CheckDomain::class)->map(fn (CheckDomain $job) => $job->domain->hostname)->sort()->values()->all());
         $this->assertSame(
             'Point the DNS of shop.example.com, www.example.org at 203.0.113.20. Cloudflare points www.example.org at 203.0.113.20.',
-            RestoreState::load()->detail(RestoreStep::CheckDomains),
+            RestoreState::load()->detail(RestoreStep::CHECK_DOMAINS),
         );
     }
 

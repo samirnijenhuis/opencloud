@@ -37,7 +37,7 @@ class CommandRunTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-24 12:00:00'));
         $this->production = $this->makeEnvironment();
         EnvVar::factory()->for($this->production)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);
-        $this->live = Deployment::factory()->for($this->production)->create(['status' => DeploymentStatus::Live, 'commit_sha' => self::SHA]);
+        $this->live = Deployment::factory()->for($this->production)->create(['status' => DeploymentStatus::LIVE, 'commit_sha' => self::SHA]);
     }
 
     public function test_the_action_stores_the_run_records_the_masked_command_and_queues_it_on_the_default_queue(): void
@@ -47,7 +47,7 @@ class CommandRunTest extends TestCase
         $run = app(RunCommand::class)->execute($this->production, $owner, '  php artisan tinker --execute="echo \'hunter22\';"  ');
 
         $this->assertSame(
-            [$this->production->id, $owner->id, $this->live->id, 'php artisan tinker --execute="echo \'hunter22\';"', CommandRunStatus::Queued],
+            [$this->production->id, $owner->id, $this->live->id, 'php artisan tinker --execute="echo \'hunter22\';"', CommandRunStatus::QUEUED],
             [$run->environment_id, $run->user_id, $run->deployment_id, $run->command, $run->fresh()->status],
         );
         $this->assertSame(
@@ -59,7 +59,7 @@ class CommandRunTest extends TestCase
 
     public function test_the_action_refuses_an_environment_without_a_live_deployment(): void
     {
-        $this->live->update(['status' => DeploymentStatus::Superseded]);
+        $this->live->update(['status' => DeploymentStatus::SUPERSEDED]);
 
         try {
             app(RunCommand::class)->execute($this->production, User::factory()->owner()->create(), 'php artisan --version');
@@ -75,7 +75,7 @@ class CommandRunTest extends TestCase
     public function test_developers_run_commands_only_on_unprotected_environments(): void
     {
         $staging = Environment::factory()->for($this->production->application)->create(['name' => 'staging', 'is_protected' => false]);
-        Deployment::factory()->for($staging)->create(['status' => DeploymentStatus::Live]);
+        Deployment::factory()->for($staging)->create(['status' => DeploymentStatus::LIVE]);
         $developer = User::factory()->create();
 
         $this->actingAs($developer)->post("/environments/{$this->production->id}/command-runs", ['command' => 'php artisan migrate:status'])->assertForbidden();
@@ -118,7 +118,7 @@ class CommandRunTest extends TestCase
         $newest = CommandRun::latest('id')->first();
         $newest->forceFill([
             'command' => 'echo hunter22',
-            'status' => CommandRunStatus::Failed,
+            'status' => CommandRunStatus::FAILED,
             'exit_code' => 3,
             'output' => "hunter22 is ********\n",
             'started_at' => now(),

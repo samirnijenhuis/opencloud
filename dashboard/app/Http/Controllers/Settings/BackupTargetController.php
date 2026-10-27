@@ -18,7 +18,7 @@ class BackupTargetController extends Controller
 {
     public function edit(Request $request): Response
     {
-        abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
+        abort_unless($request->user()->role->allows(Ability::MANAGE_CREDENTIALS), 403);
 
         $target = BackupTarget::query()->latest('id')->first();
 
@@ -49,7 +49,7 @@ class BackupTargetController extends Controller
 
     public function destroy(Request $request, DeleteBackupTarget $deleteBackupTarget): RedirectResponse
     {
-        abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
+        abort_unless($request->user()->role->allows(Ability::MANAGE_CREDENTIALS), 403);
 
         $target = BackupTarget::query()->latest('id')->first();
 

@@ -23,10 +23,10 @@ final class AttachmentEnv
         $connection = Provisioners::of($attachment->datastore)->connection($attachment);
 
         foreach ($connection?->envFor(self::profile($attachment->environment)) ?? [] as $key => $value) {
-            $attachment->environment->envVars()->updateOrCreate(['key' => $key, 'source' => EnvVarSource::Datastore], [
+            $attachment->environment->envVars()->updateOrCreate(['key' => $key, 'source' => EnvVarSource::DATASTORE], [
                 'value' => $value->value,
                 'is_secret' => $value->secret,
-                'available_at' => EnvVarAvailability::Runtime,
+                'available_at' => EnvVarAvailability::RUNTIME,
                 'datastore_attachment_id' => $attachment->id,
             ]);
         }

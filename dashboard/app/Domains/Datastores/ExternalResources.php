@@ -14,10 +14,10 @@ final class ExternalResources
     public static function find(DatastoreKind $kind): ?Provisioner
     {
         return match ($kind) {
-            DatastoreKind::Mysql => new ExternalProvisioner($kind, 'External MySQL'),
-            DatastoreKind::Postgres => new ExternalProvisioner($kind, 'External Postgres'),
-            DatastoreKind::Valkey => new ExternalProvisioner($kind, 'External Redis or Valkey'),
-            DatastoreKind::Rustfs => new ExternalProvisioner($kind, 'External S3 bucket'),
+            DatastoreKind::MYSQL => new ExternalProvisioner($kind, 'External MySQL'),
+            DatastoreKind::POSTGRES => new ExternalProvisioner($kind, 'External Postgres'),
+            DatastoreKind::VALKEY => new ExternalProvisioner($kind, 'External Redis or Valkey'),
+            DatastoreKind::RUSTFS => new ExternalProvisioner($kind, 'External S3 bucket'),
         };
     }
 

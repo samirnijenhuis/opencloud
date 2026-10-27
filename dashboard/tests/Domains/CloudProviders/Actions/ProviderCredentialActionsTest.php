@@ -26,7 +26,7 @@ class ProviderCredentialActionsTest extends TestCase
 
         $result = app(StoreProviderCredential::class)->execute($owner, 'digitalocean', '  '.self::SECRET."\n");
 
-        $this->assertSame(CheckStatus::Ok, $result->status);
+        $this->assertSame(CheckStatus::OK, $result->status);
         $credential = ProviderCredential::sole();
         $this->assertSame(self::SECRET, $credential->token);
         $this->assertNotNull($credential->checked_at);
@@ -44,7 +44,7 @@ class ProviderCredentialActionsTest extends TestCase
 
         $result = app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
 
-        $this->assertSame(CheckStatus::Invalid, $result->status);
+        $this->assertSame(CheckStatus::INVALID, $result->status);
         $this->assertSame(0, ProviderCredential::count());
         $this->assertSame(0, AuditEvent::count());
     }
@@ -65,7 +65,7 @@ class ProviderCredentialActionsTest extends TestCase
 
         $result = app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
 
-        $this->assertSame(CheckStatus::MissingRights, $result->status);
+        $this->assertSame(CheckStatus::MISSING_RIGHTS, $result->status);
         $this->assertSame(['vpc'], ProviderCredential::sole()->missing_rights);
     }
 
@@ -75,7 +75,7 @@ class ProviderCredentialActionsTest extends TestCase
 
         $result = app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
 
-        $this->assertSame(CheckStatus::MissingRights, $result->status);
+        $this->assertSame(CheckStatus::MISSING_RIGHTS, $result->status);
         $this->assertSame(['database'], ProviderCredential::sole()->missing_rights);
     }
 

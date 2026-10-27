@@ -46,7 +46,7 @@ class DashboardDomain extends Model
 
     public static function localCluster(): ?Cluster
     {
-        return Cluster::query()->where('kind', ClusterKind::Local)->first();
+        return Cluster::query()->where('kind', ClusterKind::LOCAL)->first();
     }
 
     /** The address people open the dashboard at. */

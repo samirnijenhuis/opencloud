@@ -19,7 +19,7 @@ class DatastoreFactory extends Factory
     {
         return [
             'cluster_id' => Cluster::factory(),
-            'kind' => DatastoreKind::Mysql,
+            'kind' => DatastoreKind::MYSQL,
             'version' => '8.4',
         ];
     }

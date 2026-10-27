@@ -35,7 +35,7 @@ class DataModelTest extends TestCase
         $environment = Environment::create([
             'application_id' => Application::factory()->create()->id,
             'name' => 'production',
-            'kind' => EnvironmentKind::Permanent,
+            'kind' => EnvironmentKind::PERMANENT,
         ])->fresh();
 
         $this->assertSame(Size::S, $environment->size);
@@ -52,7 +52,7 @@ class DataModelTest extends TestCase
     {
         $user = User::create(['name' => 'Ada', 'email' => 'ada@example.com', 'password' => 'secret-password']);
 
-        $this->assertSame(Role::Developer, $user->role);
+        $this->assertSame(Role::DEVELOPER, $user->role);
         $this->assertSame('developer', DB::table('users')->where('id', $user->id)->value('role'));
     }
 
@@ -60,15 +60,15 @@ class DataModelTest extends TestCase
     {
         $user = User::create(['name' => 'Eve', 'email' => 'eve@example.com', 'password' => 'secret-password', 'role' => 'owner']);
 
-        $this->assertSame(Role::Developer, $user->fresh()->role);
+        $this->assertSame(Role::DEVELOPER, $user->fresh()->role);
     }
 
     public function test_a_new_domain_waits_for_dns_in_manual_mode(): void
     {
         $domain = Domain::factory()->create(['hostname' => 'shop.example.com'])->fresh();
 
-        $this->assertSame(DnsMode::Manual, $domain->dns_mode);
-        $this->assertSame(DnsStatus::Pending, $domain->dns_status);
+        $this->assertSame(DnsMode::MANUAL, $domain->dns_mode);
+        $this->assertSame(DnsStatus::PENDING, $domain->dns_status);
         $this->assertSame('pending', $domain->certificate_status);
     }
 
@@ -106,12 +106,12 @@ class DataModelTest extends TestCase
     public function test_an_environment_has_at_most_one_live_deployment(): void
     {
         $environment = Environment::factory()->create();
-        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Live]);
-        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Superseded]);
-        Deployment::factory()->create(['status' => DeploymentStatus::Live]);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::LIVE]);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::SUPERSEDED]);
+        Deployment::factory()->create(['status' => DeploymentStatus::LIVE]);
 
         $this->expectException(QueryException::class);
 
-        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::Live]);
+        Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::LIVE]);
     }
 }

@@ -29,7 +29,7 @@ class CreateCluster
             throw ValidationException::withMessages(['name' => "Add a {$provider->label()} key in Settings, Provider keys, first."]);
         }
 
-        $cluster = Cluster::query()->create([...$data, 'kind' => ClusterKind::Created, 'provider' => $provider->key(), 'status' => ClusterStatus::Provisioning]);
+        $cluster = Cluster::query()->create([...$data, 'kind' => ClusterKind::CREATED, 'provider' => $provider->key(), 'status' => ClusterStatus::PROVISIONING]);
 
         AuditEvent::record($by, 'cluster.created', $cluster, $data);
         ProvisionCluster::dispatch($cluster);

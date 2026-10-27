@@ -54,7 +54,7 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
-        if ($user->role === Role::Owner && User::query()->where('role', Role::Owner)->count() === 1) {
+        if ($user->role === Role::OWNER && User::query()->where('role', Role::OWNER)->count() === 1) {
             throw ValidationException::withMessages([
                 'password' => 'Make another member an owner before you delete the last owner account.',
             ]);

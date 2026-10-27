@@ -54,10 +54,10 @@ class ExecuteCommandRun implements ShouldQueue
         $kubectl = Kubectl::for($run->environment->application->cluster);
 
         // Apply comes before the move, so a retry after a crash applies the same Job again and changes nothing.
-        if ($run->status === CommandRunStatus::Queued) {
+        if ($run->status === CommandRunStatus::QUEUED) {
             $kubectl->apply([(new CommandManifests($run))->job()]);
             $run->started_at = now();
-            $run->moveTo(CommandRunStatus::Running);
+            $run->moveTo(CommandRunStatus::RUNNING);
         }
 
         $this->check($kubectl, $run);
@@ -72,7 +72,7 @@ class ExecuteCommandRun implements ShouldQueue
         $run = $this->run->fresh();
 
         if ($run !== null && ! $run->status->finished()) {
-            $this->finish($run, CommandRunStatus::Failed, null, trim('Opencloud could not run the command. '.$e?->getMessage()));
+            $this->finish($run, CommandRunStatus::FAILED, null, trim('Opencloud could not run the command. '.$e?->getMessage()));
         }
     }
 
@@ -83,7 +83,7 @@ class ExecuteCommandRun implements ShouldQueue
         $job = $kubectl->get('job', $name, $namespace);
 
         if ($job === null) {
-            $this->finish($run, CommandRunStatus::Failed, null, 'The Kubernetes Job of the command is gone.');
+            $this->finish($run, CommandRunStatus::FAILED, null, 'The Kubernetes Job of the command is gone.');
 
             return;
         }
@@ -95,15 +95,15 @@ class ExecuteCommandRun implements ShouldQueue
         if ($outcome === null) {
             if (now()->subSeconds(self::DEADLINE_SECONDS)->greaterThan($run->started_at)) {
                 $kubectl->delete('job', $name, $namespace);
-                $this->finish($run, CommandRunStatus::TimedOut, null);
+                $this->finish($run, CommandRunStatus::TIMED_OUT, null);
             }
 
             return;
         }
 
         $this->finish($run, $outcome, match ($outcome) {
-            CommandRunStatus::Succeeded => 0,
-            CommandRunStatus::Failed => $this->exitCode($kubectl, $namespace, $name),
+            CommandRunStatus::SUCCEEDED => 0,
+            CommandRunStatus::FAILED => $this->exitCode($kubectl, $namespace, $name),
             default => null,
         });
     }
@@ -120,11 +120,11 @@ class ExecuteCommandRun implements ShouldQueue
             }
 
             if ($condition['type'] === 'Complete') {
-                return CommandRunStatus::Succeeded;
+                return CommandRunStatus::SUCCEEDED;
             }
 
             if ($condition['type'] === 'Failed') {
-                return ($condition['reason'] ?? null) === 'DeadlineExceeded' ? CommandRunStatus::TimedOut : CommandRunStatus::Failed;
+                return ($condition['reason'] ?? null) === 'DeadlineExceeded' ? CommandRunStatus::TIMED_OUT : CommandRunStatus::FAILED;
             }
         }
 

@@ -15,7 +15,7 @@ class CommandRun extends Model
     protected $fillable = ['environment_id', 'user_id', 'deployment_id', 'command', 'status', 'exit_code', 'output', 'started_at', 'finished_at'];
 
     protected $attributes = [
-        'status' => CommandRunStatus::Queued->value,
+        'status' => CommandRunStatus::QUEUED->value,
     ];
 
     protected function casts(): array

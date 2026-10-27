@@ -24,11 +24,11 @@ class CheckCertificatesTest extends TestCase
         $this->travelTo('2026-10-24 12:00:00');
         $cluster = Cluster::factory()->create(['ingress_ip' => '203.0.113.10']);
         $environment = Environment::factory()->for(Application::factory()->for($cluster))->create();
-        $served = Domain::factory()->for($environment)->create(['hostname' => 'shop.example.com', 'dns_status' => DnsStatus::Ok]);
-        $proxied = Domain::factory()->for($environment)->create(['hostname' => 'cdn.example.com', 'dns_status' => DnsStatus::Proxied]);
-        $expired = Domain::factory()->for($environment)->create(['hostname' => 'old.example.com', 'dns_status' => DnsStatus::Ok, 'certificate_status' => 'issued']);
-        $waiting = Domain::factory()->for($environment)->create(['hostname' => 'new.example.com', 'dns_status' => DnsStatus::Ok]);
-        $elsewhere = Domain::factory()->for($environment)->create(['hostname' => 'away.example.com', 'dns_status' => DnsStatus::Wrong]);
+        $served = Domain::factory()->for($environment)->create(['hostname' => 'shop.example.com', 'dns_status' => DnsStatus::OK]);
+        $proxied = Domain::factory()->for($environment)->create(['hostname' => 'cdn.example.com', 'dns_status' => DnsStatus::PROXIED]);
+        $expired = Domain::factory()->for($environment)->create(['hostname' => 'old.example.com', 'dns_status' => DnsStatus::OK, 'certificate_status' => 'issued']);
+        $waiting = Domain::factory()->for($environment)->create(['hostname' => 'new.example.com', 'dns_status' => DnsStatus::OK]);
+        $elsewhere = Domain::factory()->for($environment)->create(['hostname' => 'away.example.com', 'dns_status' => DnsStatus::WRONG]);
         $this->certificates([
             'shop.example.com' => ['DNS:shop.example.com', now()->addMonths(3)->getTimestamp()],
             'cdn.example.com' => ['DNS:*.example.com', now()->addMonths(3)->getTimestamp()],

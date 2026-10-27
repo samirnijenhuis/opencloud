@@ -22,7 +22,7 @@ final class LocalRustfs extends LocalProvisioner
 
     protected function kind(): DatastoreKind
     {
-        return DatastoreKind::Rustfs;
+        return DatastoreKind::RUSTFS;
     }
 
     public function capabilities(): Capabilities

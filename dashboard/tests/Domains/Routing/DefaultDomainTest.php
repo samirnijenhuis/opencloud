@@ -32,7 +32,7 @@ class DefaultDomainTest extends TestCase
 
         Queue::fake();
         FakeProcesses::install()->lsRemote = str_repeat('a', 40)."\trefs/heads/main\n";
-        $this->cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local', 'ingress_ip' => '203.0.113.10']);
+        $this->cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local', 'ingress_ip' => '203.0.113.10']);
     }
 
     public function test_a_new_application_gets_its_free_domain_after_the_domains_it_asks_for(): void
@@ -51,7 +51,7 @@ class DefaultDomainTest extends TestCase
             ['environment_id' => $production->id, 'hostname' => 'my-shop-production.203.0.113.10.sslip.io', 'generated' => true],
             AuditEvent::where('action', 'domain.added')->orderByDesc('id')->first()->context,
         );
-        $this->assertSame(0, $application->environments()->where('kind', EnvironmentKind::PreviewTemplate)->sole()->domains()->count());
+        $this->assertSame(0, $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->sole()->domains()->count());
         $this->actingAs($owner)->get("/environments/{$production->id}")
             ->assertInertia(fn (Assert $page) => $page->where('domains.0.generated', false)->where('domains.1.generated', true));
     }
@@ -82,7 +82,7 @@ class DefaultDomainTest extends TestCase
         $application = Application::factory()->for($this->cluster)->create(['name' => 'shop']);
         $production = Environment::factory()->for($application)->create(['name' => 'production']);
         $staging = Environment::factory()->for($application)->create(['name' => 'staging']);
-        Environment::factory()->for($application)->create(['name' => 'pr-4', 'kind' => EnvironmentKind::Preview]);
+        Environment::factory()->for($application)->create(['name' => 'pr-4', 'kind' => EnvironmentKind::PREVIEW]);
         Domain::factory()->for($staging)->create(['hostname' => 'staging.example.com']);
 
         $this->artisan('opencloud:default-domains')

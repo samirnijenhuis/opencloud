@@ -35,7 +35,7 @@ final readonly class CaddyConfig
             ->whereIn('dns_status', array_filter(DnsStatus::cases(), fn (DnsStatus $status) => $status->routable()))
             ->whereHas('environment', fn (Builder $environment) => $environment
                 ->whereHas('application', fn (Builder $application) => $application->where('cluster_id', $cluster->id))
-                ->whereHas('deployments', fn (Builder $deployment) => $deployment->where('status', DeploymentStatus::Live)))
+                ->whereHas('deployments', fn (Builder $deployment) => $deployment->where('status', DeploymentStatus::LIVE)))
             ->get();
 
         $routes = $domains
@@ -45,14 +45,14 @@ final readonly class CaddyConfig
             ->all();
 
         // The dashboard host is a route like an app host. Caddy then gets its certificate and redirects HTTP to HTTPS.
-        if ($cluster->kind === ClusterKind::Local && ($dashboard = DashboardDomain::verified()) !== null) {
+        if ($cluster->kind === ClusterKind::LOCAL && ($dashboard = DashboardDomain::verified()) !== null) {
             $routes[$dashboard->hostname] = self::DASHBOARD_UPSTREAM;
         }
 
         $cloudflareToken = ProviderCredential::query()->where('provider', 'cloudflare')->first()?->token;
-        $cloudflareHosts = $domains->where('dns_mode', DnsMode::Cloudflare)->pluck('hostname')->all();
+        $cloudflareHosts = $domains->where('dns_mode', DnsMode::CLOUDFLARE)->pluck('hostname')->all();
 
-        return $this->build($cluster->kind === ClusterKind::Local, $routes, $cloudflareToken, $cloudflareHosts);
+        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts);
     }
 
     /**

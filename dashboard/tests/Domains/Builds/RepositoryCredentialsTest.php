@@ -69,7 +69,7 @@ class RepositoryCredentialsTest extends TestCase
         RunDeployment::dispatchSync($deployment);
 
         $deployment->refresh();
-        $this->assertSame(DeploymentStatus::Failed, $deployment->status);
+        $this->assertSame(DeploymentStatus::FAILED, $deployment->status);
         $this->assertSame(['git', 'fetch', '--quiet', '--depth', '1', $tokenUrl, self::SHA], $this->commands[1]);
         $this->assertStringNotContainsString(self::TOKEN, $deployment->log);
         $this->assertStringContainsString(

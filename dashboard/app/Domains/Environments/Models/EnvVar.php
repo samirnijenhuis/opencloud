@@ -21,8 +21,8 @@ class EnvVar extends Model
 
     protected $attributes = [
         'is_secret' => false,
-        'available_at' => EnvVarAvailability::Runtime->value,
-        'source' => EnvVarSource::User->value,
+        'available_at' => EnvVarAvailability::RUNTIME->value,
+        'source' => EnvVarSource::USER->value,
     ];
 
     protected function casts(): array

@@ -14,7 +14,7 @@ class GenericProfileTest extends TestCase
 {
     public function test_the_default_postgres_database_sets_a_secret_database_url_with_an_encoded_password(): void
     {
-        $connection = new SqlConnection(DatastoreKind::Postgres, 'pg.internal', 5432, 'shop', 'shop_user', 'p/ss+w@rd:1%', 'main', true);
+        $connection = new SqlConnection(DatastoreKind::POSTGRES, 'pg.internal', 5432, 'shop', 'shop_user', 'p/ss+w@rd:1%', 'main', true);
 
         $this->assertEquals([
             'DATABASE_URL' => EnvValue::secret('postgresql://shop_user:p%2Fss%2Bw%40rd%3A1%25@pg.internal:5432/shop'),
@@ -23,7 +23,7 @@ class GenericProfileTest extends TestCase
 
     public function test_the_default_mysql_database_uses_the_mysql_scheme(): void
     {
-        $connection = new SqlConnection(DatastoreKind::Mysql, 'my.internal', 3306, 'shop', 'u', 'pw', 'main', true);
+        $connection = new SqlConnection(DatastoreKind::MYSQL, 'my.internal', 3306, 'shop', 'u', 'pw', 'main', true);
 
         $this->assertEquals([
             'DATABASE_URL' => EnvValue::secret('mysql://u:pw@my.internal:3306/shop'),
@@ -32,7 +32,7 @@ class GenericProfileTest extends TestCase
 
     public function test_a_database_that_is_not_the_default_gets_its_name_in_the_key(): void
     {
-        $connection = new SqlConnection(DatastoreKind::Postgres, 'pg.internal', 5432, 'rep', 'rep_user', 'pw', 'reports', false);
+        $connection = new SqlConnection(DatastoreKind::POSTGRES, 'pg.internal', 5432, 'rep', 'rep_user', 'pw', 'reports', false);
 
         $this->assertEquals([
             'REPORTS_DATABASE_URL' => EnvValue::secret('postgresql://rep_user:pw@pg.internal:5432/rep'),
@@ -79,6 +79,6 @@ class GenericProfileTest extends TestCase
 
     public function test_a_database_needs_no_config_line(): void
     {
-        $this->assertNull((new GenericProfile)->configLine(DatastoreKind::Postgres, 'reports'));
+        $this->assertNull((new GenericProfile)->configLine(DatastoreKind::POSTGRES, 'reports'));
     }
 }

@@ -74,7 +74,7 @@ abstract class LocalProvisioner implements Provisioner
         }
 
         $datastore = Datastore::firstOrCreate(
-            ['cluster_id' => $environment->application->cluster_id, 'kind' => $this->kind(), 'source' => DatastoreSource::Standard],
+            ['cluster_id' => $environment->application->cluster_id, 'kind' => $this->kind(), 'source' => DatastoreSource::STANDARD],
             ['version' => DatastoreManifests::VERSIONS[$this->kind()->value], 'root_password' => $this->sharedServer() ? Str::random(32) : null],
         );
 
@@ -82,7 +82,7 @@ abstract class LocalProvisioner implements Provisioner
             'name' => $name,
             'is_default' => $isDefault,
             ...$this->names($environment, $name),
-            ...($this->kind()->family() === ResourceFamily::Database ? DatabaseNames::server($datastore) : []),
+            ...($this->kind()->family() === ResourceFamily::DATABASE ? DatabaseNames::server($datastore) : []),
             'datastore_id' => $datastore->id,
             'password' => Str::random(32),
         ]);
@@ -122,18 +122,18 @@ abstract class LocalProvisioner implements Provisioner
         $kubectl = Kubectl::for($datastore->cluster);
         $masker = new SecretMasker(array_filter([$attachment->password, $datastore->root_password]));
 
-        $attachment->update(['status' => DatastoreStatus::Provisioning, 'error' => null]);
+        $attachment->update(['status' => DatastoreStatus::PROVISIONING, 'error' => null]);
 
         try {
             $this->provisionServer($kubectl, $datastore, $masker);
             $this->grant($kubectl, $attachment);
         } catch (Throwable $e) {
-            $attachment->update(['status' => DatastoreStatus::Failed, 'error' => $masker->mask($e->getMessage())]);
+            $attachment->update(['status' => DatastoreStatus::FAILED, 'error' => $masker->mask($e->getMessage())]);
 
             return;
         }
 
-        $attachment->update(['status' => DatastoreStatus::Ready]);
+        $attachment->update(['status' => DatastoreStatus::READY]);
     }
 
     public function release(Datastore $datastore, array $attachment, bool $destroyData): void
@@ -151,8 +151,8 @@ abstract class LocalProvisioner implements Provisioner
     /** The apply and the rollout check run each time, so a server that someone removed comes back. */
     private function provisionServer(Kubectl $kubectl, Datastore $datastore, SecretMasker $masker): void
     {
-        if ($datastore->status !== DatastoreStatus::Ready) {
-            $datastore->update(['status' => DatastoreStatus::Provisioning, 'error' => null]);
+        if ($datastore->status !== DatastoreStatus::READY) {
+            $datastore->update(['status' => DatastoreStatus::PROVISIONING, 'error' => null]);
         }
 
         try {
@@ -163,13 +163,13 @@ abstract class LocalProvisioner implements Provisioner
                 $kubectl->rolloutStatus(DatastoreManifests::NAMESPACE, 'statefulset', DatastoreManifests::serverName($datastore), self::SERVER_ROLLOUT_SECONDS)->throw();
             }
         } catch (Throwable $e) {
-            $datastore->update(['status' => DatastoreStatus::Failed, 'error' => $masker->mask($e->getMessage())]);
+            $datastore->update(['status' => DatastoreStatus::FAILED, 'error' => $masker->mask($e->getMessage())]);
 
             throw $e;
         }
 
-        if ($datastore->status !== DatastoreStatus::Ready) {
-            $datastore->update(['status' => DatastoreStatus::Ready]);
+        if ($datastore->status !== DatastoreStatus::READY) {
+            $datastore->update(['status' => DatastoreStatus::READY]);
         }
     }
 }

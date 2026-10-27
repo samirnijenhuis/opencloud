@@ -59,7 +59,7 @@ class AddDomain
         $recordId = $this->cloudflare->point($credential, $zone, $hostname, $ip, $proxied);
 
         return [
-            'dns_mode' => DnsMode::Cloudflare,
+            'dns_mode' => DnsMode::CLOUDFLARE,
             'cloudflare_zone_id' => $recordId === null ? null : $zone['id'],
             'cloudflare_record_id' => $recordId,
         ];

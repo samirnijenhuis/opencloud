@@ -22,7 +22,7 @@ class StartDeployment
      */
     public function execute(Environment $environment, ?User $by, ?string $commitSha = null): Deployment
     {
-        if ($environment->kind === EnvironmentKind::PreviewTemplate) {
+        if ($environment->kind === EnvironmentKind::PREVIEW_TEMPLATE) {
             throw new InvalidArgumentException('The preview template holds settings for previews. It is never deployed.');
         }
 

@@ -56,12 +56,12 @@ class DeploymentController extends Controller
      */
     private function waitingFor(Deployment $deployment): ?array
     {
-        if ($deployment->status !== DeploymentStatus::Queued) {
+        if ($deployment->status !== DeploymentStatus::QUEUED) {
             return null;
         }
 
         $running = Deployment::query()
-            ->whereIn('status', [DeploymentStatus::Building, DeploymentStatus::Deploying])
+            ->whereIn('status', [DeploymentStatus::BUILDING, DeploymentStatus::DEPLOYING])
             ->where('id', '<', $deployment->id)
             ->with('environment.application')
             ->orderBy('id')
@@ -75,7 +75,7 @@ class DeploymentController extends Controller
             'id' => $running->id,
             'application' => $running->environment->application->name,
             'environment' => $running->environment->name,
-            'queued_before' => Deployment::query()->where('status', DeploymentStatus::Queued)->where('id', '<', $deployment->id)->count(),
+            'queued_before' => Deployment::query()->where('status', DeploymentStatus::QUEUED)->where('id', '<', $deployment->id)->count(),
         ];
     }
 

@@ -38,7 +38,7 @@ final class DefaultDomain
         $application = $environment->application;
         $ip = $application->cluster->ingress_ip;
 
-        if ($environment->kind !== EnvironmentKind::Permanent
+        if ($environment->kind !== EnvironmentKind::PERMANENT
             || ! filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
             || $environment->domains()->where('generated', true)->exists()) {
             return null;

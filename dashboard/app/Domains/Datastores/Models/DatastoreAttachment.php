@@ -23,7 +23,7 @@ class DatastoreAttachment extends Model
     protected $hidden = ['password'];
 
     protected $attributes = [
-        'status' => DatastoreStatus::Pending->value,
+        'status' => DatastoreStatus::PENDING->value,
     ];
 
     protected function casts(): array

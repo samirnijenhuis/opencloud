@@ -43,7 +43,7 @@ class ImageCopyTest extends TestCase
 
         RunDeployment::dispatchSync($deployment);
 
-        $this->assertSame(DeploymentStatus::Live, $deployment->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $deployment->fresh()->status);
         $this->assertSame($target, $deployment->fresh()->image);
         $this->assertSame(
             [['crane', 'copy', "10.43.200.200:5000/{$environment->application_id}/{$environment->id}:0123456-{$deployment->id}", $target]],
@@ -88,7 +88,7 @@ class ImageCopyTest extends TestCase
 
         RunDeployment::dispatchSync($deployment);
 
-        $this->assertSame(DeploymentStatus::Failed, $deployment->fresh()->status);
+        $this->assertSame(DeploymentStatus::FAILED, $deployment->fresh()->status);
         $this->assertSame([], $this->kubectl->calls);
         $this->assertStringContainsString('crane could not copy the image to the cluster registry. UNAUTHORIZED: authentication required', $deployment->fresh()->log);
     }
@@ -102,13 +102,13 @@ class ImageCopyTest extends TestCase
     private function deployment(bool $insecure): Deployment
     {
         $cluster = Cluster::factory()->create([
-            'kind' => ClusterKind::Connected,
+            'kind' => ClusterKind::CONNECTED,
             'registry_url' => 'registry.example.com/team',
             'registry_username' => 'robot',
             'registry_password' => 'REGISTRY_PASSWORD',
             'registry_insecure' => $insecure,
         ]);
-        $application = Application::factory()->for($cluster)->create(['type' => ApplicationType::Laravel]);
+        $application = Application::factory()->for($cluster)->create(['type' => ApplicationType::LARAVEL]);
         $environment = Environment::factory()->for($application)->create([
             'deploy_commands' => [], 'min_instances' => 1, 'max_instances' => 1,
         ]);

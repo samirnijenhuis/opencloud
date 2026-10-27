@@ -17,7 +17,7 @@ class KubectlTest extends TestCase
 
     public function test_a_connected_cluster_gets_a_private_kubeconfig_file_that_is_removed_after_the_call(): void
     {
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Connected, 'name' => 'do-ams3', 'kubeconfig' => "apiVersion: v1\nkind: Config\n"]);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::CONNECTED, 'name' => 'do-ams3', 'kubeconfig' => "apiVersion: v1\nkind: Config\n"]);
         $seen = [];
 
         $kubectl = new class($cluster, $seen) extends Kubectl
@@ -52,7 +52,7 @@ class KubectlTest extends TestCase
     public function test_a_stream_goes_in_on_stdin_and_stdout_streams_into_the_output(): void
     {
         config(['opencloud.kubectl_binary' => base_path('tests/Fakes/bin/cat-stdin')]);
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $input = fopen('php://temp', 'w+');
         fwrite($input, str_repeat("0123456789abcdef\n", 200_000));
         rewind($input);
@@ -68,7 +68,7 @@ class KubectlTest extends TestCase
     public function test_the_local_cluster_uses_the_in_cluster_config(): void
     {
         $fake = FakeKubectl::install();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
 
         Kubectl::for($local)->get('nodes');
 
@@ -78,7 +78,7 @@ class KubectlTest extends TestCase
     public function test_apply_sends_one_list_with_server_side_apply(): void
     {
         $fake = FakeKubectl::install();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
 
         Kubectl::for($local)->apply([
             ['apiVersion' => 'v1', 'kind' => 'Namespace', 'metadata' => ['name' => 'oc-env-1']],
@@ -93,7 +93,7 @@ class KubectlTest extends TestCase
     public function test_exec_passes_stdin_and_the_container(): void
     {
         $fake = FakeKubectl::install();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
 
         Kubectl::for($local)->exec('opencloud', 'deploy/caddy', ['sh', '-c', 'cat'], stdin: '{}', container: 'caddy');
 
@@ -107,7 +107,7 @@ class KubectlTest extends TestCase
     public function test_get_returns_null_when_the_object_does_not_exist_and_json_when_it_does(): void
     {
         $fake = FakeKubectl::install();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $fake->respond('get deployment web', new KubectlResult(0, '{"kind":"Deployment","status":{"readyReplicas":2}}'));
 
         $this->assertNull(Kubectl::for($local)->get('deployment', 'missing', 'oc-env-1'));
@@ -117,7 +117,7 @@ class KubectlTest extends TestCase
     public function test_a_failed_apply_throws_with_the_kubectl_error(): void
     {
         $fake = FakeKubectl::install();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $fake->respond('apply', new KubectlResult(1, '', 'error: the server could not find the requested resource'));
 
         $this->expectException(KubectlException::class);

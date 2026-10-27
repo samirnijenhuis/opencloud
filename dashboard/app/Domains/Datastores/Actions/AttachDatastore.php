@@ -32,7 +32,7 @@ class AttachDatastore
      *
      * @throws InvalidArgumentException when the name is not valid or taken, or the source cannot serve the kind here
      */
-    public function execute(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = DatastoreSource::Standard, ?string $name = null, ?Connection $connection = null): DatastoreAttachment
+    public function execute(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = DatastoreSource::STANDARD, ?string $name = null, ?Connection $connection = null): DatastoreAttachment
     {
         $provisioner = Provisioners::for($kind, $source);
         $refusal = $provisioner->refusalOn($environment->application->cluster);
@@ -44,7 +44,7 @@ class AttachDatastore
         return DB::transaction(function () use ($environment, $by, $kind, $source, $name, $connection, $provisioner) {
             // An attachment whose datastore is being destroyed no longer holds its name or its family.
             $attachments = $environment->datastoreAttachments()->with('datastore')->get()
-                ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->status === DatastoreStatus::Destroying);
+                ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->status === DatastoreStatus::DESTROYING);
             $named = $kind->family()->isNamed();
             $name = $named ? $this->databaseName($attachments, $name) : null;
             $existing = $attachments->first(fn (DatastoreAttachment $attachment) => $named
@@ -62,7 +62,7 @@ class AttachDatastore
                 'environment_id' => $environment->id,
                 'kind' => $kind->value,
                 'name' => $name,
-                'source' => $source === DatastoreSource::Standard ? null : $source->value,
+                'source' => $source === DatastoreSource::STANDARD ? null : $source->value,
             ]));
 
             return $attachment;
@@ -92,13 +92,13 @@ class AttachDatastore
     {
         $named = $kind->family()->isNamed();
 
-        if ($typed || $existing->datastore->kind !== $kind || ($named && $existing->status !== DatastoreStatus::Failed)) {
+        if ($typed || $existing->datastore->kind !== $kind || ($named && $existing->status !== DatastoreStatus::FAILED)) {
             throw new InvalidArgumentException($named
                 ? "This environment already has a database with the name {$existing->name}."
                 : "This environment already has a {$existing->datastore->kind->value} datastore.");
         }
 
-        if ($existing->status === DatastoreStatus::Failed) {
+        if ($existing->status === DatastoreStatus::FAILED) {
             Provisioners::of($existing->datastore)->retry($existing);
         }
 

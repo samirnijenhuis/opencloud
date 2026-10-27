@@ -67,9 +67,9 @@ class ManagedBucketTest extends TestCase
         ProviderCredential::factory()->create(['provider' => 'digitalocean', 'token' => self::TOKEN]);
         $this->cluster = Cluster::factory()->create([
             'name' => 'ams3-prod',
-            'kind' => ClusterKind::Created,
+            'kind' => ClusterKind::CREATED,
             'provider' => 'digitalocean',
-            'status' => ClusterStatus::Ready,
+            'status' => ClusterStatus::READY,
             'region' => 'ams3',
             'provider_cluster_id' => 'c0ffee00-1111',
             'provider_vpc_id' => 'vpc-2222',
@@ -88,7 +88,7 @@ class ManagedBucketTest extends TestCase
     {
         $attachment = $this->attach($this->environment());
 
-        $this->assertSame(['ams3-prod-env-1-k3x9q2m7', null, DatastoreSource::Managed, ''], [$attachment->database_name, $attachment->host, $attachment->datastore->source, $attachment->datastore->version]);
+        $this->assertSame(['ams3-prod-env-1-k3x9q2m7', null, DatastoreSource::MANAGED, ''], [$attachment->database_name, $attachment->host, $attachment->datastore->source, $attachment->datastore->version]);
 
         Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
 
@@ -115,7 +115,7 @@ class ManagedBucketTest extends TestCase
 
         $attachment->refresh();
         $this->assertSame(
-            ['https://ams3.digitaloceanspaces.com', 'ams3', 'ams3-prod-env-1-k3x9q2m7', 'DO00BUCKETKEYID', 'DO_BUCKET_SECRET_KEY', false, DatastoreStatus::Ready],
+            ['https://ams3.digitaloceanspaces.com', 'ams3', 'ams3-prod-env-1-k3x9q2m7', 'DO00BUCKETKEYID', 'DO_BUCKET_SECRET_KEY', false, DatastoreStatus::READY],
             [$attachment->host, $attachment->region, $attachment->database_name, $attachment->username, $attachment->password, $attachment->path_style, $attachment->status],
         );
         $this->assertEquals(
@@ -154,10 +154,10 @@ class ManagedBucketTest extends TestCase
         Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
 
         $failed = 'tofu apply failed. Error: Error creating Spaces key: POST https://api.digitalocean.com/v2/spaces/keys: 403 You are not authorized to perform this operation';
-        $this->assertSame([DatastoreStatus::Failed, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
+        $this->assertSame([DatastoreStatus::FAILED, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
         $this->assertSame([], $this->envOf($environment));
 
-        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Rustfs, DatastoreSource::Managed);
+        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::RUSTFS, DatastoreSource::MANAGED);
         Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
 
         $id = $attachment->datastore_id;
@@ -170,7 +170,7 @@ class ManagedBucketTest extends TestCase
             $this->runs(),
         );
         $this->assertSame('ams3-prod-env-1-k3x9q2m7', $this->tofu->ran[8]['variables']['name']);
-        $this->assertSame([DatastoreStatus::Ready, null, DatastoreStatus::Ready], [$attachment->fresh()->status, $attachment->fresh()->error, $attachment->datastore->fresh()->status]);
+        $this->assertSame([DatastoreStatus::READY, null, DatastoreStatus::READY], [$attachment->fresh()->status, $attachment->fresh()->error, $attachment->datastore->fresh()->status]);
         $this->assertSame(['DO00BUCKETKEYID', false], $this->envOf($environment)['AWS_ACCESS_KEY_ID']);
     }
 
@@ -215,7 +215,7 @@ class ManagedBucketTest extends TestCase
 
         $datastore = $attachment->datastore->fresh();
         $id = $datastore->id;
-        $this->assertSame([DatastoreStatus::Failed, 'The destroy failed. tofu destroy failed. Error: deleting Spaces bucket: 503 Service Unavailable'], [$datastore->status, $datastore->error]);
+        $this->assertSame([DatastoreStatus::FAILED, 'The destroy failed. tofu destroy failed. Error: deleting Spaces bucket: 503 Service Unavailable'], [$datastore->status, $datastore->error]);
         $this->assertSame(
             ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} destroy", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy"],
             array_slice($this->runs(), 8),
@@ -245,7 +245,7 @@ class ManagedBucketTest extends TestCase
             ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} apply", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy"],
             $this->runs(),
         );
-        $this->assertSame([DatastoreStatus::Failed, 'tofu apply failed. Error: creating Spaces bucket: 503 Service Unavailable'], [$attachment->fresh()->status, $attachment->fresh()->error]);
+        $this->assertSame([DatastoreStatus::FAILED, 'tofu apply failed. Error: creating Spaces bucket: 503 Service Unavailable'], [$attachment->fresh()->status, $attachment->fresh()->error]);
         Sleep::assertNeverSlept();
     }
 
@@ -270,7 +270,7 @@ class ManagedBucketTest extends TestCase
         );
         Sleep::assertSleptTimes(2);
         Sleep::assertSequence([Sleep::for(10)->seconds(), Sleep::for(10)->seconds()]);
-        $this->assertSame(DatastoreStatus::Ready, $attachment->fresh()->status);
+        $this->assertSame(DatastoreStatus::READY, $attachment->fresh()->status);
     }
 
     public function test_the_bucket_step_gives_up_after_five_tries_with_an_unknown_access_key(): void
@@ -286,7 +286,7 @@ class ManagedBucketTest extends TestCase
         $this->assertSame(5, count(array_keys($this->runs(), "bucket-{$id} apply")));
         $this->assertSame("spacesadmin-{$id} destroy", Arr::last($this->runs()));
         Sleep::assertSleptTimes(4);
-        $this->assertSame(DatastoreStatus::Failed, $attachment->fresh()->status);
+        $this->assertSame(DatastoreStatus::FAILED, $attachment->fresh()->status);
     }
 
     public function test_an_admin_key_that_stays_after_a_good_apply_fails_the_run_and_the_next_run_destroys_it(): void
@@ -299,20 +299,20 @@ class ManagedBucketTest extends TestCase
 
         Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
 
-        $this->assertSame(DatastoreStatus::Failed, $attachment->fresh()->status);
+        $this->assertSame(DatastoreStatus::FAILED, $attachment->fresh()->status);
 
-        app(AttachDatastore::class)->execute($attachment->environment, null, DatastoreKind::Rustfs, DatastoreSource::Managed);
+        app(AttachDatastore::class)->execute($attachment->environment, null, DatastoreKind::RUSTFS, DatastoreSource::MANAGED);
         Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
 
         $id = $attachment->datastore_id;
         $this->assertSame("spacesadmin-{$id} destroy", Arr::last($this->runs()));
-        $this->assertSame(DatastoreStatus::Ready, $attachment->fresh()->status);
+        $this->assertSame(DatastoreStatus::READY, $attachment->fresh()->status);
     }
 
     public function test_the_nightly_bucket_copy_skips_a_spaces_bucket(): void
     {
-        $standard = Datastore::factory()->for($this->cluster)->create(['kind' => DatastoreKind::Rustfs]);
-        Datastore::factory()->for($this->cluster)->create(['kind' => DatastoreKind::Rustfs, 'source' => DatastoreSource::Managed]);
+        $standard = Datastore::factory()->for($this->cluster)->create(['kind' => DatastoreKind::RUSTFS]);
+        Datastore::factory()->for($this->cluster)->create(['kind' => DatastoreKind::RUSTFS, 'source' => DatastoreSource::MANAGED]);
 
         collect(app(Schedule::class)->events())->first(fn ($event) => $event->description === 'nightly-backups')->run($this->app);
 
@@ -323,7 +323,7 @@ class ManagedBucketTest extends TestCase
     {
         Str::createRandomStringsUsing(fn () => 'K3x9Q2m7');
 
-        return app(AttachDatastore::class)->execute($environment, $by, DatastoreKind::Rustfs, DatastoreSource::Managed);
+        return app(AttachDatastore::class)->execute($environment, $by, DatastoreKind::RUSTFS, DatastoreSource::MANAGED);
     }
 
     private function environment(): Environment
@@ -346,7 +346,7 @@ class ManagedBucketTest extends TestCase
     /** @return array<string, array{0: string, 1: bool}> */
     private function envOf(Environment $environment): array
     {
-        return $environment->envVars()->where('source', EnvVarSource::Datastore)->orderBy('key')->get()
+        return $environment->envVars()->where('source', EnvVarSource::DATASTORE)->orderBy('key')->get()
             ->mapWithKeys(fn (EnvVar $var) => [$var->key => [$var->value, $var->is_secret]])
             ->all();
     }

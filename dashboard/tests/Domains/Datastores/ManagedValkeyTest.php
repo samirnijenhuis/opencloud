@@ -59,9 +59,9 @@ class ManagedValkeyTest extends TestCase
         ProviderCredential::factory()->create(['provider' => 'digitalocean', 'token' => self::TOKEN]);
         $this->cluster = Cluster::factory()->create([
             'name' => 'ams3-prod',
-            'kind' => ClusterKind::Created,
+            'kind' => ClusterKind::CREATED,
             'provider' => 'digitalocean',
-            'status' => ClusterStatus::Ready,
+            'status' => ClusterStatus::READY,
             'region' => 'ams3',
             'provider_cluster_id' => 'c0ffee00-1111',
             'provider_vpc_id' => 'vpc-2222',
@@ -80,14 +80,14 @@ class ManagedValkeyTest extends TestCase
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
         $attach = app(AttachDatastore::class);
-        $managed = $attach->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $managed = $attach->execute($environment, $owner, DatastoreKind::VALKEY, DatastoreSource::MANAGED);
         app(DetachDatastore::class)->execute($managed, $owner);
 
-        $local = $attach->execute($environment, $owner, DatastoreKind::Valkey);
+        $local = $attach->execute($environment, $owner, DatastoreKind::VALKEY);
 
         $this->assertNotSame($managed->id, $local->id);
         $this->assertSame(
-            [[DatastoreSource::Managed, DatastoreStatus::Destroying], [DatastoreSource::Standard, DatastoreStatus::Pending]],
+            [[DatastoreSource::MANAGED, DatastoreStatus::DESTROYING], [DatastoreSource::STANDARD, DatastoreStatus::PENDING]],
             [[$managed->datastore->fresh()->source, $managed->datastore->fresh()->status], [$local->datastore->source, $local->datastore->status]],
         );
     }
@@ -97,10 +97,10 @@ class ManagedValkeyTest extends TestCase
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
 
-        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::VALKEY, DatastoreSource::MANAGED);
 
         $datastore = $attachment->datastore;
-        $this->assertSame([DatastoreSource::Managed, '8', null, null], [$datastore->source, $datastore->version, $attachment->name, $attachment->host]);
+        $this->assertSame([DatastoreSource::MANAGED, '8', null, null], [$datastore->source, $datastore->version, $attachment->name, $attachment->host]);
         $this->assertSame([], $this->envOf($environment));
         $this->assertSame(['environment_id' => $environment->id, 'kind' => 'valkey', 'source' => 'managed'], AuditEvent::query()->sole()->context);
 
@@ -119,7 +119,7 @@ class ManagedValkeyTest extends TestCase
 
         $attachment->refresh();
         $this->assertSame(
-            ['private-ams3-prod-valkey-1-do-user-1.k.db.ondigitalocean.com', 25061, 'DO_VALKEY_PASSWORD_SECRET', true, DatastoreStatus::Ready],
+            ['private-ams3-prod-valkey-1-do-user-1.k.db.ondigitalocean.com', 25061, 'DO_VALKEY_PASSWORD_SECRET', true, DatastoreStatus::READY],
             [$attachment->host, $attachment->port, $attachment->password, $attachment->tls, $attachment->status],
         );
         $this->assertSame(
@@ -132,7 +132,7 @@ class ManagedValkeyTest extends TestCase
     public function test_the_apply_writes_the_laravel_redis_values(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::VALKEY, DatastoreSource::MANAGED);
 
         (new ProvisionManagedDatabase($attachment))->handle();
 
@@ -152,20 +152,20 @@ class ManagedValkeyTest extends TestCase
         $this->tofu->failOn = 'apply';
         $this->tofu->failTimes = 1;
         $this->tofu->error = 'Error: Error creating database cluster: 422 invalid size slug for engine valkey';
-        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::VALKEY, DatastoreSource::MANAGED);
 
         Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
 
         $failed = 'tofu apply failed. Error: Error creating database cluster: 422 invalid size slug for engine valkey';
-        $this->assertSame([DatastoreStatus::Failed, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
-        $this->assertSame([DatastoreStatus::Failed, $failed], [$attachment->datastore->fresh()->status, $attachment->datastore->fresh()->error]);
+        $this->assertSame([DatastoreStatus::FAILED, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
+        $this->assertSame([DatastoreStatus::FAILED, $failed], [$attachment->datastore->fresh()->status, $attachment->datastore->fresh()->error]);
         $this->assertSame([], $this->envOf($environment));
 
-        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::VALKEY, DatastoreSource::MANAGED);
         Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
 
         $this->assertTrue($again->is($attachment));
-        $this->assertSame([DatastoreStatus::Ready, null, DatastoreStatus::Ready], [$attachment->fresh()->status, $attachment->fresh()->error, $attachment->datastore->fresh()->status]);
+        $this->assertSame([DatastoreStatus::READY, null, DatastoreStatus::READY], [$attachment->fresh()->status, $attachment->fresh()->error, $attachment->datastore->fresh()->status]);
         $this->assertSame('DO_VALKEY_PASSWORD_SECRET', $this->envOf($environment)['REDIS_PASSWORD'][0]);
         $this->assertSame(['init', 'apply', 'init', 'apply', 'output'], array_map(fn (array $command) => $command[0], $this->tofu->commands()));
     }
@@ -174,14 +174,14 @@ class ManagedValkeyTest extends TestCase
     {
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
-        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::VALKEY, DatastoreSource::MANAGED);
         (new ProvisionManagedDatabase($attachment))->handle();
         $datastore = $attachment->datastore;
 
         app(DetachDatastore::class)->execute($attachment->fresh(), $owner);
 
         $this->assertSame([], $this->envOf($environment));
-        $this->assertSame(DatastoreStatus::Destroying, $datastore->fresh()->status);
+        $this->assertSame(DatastoreStatus::DESTROYING, $datastore->fresh()->status);
 
         Queue::pushed(TearDownManagedDatabase::class)->sole()->handle();
 
@@ -197,7 +197,7 @@ class ManagedValkeyTest extends TestCase
 
     public function test_a_manual_backup_says_why_opencloud_does_not_back_it_up(): void
     {
-        $attachment = app(AttachDatastore::class)->execute($this->environment(), null, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($this->environment(), null, DatastoreKind::VALKEY, DatastoreSource::MANAGED);
 
         try {
             app(BackupNow::class)->execute($attachment, User::factory()->owner()->create());
@@ -215,7 +215,7 @@ class ManagedValkeyTest extends TestCase
     /** @return array<string, array{0: string, 1: bool}> */
     private function envOf(Environment $environment): array
     {
-        return $environment->envVars()->where('source', EnvVarSource::Datastore)->orderBy('key')->get()
+        return $environment->envVars()->where('source', EnvVarSource::DATASTORE)->orderBy('key')->get()
             ->mapWithKeys(fn (EnvVar $var) => [$var->key => [$var->value, $var->is_secret]])
             ->all();
     }

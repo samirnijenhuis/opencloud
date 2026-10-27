@@ -57,7 +57,7 @@ class ExternalResourcesTest extends TestCase
         Queue::fake();
         $this->kubectl = FakeKubectl::install();
         $this->tofu = FakeTofu::install();
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create(['name' => 'production']);
         $this->owner = User::factory()->owner()->create();
     }
@@ -68,7 +68,7 @@ class ExternalResourcesTest extends TestCase
         $seen = [];
 
         foreach (Provisioners::table() as ['kind' => $kind, 'source' => $source, 'provisioner' => $provisioner]) {
-            if ($source !== DatastoreSource::External) {
+            if ($source !== DatastoreSource::EXTERNAL) {
                 continue;
             }
 
@@ -103,7 +103,7 @@ class ExternalResourcesTest extends TestCase
                 'refusal' => null,
                 'status' => ['ready', 'ready'],
                 'cluster' => null,
-                'connection' => new SqlConnection(DatastoreKind::Mysql, 'mysql.example.com', 3306, 'shop', 'shop_app', 'p@ss/w0rd+1', 'main', true),
+                'connection' => new SqlConnection(DatastoreKind::MYSQL, 'mysql.example.com', 3306, 'shop', 'shop_app', 'p@ss/w0rd+1', 'main', true),
                 'label' => 'External MySQL',
                 'no dumps' => 'Opencloud does not back up a database that you run yourself.',
                 'copies buckets' => false,
@@ -113,7 +113,7 @@ class ExternalResourcesTest extends TestCase
                 'refusal' => null,
                 'status' => ['ready', 'ready'],
                 'cluster' => null,
-                'connection' => new SqlConnection(DatastoreKind::Postgres, 'pg.example.com', 25060, 'reports', 'doadmin', 'pg:secret%', 'main', true),
+                'connection' => new SqlConnection(DatastoreKind::POSTGRES, 'pg.example.com', 25060, 'reports', 'doadmin', 'pg:secret%', 'main', true),
                 'label' => 'External Postgres',
                 'no dumps' => 'Opencloud does not back up a database that you run yourself.',
                 'copies buckets' => false,
@@ -147,9 +147,9 @@ class ExternalResourcesTest extends TestCase
 
     public function test_an_external_provisioner_refuses_an_address_of_another_family(): void
     {
-        $provisioner = Provisioners::for(DatastoreKind::Mysql, DatastoreSource::External);
+        $provisioner = Provisioners::for(DatastoreKind::MYSQL, DatastoreSource::EXTERNAL);
 
-        foreach ([null, $this->typed(DatastoreKind::Postgres), $this->typed(DatastoreKind::Valkey)] as $given) {
+        foreach ([null, $this->typed(DatastoreKind::POSTGRES), $this->typed(DatastoreKind::VALKEY)] as $given) {
             try {
                 $provisioner->attach($this->environment, 'main', true, $given);
                 $this->fail('The attach took an address of another kind.');
@@ -164,8 +164,8 @@ class ExternalResourcesTest extends TestCase
     public function test_external_databases_are_ready_at_once_with_the_laravel_env_and_detach_removes_only_the_rows(): void
     {
         $attach = app(AttachDatastore::class);
-        $main = $attach->execute($this->environment, $this->owner, DatastoreKind::Mysql, DatastoreSource::External, null, $this->typed(DatastoreKind::Mysql));
-        $reports = $attach->execute($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Postgres));
+        $main = $attach->execute($this->environment, $this->owner, DatastoreKind::MYSQL, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::MYSQL));
+        $reports = $attach->execute($this->environment, $this->owner, DatastoreKind::POSTGRES, DatastoreSource::EXTERNAL, 'reports', $this->typed(DatastoreKind::POSTGRES));
 
         $this->assertSame(
             [['main', true, 'ready', null], ['reports', false, 'ready', null]],
@@ -183,7 +183,7 @@ class ExternalResourcesTest extends TestCase
 
         // Attaching again never drops the new address: the name is taken, so the action refuses.
         try {
-            $attach->execute($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Postgres));
+            $attach->execute($this->environment, $this->owner, DatastoreKind::POSTGRES, DatastoreSource::EXTERNAL, 'reports', $this->typed(DatastoreKind::POSTGRES));
             $this->fail('A second database took the name reports.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('This environment already has a database with the name reports.', $e->getMessage());
@@ -212,7 +212,7 @@ class ExternalResourcesTest extends TestCase
     public function test_an_external_key_value_store_is_ready_at_once_with_the_laravel_env_and_detach_removes_only_the_rows(): void
     {
         $attach = app(AttachDatastore::class);
-        $store = $attach->execute($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
+        $store = $attach->execute($this->environment, $this->owner, DatastoreKind::VALKEY, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::VALKEY));
 
         $this->assertSame([null, 'ready', true], [$store->name, $store->status->value, $store->tls]);
         $this->assertSame([
@@ -225,12 +225,12 @@ class ExternalResourcesTest extends TestCase
 
         // A second typed address is refused, so it never goes unused. An attach without an address finds the store.
         try {
-            $attach->execute($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
+            $attach->execute($this->environment, $this->owner, DatastoreKind::VALKEY, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::VALKEY));
             $this->fail('A second key-value store took the place of the first.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('This environment already has a valkey datastore.', $e->getMessage());
         }
-        $this->assertTrue($attach->execute($this->environment, $this->owner, DatastoreKind::Valkey)->is($store));
+        $this->assertTrue($attach->execute($this->environment, $this->owner, DatastoreKind::VALKEY)->is($store));
         $this->assertSame(1, DatastoreAttachment::query()->count());
 
         app(DetachDatastore::class)->execute($store, $this->owner);
@@ -242,7 +242,7 @@ class ExternalResourcesTest extends TestCase
     public function test_an_external_bucket_is_ready_at_once_with_the_laravel_env_and_detach_removes_only_the_rows(): void
     {
         $attach = app(AttachDatastore::class);
-        $bucket = $attach->execute($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
+        $bucket = $attach->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::RUSTFS));
 
         $this->assertSame(
             ['https://fsn1.your-objectstorage.com', 'fsn1', 'shop-uploads', 'AKIAEXTERNAL', false, 'ready'],
@@ -259,7 +259,7 @@ class ExternalResourcesTest extends TestCase
         ], $this->env());
 
         try {
-            $attach->execute($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
+            $attach->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::RUSTFS));
             $this->fail('A second bucket took the place of the first.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('This environment already has a rustfs datastore.', $e->getMessage());
@@ -274,14 +274,14 @@ class ExternalResourcesTest extends TestCase
     public function test_a_preview_gets_local_resources_for_the_external_resources_of_production(): void
     {
         $application = $this->environment->application;
-        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate]);
+        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
         $attach = app(AttachDatastore::class);
-        $attach->execute($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, null, $this->typed(DatastoreKind::Postgres));
-        $attach->execute($this->environment, $this->owner, DatastoreKind::Mysql, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Mysql));
-        $attach->execute($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
-        $attach->execute($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
+        $attach->execute($this->environment, $this->owner, DatastoreKind::POSTGRES, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::POSTGRES));
+        $attach->execute($this->environment, $this->owner, DatastoreKind::MYSQL, DatastoreSource::EXTERNAL, 'reports', $this->typed(DatastoreKind::MYSQL));
+        $attach->execute($this->environment, $this->owner, DatastoreKind::VALKEY, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::VALKEY));
+        $attach->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::RUSTFS));
 
-        $preview = app(OpenPreview::class)->execute($application, new PullRequestEvent(PullRequestAction::Opened, $application->repository, 12, 'feature/login', str_repeat('1', 40), fromFork: false));
+        $preview = app(OpenPreview::class)->execute($application, new PullRequestEvent(PullRequestAction::OPENED, $application->repository, 12, 'feature/login', str_repeat('1', 40), fromFork: false));
 
         $this->assertSame([
             ['postgres', 'standard', 'main', true, 'local'],
@@ -300,17 +300,17 @@ class ExternalResourcesTest extends TestCase
     private function typed(DatastoreKind $kind): Connection
     {
         return match ($kind) {
-            DatastoreKind::Mysql => new SqlConnection($kind, 'mysql.example.com', 3306, 'shop', 'shop_app', 'p@ss/w0rd+1', 'main', isDefault: false),
-            DatastoreKind::Postgres => new SqlConnection($kind, 'pg.example.com', 25060, 'reports', 'doadmin', 'pg:secret%', 'reports', isDefault: false),
-            DatastoreKind::Valkey => new KeyValueConnection('redis.example.com', 6380, 'redis-secret', tls: true),
-            DatastoreKind::Rustfs => new BucketConnection('https://fsn1.your-objectstorage.com', 'fsn1', 'shop-uploads', 'AKIAEXTERNAL', 'bucket-secret/key', pathStyle: false),
+            DatastoreKind::MYSQL => new SqlConnection($kind, 'mysql.example.com', 3306, 'shop', 'shop_app', 'p@ss/w0rd+1', 'main', isDefault: false),
+            DatastoreKind::POSTGRES => new SqlConnection($kind, 'pg.example.com', 25060, 'reports', 'doadmin', 'pg:secret%', 'reports', isDefault: false),
+            DatastoreKind::VALKEY => new KeyValueConnection('redis.example.com', 6380, 'redis-secret', tls: true),
+            DatastoreKind::RUSTFS => new BucketConnection('https://fsn1.your-objectstorage.com', 'fsn1', 'shop-uploads', 'AKIAEXTERNAL', 'bucket-secret/key', pathStyle: false),
         };
     }
 
     /** @return list<array{0: string, 1: string, 2: bool, 3: int}> key, value, secret, and attachment of each datastore value */
     private function env(): array
     {
-        return EnvVar::query()->where('environment_id', $this->environment->id)->where('source', EnvVarSource::Datastore)->orderBy('key')->get()
+        return EnvVar::query()->where('environment_id', $this->environment->id)->where('source', EnvVarSource::DATASTORE)->orderBy('key')->get()
             ->map(fn (EnvVar $var) => [$var->key, $var->value, $var->is_secret, $var->datastore_attachment_id])
             ->all();
     }

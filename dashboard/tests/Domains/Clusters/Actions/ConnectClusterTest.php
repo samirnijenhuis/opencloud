@@ -51,8 +51,8 @@ class ConnectClusterTest extends TestCase
         ], $this->kubectl->calls);
 
         $cluster->refresh();
-        $this->assertSame(ClusterKind::Connected, $cluster->kind);
-        $this->assertSame(ClusterStatus::Installing, $cluster->status);
+        $this->assertSame(ClusterKind::CONNECTED, $cluster->kind);
+        $this->assertSame(ClusterStatus::INSTALLING, $cluster->status);
         $this->assertSame(self::KUBECONFIG, $cluster->kubeconfig);
         $this->assertSame(['192.0.2.5:5000', 'robot', 'REGISTRY_PASSWORD_SECRET', true], [
             $cluster->registry()->address, $cluster->registry()->username, $cluster->registry()->password, $cluster->registry()->insecure,
@@ -96,7 +96,7 @@ class ConnectClusterTest extends TestCase
     public function test_the_install_applies_the_parts_and_stores_the_load_balancer_ip_when_caddy_runs(): void
     {
         config(['opencloud.version' => '1.4.0', 'opencloud.caddy_image' => 'caddy:2.11.7']);
-        $cluster = $this->cluster(['status' => ClusterStatus::Installing, 'error' => 'an old error']);
+        $cluster = $this->cluster(['status' => ClusterStatus::INSTALLING, 'error' => 'an old error']);
         $this->caddyIs(available: 1);
         $this->kubectl->respond('get service caddy', $this->service([['ip' => '2001:db8::5'], ['ip' => '203.0.113.20']]));
 
@@ -108,14 +108,14 @@ class ConnectClusterTest extends TestCase
             array_map(fn (array $manifest) => [$manifest['kind'], $manifest['metadata']['name']], $this->kubectl->appliedManifests()),
         );
         $cluster->refresh();
-        $this->assertSame([ClusterStatus::Ready, '203.0.113.20', '1.4.0', null], [$cluster->status, $cluster->ingress_ip, $cluster->parts_version, $cluster->error]);
+        $this->assertSame([ClusterStatus::READY, '203.0.113.20', '1.4.0', null], [$cluster->status, $cluster->ingress_ip, $cluster->parts_version, $cluster->error]);
         $this->assertSame([$cluster->id], Queue::pushed(SyncCaddy::class)->map(fn (SyncCaddy $sync) => $sync->cluster->id)->all());
         $job->assertNotReleased();
     }
 
     public function test_the_install_resolves_a_load_balancer_host_name_to_its_ip(): void
     {
-        $cluster = $this->cluster(['status' => ClusterStatus::Installing]);
+        $cluster = $this->cluster(['status' => ClusterStatus::INSTALLING]);
         $this->caddyIs(available: 1);
         $this->kubectl->respond('get service caddy', $this->service([['hostname' => 'abc.elb.example.com']]));
         $this->app->instance(DnsResolver::class, new class extends DnsResolver
@@ -133,7 +133,7 @@ class ConnectClusterTest extends TestCase
 
     public function test_the_install_tries_again_while_the_load_balancer_has_no_address(): void
     {
-        $cluster = $this->cluster(['status' => ClusterStatus::Installing]);
+        $cluster = $this->cluster(['status' => ClusterStatus::INSTALLING]);
         $this->caddyIs(available: 1);
         $this->kubectl->respond('get service caddy', $this->service([]));
 
@@ -141,13 +141,13 @@ class ConnectClusterTest extends TestCase
         $job->handle(app(DnsResolver::class));
 
         $job->assertReleased(delay: 15);
-        $this->assertSame([ClusterStatus::Installing, null], [$cluster->fresh()->status, $cluster->fresh()->ingress_ip]);
+        $this->assertSame([ClusterStatus::INSTALLING, null], [$cluster->fresh()->status, $cluster->fresh()->ingress_ip]);
         Queue::assertNotPushed(SyncCaddy::class);
     }
 
     public function test_the_install_tries_again_while_caddy_does_not_run_and_fails_after_the_last_try(): void
     {
-        $cluster = $this->cluster(['status' => ClusterStatus::Installing]);
+        $cluster = $this->cluster(['status' => ClusterStatus::INSTALLING]);
         $this->caddyIs(available: 0);
         $this->kubectl->respond('get service caddy', $this->service([['ip' => '203.0.113.20']]));
 
@@ -161,36 +161,36 @@ class ConnectClusterTest extends TestCase
 
         $last->assertNotReleased();
         $cluster->refresh();
-        $this->assertSame(ClusterStatus::Failed, $cluster->status);
+        $this->assertSame(ClusterStatus::FAILED, $cluster->status);
         $this->assertSame('Caddy did not start in 15 minutes. Read its events with: kubectl -n opencloud describe pod -l app.kubernetes.io/name=caddy', $cluster->error);
     }
 
     public function test_a_failed_apply_fails_the_install_and_keeps_the_error(): void
     {
-        $cluster = $this->cluster(['status' => ClusterStatus::Installing]);
+        $cluster = $this->cluster(['status' => ClusterStatus::INSTALLING]);
         $this->kubectl->respond('apply', new KubectlResult(1, '', 'error: namespaces "opencloud" is forbidden'));
 
         $job = (new InstallClusterParts($cluster))->withFakeQueueInteractions();
         $job->handle(app(DnsResolver::class));
 
         $job->assertNotReleased();
-        $this->assertSame([ClusterStatus::Failed, 'error: namespaces "opencloud" is forbidden'], [$cluster->fresh()->status, $cluster->fresh()->error]);
+        $this->assertSame([ClusterStatus::FAILED, 'error: namespaces "opencloud" is forbidden'], [$cluster->fresh()->status, $cluster->fresh()->error]);
     }
 
     public function test_reinstalling_clears_the_error_and_runs_the_install_again(): void
     {
-        $cluster = $this->cluster(['status' => ClusterStatus::Failed, 'error' => 'timeout']);
+        $cluster = $this->cluster(['status' => ClusterStatus::FAILED, 'error' => 'timeout']);
 
         app(ReinstallClusterParts::class)->execute($cluster, User::factory()->owner()->create());
 
-        $this->assertSame([ClusterStatus::Installing, null], [$cluster->fresh()->status, $cluster->fresh()->error]);
+        $this->assertSame([ClusterStatus::INSTALLING, null], [$cluster->fresh()->status, $cluster->fresh()->error]);
         $this->assertSame([$cluster->id], Queue::pushed(InstallClusterParts::class)->map(fn (InstallClusterParts $job) => $job->cluster->id)->all());
         $this->assertSame('cluster.parts_reinstalled', AuditEvent::query()->sole()->action);
     }
 
     public function test_the_parts_of_the_local_cluster_are_never_reinstalled_or_disconnected(): void
     {
-        $local = $this->cluster(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $local = $this->cluster(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $owner = User::factory()->owner()->create();
 
         $this->assertSame(

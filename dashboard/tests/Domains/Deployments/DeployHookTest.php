@@ -66,7 +66,7 @@ class DeployHookTest extends TestCase
 
     public function test_the_preview_template_gets_no_hook(): void
     {
-        $template = $this->makeEnvironment(false, 'preview-template', ['kind' => EnvironmentKind::PreviewTemplate, 'branch' => null]);
+        $template = $this->makeEnvironment(false, 'preview-template', ['kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
 
         $this->expectException(InvalidArgumentException::class);
 
@@ -82,7 +82,7 @@ class DeployHookTest extends TestCase
 
         $deployment = Deployment::sole();
         $response->assertStatus(202)->assertExactJson(['deployment_id' => $deployment->id, 'commit_sha' => self::SHA, 'status' => 'queued']);
-        $this->assertSame([$environment->id, self::SHA, DeploymentStatus::Queued, null], [$deployment->environment_id, $deployment->commit_sha, $deployment->status, $deployment->triggered_by]);
+        $this->assertSame([$environment->id, self::SHA, DeploymentStatus::QUEUED, null], [$deployment->environment_id, $deployment->commit_sha, $deployment->status, $deployment->triggered_by]);
         Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->is($deployment));
         $this->assertSame(
             [null, ['deployment_id' => $deployment->id, 'ip' => '127.0.0.1']],

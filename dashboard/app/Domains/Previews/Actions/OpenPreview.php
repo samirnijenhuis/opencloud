@@ -51,7 +51,7 @@ class OpenPreview
             return null;
         }
 
-        $preview = $application->environments()->where('kind', EnvironmentKind::Preview)->where('pr_number', $pullRequest->number)->first()
+        $preview = $application->environments()->where('kind', EnvironmentKind::PREVIEW)->where('pr_number', $pullRequest->number)->first()
             ?? $this->create($application, $pullRequest);
 
         if ($preview !== null) {
@@ -65,18 +65,18 @@ class OpenPreview
     {
         $limit = config('opencloud.max_previews');
 
-        if ($application->environments()->where('kind', EnvironmentKind::Preview)->count() >= $limit) {
+        if ($application->environments()->where('kind', EnvironmentKind::PREVIEW)->count() >= $limit) {
             AuditEvent::record(null, 'preview.limit_reached', $application, ['pr_number' => $pullRequest->number, 'limit' => $limit]);
 
             // A push to the pull request tries again, so only a new or reopened pull request gets the comment.
-            if ($pullRequest->action !== PullRequestAction::Synchronize) {
+            if ($pullRequest->action !== PullRequestAction::SYNCHRONIZE) {
                 $this->comment($pullRequest, "Opencloud did not create a preview for this pull request. {$application->name} already runs {$limit} previews, which is the limit. Close a pull request that has a preview, then push to this pull request to try again.");
             }
 
             return null;
         }
 
-        $template = $application->environments()->where('kind', EnvironmentKind::PreviewTemplate)->firstOrFail();
+        $template = $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->firstOrFail();
         $production = $application->environments()->where('name', 'production')->first();
         // The default comes first, so it is the default of the preview too. A database that DigitalOcean destroys has no name.
         $attachments = $production?->datastoreAttachments()->with('datastore')->orderByDesc('is_default')->orderBy('id')->get()
@@ -86,7 +86,7 @@ class OpenPreview
             $preview = $application->environments()->create([
                 ...$template->only(self::TEMPLATE_SETTINGS),
                 'name' => "pr-{$pullRequest->number}",
-                'kind' => EnvironmentKind::Preview,
+                'kind' => EnvironmentKind::PREVIEW,
                 'pr_number' => $pullRequest->number,
                 'branch' => $pullRequest->headRef,
                 'is_protected' => false,
@@ -109,7 +109,7 @@ class OpenPreview
 
             foreach ($attachments as $attachment) {
                 // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
-                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::Standard, $attachment->name);
+                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name);
             }
 
             $hostname = $this->hostname($application, $pullRequest->number);
@@ -127,13 +127,13 @@ class OpenPreview
     /** Copies each user value of the template, secrets too, as values of the preview. The preset generates each secret that the template lacks. */
     private function copyEnv(Application $application, Environment $template, Environment $preview): void
     {
-        $copied = $template->envVars()->where('source', EnvVarSource::User)->orderBy('key')->get()
+        $copied = $template->envVars()->where('source', EnvVarSource::USER)->orderBy('key')->get()
             ->map(fn (EnvVar $var) => $preview->envVars()->create($var->only(['key', 'value', 'is_secret', 'available_at', 'source']))->key);
         $generated = [];
 
         foreach ($application->type->generatedSecrets() as $key => $value) {
             if (! $copied->contains($key)) {
-                $preview->envVars()->create(['key' => $key, 'value' => $value, 'is_secret' => true, 'available_at' => EnvVarAvailability::Runtime]);
+                $preview->envVars()->create(['key' => $key, 'value' => $value, 'is_secret' => true, 'available_at' => EnvVarAvailability::RUNTIME]);
                 $generated[] = $key;
             }
         }

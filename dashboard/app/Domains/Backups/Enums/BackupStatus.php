@@ -4,7 +4,7 @@ namespace App\Domains\Backups\Enums;
 
 enum BackupStatus: string
 {
-    case Running = 'running';
-    case Done = 'done';
-    case Failed = 'failed';
+    case RUNNING = 'running';
+    case DONE = 'done';
+    case FAILED = 'failed';
 }

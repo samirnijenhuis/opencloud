@@ -50,7 +50,7 @@ final class RestoreState
 
     public function status(RestoreStep $step): StepStatus
     {
-        return StepStatus::from($this->steps[$step->value]['status'] ?? StepStatus::Pending->value);
+        return StepStatus::from($this->steps[$step->value]['status'] ?? StepStatus::PENDING->value);
     }
 
     public function detail(RestoreStep $step): ?string
@@ -66,7 +66,7 @@ final class RestoreState
 
     public function finished(): bool
     {
-        return collect(RestoreStep::cases())->every(fn (RestoreStep $step) => $this->status($step) === StepStatus::Done);
+        return collect(RestoreStep::cases())->every(fn (RestoreStep $step) => $this->status($step) === StepStatus::DONE);
     }
 
     /** @return array<int, string>|null */

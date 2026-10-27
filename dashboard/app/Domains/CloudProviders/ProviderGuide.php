@@ -61,9 +61,9 @@ final readonly class ProviderGuide
         $optional = collect($this->rights)->where('optional', true)->pluck('id')->all();
 
         return match ($result->status) {
-            CheckStatus::Ok => true,
-            CheckStatus::MissingRights => array_diff($result->missing, $optional) === [],
-            CheckStatus::Invalid => false,
+            CheckStatus::OK => true,
+            CheckStatus::MISSING_RIGHTS => array_diff($result->missing, $optional) === [],
+            CheckStatus::INVALID => false,
         };
     }
 }

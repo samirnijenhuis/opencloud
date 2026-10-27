@@ -42,7 +42,7 @@ class User extends Authenticatable
     ];
 
     protected $attributes = [
-        'role' => Role::Developer->value,
+        'role' => Role::DEVELOPER->value,
     ];
 
     /**

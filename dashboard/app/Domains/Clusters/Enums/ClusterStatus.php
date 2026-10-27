@@ -8,16 +8,16 @@ namespace App\Domains\Clusters\Enums;
  */
 enum ClusterStatus: string
 {
-    case Provisioning = 'provisioning';
-    case Pending = 'pending';
-    case Installing = 'installing';
-    case Ready = 'ready';
-    case Failed = 'failed';
-    case Destroying = 'destroying';
+    case PROVISIONING = 'provisioning';
+    case PENDING = 'pending';
+    case INSTALLING = 'installing';
+    case READY = 'ready';
+    case FAILED = 'failed';
+    case DESTROYING = 'destroying';
 
     /** OpenTofu or the install runs, so the page polls and the actions wait. */
     public function isBusy(): bool
     {
-        return in_array($this, [self::Provisioning, self::Installing, self::Destroying], true);
+        return in_array($this, [self::PROVISIONING, self::INSTALLING, self::DESTROYING], true);
     }
 }

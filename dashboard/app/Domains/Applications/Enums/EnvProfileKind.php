@@ -9,14 +9,14 @@ use App\Domains\Datastores\Env\LaravelProfile;
 /** The env names that an application reads. A new application gets the profile of its preset, and the user can pick the other. */
 enum EnvProfileKind: string
 {
-    case Laravel = 'laravel';
-    case Generic = 'generic';
+    case LARAVEL = 'laravel';
+    case GENERIC = 'generic';
 
     public function profile(): EnvProfile
     {
         return match ($this) {
-            self::Laravel => new LaravelProfile,
-            self::Generic => new GenericProfile,
+            self::LARAVEL => new LaravelProfile,
+            self::GENERIC => new GenericProfile,
         };
     }
 }

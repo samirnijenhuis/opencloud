@@ -53,7 +53,7 @@ class CreateApplication
      */
     public function execute(User $by, array $data): Application
     {
-        $type = $data['type'] ?? ApplicationType::Laravel;
+        $type = $data['type'] ?? ApplicationType::LARAVEL;
         $type = $type instanceof ApplicationType ? $type : ApplicationType::from($type);
         $env = $data['env'] ?? [];
         $database = $data['database'] ?? $type->database();
@@ -82,7 +82,7 @@ class CreateApplication
 
             $production = $application->environments()->create([
                 'name' => 'production',
-                'kind' => EnvironmentKind::Permanent,
+                'kind' => EnvironmentKind::PERMANENT,
                 'is_protected' => true,
                 'branch' => $branch,
                 ...$settings,
@@ -91,7 +91,7 @@ class CreateApplication
             // Previews run as one small instance, so the template takes the commands but not the size.
             $template = $application->environments()->create([
                 'name' => 'preview-template',
-                'kind' => EnvironmentKind::PreviewTemplate,
+                'kind' => EnvironmentKind::PREVIEW_TEMPLATE,
                 'is_protected' => false,
                 'auto_deploy' => false,
                 ...Arr::except($settings, ['size', 'min_instances', 'max_instances', 'cpu_target']),
@@ -106,11 +106,11 @@ class CreateApplication
             }
 
             foreach (array_diff_key($type->generatedSecrets(), array_flip(array_column($env, 'key'))) as $key => $value) {
-                $this->setEnvVar->execute($production, $by, $key, $value, true, EnvVarAvailability::Runtime);
+                $this->setEnvVar->execute($production, $by, $key, $value, true, EnvVarAvailability::RUNTIME);
             }
 
             foreach ($env as $value) {
-                $availableAt = $value['available_at'] ?? EnvVarAvailability::Runtime;
+                $availableAt = $value['available_at'] ?? EnvVarAvailability::RUNTIME;
 
                 $this->setEnvVar->execute(
                     $production,

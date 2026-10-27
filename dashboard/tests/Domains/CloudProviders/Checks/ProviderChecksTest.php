@@ -27,7 +27,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('digitalocean')->check('dop_v1_abc');
 
-        $this->assertSame(CheckStatus::Ok, $result->status);
+        $this->assertSame(CheckStatus::OK, $result->status);
         $this->assertSame('The token works for the account me@example.com.', $result->message);
         Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer dop_v1_abc'));
         Http::assertSentCount(6);
@@ -39,7 +39,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('digitalocean')->check('bad');
 
-        $this->assertSame(CheckStatus::Invalid, $result->status);
+        $this->assertSame(CheckStatus::INVALID, $result->status);
         $this->assertSame('Unable to authenticate you', $result->message);
         Http::assertSentCount(1);
     }
@@ -57,7 +57,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('digitalocean')->check('scoped');
 
-        $this->assertSame(CheckStatus::MissingRights, $result->status);
+        $this->assertSame(CheckStatus::MISSING_RIGHTS, $result->status);
         $this->assertSame(['kubernetes', 'registry'], $result->missing);
         $this->assertSame(
             'DigitalOcean answered 403 for kubernetes: You are not authorized to perform this operation; registry: You are not authorized to perform this operation.',
@@ -79,7 +79,7 @@ class ProviderChecksTest extends TestCase
 
         $result = $guide->check('no-database');
 
-        $this->assertSame(CheckStatus::MissingRights, $result->status);
+        $this->assertSame(CheckStatus::MISSING_RIGHTS, $result->status);
         $this->assertSame(['database', 'spaces_key'], $result->missing);
         $this->assertSame('DigitalOcean answered 403 for database: You are not authorized to perform this operation; spaces_key: You are not authorized to perform this operation.', $result->message);
         $this->assertTrue($guide->accepts($result));
@@ -100,10 +100,10 @@ class ProviderChecksTest extends TestCase
             ->push(['error' => ['code' => 'unauthorized', 'message' => 'unable to authenticate']], 401)
             ->push(['error' => ['code' => 'forbidden', 'message' => 'insufficient permissions']], 403)]);
 
-        $this->assertSame(CheckStatus::Ok, $guide->check('good')->status);
+        $this->assertSame(CheckStatus::OK, $guide->check('good')->status);
 
         $invalid = $guide->check('bad');
-        $this->assertSame(CheckStatus::Invalid, $invalid->status);
+        $this->assertSame(CheckStatus::INVALID, $invalid->status);
         $this->assertSame('unable to authenticate', $invalid->message);
 
         $this->assertSame(['read_write'], $guide->check('limited')->missing);
@@ -115,7 +115,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('cloudflare')->check('cf-token');
 
-        $this->assertSame(CheckStatus::Ok, $result->status);
+        $this->assertSame(CheckStatus::OK, $result->status);
         $this->assertSame('The token works. It sees these zones: example.com, example.org.', $result->message);
         $this->assertSame([['id' => 'z1', 'name' => 'example.com'], ['id' => 'z2', 'name' => 'example.org']], $result->details['zones']);
     }
@@ -126,7 +126,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('cloudflare')->check('bad');
 
-        $this->assertSame(CheckStatus::Invalid, $result->status);
+        $this->assertSame(CheckStatus::INVALID, $result->status);
         $this->assertSame('Invalid API Token', $result->message);
     }
 
@@ -139,7 +139,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('cloudflare')->check('t');
 
-        $this->assertSame(CheckStatus::MissingRights, $result->status);
+        $this->assertSame(CheckStatus::MISSING_RIGHTS, $result->status);
         $this->assertSame(['zone_read'], $result->missing);
     }
 
@@ -169,7 +169,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('aws')->check('AKIAEXAMPLE:secretvalue');
 
-        $this->assertSame(CheckStatus::Ok, $result->status);
+        $this->assertSame(CheckStatus::OK, $result->status);
         $this->assertStringContainsString('arn:aws:iam::123456789012:user/opencloud', $result->message);
         Http::assertSent(fn (Request $request) => $request->url() === 'https://sts.amazonaws.com/'
             && $request->body() === 'Action=GetCallerIdentity&Version=2011-06-15'
@@ -183,7 +183,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('aws')->check('AKIAFAKE:secret');
 
-        $this->assertSame(CheckStatus::Invalid, $result->status);
+        $this->assertSame(CheckStatus::INVALID, $result->status);
         $this->assertSame('The security token included in the request is invalid.', $result->message);
         Http::assertSentCount(1);
     }
@@ -197,7 +197,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('aws')->check('AKIAEXAMPLE:secret');
 
-        $this->assertSame(CheckStatus::MissingRights, $result->status);
+        $this->assertSame(CheckStatus::MISSING_RIGHTS, $result->status);
         $this->assertSame(['ecr_push'], $result->missing);
         $this->assertStringContainsString('User is not authorized to perform: ecr:GetAuthorizationToken', $result->message);
     }
@@ -208,7 +208,7 @@ class ProviderChecksTest extends TestCase
 
         $result = Providers::find('aws')->check('only-one-value');
 
-        $this->assertSame(CheckStatus::Invalid, $result->status);
+        $this->assertSame(CheckStatus::INVALID, $result->status);
         Http::assertNothingSent();
     }
 

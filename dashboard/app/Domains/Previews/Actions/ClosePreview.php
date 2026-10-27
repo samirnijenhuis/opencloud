@@ -20,14 +20,14 @@ class ClosePreview
     /** @return bool false while a deployment of the preview still builds or rolls out, so the caller tries again later */
     public function execute(Application $application, int $number): bool
     {
-        $preview = $application->environments()->where('kind', EnvironmentKind::Preview)->where('pr_number', $number)->first();
+        $preview = $application->environments()->where('kind', EnvironmentKind::PREVIEW)->where('pr_number', $number)->first();
 
         if ($preview === null) {
             return true;
         }
 
         // A running deployment would apply its manifests into the namespace again after the delete.
-        if ($preview->deployments()->whereIn('status', [DeploymentStatus::Building, DeploymentStatus::Deploying])->exists()) {
+        if ($preview->deployments()->whereIn('status', [DeploymentStatus::BUILDING, DeploymentStatus::DEPLOYING])->exists()) {
             return false;
         }
 

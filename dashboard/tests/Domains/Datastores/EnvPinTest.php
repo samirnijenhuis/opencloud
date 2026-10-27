@@ -57,16 +57,16 @@ class EnvPinTest extends TestCase
         $this->scenario();
 
         $this->assertEquals([
-            21 => new SqlConnection(DatastoreKind::Mysql, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7', 'env_7', 'mysql-main-pass', 'main', true),
-            22 => new SqlConnection(DatastoreKind::Postgres, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_7_reports', 'env_7_0b7ec688', 'p/ss+w@rd:1%', 'reports', false),
-            23 => new SqlConnection(DatastoreKind::Mysql, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7_analytics', 'env_7_66d9b558', 'analytics-pass', 'analytics', false),
+            21 => new SqlConnection(DatastoreKind::MYSQL, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7', 'env_7', 'mysql-main-pass', 'main', true),
+            22 => new SqlConnection(DatastoreKind::POSTGRES, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_7_reports', 'env_7_0b7ec688', 'p/ss+w@rd:1%', 'reports', false),
+            23 => new SqlConnection(DatastoreKind::MYSQL, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7_analytics', 'env_7_66d9b558', 'analytics-pass', 'analytics', false),
             24 => new KeyValueConnection('valkey-24.oc-datastores.svc.cluster.local', 6379, 'valkey-pass', tls: false),
             25 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-7', 'env-7', 'rustfs-secret', pathStyle: true),
-            31 => new SqlConnection(DatastoreKind::Postgres, 'private-blog-main.db.ondigitalocean.com', 25060, 'env_8', 'env_8', 'DO/generated+pass', 'main', true),
-            32 => new SqlConnection(DatastoreKind::Postgres, 'private-blog-reports.db.ondigitalocean.com', 25060, 'env_8_reports', 'env_8_0b7ec688', 'do-reports-pass', 'reports', false),
+            31 => new SqlConnection(DatastoreKind::POSTGRES, 'private-blog-main.db.ondigitalocean.com', 25060, 'env_8', 'env_8', 'DO/generated+pass', 'main', true),
+            32 => new SqlConnection(DatastoreKind::POSTGRES, 'private-blog-reports.db.ondigitalocean.com', 25060, 'env_8_reports', 'env_8_0b7ec688', 'do-reports-pass', 'reports', false),
             33 => null,
-            41 => new SqlConnection(DatastoreKind::Postgres, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_9', 'env_9', 'swap-main-pass', 'main', false),
-            42 => new SqlConnection(DatastoreKind::Mysql, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_9_reports', 'env_9_0b7ec688', 'swap-reports-pass', 'reports', true),
+            41 => new SqlConnection(DatastoreKind::POSTGRES, 'postgres-4.oc-datastores.svc.cluster.local', 5432, 'env_9', 'env_9', 'swap-main-pass', 'main', false),
+            42 => new SqlConnection(DatastoreKind::MYSQL, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_9_reports', 'env_9_0b7ec688', 'swap-reports-pass', 'reports', true),
         ], DatastoreAttachment::query()->with('datastore')->orderBy('id')->get()
             ->mapWithKeys(fn (DatastoreAttachment $attachment) => [$attachment->id => Provisioners::of($attachment->datastore)->connection($attachment)])
             ->all());
@@ -80,17 +80,17 @@ class EnvPinTest extends TestCase
      */
     private function scenario(): array
     {
-        $cluster = Cluster::factory()->create(['id' => 1, 'name' => 'local', 'kind' => ClusterKind::Local]);
+        $cluster = Cluster::factory()->create(['id' => 1, 'name' => 'local', 'kind' => ClusterKind::LOCAL]);
         $application = Application::factory()->for($cluster)->create(['id' => 1, 'name' => 'shop']);
         [$shop, $blog, $swap] = array_map(
             fn (array $row) => Environment::factory()->for($application)->create($row),
             [['id' => 7, 'name' => 'shop'], ['id' => 8, 'name' => 'blog'], ['id' => 9, 'name' => 'swap']],
         );
 
-        $mysql = $this->datastore(3, DatastoreKind::Mysql, DatastoreSource::Standard, $cluster);
-        $postgres = $this->datastore(4, DatastoreKind::Postgres, DatastoreSource::Standard, $cluster);
-        $valkey = $this->datastore(5, DatastoreKind::Valkey, DatastoreSource::Standard, $cluster);
-        $rustfs = $this->datastore(6, DatastoreKind::Rustfs, DatastoreSource::Standard, $cluster);
+        $mysql = $this->datastore(3, DatastoreKind::MYSQL, DatastoreSource::STANDARD, $cluster);
+        $postgres = $this->datastore(4, DatastoreKind::POSTGRES, DatastoreSource::STANDARD, $cluster);
+        $valkey = $this->datastore(5, DatastoreKind::VALKEY, DatastoreSource::STANDARD, $cluster);
+        $rustfs = $this->datastore(6, DatastoreKind::RUSTFS, DatastoreSource::STANDARD, $cluster);
         $snapshot = [];
 
         // shop: the default database, two named databases, Valkey, and RustFS. The password needs URL encoding.
@@ -110,9 +110,9 @@ class EnvPinTest extends TestCase
             ->all();
 
         // blog: managed Postgres has no address and no password before its apply, so it has no env values yet.
-        $main = $this->attachment(31, $this->datastore(9, DatastoreKind::Postgres, DatastoreSource::Managed, $cluster), $blog, 'main', true, null, null, 'env_8', 'env_8', null);
-        $reports = $this->attachment(32, $this->datastore(10, DatastoreKind::Postgres, DatastoreSource::Managed, $cluster), $blog, 'reports', false, null, null, 'env_8_reports', 'env_8_0b7ec688', null);
-        $archive = $this->attachment(33, $this->datastore(11, DatastoreKind::Postgres, DatastoreSource::Managed, $cluster), $blog, 'archive', false, null, null, 'env_8_archive', 'env_8_ebfb55f4', null);
+        $main = $this->attachment(31, $this->datastore(9, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, $cluster), $blog, 'main', true, null, null, 'env_8', 'env_8', null);
+        $reports = $this->attachment(32, $this->datastore(10, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, $cluster), $blog, 'reports', false, null, null, 'env_8_reports', 'env_8_0b7ec688', null);
+        $archive = $this->attachment(33, $this->datastore(11, DatastoreKind::POSTGRES, DatastoreSource::MANAGED, $cluster), $blog, 'archive', false, null, null, 'env_8_archive', 'env_8_ebfb55f4', null);
         $this->write([$main, $reports, $archive]);
         $snapshot['blog before the apply'] = $this->rows($blog);
 

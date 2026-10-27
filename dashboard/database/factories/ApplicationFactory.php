@@ -22,8 +22,8 @@ class ApplicationFactory extends Factory
             'name' => fake()->unique()->slug(2),
             'repository' => fake()->userName().'/'.fake()->slug(2),
             'cluster_id' => Cluster::factory(),
-            'type' => ApplicationType::Laravel,
-            'env_profile' => EnvProfileKind::Laravel,
+            'type' => ApplicationType::LARAVEL,
+            'env_profile' => EnvProfileKind::LARAVEL,
         ];
     }
 }

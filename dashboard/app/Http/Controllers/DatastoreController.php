@@ -39,8 +39,8 @@ class DatastoreController extends Controller
     {
         Gate::authorize('update', $attachment->environment);
 
-        if ($attachment->datastore->source === DatastoreSource::Managed) {
-            abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
+        if ($attachment->datastore->source === DatastoreSource::MANAGED) {
+            abort_unless($request->user()->role->allows(Ability::MANAGE_CREDENTIALS), 403);
             $request->validate(['confirm' => ['accepted']], ['confirm.accepted' => 'Confirm that you want to destroy this resource and its data.']);
         }
 

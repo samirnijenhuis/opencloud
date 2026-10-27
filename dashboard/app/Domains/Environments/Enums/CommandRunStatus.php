@@ -4,18 +4,18 @@ namespace App\Domains\Environments\Enums;
 
 enum CommandRunStatus: string
 {
-    case Queued = 'queued';
-    case Running = 'running';
-    case Succeeded = 'succeeded';
-    case Failed = 'failed';
-    case TimedOut = 'timed_out';
+    case QUEUED = 'queued';
+    case RUNNING = 'running';
+    case SUCCEEDED = 'succeeded';
+    case FAILED = 'failed';
+    case TIMED_OUT = 'timed_out';
 
     public function canMoveTo(self $next): bool
     {
         $allowed = match ($this) {
-            self::Queued => [self::Running, self::Failed],
-            self::Running => [self::Succeeded, self::Failed, self::TimedOut],
-            self::Succeeded, self::Failed, self::TimedOut => [],
+            self::QUEUED => [self::RUNNING, self::FAILED],
+            self::RUNNING => [self::SUCCEEDED, self::FAILED, self::TIMED_OUT],
+            self::SUCCEEDED, self::FAILED, self::TIMED_OUT => [],
         };
 
         return in_array($next, $allowed, true);
@@ -23,6 +23,6 @@ enum CommandRunStatus: string
 
     public function finished(): bool
     {
-        return in_array($this, [self::Succeeded, self::Failed, self::TimedOut], true);
+        return in_array($this, [self::SUCCEEDED, self::FAILED, self::TIMED_OUT], true);
     }
 }

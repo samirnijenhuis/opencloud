@@ -44,7 +44,7 @@ class EnvironmentActionsTest extends TestCase
 
         Queue::fake();
         $this->user = User::factory()->create();
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $application = Application::factory()->for($cluster)->create(['repository' => 'acme/shop']);
         $this->environment = Environment::factory()->for($application)->create(['branch' => 'main']);
     }
@@ -75,7 +75,7 @@ class EnvironmentActionsTest extends TestCase
         $this->assertSame([], $processes->ran);
         $this->assertSame(['cccccccccccccccccccccccccccccccccccccccc', null], [$deployment->commit_sha, $deployment->triggered_by]);
 
-        $template = Environment::factory()->for($this->environment->application)->create(['kind' => EnvironmentKind::PreviewTemplate]);
+        $template = Environment::factory()->for($this->environment->application)->create(['kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
         $this->expectExceptionObject(new InvalidArgumentException('The preview template holds settings for previews. It is never deployed.'));
         app(StartDeployment::class)->execute($template, $this->user, 'cccccccccccccccccccccccccccccccccccccccc');
     }
@@ -84,12 +84,12 @@ class EnvironmentActionsTest extends TestCase
     {
         $set = app(SetEnvVar::class);
 
-        $set->execute($this->environment, $this->user, 'STRIPE_SECRET', 'sk_live_1', true, EnvVarAvailability::Runtime);
-        $kept = $set->execute($this->environment, $this->user, 'STRIPE_SECRET', null, true, EnvVarAvailability::Both);
-        $set->execute($this->environment, $this->user, 'APP_NAME', 'Shop', false, EnvVarAvailability::Runtime);
-        $set->execute($this->environment, $this->user, 'APP_NAME', 'Shop 2', false, EnvVarAvailability::Runtime);
+        $set->execute($this->environment, $this->user, 'STRIPE_SECRET', 'sk_live_1', true, EnvVarAvailability::RUNTIME);
+        $kept = $set->execute($this->environment, $this->user, 'STRIPE_SECRET', null, true, EnvVarAvailability::BOTH);
+        $set->execute($this->environment, $this->user, 'APP_NAME', 'Shop', false, EnvVarAvailability::RUNTIME);
+        $set->execute($this->environment, $this->user, 'APP_NAME', 'Shop 2', false, EnvVarAvailability::RUNTIME);
 
-        $this->assertSame(['sk_live_1', true, EnvVarAvailability::Both], [$kept->fresh()->value, $kept->is_secret, $kept->fresh()->available_at]);
+        $this->assertSame(['sk_live_1', true, EnvVarAvailability::BOTH], [$kept->fresh()->value, $kept->is_secret, $kept->fresh()->available_at]);
         $this->assertSame(
             [['APP_NAME', 'Shop 2'], ['STRIPE_SECRET', 'sk_live_1']],
             $this->environment->envVars()->orderBy('key')->get()->map(fn (EnvVar $v) => [$v->key, $v->value])->all(),
@@ -104,9 +104,9 @@ class EnvironmentActionsTest extends TestCase
 
     public function test_set_env_var_overrides_only_the_user_value_next_to_a_datastore_value(): void
     {
-        EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'value' => 'mysql', 'source' => EnvVarSource::Datastore]);
+        EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'value' => 'mysql', 'source' => EnvVarSource::DATASTORE]);
 
-        app(SetEnvVar::class)->execute($this->environment, $this->user, 'DB_HOST', 'my-own-db', false, EnvVarAvailability::Runtime);
+        app(SetEnvVar::class)->execute($this->environment, $this->user, 'DB_HOST', 'my-own-db', false, EnvVarAvailability::RUNTIME);
 
         $this->assertSame(
             [['datastore', 'mysql'], ['user', 'my-own-db']],
@@ -117,23 +117,23 @@ class EnvironmentActionsTest extends TestCase
     public function test_set_env_var_refuses_to_reveal_a_kept_secret_and_bad_keys(): void
     {
         $set = app(SetEnvVar::class);
-        $set->execute($this->environment, $this->user, 'TOKEN', 'abcd1234', true, EnvVarAvailability::Runtime);
+        $set->execute($this->environment, $this->user, 'TOKEN', 'abcd1234', true, EnvVarAvailability::RUNTIME);
 
         try {
-            $set->execute($this->environment, $this->user, 'TOKEN', null, false, EnvVarAvailability::Runtime);
+            $set->execute($this->environment, $this->user, 'TOKEN', null, false, EnvVarAvailability::RUNTIME);
             $this->fail('A kept secret became plain.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('Give TOKEN a new value to make it a plain value.', $e->getMessage());
         }
 
         $this->expectExceptionObject(new InvalidArgumentException('1BAD-KEY is not a valid env name. Use letters, digits, and underscores.'));
-        $set->execute($this->environment, $this->user, '1BAD-KEY', 'x', false, EnvVarAvailability::Runtime);
+        $set->execute($this->environment, $this->user, '1BAD-KEY', 'x', false, EnvVarAvailability::RUNTIME);
     }
 
     public function test_delete_env_var_deletes_a_user_value_and_refuses_a_datastore_value(): void
     {
         $user = EnvVar::factory()->for($this->environment)->create(['key' => 'MAIL_HOST']);
-        $datastore = EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'source' => EnvVarSource::Datastore]);
+        $datastore = EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'source' => EnvVarSource::DATASTORE]);
 
         app(DeleteEnvVar::class)->execute($user, $this->user);
 

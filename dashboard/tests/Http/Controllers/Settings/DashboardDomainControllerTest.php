@@ -36,7 +36,7 @@ class DashboardDomainControllerTest extends TestCase
 
     public function test_the_page_shows_the_ip_address_until_a_domain_passes(): void
     {
-        Cluster::factory()->create(['kind' => ClusterKind::Local, 'ingress_ip' => '203.0.113.10']);
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'ingress_ip' => '203.0.113.10']);
 
         $this->actingAs(User::factory()->owner()->create())->get('/settings/dashboard-address')->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -48,8 +48,8 @@ class DashboardDomainControllerTest extends TestCase
 
     public function test_the_page_shows_the_dns_state_of_the_domain(): void
     {
-        Cluster::factory()->create(['kind' => ClusterKind::Local, 'ingress_ip' => '203.0.113.10']);
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Wrong, 'dns_found' => ['198.51.100.1']]);
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'ingress_ip' => '203.0.113.10']);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::WRONG, 'dns_found' => ['198.51.100.1']]);
 
         $this->actingAs(User::factory()->owner()->create())->get('/settings/dashboard-address')->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -61,8 +61,8 @@ class DashboardDomainControllerTest extends TestCase
 
     public function test_the_page_shows_the_domain_as_the_address_once_it_passes(): void
     {
-        Cluster::factory()->create(['kind' => ClusterKind::Local, 'ingress_ip' => '203.0.113.10']);
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Ok]);
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'ingress_ip' => '203.0.113.10']);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
 
         $this->actingAs(User::factory()->owner()->create())->get('/settings/dashboard-address')
             ->assertInertia(fn (Assert $page) => $page->where('address', 'https://admin.example.com')->where('domain.dns_status', 'ok'));
@@ -76,7 +76,7 @@ class DashboardDomainControllerTest extends TestCase
         $this->actingAs($owner)->put('/settings/dashboard-address', ['hostname' => ' Admin.Example.com. '])->assertRedirect();
 
         $domain = DashboardDomain::sole();
-        $this->assertSame(['admin.example.com', DnsStatus::Pending], [$domain->hostname, $domain->dns_status]);
+        $this->assertSame(['admin.example.com', DnsStatus::PENDING], [$domain->hostname, $domain->dns_status]);
         Queue::assertPushed(CheckDashboardDomain::class, 1);
         $this->assertSame('dashboard_domain.set', AuditEvent::sole()->action);
     }
@@ -84,8 +84,8 @@ class DashboardDomainControllerTest extends TestCase
     public function test_a_new_domain_replaces_the_old_one(): void
     {
         Queue::fake();
-        Cluster::factory()->create(['kind' => ClusterKind::Local]);
-        DashboardDomain::create(['hostname' => 'old.example.com', 'dns_status' => DnsStatus::Ok]);
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL]);
+        DashboardDomain::create(['hostname' => 'old.example.com', 'dns_status' => DnsStatus::OK]);
 
         $this->actingAs(User::factory()->owner()->create())->put('/settings/dashboard-address', ['hostname' => 'new.example.com'])->assertRedirect();
 
@@ -128,8 +128,8 @@ class DashboardDomainControllerTest extends TestCase
     {
         Queue::fake();
         config(['app.url' => 'http://localhost']);
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local, 'ingress_ip' => '203.0.113.10']);
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Ok]);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'ingress_ip' => '203.0.113.10']);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
 
         $this->actingAs(User::factory()->owner()->create())->delete('/settings/dashboard-address')->assertRedirect();
 

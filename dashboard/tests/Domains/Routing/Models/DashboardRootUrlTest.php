@@ -16,7 +16,7 @@ class DashboardRootUrlTest extends TestCase
     public function test_a_verified_domain_becomes_the_root_url_over_https(): void
     {
         config(['app.url' => 'http://203.0.113.10:8000']);
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Ok]);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
 
         DashboardDomain::applyRootUrl();
 
@@ -28,7 +28,7 @@ class DashboardRootUrlTest extends TestCase
     public function test_a_domain_that_did_not_pass_keeps_the_app_url(): void
     {
         config(['app.url' => 'http://203.0.113.10:8000']);
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Missing]);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::MISSING]);
 
         DashboardDomain::applyRootUrl();
 

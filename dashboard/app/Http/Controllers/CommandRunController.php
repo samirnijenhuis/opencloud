@@ -70,6 +70,6 @@ class CommandRunController extends Controller
     private function authorizeRead(Request $request, Environment $environment): void
     {
         Gate::authorize('view', $environment);
-        abort_unless($request->user()->role->allows(Ability::ReadLogs), 403);
+        abort_unless($request->user()->role->allows(Ability::READ_LOGS), 403);
     }
 }

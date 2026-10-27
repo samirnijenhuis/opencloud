@@ -76,7 +76,7 @@ class CreatedClusterTest extends TestCase
         $cluster = app(CreateCluster::class)->execute($owner, new DigitalOceanCluster, $this->form());
 
         $this->assertSame(
-            ['ams3-prod', ClusterKind::Created, 'digitalocean', ClusterStatus::Provisioning, 'ams3', 's-2vcpu-4gb', 1, 3],
+            ['ams3-prod', ClusterKind::CREATED, 'digitalocean', ClusterStatus::PROVISIONING, 'ams3', 's-2vcpu-4gb', 1, 3],
             [$cluster->name, $cluster->kind, $cluster->provider, $cluster->status, $cluster->region, $cluster->node_size, $cluster->min_nodes, $cluster->max_nodes],
         );
         $this->assertSame([$cluster->id], Queue::pushed(ProvisionCluster::class)->map(fn (ProvisionCluster $job) => $job->cluster->id)->all());
@@ -118,7 +118,7 @@ class CreatedClusterTest extends TestCase
         Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer '.self::TOKEN));
 
         $cluster->refresh();
-        $this->assertSame(ClusterStatus::Installing, $cluster->status);
+        $this->assertSame(ClusterStatus::INSTALLING, $cluster->status);
         $this->assertNull($cluster->error);
         $this->assertSame(self::KUBECONFIG, $cluster->kubeconfig);
         $this->assertSame(['c0ffee00-1111-2222-3333-444455556666', 'vpc-0000-1111'], [$cluster->provider_cluster_id, $cluster->provider_vpc_id]);
@@ -147,7 +147,7 @@ class CreatedClusterTest extends TestCase
         $this->provision($cluster);
 
         $cluster->refresh();
-        $this->assertSame(ClusterStatus::Failed, $cluster->status);
+        $this->assertSame(ClusterStatus::FAILED, $cluster->status);
         $this->assertSame('tofu apply failed. Error: Error creating Kubernetes cluster: 422 (request "x") token ******** is limited', $cluster->error);
         $this->assertNull($cluster->kubeconfig);
         Queue::assertNotPushed(InstallClusterParts::class);
@@ -160,13 +160,13 @@ class CreatedClusterTest extends TestCase
 
         $this->provision($cluster);
 
-        $this->assertSame([ClusterStatus::Failed, 'There is no DigitalOcean key. Add one in Settings, Provider keys.'], [$cluster->fresh()->status, $cluster->fresh()->error]);
+        $this->assertSame([ClusterStatus::FAILED, 'There is no DigitalOcean key. Add one in Settings, Provider keys.'], [$cluster->fresh()->status, $cluster->fresh()->error]);
         $this->assertSame([], $this->tofu->ran);
     }
 
     public function test_reinstall_of_a_created_cluster_runs_the_provision_again(): void
     {
-        $cluster = $this->createdCluster(['status' => ClusterStatus::Failed, 'error' => 'tofu apply failed.']);
+        $cluster = $this->createdCluster(['status' => ClusterStatus::FAILED, 'error' => 'tofu apply failed.']);
 
         app(ReinstallClusterParts::class)->execute($cluster, User::factory()->owner()->create());
 
@@ -176,12 +176,12 @@ class CreatedClusterTest extends TestCase
 
     public function test_destroy_refuses_a_connected_cluster(): void
     {
-        $this->assertDestroyRefused(Cluster::factory()->create(['status' => ClusterStatus::Ready]), 'Opencloud did not create this cluster, so it does not destroy it. Disconnect it instead.');
+        $this->assertDestroyRefused(Cluster::factory()->create(['status' => ClusterStatus::READY]), 'Opencloud did not create this cluster, so it does not destroy it. Disconnect it instead.');
     }
 
     public function test_destroy_refuses_while_applications_use_the_cluster(): void
     {
-        $cluster = $this->createdCluster(['status' => ClusterStatus::Ready]);
+        $cluster = $this->createdCluster(['status' => ClusterStatus::READY]);
         Application::factory()->for($cluster)->create(['name' => 'shop']);
         Application::factory()->for($cluster)->create(['name' => 'blog']);
 
@@ -190,8 +190,8 @@ class CreatedClusterTest extends TestCase
 
     public function test_destroy_refuses_while_the_cluster_has_managed_databases(): void
     {
-        $cluster = $this->createdCluster(['status' => ClusterStatus::Ready]);
-        Datastore::factory()->for($cluster)->create(['source' => DatastoreSource::Managed]);
+        $cluster = $this->createdCluster(['status' => ClusterStatus::READY]);
+        Datastore::factory()->for($cluster)->create(['source' => DatastoreSource::MANAGED]);
 
         $this->assertDestroyRefused($cluster, 'This cluster has managed resources. Detach them first.');
     }
@@ -205,12 +205,12 @@ class CreatedClusterTest extends TestCase
     {
         Http::fake(['api.digitalocean.com/v2/registry' => Http::response(['registry' => ['name' => 'acme']])]);
         $owner = User::factory()->owner()->create();
-        $cluster = $this->createdCluster(['status' => ClusterStatus::Ready]);
-        Datastore::factory()->for($cluster)->create(['source' => DatastoreSource::Standard]);
+        $cluster = $this->createdCluster(['status' => ClusterStatus::READY]);
+        Datastore::factory()->for($cluster)->create(['source' => DatastoreSource::STANDARD]);
 
         app(DestroyCluster::class)->execute($cluster, $owner);
 
-        $this->assertSame(ClusterStatus::Destroying, $cluster->fresh()->status);
+        $this->assertSame(ClusterStatus::DESTROYING, $cluster->fresh()->status);
         $job = Queue::pushed(TearDownCluster::class)->sole();
         $this->assertSame('builds', $job->queue);
 
@@ -232,12 +232,12 @@ class CreatedClusterTest extends TestCase
         Http::fake(['api.digitalocean.com/v2/registry' => Http::response(['registry' => ['name' => 'acme']])]);
         $this->tofu->failOn = 'destroy';
         $this->tofu->error = 'Error: Error deleting Kubernetes cluster: 500 Server Error';
-        $cluster = $this->createdCluster(['status' => ClusterStatus::Destroying]);
+        $cluster = $this->createdCluster(['status' => ClusterStatus::DESTROYING]);
 
         (new TearDownCluster($cluster))->handle(app(Runner::class), app(ClusterProviders::class));
 
         $cluster->refresh();
-        $this->assertSame(ClusterStatus::Failed, $cluster->status);
+        $this->assertSame(ClusterStatus::FAILED, $cluster->status);
         $this->assertSame('The destroy failed. tofu destroy failed. Error: Error deleting Kubernetes cluster: 500 Server Error', $cluster->error);
     }
 
@@ -252,10 +252,10 @@ class CreatedClusterTest extends TestCase
     {
         return Cluster::factory()->create([
             ...$this->form(),
-            'kind' => ClusterKind::Created,
+            'kind' => ClusterKind::CREATED,
             'provider' => 'digitalocean',
             'kubeconfig' => null,
-            'status' => ClusterStatus::Provisioning,
+            'status' => ClusterStatus::PROVISIONING,
             ...$attributes,
         ]);
     }

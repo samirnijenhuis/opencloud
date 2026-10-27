@@ -36,12 +36,12 @@ class UserFactory extends Factory
 
     public function owner(): static
     {
-        return $this->state(['role' => Role::Owner]);
+        return $this->state(['role' => Role::OWNER]);
     }
 
     public function admin(): static
     {
-        return $this->state(['role' => Role::Admin]);
+        return $this->state(['role' => Role::ADMIN]);
     }
 
     /**

@@ -53,12 +53,12 @@ class RunDeploymentTest extends TestCase
         $processes->buildOutput = ['#9 DONE 3.1s'];
         $this->kubectl = FakeKubectl::install();
 
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
-        $application = Application::factory()->for($cluster)->create(['repository' => 'acme/shop', 'type' => ApplicationType::Laravel]);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
+        $application = Application::factory()->for($cluster)->create(['repository' => 'acme/shop', 'type' => ApplicationType::LARAVEL]);
         $this->environment = Environment::factory()->for($application)->create(['deploy_commands' => ['php artisan migrate --force']]);
-        $this->environment->processes()->createMany(ApplicationType::Laravel->processes());
+        $this->environment->processes()->createMany(ApplicationType::LARAVEL->processes());
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);
-        $this->old = Deployment::factory()->for($this->environment)->create(['status' => DeploymentStatus::Live, 'image' => 'old-image']);
+        $this->old = Deployment::factory()->for($this->environment)->create(['status' => DeploymentStatus::LIVE, 'image' => 'old-image']);
         $this->new = Deployment::factory()->for($this->environment)->create(['commit_sha' => self::SHA]);
 
         $this->kubectl->respond("logs job/deploy-{$this->new->id}", new KubectlResult(0, "Migrating: create_users_table\nconnected with hunter22\n"));
@@ -117,8 +117,8 @@ class RunDeploymentTest extends TestCase
         $this->assertSame($image, $applied[3]['spec']['template']['spec']['containers'][0]['image']);
 
         $new = $this->new->fresh();
-        $this->assertSame(DeploymentStatus::Live, $new->status);
-        $this->assertSame(DeploymentStatus::Superseded, $this->old->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $new->status);
+        $this->assertSame(DeploymentStatus::SUPERSEDED, $this->old->fresh()->status);
         $this->assertSame($image, $new->image);
         $this->assertNull($new->warning);
         $this->assertSame('2026-10-23 12:00:00', $new->started_at->toDateTimeString());
@@ -147,7 +147,7 @@ class RunDeploymentTest extends TestCase
         RunDeployment::dispatchSync($this->new);
 
         $this->assertSame(3, $checks);
-        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
         $this->assertSame('2026-10-23 12:00:04', $this->new->fresh()->finished_at->toDateTimeString());
         $this->assertStringContainsString("2026-10-23T12:00:00Z Waiting for the old pods to stop.\n2026-10-23T12:00:04Z The deployment is live.\n", $this->new->fresh()->log);
     }
@@ -159,7 +159,7 @@ class RunDeploymentTest extends TestCase
 
         RunDeployment::dispatchSync($this->new);
 
-        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
         $this->assertStringContainsString("The old pods did not stop within 60 seconds. Kubernetes stops them later.\n", $this->new->fresh()->log);
     }
 
@@ -171,7 +171,7 @@ class RunDeploymentTest extends TestCase
         RunDeployment::dispatchSync($this->new);
 
         $namespace = "oc-env-{$this->environment->id}";
-        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
         $this->assertSame([
             ['rollout', 'status', 'deployment/web', "--namespace={$namespace}", '--timeout=300s'],
             ['rollout', 'status', 'deployment/horizon', "--namespace={$namespace}", '--timeout=300s'],
@@ -197,8 +197,8 @@ class RunDeploymentTest extends TestCase
         RunDeployment::dispatchSync($this->new);
 
         $this->assertSame([['new', 'building'], ['new', 'deploying'], ['new', 'failed']], $this->moves);
-        $this->assertSame(DeploymentStatus::Failed, $this->new->fresh()->status);
-        $this->assertSame(DeploymentStatus::Live, $this->old->fresh()->status);
+        $this->assertSame(DeploymentStatus::FAILED, $this->new->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $this->old->fresh()->status);
         $this->assertSame(['Namespace', 'Secret', 'Job'], array_column($this->kubectl->appliedManifests(), 'kind'));
         $this->assertSame([], $this->kubectl->callsStartingWith('rollout'));
         $this->assertSame([], $this->kubectl->callsStartingWith('exec'));
@@ -217,7 +217,7 @@ class RunDeploymentTest extends TestCase
 
         $namespace = "oc-env-{$this->environment->id}";
         $this->assertSame([['new', 'building'], ['new', 'deploying'], ['new', 'failed']], $this->moves);
-        $this->assertSame(DeploymentStatus::Live, $this->old->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $this->old->fresh()->status);
         $this->assertSame([
             ['rollout', 'status', 'deployment/web', "--namespace={$namespace}", '--timeout=300s'],
             ['rollout', 'status', 'deployment/worker', "--namespace={$namespace}", '--timeout=300s'],
@@ -235,7 +235,7 @@ class RunDeploymentTest extends TestCase
 
     public function test_going_live_keeps_the_live_secret_and_the_two_newest_and_deletes_the_rest(): void
     {
-        $failed = Deployment::factory()->for($this->environment)->count(2)->create(['status' => DeploymentStatus::Failed]);
+        $failed = Deployment::factory()->for($this->environment)->count(2)->create(['status' => DeploymentStatus::FAILED]);
         $newest = $failed->last();
         $this->kubectl->respond('get secrets', $this->secretList([
             'env', "env-{$this->old->id}", "env-{$this->new->id}", "env-{$failed->first()->id}", "env-{$newest->id}",
@@ -243,7 +243,7 @@ class RunDeploymentTest extends TestCase
 
         RunDeployment::dispatchSync($this->new);
 
-        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
         $this->assertSame(
             [['secret', "env-{$this->old->id}"], ['secret', 'env']],
             array_map(fn (array $call) => array_slice($call['args'], 1, 2), $this->kubectl->callsStartingWith('delete secret')),
@@ -256,7 +256,7 @@ class RunDeploymentTest extends TestCase
 
         RunDeployment::dispatchSync($this->new);
 
-        $this->assertSame(DeploymentStatus::Failed, $this->new->fresh()->status);
+        $this->assertSame(DeploymentStatus::FAILED, $this->new->fresh()->status);
         $this->assertSame([], $this->kubectl->callsStartingWith('get secrets'));
         $this->assertSame([], $this->kubectl->callsStartingWith('delete secret'));
     }
@@ -264,17 +264,17 @@ class RunDeploymentTest extends TestCase
     public function test_the_deployment_waits_for_its_datastores_before_it_applies_the_env_secret(): void
     {
         Sleep::fake(syncWithCarbon: true);
-        $attachment = DatastoreAttachment::factory()->for($this->environment)->create(['status' => DatastoreStatus::Provisioning]);
+        $attachment = DatastoreAttachment::factory()->for($this->environment)->create(['status' => DatastoreStatus::PROVISIONING]);
         $sleeps = 0;
         Sleep::whenFakingSleep(function () use ($attachment, &$sleeps) {
             if (++$sleeps === 3) {
-                $attachment->update(['status' => DatastoreStatus::Ready]);
+                $attachment->update(['status' => DatastoreStatus::READY]);
             }
         });
 
         RunDeployment::dispatchSync($this->new);
 
-        $this->assertSame(DeploymentStatus::Live, $this->new->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
         Sleep::assertSleptTimes(3);
         $this->assertStringContainsString(
             "2026-10-23T12:00:00Z Waiting for the datastores: mysql.\n".
@@ -286,14 +286,14 @@ class RunDeploymentTest extends TestCase
     public function test_a_failed_datastore_fails_the_deployment_with_its_error(): void
     {
         DatastoreAttachment::factory()->for($this->environment)->create([
-            'status' => DatastoreStatus::Failed,
+            'status' => DatastoreStatus::FAILED,
             'error' => "ERROR 1045 (28000): Access denied for user 'root'@'localhost'",
         ]);
 
         RunDeployment::dispatchSync($this->new);
 
         $this->assertSame([['new', 'building'], ['new', 'deploying'], ['new', 'failed']], $this->moves);
-        $this->assertSame(DeploymentStatus::Live, $this->old->fresh()->status);
+        $this->assertSame(DeploymentStatus::LIVE, $this->old->fresh()->status);
         $this->assertSame([], $this->kubectl->callsStartingWith('apply'));
         $this->assertStringEndsWith(
             "2026-10-23T12:00:00Z The deployment failed. The mysql datastore failed. ERROR 1045 (28000): Access denied for user 'root'@'localhost'\n",
@@ -304,12 +304,12 @@ class RunDeploymentTest extends TestCase
     public function test_a_datastore_that_stays_pending_fails_the_deployment_after_ten_minutes(): void
     {
         Sleep::fake(syncWithCarbon: true);
-        DatastoreAttachment::factory()->for($this->environment)->create(['status' => DatastoreStatus::Pending]);
+        DatastoreAttachment::factory()->for($this->environment)->create(['status' => DatastoreStatus::PENDING]);
 
         RunDeployment::dispatchSync($this->new);
 
         Sleep::assertSleptTimes(120);
-        $this->assertSame(DeploymentStatus::Failed, $this->new->fresh()->status);
+        $this->assertSame(DeploymentStatus::FAILED, $this->new->fresh()->status);
         $this->assertSame([], $this->kubectl->callsStartingWith('apply'));
         $this->assertStringEndsWith(
             "2026-10-23T12:00:00Z Waiting for the datastores: mysql.\n".
@@ -325,14 +325,14 @@ class RunDeploymentTest extends TestCase
         RunDeployment::dispatchSync($this->new);
 
         $new = $this->new->fresh();
-        $this->assertSame(DeploymentStatus::Live, $new->status);
+        $this->assertSame(DeploymentStatus::LIVE, $new->status);
         $this->assertSame('The home page returned HTTP 500.', $new->warning);
         $this->assertStringEndsWith("2026-10-23T12:00:00Z Warning: the home page returned HTTP 500. Read the web logs.\n", $new->log);
     }
 
     public function test_a_deployment_that_a_dead_worker_left_behind_fails_instead_of_running_again(): void
     {
-        $this->new->forceFill(['status' => DeploymentStatus::Building])->save();
+        $this->new->forceFill(['status' => DeploymentStatus::BUILDING])->save();
         $this->moves = [];
 
         RunDeployment::dispatchSync($this->new);

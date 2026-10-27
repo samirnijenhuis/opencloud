@@ -50,14 +50,14 @@ class DatabaseBackupsTest extends TestCase
         $this->data = Storage::fake('opencloud-data');
         config(['opencloud.data_path' => $this->data->path('')]);
 
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
-        $this->mysql = Datastore::factory()->for($cluster)->create(['kind' => DatastoreKind::Mysql, 'status' => DatastoreStatus::Ready, 'root_password' => 'root-secret-pw']);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
+        $this->mysql = Datastore::factory()->for($cluster)->create(['kind' => DatastoreKind::MYSQL, 'status' => DatastoreStatus::READY, 'root_password' => 'root-secret-pw']);
         $environment = Environment::factory()->create();
         $this->attachment = DatastoreAttachment::factory()->for($this->mysql)->for($environment)->create([
             'database_name' => "env_{$environment->id}",
             'username' => "env_{$environment->id}",
             'password' => 'user-secret-pw',
-            'status' => DatastoreStatus::Ready,
+            'status' => DatastoreStatus::READY,
         ]);
     }
 
@@ -71,7 +71,7 @@ class DatabaseBackupsTest extends TestCase
         $env = $this->attachment->environment_id;
         $location = "backups/{$this->mysql->id}/{$env}/20261023-030000.sql.gz";
         $this->assertSame(
-            [BackupStatus::Done, 'local', $location, "env_{$env}", strlen($dump), $this->attachment->id],
+            [BackupStatus::DONE, 'local', $location, "env_{$env}", strlen($dump), $this->attachment->id],
             [$backup->status, $backup->disk, $backup->location, $backup->database_name, $backup->size, $backup->datastore_attachment_id],
         );
         $this->assertSame($dump, $this->data->get($location));
@@ -89,7 +89,7 @@ class DatabaseBackupsTest extends TestCase
         $reports = DatastoreAttachment::factory()->for($this->mysql)->for($this->attachment->environment)->create([
             'name' => 'reports',
             'database_name' => "env_{$env}_reports",
-            'status' => DatastoreStatus::Ready,
+            'status' => DatastoreStatus::READY,
         ]);
 
         $main = app(DatabaseBackups::class)->backup($this->attachment);
@@ -104,7 +104,7 @@ class DatabaseBackupsTest extends TestCase
 
     public function test_postgres_dumps_without_owners_and_grants(): void
     {
-        $this->mysql->update(['kind' => DatastoreKind::Postgres]);
+        $this->mysql->update(['kind' => DatastoreKind::POSTGRES]);
         $this->kubectl->respond('exec', new KubectlResult(0, gzencode('-- dump')));
 
         app(DatabaseBackups::class)->backup($this->attachment->fresh());
@@ -122,7 +122,7 @@ class DatabaseBackupsTest extends TestCase
 
         $backup = app(DatabaseBackups::class)->backup($this->attachment);
 
-        $this->assertSame(BackupStatus::Failed, $backup->status);
+        $this->assertSame(BackupStatus::FAILED, $backup->status);
         $this->assertSame("mysqldump: Got error: 1045: Access denied (using password: ********)\ncommand terminated with exit code 2", $backup->error);
         $this->assertFalse($this->data->exists($backup->location));
     }
@@ -139,10 +139,10 @@ class DatabaseBackupsTest extends TestCase
                 'disk' => 'local',
                 'location' => $location,
                 'size' => 6,
-                'status' => $day === 7 ? BackupStatus::Failed : BackupStatus::Done,
+                'status' => $day === 7 ? BackupStatus::FAILED : BackupStatus::DONE,
             ]);
         });
-        $otherDatabase = Backup::factory()->for($this->mysql)->create(['database_name' => 'env_999', 'status' => BackupStatus::Done]);
+        $otherDatabase = Backup::factory()->for($this->mysql)->create(['database_name' => 'env_999', 'status' => BackupStatus::DONE]);
         $this->kubectl->respond('exec', new KubectlResult(0, gzencode('new')));
 
         $new = app(DatabaseBackups::class)->backup($this->attachment);
@@ -176,7 +176,7 @@ class DatabaseBackupsTest extends TestCase
 
         $backup = app(DatabaseBackups::class)->backup($this->attachment);
 
-        $this->assertSame(['s3', BackupStatus::Done], [$backup->disk, $backup->status]);
+        $this->assertSame(['s3', BackupStatus::DONE], [$backup->disk, $backup->status]);
         $this->assertSame(gzencode('dump'), $bucket->get($backup->location));
     }
 
@@ -186,7 +186,7 @@ class DatabaseBackupsTest extends TestCase
         $this->data->put('backups/old.sql.gz', gzencode('INSERT INTO notes VALUES (1);'));
         $backup = $this->attachment->backups()->create([
             'datastore_id' => $this->mysql->id, 'database_name' => $this->attachment->database_name, 'disk' => 'local',
-            'location' => 'backups/old.sql.gz', 'size' => 10, 'status' => BackupStatus::Done,
+            'location' => 'backups/old.sql.gz', 'size' => 10, 'status' => BackupStatus::DONE,
         ]);
         $this->kubectl->respond('exec', new KubectlResult(0, gzencode('current state')));
 
@@ -205,7 +205,7 @@ class DatabaseBackupsTest extends TestCase
         );
         $this->assertSame(gzencode('INSERT INTO notes VALUES (1);'), $calls[2]['stdin']);
         $before = Backup::query()->latest('id')->first();
-        $this->assertSame([BackupStatus::Done, gzencode('current state')], [$before->status, $this->data->get($before->location)]);
+        $this->assertSame([BackupStatus::DONE, gzencode('current state')], [$before->status, $this->data->get($before->location)]);
         $this->assertSame(['backup.restore_requested', 'backup.restored'], AuditEvent::orderBy('id')->pluck('action')->all());
         $this->assertSame(['datastore_id' => $this->mysql->id, 'database_name' => $database], AuditEvent::latest('id')->first()->context);
     }
@@ -215,7 +215,7 @@ class DatabaseBackupsTest extends TestCase
         $this->data->put('backups/old.sql.gz', gzencode('broken'));
         $backup = $this->attachment->backups()->create([
             'datastore_id' => $this->mysql->id, 'database_name' => $this->attachment->database_name, 'disk' => 'local',
-            'location' => 'backups/old.sql.gz', 'size' => 10, 'status' => BackupStatus::Done,
+            'location' => 'backups/old.sql.gz', 'size' => 10, 'status' => BackupStatus::DONE,
         ]);
         $this->kubectl->respond('exec', new KubectlResult(0, gzencode('current state')));
         $this->kubectl->respond('exec -i mysql', fn (array $args) => end($args) === self::MYSQL_CLIENT[2]
@@ -232,8 +232,8 @@ class DatabaseBackupsTest extends TestCase
     public function test_only_a_finished_backup_of_an_attached_database_can_be_restored(): void
     {
         $owner = User::factory()->create();
-        $failed = Backup::factory()->for($this->mysql)->create(['database_name' => $this->attachment->database_name, 'status' => BackupStatus::Failed]);
-        $detached = Backup::factory()->for($this->mysql)->create(['database_name' => 'env_999', 'status' => BackupStatus::Done]);
+        $failed = Backup::factory()->for($this->mysql)->create(['database_name' => $this->attachment->database_name, 'status' => BackupStatus::FAILED]);
+        $detached = Backup::factory()->for($this->mysql)->create(['database_name' => 'env_999', 'status' => BackupStatus::DONE]);
 
         $messages = collect([$failed, $detached])->map(function (Backup $backup) use ($owner) {
             try {
@@ -254,7 +254,7 @@ class DatabaseBackupsTest extends TestCase
     {
         $owner = User::factory()->create();
         $this->kubectl->respond('exec', new KubectlResult(0, gzencode('dump')));
-        $valkey = DatastoreAttachment::factory()->for(Datastore::factory()->create(['kind' => DatastoreKind::Valkey]))->create();
+        $valkey = DatastoreAttachment::factory()->for(Datastore::factory()->create(['kind' => DatastoreKind::VALKEY]))->create();
 
         app(BackupNow::class)->execute($this->attachment, $owner);
 
@@ -265,7 +265,7 @@ class DatabaseBackupsTest extends TestCase
             $this->assertSame('A valkey datastore has no database to back up.', $e->getMessage());
         }
 
-        $this->assertSame([BackupStatus::Done], $this->attachment->backups()->pluck('status')->all());
+        $this->assertSame([BackupStatus::DONE], $this->attachment->backups()->pluck('status')->all());
         $this->assertSame(['backup.requested'], AuditEvent::pluck('action')->all());
     }
 
@@ -279,7 +279,7 @@ class DatabaseBackupsTest extends TestCase
         BackupDatastore::dispatchSync($this->mysql);
 
         $this->assertSame(
-            [[$this->attachment->database_name, BackupStatus::Failed], ['env_second', BackupStatus::Done]],
+            [[$this->attachment->database_name, BackupStatus::FAILED], ['env_second', BackupStatus::DONE]],
             Backup::orderBy('id')->get()->map(fn (Backup $backup) => [$backup->database_name, $backup->status])->all(),
         );
         $this->assertSame($second->id, Backup::latest('id')->value('datastore_attachment_id'));

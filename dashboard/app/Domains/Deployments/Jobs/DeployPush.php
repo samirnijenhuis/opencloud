@@ -23,7 +23,7 @@ class DeployPush implements ShouldQueue
     {
         foreach (Application::forGitHubRepository($this->push->repository) as $application) {
             $environments = $application->environments()
-                ->where('kind', EnvironmentKind::Permanent)
+                ->where('kind', EnvironmentKind::PERMANENT)
                 ->where('auto_deploy', true)
                 ->where('branch', $this->push->branch)
                 ->orderBy('id')

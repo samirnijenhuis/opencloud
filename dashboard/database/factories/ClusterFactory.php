@@ -18,7 +18,7 @@ class ClusterFactory extends Factory
     {
         return [
             'name' => fake()->unique()->slug(2),
-            'kind' => ClusterKind::Connected,
+            'kind' => ClusterKind::CONNECTED,
             'provider' => null,
             'kubeconfig' => "apiVersion: v1\nkind: Config\n",
         ];

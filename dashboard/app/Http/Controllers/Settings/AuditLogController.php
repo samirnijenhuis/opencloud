@@ -17,7 +17,7 @@ class AuditLogController extends Controller
 {
     public function index(Request $request): Response
     {
-        abort_unless($request->user()->role->allows(Ability::ManageApplications), 403);
+        abort_unless($request->user()->role->allows(Ability::MANAGE_APPLICATIONS), 403);
 
         return Inertia::render('settings/audit', [
             'events' => AuditEvent::query()

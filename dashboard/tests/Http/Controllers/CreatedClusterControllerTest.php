@@ -43,7 +43,7 @@ class CreatedClusterControllerTest extends TestCase
         }
 
         $this->assertSame(1, Cluster::query()->count());
-        $this->assertSame(ClusterStatus::Ready, $cluster->fresh()->status);
+        $this->assertSame(ClusterStatus::READY, $cluster->fresh()->status);
         Queue::assertNothingPushed();
     }
 
@@ -68,7 +68,7 @@ class CreatedClusterControllerTest extends TestCase
 
         $cluster = Cluster::query()->where('name', 'ams3-prod')->sole();
         $response->assertRedirect("/clusters/{$cluster->id}");
-        $this->assertSame([ClusterKind::Created, ClusterStatus::Provisioning, 2, 4], [$cluster->kind, $cluster->status, $cluster->min_nodes, $cluster->max_nodes]);
+        $this->assertSame([ClusterKind::CREATED, ClusterStatus::PROVISIONING, 2, 4], [$cluster->kind, $cluster->status, $cluster->min_nodes, $cluster->max_nodes]);
         Queue::assertPushed(ProvisionCluster::class);
     }
 
@@ -100,7 +100,7 @@ class CreatedClusterControllerTest extends TestCase
 
         $this->actingAs($owner)->delete("/clusters/{$cluster->id}/destroy", ['confirm' => 'ams3-prod'])->assertRedirect("/clusters/{$cluster->id}");
 
-        $this->assertSame(ClusterStatus::Destroying, $cluster->fresh()->status);
+        $this->assertSame(ClusterStatus::DESTROYING, $cluster->fresh()->status);
         Queue::assertPushed(TearDownCluster::class);
     }
 
@@ -147,9 +147,9 @@ class CreatedClusterControllerTest extends TestCase
     {
         return Cluster::factory()->create([
             ...$this->form(),
-            'kind' => ClusterKind::Created,
+            'kind' => ClusterKind::CREATED,
             'provider' => 'digitalocean',
-            'status' => ClusterStatus::Ready,
+            'status' => ClusterStatus::READY,
             'kubeconfig' => "apiVersion: v1\nusers:\n- user:\n    token: SA_TOKEN_SECRET\n",
             'registry_url' => 'registry.digitalocean.com/acme',
             'registry_username' => 'REGISTRY_USER_SECRET',

@@ -43,32 +43,32 @@ class DemoSeeder extends Seeder
 
         $cluster = Cluster::create([
             'name' => 'local',
-            'kind' => ClusterKind::Local,
+            'kind' => ClusterKind::LOCAL,
             'ingress_ip' => '203.0.113.10',
             'parts_version' => '0.1.0',
             'status' => 'ready',
         ]);
 
-        $shop = Application::create(['name' => 'shop', 'repository' => 'https://github.com/acme/shop.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::Laravel]);
-        $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::Node, 'env_profile' => EnvProfileKind::Generic, 'port' => 3000]);
+        $shop = Application::create(['name' => 'shop', 'repository' => 'https://github.com/acme/shop.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::LARAVEL]);
+        $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::NODE, 'env_profile' => EnvProfileKind::GENERIC, 'port' => 3000]);
 
-        $production = $this->environment($shop, 'production', EnvironmentKind::Permanent, protected: true, attributes: [
+        $production = $this->environment($shop, 'production', EnvironmentKind::PERMANENT, protected: true, attributes: [
             'size' => Size::M,
             'min_instances' => 2,
             'max_instances' => 5,
             'deploy_commands' => ['php artisan migrate --force'],
         ]);
-        $staging = $this->environment($shop, 'staging', EnvironmentKind::Permanent);
-        $preview = $this->environment($shop, 'pr-12', EnvironmentKind::Preview, attributes: ['pr_number' => 12, 'branch' => 'feature/checkout']);
-        $docsProduction = $this->environment($docs, 'production', EnvironmentKind::Permanent, protected: true, attributes: [
+        $staging = $this->environment($shop, 'staging', EnvironmentKind::PERMANENT);
+        $preview = $this->environment($shop, 'pr-12', EnvironmentKind::PREVIEW, attributes: ['pr_number' => 12, 'branch' => 'feature/checkout']);
+        $docsProduction = $this->environment($docs, 'production', EnvironmentKind::PERMANENT, protected: true, attributes: [
             'deploy_commands' => [],
             'health_path' => '/',
         ]);
 
         $this->shopDeployments($production, $owner, $developer);
         $this->commandRuns($production, $owner);
-        $this->deployment($staging, DeploymentStatus::Queued, $developer, 'c0ffee1c0ffee1c0ffee1c0ffee1c0ffee1c0ffe', 4, null);
-        $this->deployment($preview, DeploymentStatus::Deploying, $developer, '5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad', 1, $this->log('deploying'));
+        $this->deployment($staging, DeploymentStatus::QUEUED, $developer, 'c0ffee1c0ffee1c0ffee1c0ffee1c0ffee1c0ffe', 4, null);
+        $this->deployment($preview, DeploymentStatus::DEPLOYING, $developer, '5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad5a1ad', 1, $this->log('deploying'));
         $this->docsDeployments($docsProduction, $owner);
 
         $this->envValues($production, $docsProduction);
@@ -95,7 +95,7 @@ class DemoSeeder extends Seeder
         $environments = [$environment];
 
         if ($name === 'production') {
-            $environments[] = $application->environments()->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate, 'auto_deploy' => false]);
+            $environments[] = $application->environments()->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'auto_deploy' => false]);
         }
 
         foreach ($environments as $each) {
@@ -109,10 +109,10 @@ class DemoSeeder extends Seeder
 
     private function commandRuns(Environment $production, User $owner): void
     {
-        $live = $production->deployments()->where('status', DeploymentStatus::Live)->sole();
+        $live = $production->deployments()->where('status', DeploymentStatus::LIVE)->sole();
         $runs = [
-            ['php artisan migrate:status', CommandRunStatus::Succeeded, 0, 90, 4, "  Migration name .......................... Batch / Status\n  0001_01_01_000000_create_users_table ......... [1] Ran\n  0001_01_01_000001_create_cache_table ......... [1] Ran\n  2026_10_02_101500_create_orders_table ........ [2] Ran\n"],
-            ['php artisan queue:retry all', CommandRunStatus::Failed, 1, 30, 2, "\n   ERROR  No failed jobs matched the given IDs.\n\n"],
+            ['php artisan migrate:status', CommandRunStatus::SUCCEEDED, 0, 90, 4, "  Migration name .......................... Batch / Status\n  0001_01_01_000000_create_users_table ......... [1] Ran\n  0001_01_01_000001_create_cache_table ......... [1] Ran\n  2026_10_02_101500_create_orders_table ........ [2] Ran\n"],
+            ['php artisan queue:retry all', CommandRunStatus::FAILED, 1, 30, 2, "\n   ERROR  No failed jobs matched the given IDs.\n\n"],
         ];
 
         foreach ($runs as [$command, $status, $exitCode, $minutesAgo, $seconds, $output]) {
@@ -132,22 +132,22 @@ class DemoSeeder extends Seeder
 
     private function shopDeployments(Environment $production, User $owner, User $developer): void
     {
-        $this->deployment($production, DeploymentStatus::Superseded, $owner, '1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 3 * 1440, $this->log('live'));
-        $this->deployment($production, DeploymentStatus::Failed, $developer, '2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 1440, $this->log('failed'), 'The build failed. Nothing changed in production.');
-        $this->deployment($production, DeploymentStatus::Live, $owner, '3333333cccccccccccccccccccccccccccccccc', 95, $this->log('live'), 'The health check answered slowly. It took 8 seconds.');
+        $this->deployment($production, DeploymentStatus::SUPERSEDED, $owner, '1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 3 * 1440, $this->log('live'));
+        $this->deployment($production, DeploymentStatus::FAILED, $developer, '2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 1440, $this->log('failed'), 'The build failed. Nothing changed in production.');
+        $this->deployment($production, DeploymentStatus::LIVE, $owner, '3333333cccccccccccccccccccccccccccccccc', 95, $this->log('live'), 'The health check answered slowly. It took 8 seconds.');
     }
 
     private function docsDeployments(Environment $production, User $owner): void
     {
-        $this->deployment($production, DeploymentStatus::Failed, $owner, '4444444dddddddddddddddddddddddddddddddd', 60, $this->log('failed'));
-        $this->deployment($production, DeploymentStatus::Building, $owner, '5555555eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 2, $this->log('building'));
+        $this->deployment($production, DeploymentStatus::FAILED, $owner, '4444444dddddddddddddddddddddddddddddddd', 60, $this->log('failed'));
+        $this->deployment($production, DeploymentStatus::BUILDING, $owner, '5555555eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 2, $this->log('building'));
     }
 
     private function deployment(Environment $environment, DeploymentStatus $status, User $by, string $sha, int $minutesAgo, ?string $log, ?string $warning = null): Deployment
     {
         $createdAt = Carbon::now()->subMinutes($minutesAgo);
-        $started = in_array($status, [DeploymentStatus::Queued], true) ? null : $createdAt->copy()->addSeconds(5);
-        $finished = in_array($status, [DeploymentStatus::Live, DeploymentStatus::Failed, DeploymentStatus::Superseded], true) ? $createdAt->copy()->addSeconds(140) : null;
+        $started = in_array($status, [DeploymentStatus::QUEUED], true) ? null : $createdAt->copy()->addSeconds(5);
+        $finished = in_array($status, [DeploymentStatus::LIVE, DeploymentStatus::FAILED, DeploymentStatus::SUPERSEDED], true) ? $createdAt->copy()->addSeconds(140) : null;
 
         $deployment = new Deployment([
             'environment_id' => $environment->id,
@@ -214,12 +214,12 @@ class DemoSeeder extends Seeder
     private function envValues(Environment $production, Environment $docsProduction): void
     {
         $values = [
-            [$production, 'APP_ENV', 'production', false, EnvVarAvailability::Both],
-            [$production, 'APP_URL', 'https://shop.example.com', false, EnvVarAvailability::Runtime],
-            [$production, 'MAIL_MAILER', 'smtp', false, EnvVarAvailability::Runtime],
-            [$production, 'APP_KEY', 'base64:'.base64_encode(str_repeat('k', 32)), true, EnvVarAvailability::Runtime],
-            [$production, 'STRIPE_SECRET', 'sk_live_demo_value_do_not_use', true, EnvVarAvailability::Runtime],
-            [$docsProduction, 'NODE_ENV', 'production', false, EnvVarAvailability::Both],
+            [$production, 'APP_ENV', 'production', false, EnvVarAvailability::BOTH],
+            [$production, 'APP_URL', 'https://shop.example.com', false, EnvVarAvailability::RUNTIME],
+            [$production, 'MAIL_MAILER', 'smtp', false, EnvVarAvailability::RUNTIME],
+            [$production, 'APP_KEY', 'base64:'.base64_encode(str_repeat('k', 32)), true, EnvVarAvailability::RUNTIME],
+            [$production, 'STRIPE_SECRET', 'sk_live_demo_value_do_not_use', true, EnvVarAvailability::RUNTIME],
+            [$docsProduction, 'NODE_ENV', 'production', false, EnvVarAvailability::BOTH],
         ];
 
         foreach ($values as [$environment, $key, $value, $secret, $availability]) {
@@ -230,22 +230,22 @@ class DemoSeeder extends Seeder
 
     private function datastores(Cluster $cluster, Environment $production, Environment $staging, User $owner): void
     {
-        $mysql = $this->attachment($cluster, $production, DatastoreKind::Mysql, DatastoreStatus::Ready, 'shop_production', name: 'main');
-        $reports = $this->attachment($cluster, $production, DatastoreKind::Postgres, DatastoreStatus::Ready, 'shop_production_reports', name: 'reports');
-        $this->attachment($cluster, $production, DatastoreKind::Valkey, DatastoreStatus::Provisioning, null);
-        $this->attachment($cluster, $production, DatastoreKind::Rustfs, DatastoreStatus::Failed, 'shop-production', 'The bucket could not be created. The storage server did not answer.');
-        $this->attachment($cluster, $staging, DatastoreKind::Postgres, DatastoreStatus::Pending, 'shop_staging', name: 'main');
+        $mysql = $this->attachment($cluster, $production, DatastoreKind::MYSQL, DatastoreStatus::READY, 'shop_production', name: 'main');
+        $reports = $this->attachment($cluster, $production, DatastoreKind::POSTGRES, DatastoreStatus::READY, 'shop_production_reports', name: 'reports');
+        $this->attachment($cluster, $production, DatastoreKind::VALKEY, DatastoreStatus::PROVISIONING, null);
+        $this->attachment($cluster, $production, DatastoreKind::RUSTFS, DatastoreStatus::FAILED, 'shop-production', 'The bucket could not be created. The storage server did not answer.');
+        $this->attachment($cluster, $staging, DatastoreKind::POSTGRES, DatastoreStatus::PENDING, 'shop_staging', name: 'main');
 
         $this->envKeys($mysql, ['DB_CONNECTION' => 'mysql', 'DB_HOST' => 'mysql.shop.svc', 'DB_PASSWORD' => 'demo-database-password']);
         $this->envKeys($reports, ['REPORTS_DB_URL' => 'postgres://shop_production_reports:demo-database-password@postgres.shop.svc:5432/shop_production_reports']);
-        $this->envKeys($production->datastoreAttachments()->whereHas('datastore', fn ($query) => $query->where('kind', DatastoreKind::Valkey))->sole(), ['REDIS_HOST' => 'valkey.shop.svc', 'REDIS_PASSWORD' => 'demo-valkey-password']);
+        $this->envKeys($production->datastoreAttachments()->whereHas('datastore', fn ($query) => $query->where('kind', DatastoreKind::VALKEY))->sole(), ['REDIS_HOST' => 'valkey.shop.svc', 'REDIS_PASSWORD' => 'demo-valkey-password']);
 
         $backups = [
-            [BackupStatus::Done, 'local', 5 * 1440 + 120, 3_145_728, null],
-            [BackupStatus::Done, 's3', 3 * 1440 + 120, 3_250_000, null],
-            [BackupStatus::Failed, 's3', 1440 + 120, null, 'The upload to the backup target failed.'],
-            [BackupStatus::Done, 's3', 120, 3_410_000, null],
-            [BackupStatus::Running, 's3', 1, null, null],
+            [BackupStatus::DONE, 'local', 5 * 1440 + 120, 3_145_728, null],
+            [BackupStatus::DONE, 's3', 3 * 1440 + 120, 3_250_000, null],
+            [BackupStatus::FAILED, 's3', 1440 + 120, null, 'The upload to the backup target failed.'],
+            [BackupStatus::DONE, 's3', 120, 3_410_000, null],
+            [BackupStatus::RUNNING, 's3', 1, null, null],
         ];
 
         foreach ($backups as [$status, $disk, $minutesAgo, $size, $error]) {
@@ -263,7 +263,7 @@ class DemoSeeder extends Seeder
             $backup->save();
         }
 
-        $restored = Backup::where('status', BackupStatus::Done)->orderBy('id')->first();
+        $restored = Backup::where('status', BackupStatus::DONE)->orderBy('id')->first();
         AuditEvent::record($owner, 'backup.restore_requested', $restored, ['datastore_id' => $restored->datastore_id, 'database_name' => $restored->database_name]);
         AuditEvent::record($owner, 'backup.restore_failed', $restored, ['datastore_id' => $restored->datastore_id, 'database_name' => $restored->database_name, 'error' => 'The dump is not a valid gzip file.']);
     }
@@ -273,14 +273,14 @@ class DemoSeeder extends Seeder
     {
         $datastore = Datastore::firstOrCreate(
             ['cluster_id' => $cluster->id, 'kind' => $kind],
-            ['version' => '1', 'status' => DatastoreStatus::Ready->value, 'root_password' => 'demo-root-password'],
+            ['version' => '1', 'status' => DatastoreStatus::READY->value, 'root_password' => 'demo-root-password'],
         );
 
         return $environment->datastoreAttachments()->create([
             'datastore_id' => $datastore->id,
             'name' => $name,
             'is_default' => $name !== null && ! $environment->datastoreAttachments()->where('is_default', true)->exists(),
-            'host' => $kind->family() === ResourceFamily::Database ? "{$kind->value}.shop.svc" : null,
+            'host' => $kind->family() === ResourceFamily::DATABASE ? "{$kind->value}.shop.svc" : null,
             'port' => ['mysql' => 3306, 'postgres' => 5432][$kind->value] ?? null,
             'database_name' => $databaseName,
             'username' => $databaseName,
@@ -298,7 +298,7 @@ class DemoSeeder extends Seeder
                 'key' => $key,
                 'value' => $value,
                 'is_secret' => str_ends_with($key, 'PASSWORD') || str_ends_with($key, '_URL'),
-                'source' => EnvVarSource::Datastore,
+                'source' => EnvVarSource::DATASTORE,
                 'datastore_attachment_id' => $attachment->id,
             ]);
         }
@@ -309,18 +309,18 @@ class DemoSeeder extends Seeder
         $production->domains()->create([
             'hostname' => 'shop-production.203.0.113.10.sslip.io',
             'generated' => true,
-            'dns_status' => DnsStatus::Ok,
+            'dns_status' => DnsStatus::OK,
             'certificate_status' => 'issued',
             'dns_found' => ['203.0.113.10'],
             'dns_checked_at' => now()->subMinutes(3),
         ]);
 
         $rows = [
-            [$production, 'shop.example.com', DnsStatus::Ok, 'issued', ['203.0.113.10']],
-            [$production, 'www.shop.example.com', DnsStatus::Wrong, 'pending', ['198.51.100.7']],
-            [$production, 'cdn.shop.example.com', DnsStatus::Proxied, 'issued', ['104.16.1.1', '104.16.2.1']],
-            [$staging, 'staging.shop.example.com', DnsStatus::Missing, 'pending', []],
-            [$docsProduction, 'docs.example.org', DnsStatus::Pending, 'pending', null],
+            [$production, 'shop.example.com', DnsStatus::OK, 'issued', ['203.0.113.10']],
+            [$production, 'www.shop.example.com', DnsStatus::WRONG, 'pending', ['198.51.100.7']],
+            [$production, 'cdn.shop.example.com', DnsStatus::PROXIED, 'issued', ['104.16.1.1', '104.16.2.1']],
+            [$staging, 'staging.shop.example.com', DnsStatus::MISSING, 'pending', []],
+            [$docsProduction, 'docs.example.org', DnsStatus::PENDING, 'pending', null],
         ];
 
         foreach ($rows as [$environment, $hostname, $status, $certificate, $found]) {

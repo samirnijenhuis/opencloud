@@ -102,22 +102,22 @@ final class Provisioners
     private static function find(DatastoreKind $kind, DatastoreSource $source): ?Provisioner
     {
         return match ($source) {
-            DatastoreSource::Standard => match ($kind) {
-                DatastoreKind::Mysql => new LocalMysql,
-                DatastoreKind::Postgres => new LocalPostgres,
-                DatastoreKind::Valkey => new LocalValkey,
-                DatastoreKind::Rustfs => new LocalRustfs,
+            DatastoreSource::STANDARD => match ($kind) {
+                DatastoreKind::MYSQL => new LocalMysql,
+                DatastoreKind::POSTGRES => new LocalPostgres,
+                DatastoreKind::VALKEY => new LocalValkey,
+                DatastoreKind::RUSTFS => new LocalRustfs,
             },
-            DatastoreSource::Managed => ManagedResources::find($kind),
-            DatastoreSource::External => ExternalResources::find($kind),
+            DatastoreSource::MANAGED => ManagedResources::find($kind),
+            DatastoreSource::EXTERNAL => ExternalResources::find($kind),
         };
     }
 
     private static function unsupported(DatastoreSource $source): string
     {
         return match ($source) {
-            DatastoreSource::Managed => ManagedResources::unsupported(),
-            DatastoreSource::External => ExternalResources::unsupported(),
+            DatastoreSource::MANAGED => ManagedResources::unsupported(),
+            DatastoreSource::EXTERNAL => ExternalResources::unsupported(),
         };
     }
 }

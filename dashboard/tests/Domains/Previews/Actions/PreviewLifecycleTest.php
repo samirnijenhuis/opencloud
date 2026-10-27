@@ -58,7 +58,7 @@ class PreviewLifecycleTest extends TestCase
         $this->kubectl = FakeKubectl::install();
         FakeProcesses::install()->lsRemote = str_repeat('a', 40)."\trefs/heads/main\n";
         $owner = User::factory()->owner()->create();
-        $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local', 'ingress_ip' => '203.0.113.10']);
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local', 'ingress_ip' => '203.0.113.10']);
 
         $this->application = app(CreateApplication::class)->execute($owner, [
             'name' => 'Shop',
@@ -66,16 +66,16 @@ class PreviewLifecycleTest extends TestCase
             'cluster_id' => $cluster->id,
             'env' => [['key' => 'STRIPE_SECRET', 'value' => 'sk_live_production', 'is_secret' => true]],
         ]);
-        app(AttachDatastore::class)->execute($this->environment('production'), $owner, DatastoreKind::Valkey);
+        app(AttachDatastore::class)->execute($this->environment('production'), $owner, DatastoreKind::VALKEY);
 
         $template = $this->environment('preview-template');
         $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force']]);
         $template->processes()->where('name', 'worker')->delete();
         $template->processes()->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 2, 'exclusive' => false]);
         $setEnvVar = app(SetEnvVar::class);
-        $setEnvVar->execute($template, $owner, 'MAIL_MAILER', 'log', false, EnvVarAvailability::Runtime);
-        $setEnvVar->execute($template, $owner, 'STRIPE_SECRET', 'sk_test_preview', true, EnvVarAvailability::Runtime);
-        $setEnvVar->execute($template, $owner, 'COMPOSER_AUTH', '{"github-oauth":{"github.com":"gho_x"}}', true, EnvVarAvailability::Build);
+        $setEnvVar->execute($template, $owner, 'MAIL_MAILER', 'log', false, EnvVarAvailability::RUNTIME);
+        $setEnvVar->execute($template, $owner, 'STRIPE_SECRET', 'sk_test_preview', true, EnvVarAvailability::RUNTIME);
+        $setEnvVar->execute($template, $owner, 'COMPOSER_AUTH', '{"github-oauth":{"github.com":"gho_x"}}', true, EnvVarAvailability::BUILD);
 
         $this->makeGitHubApp();
         $this->fakeGitHub();
@@ -88,7 +88,7 @@ class PreviewLifecycleTest extends TestCase
 
         $preview = $this->environment('pr-12');
         $this->assertSame(
-            [EnvironmentKind::Preview, 12, 'feature/login', false, 's', 1, 1, '/health', ['php artisan migrate --force', 'php artisan db:seed --force']],
+            [EnvironmentKind::PREVIEW, 12, 'feature/login', false, 's', 1, 1, '/health', ['php artisan migrate --force', 'php artisan db:seed --force']],
             [$preview->kind, $preview->pr_number, $preview->branch, $preview->is_protected, $preview->size->value, $preview->min_instances, $preview->max_instances, $preview->health_path, $preview->deploy_commands],
         );
         $this->assertSame(
@@ -100,7 +100,7 @@ class PreviewLifecycleTest extends TestCase
             AuditEvent::where('action', 'preview.created')->sole()->context,
         );
 
-        $userEnv = $preview->envVars()->where('source', EnvVarSource::User)->orderBy('key')->get()
+        $userEnv = $preview->envVars()->where('source', EnvVarSource::USER)->orderBy('key')->get()
             ->map(fn (EnvVar $var) => [$var->key, $var->key === 'APP_KEY' ? 'generated' : $var->value, $var->is_secret, $var->available_at->value])
             ->all();
         $this->assertSame([
@@ -130,11 +130,11 @@ class PreviewLifecycleTest extends TestCase
         $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-2')->assertStatus(202);
 
         $this->assertSame(
-            [[self::OPENED_SHA, DeploymentStatus::Queued, null], [self::PUSHED_SHA, DeploymentStatus::Queued, null]],
+            [[self::OPENED_SHA, DeploymentStatus::QUEUED, null], [self::PUSHED_SHA, DeploymentStatus::QUEUED, null]],
             $preview->deployments()->orderBy('id')->get()->map(fn (Deployment $d) => [$d->commit_sha, $d->status, $d->triggered_by])->all(),
         );
         Queue::assertPushed(RunDeployment::class, 3);
-        $this->assertSame(1, Environment::query()->where('kind', EnvironmentKind::Preview)->count());
+        $this->assertSame(1, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
 
         $this->postWebhook('pull_request', $this->pullRequest('closed', self::PUSHED_SHA), delivery: 'd-3')->assertStatus(202);
 
@@ -175,7 +175,7 @@ class PreviewLifecycleTest extends TestCase
     {
         $production = $this->environment('production');
         $owner = User::factory()->owner()->create();
-        $reports = app(AttachDatastore::class)->execute($production, $owner, DatastoreKind::Postgres, name: 'reports');
+        $reports = app(AttachDatastore::class)->execute($production, $owner, DatastoreKind::POSTGRES, name: 'reports');
         app(SetDefaultDatabase::class)->execute($reports, $owner);
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
@@ -196,16 +196,16 @@ class PreviewLifecycleTest extends TestCase
     public function test_a_preview_gets_a_local_database_for_a_managed_database_of_production(): void
     {
         $production = $this->environment('production');
-        $managed = Datastore::factory()->create(['cluster_id' => $production->application->cluster_id, 'kind' => DatastoreKind::Postgres, 'source' => DatastoreSource::Managed]);
+        $managed = Datastore::factory()->create(['cluster_id' => $production->application->cluster_id, 'kind' => DatastoreKind::POSTGRES, 'source' => DatastoreSource::MANAGED]);
         DatastoreAttachment::factory()->create(['datastore_id' => $managed->id, 'environment_id' => $production->id, 'name' => 'reports', 'is_default' => false]);
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
 
         $preview = $this->environment('pr-12');
         $this->assertSame(
-            [['postgres', 'reports', DatastoreSource::Standard]],
+            [['postgres', 'reports', DatastoreSource::STANDARD]],
             $preview->datastoreAttachments()->with('datastore')->get()
-                ->filter(fn (DatastoreAttachment $a) => $a->datastore->kind === DatastoreKind::Postgres)
+                ->filter(fn (DatastoreAttachment $a) => $a->datastore->kind === DatastoreKind::POSTGRES)
                 ->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->name, $a->datastore->source])->values()->all(),
         );
         $this->assertNotSame($managed->id, $preview->datastoreAttachments()->where('name', 'reports')->sole()->datastore_id);
@@ -226,7 +226,7 @@ class PreviewLifecycleTest extends TestCase
 
         $this->postWebhook('pull_request', $fork, delivery: 'd-1')->assertStatus(202);
 
-        $this->assertSame(0, Environment::query()->where('kind', EnvironmentKind::Preview)->count());
+        $this->assertSame(0, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
         $this->assertSame(['preview.skipped', ['pr_number' => 12, 'reason' => 'fork']], [AuditEvent::sole()->action, AuditEvent::sole()->context]);
 
         $this->application->update(['allow_forks' => true]);
@@ -241,7 +241,7 @@ class PreviewLifecycleTest extends TestCase
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA))->assertStatus(202);
 
-        $this->assertSame(0, Environment::query()->where('kind', EnvironmentKind::Preview)->count());
+        $this->assertSame(0, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
         $this->assertSame(['pr_number' => 12, 'reason' => 'previews_disabled'], AuditEvent::sole()->context);
     }
 
@@ -254,7 +254,7 @@ class PreviewLifecycleTest extends TestCase
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA, number: 13), delivery: 'd-2')->assertStatus(202);
         $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA, number: 13), delivery: 'd-3')->assertStatus(202);
 
-        $this->assertSame(['pr-12'], Environment::query()->where('kind', EnvironmentKind::Preview)->pluck('name')->all());
+        $this->assertSame(['pr-12'], Environment::query()->where('kind', EnvironmentKind::PREVIEW)->pluck('name')->all());
         $comments = Http::recorded(fn (Request $request) => $request->method() === 'POST' && str_ends_with($request->url(), '/comments'))->values();
         $this->assertCount(1, $comments);
         $this->assertSame('https://api.github.com/repos/acme/shop/issues/13/comments', $comments[0][0]->url());
@@ -270,7 +270,7 @@ class PreviewLifecycleTest extends TestCase
     {
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1');
         $preview = $this->environment('pr-12');
-        $preview->deployments()->sole()->moveTo(DeploymentStatus::Building);
+        $preview->deployments()->sole()->moveTo(DeploymentStatus::BUILDING);
 
         $this->postWebhook('pull_request', $this->pullRequest('closed', self::OPENED_SHA), delivery: 'd-2')->assertStatus(202);
 

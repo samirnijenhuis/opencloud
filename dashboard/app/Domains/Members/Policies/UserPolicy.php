@@ -14,7 +14,7 @@ class UserPolicy
 
     public function invite(User $user): bool
     {
-        return $user->role->allows(Ability::ManageMembers);
+        return $user->role->allows(Ability::MANAGE_MEMBERS);
     }
 
     /**
@@ -22,11 +22,11 @@ class UserPolicy
      */
     public function update(User $user, User $member): bool
     {
-        return $user->role->allows(Ability::ManageMembers) && ! $user->is($member);
+        return $user->role->allows(Ability::MANAGE_MEMBERS) && ! $user->is($member);
     }
 
     public function delete(User $user, User $member): bool
     {
-        return $user->role->allows(Ability::ManageMembers) && ! $user->is($member);
+        return $user->role->allows(Ability::MANAGE_MEMBERS) && ! $user->is($member);
     }
 }

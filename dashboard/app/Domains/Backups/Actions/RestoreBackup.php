@@ -20,7 +20,7 @@ class RestoreBackup
      */
     public function execute(Backup $backup, User $by): void
     {
-        if ($backup->status !== BackupStatus::Done) {
+        if ($backup->status !== BackupStatus::DONE) {
             throw new InvalidArgumentException('Only a finished backup can be restored.');
         }
 

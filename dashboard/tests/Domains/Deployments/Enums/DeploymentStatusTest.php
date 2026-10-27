@@ -40,16 +40,16 @@ class DeploymentStatusTest extends TestCase
 
     public function test_finished_deployments_never_move_again(): void
     {
-        $this->assertFalse(Status::Failed->canMoveTo(Status::Queued));
-        $this->assertFalse(Status::Failed->canMoveTo(Status::Live));
-        $this->assertFalse(Status::Superseded->canMoveTo(Status::Live));
+        $this->assertFalse(Status::FAILED->canMoveTo(Status::QUEUED));
+        $this->assertFalse(Status::FAILED->canMoveTo(Status::LIVE));
+        $this->assertFalse(Status::SUPERSEDED->canMoveTo(Status::LIVE));
     }
 
     public function test_a_deployment_cannot_skip_a_step(): void
     {
-        $this->assertFalse(Status::Queued->canMoveTo(Status::Live));
-        $this->assertFalse(Status::Queued->canMoveTo(Status::Deploying));
-        $this->assertFalse(Status::Building->canMoveTo(Status::Live));
-        $this->assertFalse(Status::Live->canMoveTo(Status::Failed));
+        $this->assertFalse(Status::QUEUED->canMoveTo(Status::LIVE));
+        $this->assertFalse(Status::QUEUED->canMoveTo(Status::DEPLOYING));
+        $this->assertFalse(Status::BUILDING->canMoveTo(Status::LIVE));
+        $this->assertFalse(Status::LIVE->canMoveTo(Status::FAILED));
     }
 }

@@ -4,21 +4,21 @@ namespace App\Domains\Deployments\Enums;
 
 enum DeploymentStatus: string
 {
-    case Queued = 'queued';
-    case Building = 'building';
-    case Deploying = 'deploying';
-    case Live = 'live';
-    case Failed = 'failed';
-    case Superseded = 'superseded';
+    case QUEUED = 'queued';
+    case BUILDING = 'building';
+    case DEPLOYING = 'deploying';
+    case LIVE = 'live';
+    case FAILED = 'failed';
+    case SUPERSEDED = 'superseded';
 
     public function canMoveTo(self $next): bool
     {
         $allowed = match ($this) {
-            self::Queued => [self::Building, self::Failed],
-            self::Building => [self::Deploying, self::Failed],
-            self::Deploying => [self::Live, self::Failed],
-            self::Live => [self::Superseded],
-            self::Failed, self::Superseded => [],
+            self::QUEUED => [self::BUILDING, self::FAILED],
+            self::BUILDING => [self::DEPLOYING, self::FAILED],
+            self::DEPLOYING => [self::LIVE, self::FAILED],
+            self::LIVE => [self::SUPERSEDED],
+            self::FAILED, self::SUPERSEDED => [],
         };
 
         return in_array($next, $allowed, true);

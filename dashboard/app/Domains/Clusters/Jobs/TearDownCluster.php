@@ -39,7 +39,7 @@ class TearDownCluster implements ShouldQueue
     public function handle(Runner $runner, ClusterProviders $providers): void
     {
         $cluster = $this->cluster;
-        $cluster->update(['status' => ClusterStatus::Destroying, 'error' => null, 'tofu_log' => null]);
+        $cluster->update(['status' => ClusterStatus::DESTROYING, 'error' => null, 'tofu_log' => null]);
 
         try {
             $runner->destroy($providers->for($cluster->provider)->stack($cluster), $cluster);
@@ -58,6 +58,6 @@ class TearDownCluster implements ShouldQueue
 
     public function failed(?Throwable $e): void
     {
-        $this->cluster->update(['status' => ClusterStatus::Failed, 'error' => 'The destroy failed. '.($e?->getMessage() ?? '')]);
+        $this->cluster->update(['status' => ClusterStatus::FAILED, 'error' => 'The destroy failed. '.($e?->getMessage() ?? '')]);
     }
 }

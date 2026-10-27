@@ -32,10 +32,10 @@ class MoveWorkerAndSchedulerIntoProcessesTest extends TestCase
 
     public function test_each_switch_that_is_on_becomes_a_row_for_a_laravel_app_and_the_columns_go(): void
     {
-        $shop = Application::factory()->create(['type' => ApplicationType::Laravel]);
-        $site = Application::factory()->create(['type' => ApplicationType::Dockerfile]);
+        $shop = Application::factory()->create(['type' => ApplicationType::LARAVEL]);
+        $site = Application::factory()->create(['type' => ApplicationType::DOCKERFILE]);
         $workerOnly = $this->environment($shop, 'production', worker: true, scheduler: false);
-        $template = $this->environment($shop, 'preview-template', worker: true, scheduler: true, kind: EnvironmentKind::PreviewTemplate);
+        $template = $this->environment($shop, 'preview-template', worker: true, scheduler: true, kind: EnvironmentKind::PREVIEW_TEMPLATE);
         $this->environment($shop, 'staging', worker: false, scheduler: false);
         $this->environment($site, 'production', worker: true, scheduler: true);
 
@@ -51,7 +51,7 @@ class MoveWorkerAndSchedulerIntoProcessesTest extends TestCase
 
     public function test_down_turns_the_worker_and_scheduler_rows_back_into_switches(): void
     {
-        $shop = Application::factory()->create(['type' => ApplicationType::Laravel]);
+        $shop = Application::factory()->create(['type' => ApplicationType::LARAVEL]);
         $production = $this->environment($shop, 'production', worker: true, scheduler: false);
         $this->migration->up();
         DB::table('processes')->insert(['environment_id' => $production->id, 'name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 1, 'exclusive' => false]);
@@ -65,7 +65,7 @@ class MoveWorkerAndSchedulerIntoProcessesTest extends TestCase
         $this->assertSame([[$production->id, 'horizon', 'php artisan horizon', 1, 0]], $this->rows());
     }
 
-    private function environment(Application $application, string $name, bool $worker, bool $scheduler, EnvironmentKind $kind = EnvironmentKind::Permanent): Environment
+    private function environment(Application $application, string $name, bool $worker, bool $scheduler, EnvironmentKind $kind = EnvironmentKind::PERMANENT): Environment
     {
         $environment = Environment::factory()->for($application)->create(['name' => $name, 'kind' => $kind]);
         DB::table('environments')->where('id', $environment->id)->update(['worker_enabled' => $worker, 'scheduler_enabled' => $scheduler]);

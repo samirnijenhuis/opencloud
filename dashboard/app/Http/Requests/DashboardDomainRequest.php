@@ -9,7 +9,7 @@ class DashboardDomainRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->role->allows(Ability::ManageCredentials);
+        return $this->user()->role->allows(Ability::MANAGE_CREDENTIALS);
     }
 
     /** @return array<string, mixed> */

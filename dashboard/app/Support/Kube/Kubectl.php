@@ -22,7 +22,7 @@ class Kubectl
      */
     public function run(array $args, mixed $stdin = null, int $timeout = 120, mixed $output = null): KubectlResult
     {
-        if ($this->cluster->kind === ClusterKind::Local) {
+        if ($this->cluster->kind === ClusterKind::LOCAL) {
             $kubeconfig = config('opencloud.local_kubeconfig');
 
             return $this->process($this->command($args, $kubeconfig ?: null), $stdin, $timeout, $output);

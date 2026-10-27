@@ -45,6 +45,6 @@ class EnvironmentLogController extends Controller
 
     private function authorizeLogs(Request $request): void
     {
-        abort_unless($request->user()->role->allows(Ability::ReadLogs), 403);
+        abort_unless($request->user()->role->allows(Ability::READ_LOGS), 403);
     }
 }

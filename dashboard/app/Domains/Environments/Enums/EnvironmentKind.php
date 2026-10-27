@@ -4,7 +4,7 @@ namespace App\Domains\Environments\Enums;
 
 enum EnvironmentKind: string
 {
-    case Permanent = 'permanent';
-    case Preview = 'preview';
-    case PreviewTemplate = 'preview_template';
+    case PERMANENT = 'permanent';
+    case PREVIEW = 'preview';
+    case PREVIEW_TEMPLATE = 'preview_template';
 }

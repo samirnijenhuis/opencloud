@@ -11,7 +11,7 @@ class DeploymentObserver
 {
     public function updated(Deployment $deployment): void
     {
-        if ($deployment->wasChanged('status') && $deployment->status === DeploymentStatus::Live && $deployment->environment->kind === EnvironmentKind::Preview) {
+        if ($deployment->wasChanged('status') && $deployment->status === DeploymentStatus::LIVE && $deployment->environment->kind === EnvironmentKind::PREVIEW) {
             PostPreviewComment::dispatch($deployment)->afterCommit();
         }
     }

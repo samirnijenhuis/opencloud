@@ -20,17 +20,17 @@ class Bootstrap extends Command
         $version = config('opencloud.version');
 
         $cluster = Cluster::updateOrCreate(
-            ['kind' => ClusterKind::Local],
+            ['kind' => ClusterKind::LOCAL],
             // The installer puts the parts on the local cluster, so it is ready once the dashboard runs.
-            ['name' => 'local', 'status' => ClusterStatus::Ready, 'parts_version' => $version, ...($publicIp ? ['ingress_ip' => $publicIp] : [])],
+            ['name' => 'local', 'status' => ClusterStatus::READY, 'parts_version' => $version, ...($publicIp ? ['ingress_ip' => $publicIp] : [])],
         );
 
         $this->info("The local cluster is cluster {$cluster->id}.");
 
         // After an upgrade, the other clusters still run the parts of the old release. A cluster that never got its parts, or that installs now, keeps its state.
         Cluster::query()
-            ->whereNot('kind', ClusterKind::Local)
-            ->whereIn('status', [ClusterStatus::Ready, ClusterStatus::Failed])
+            ->whereNot('kind', ClusterKind::LOCAL)
+            ->whereIn('status', [ClusterStatus::READY, ClusterStatus::FAILED])
             ->whereNotNull('parts_version')
             ->whereNot('parts_version', $version)
             ->get()

@@ -39,7 +39,7 @@ class BuilderTest extends TestCase
         $processes->buildOutput = ['#1 [internal] load build definition', '#5 composer install with token ghp_secret_token', '#9 DONE 1.2s'];
         $deployment = $this->deployment('acme/shop');
         EnvVar::factory()->for($deployment->environment)->create([
-            'key' => 'COMPOSER_AUTH', 'value' => 'ghp_secret_token', 'is_secret' => true, 'available_at' => EnvVarAvailability::Build,
+            'key' => 'COMPOSER_AUTH', 'value' => 'ghp_secret_token', 'is_secret' => true, 'available_at' => EnvVarAvailability::BUILD,
         ]);
         EnvVar::factory()->for($deployment->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'runtime-only', 'is_secret' => true]);
 
@@ -82,7 +82,7 @@ class BuilderTest extends TestCase
     {
         $processes = FakeProcesses::install()->withLaravelRepository();
         $processes->repository['Dockerfile'] = "FROM nginx:alpine\n";
-        $deployment = $this->deployment('https://git.example.com/acme/site.git', ApplicationType::Dockerfile);
+        $deployment = $this->deployment('https://git.example.com/acme/site.git', ApplicationType::DOCKERFILE);
 
         (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
@@ -102,7 +102,7 @@ class BuilderTest extends TestCase
             'pnpm-lock.yaml' => "lockfileVersion: '9.0'\n",
             'yarn.lock' => "# yarn lockfile v1\n",
         ];
-        $deployment = $this->deployment('acme/api', ApplicationType::Node);
+        $deployment = $this->deployment('acme/api', ApplicationType::NODE);
         $deployment->environment->update(['build_command' => 'npx prisma generate']);
 
         (new Builder)->build($deployment, DeploymentLog::for($deployment));
@@ -129,9 +129,9 @@ class BuilderTest extends TestCase
             'Procfile' => "web: gunicorn shop.wsgi:app --bind 0.0.0.0:\$PORT\n",
             'package.json' => '{"scripts":{"start":"node server.js"}}',
         ];
-        $deployment = $this->deployment('acme/shop', ApplicationType::Python);
+        $deployment = $this->deployment('acme/shop', ApplicationType::PYTHON);
         $deployment->environment->update(['build_command' => 'flask --app shop assets build']);
-        EnvVar::factory()->for($deployment->environment)->create(['key' => 'PIP_INDEX_URL', 'value' => 'https://pypi.example.com/simple', 'available_at' => EnvVarAvailability::Build]);
+        EnvVar::factory()->for($deployment->environment)->create(['key' => 'PIP_INDEX_URL', 'value' => 'https://pypi.example.com/simple', 'available_at' => EnvVarAvailability::BUILD]);
 
         (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
@@ -159,7 +159,7 @@ class BuilderTest extends TestCase
             'config/application.rb' => "module Shop\nend\n",
             'package.json' => '{"scripts":{"start":"node server.js"}}',
         ];
-        $deployment = $this->deployment('acme/shop', ApplicationType::Ruby);
+        $deployment = $this->deployment('acme/shop', ApplicationType::RUBY);
 
         (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
@@ -179,7 +179,7 @@ class BuilderTest extends TestCase
     {
         $processes = FakeProcesses::install();
         $processes->repository = ['index.html' => '<h1>Docs</h1>', 'composer.json' => '{"require":{"laravel/framework":"^12.0"}}'];
-        $deployment = $this->deployment('acme/docs', ApplicationType::Static);
+        $deployment = $this->deployment('acme/docs', ApplicationType::STATIC);
         $deployment->environment->update(['build_command' => 'make site']);
 
         (new Builder)->build($deployment, DeploymentLog::for($deployment));
@@ -196,8 +196,8 @@ class BuilderTest extends TestCase
         foreach (['https://api.example.com', 'https://staging.example.com'] as $value) {
             $processes = FakeProcesses::install();
             $processes->repository = ['Dockerfile' => $dockerfile, 'Dockerfile.dockerignore' => "node_modules\n"];
-            $deployment = $this->deployment('https://git.example.com/acme/site.git', ApplicationType::Dockerfile);
-            EnvVar::factory()->for($deployment->environment)->create(['key' => 'VITE_API', 'value' => $value, 'available_at' => EnvVarAvailability::Build]);
+            $deployment = $this->deployment('https://git.example.com/acme/site.git', ApplicationType::DOCKERFILE);
+            EnvVar::factory()->for($deployment->environment)->create(['key' => 'VITE_API', 'value' => $value, 'available_at' => EnvVarAvailability::BUILD]);
 
             (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
@@ -222,37 +222,37 @@ class BuilderTest extends TestCase
     {
         return [
             'laravel without laravel/framework' => [
-                ApplicationType::Laravel,
+                ApplicationType::LARAVEL,
                 ['composer.json' => '{"require":{"symfony/console":"^7"}}', 'Dockerfile' => "FROM php:8.4-cli\n"],
                 'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework. To use another preset, create a new application with the same repository.',
             ],
             'laravel without composer.json' => [
-                ApplicationType::Laravel,
+                ApplicationType::LARAVEL,
                 ['Dockerfile' => "FROM nginx:alpine\n"],
                 'The application uses the Laravel preset, but the composer.json of the repository does not require laravel/framework. To use another preset, create a new application with the same repository.',
             ],
             'node without package.json' => [
-                ApplicationType::Node,
+                ApplicationType::NODE,
                 ['Dockerfile' => "FROM node:24\n"],
                 'The application uses the Node.js preset, but the repository has no package.json at its root. To use another preset, create a new application with the same repository.',
             ],
             'node without a way to start' => [
-                ApplicationType::Node,
+                ApplicationType::NODE,
                 ['package.json' => '{"scripts":{"build":"tsc"}}'],
                 'package.json has no start script and no main, so opencloud does not know how to start the app. Add a start script. To use another preset, create a new application with the same repository.',
             ],
             'python without a dependency file' => [
-                ApplicationType::Python,
+                ApplicationType::PYTHON,
                 ['app.py' => "app = Flask(__name__)\n", 'package.json' => '{"scripts":{"start":"node server.js"}}'],
                 'The application uses the Python preset, but the repository has no uv.lock, poetry.lock, Pipfile.lock, requirements.txt, or pyproject.toml at its root. To use another preset, create a new application with the same repository.',
             ],
             'ruby without a Gemfile' => [
-                ApplicationType::Ruby,
+                ApplicationType::RUBY,
                 ['Gemfile.lock' => "GEM\n", 'config.ru' => "run App\n"],
                 'The application uses the Ruby preset, but the repository has no Gemfile at its root. To use another preset, create a new application with the same repository.',
             ],
             'dockerfile without a Dockerfile' => [
-                ApplicationType::Dockerfile,
+                ApplicationType::DOCKERFILE,
                 ['composer.json' => '{"require":{"laravel/framework":"^12.0"}}'],
                 'The application uses the Dockerfile preset, but the repository has no Dockerfile at its root. To use another preset, create a new application with the same repository.',
             ],
@@ -299,7 +299,7 @@ class BuilderTest extends TestCase
         );
     }
 
-    private function deployment(string $repository, ApplicationType $type = ApplicationType::Laravel): Deployment
+    private function deployment(string $repository, ApplicationType $type = ApplicationType::LARAVEL): Deployment
     {
         $application = Application::factory()->create(['repository' => $repository, 'type' => $type]);
         $environment = Environment::factory()->for($application)->create();

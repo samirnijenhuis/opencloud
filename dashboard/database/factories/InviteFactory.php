@@ -19,7 +19,7 @@ class InviteFactory extends Factory
     {
         return [
             'token_hash' => Invite::hashToken(Str::random(48)),
-            'role' => Role::Developer,
+            'role' => Role::DEVELOPER,
             'expires_at' => now()->addDays(Invite::LIFETIME_DAYS),
         ];
     }

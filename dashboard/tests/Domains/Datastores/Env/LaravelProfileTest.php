@@ -14,7 +14,7 @@ class LaravelProfileTest extends TestCase
 {
     public function test_the_default_postgres_database_sets_the_db_values_with_the_pgsql_driver(): void
     {
-        $connection = new SqlConnection(DatastoreKind::Postgres, 'pg.internal', 5432, 'shop', 'shop_user', 's3cret', 'main', true);
+        $connection = new SqlConnection(DatastoreKind::POSTGRES, 'pg.internal', 5432, 'shop', 'shop_user', 's3cret', 'main', true);
 
         $this->assertEquals([
             'DB_CONNECTION' => EnvValue::plain('pgsql'),
@@ -28,7 +28,7 @@ class LaravelProfileTest extends TestCase
 
     public function test_a_named_postgres_database_sets_one_secret_url_with_an_encoded_password(): void
     {
-        $connection = new SqlConnection(DatastoreKind::Postgres, 'pg.internal', 5432, 'rep', 'rep_user', 'p/ss+w@rd:1%', 'reports', false);
+        $connection = new SqlConnection(DatastoreKind::POSTGRES, 'pg.internal', 5432, 'rep', 'rep_user', 'p/ss+w@rd:1%', 'reports', false);
 
         $this->assertEquals([
             'REPORTS_DB_URL' => EnvValue::secret('postgres://rep_user:p%2Fss%2Bw%40rd%3A1%25@pg.internal:5432/rep'),
@@ -37,7 +37,7 @@ class LaravelProfileTest extends TestCase
 
     public function test_a_named_mysql_database_uses_the_mysql_scheme(): void
     {
-        $connection = new SqlConnection(DatastoreKind::Mysql, 'my.internal', 3306, 'cache_db', 'u', 'pw', 'cache', false);
+        $connection = new SqlConnection(DatastoreKind::MYSQL, 'my.internal', 3306, 'cache_db', 'u', 'pw', 'cache', false);
 
         $this->assertEquals([
             'CACHE_DB_URL' => EnvValue::secret('mysql://u:pw@my.internal:3306/cache_db'),
@@ -90,7 +90,7 @@ class LaravelProfileTest extends TestCase
     {
         $profile = new LaravelProfile;
 
-        $this->assertSame("'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],", $profile->configLine(DatastoreKind::Postgres, 'reports'));
-        $this->assertSame("'cache' => ['driver' => 'mysql', 'url' => env('CACHE_DB_URL')],", $profile->configLine(DatastoreKind::Mysql, 'cache'));
+        $this->assertSame("'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],", $profile->configLine(DatastoreKind::POSTGRES, 'reports'));
+        $this->assertSame("'cache' => ['driver' => 'mysql', 'url' => env('CACHE_DB_URL')],", $profile->configLine(DatastoreKind::MYSQL, 'cache'));
     }
 }

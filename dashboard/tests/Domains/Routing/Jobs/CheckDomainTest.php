@@ -24,12 +24,12 @@ class CheckDomainTest extends TestCase
     public static function answers(): array
     {
         return [
-            'the ingress ip' => [['203.0.113.10'], DnsStatus::Ok],
-            'the ingress ip among others' => [['198.51.100.1', '203.0.113.10'], DnsStatus::Ok],
-            'cloudflare only' => [['104.16.132.229', '172.67.10.1'], DnsStatus::Proxied],
-            'cloudflare and another host' => [['104.16.132.229', '198.51.100.1'], DnsStatus::Wrong],
-            'another host' => [['198.51.100.1'], DnsStatus::Wrong],
-            'no records' => [[], DnsStatus::Missing],
+            'the ingress ip' => [['203.0.113.10'], DnsStatus::OK],
+            'the ingress ip among others' => [['198.51.100.1', '203.0.113.10'], DnsStatus::OK],
+            'cloudflare only' => [['104.16.132.229', '172.67.10.1'], DnsStatus::PROXIED],
+            'cloudflare and another host' => [['104.16.132.229', '198.51.100.1'], DnsStatus::WRONG],
+            'another host' => [['198.51.100.1'], DnsStatus::WRONG],
+            'no records' => [[], DnsStatus::MISSING],
         ];
     }
 
@@ -42,7 +42,7 @@ class CheckDomainTest extends TestCase
 
     public function test_a_cluster_without_an_ingress_ip_never_passes_on_its_own_address(): void
     {
-        $this->assertSame(DnsStatus::Wrong, DnsStatus::forAddresses(['203.0.113.10'], null));
+        $this->assertSame(DnsStatus::WRONG, DnsStatus::forAddresses(['203.0.113.10'], null));
     }
 
     public function test_a_domain_that_points_at_the_cluster_is_ok_and_syncs_caddy(): void
@@ -56,7 +56,7 @@ class CheckDomainTest extends TestCase
         $job->handle(app(DnsResolver::class));
 
         $domain->refresh();
-        $this->assertSame(DnsStatus::Ok, $domain->dns_status);
+        $this->assertSame(DnsStatus::OK, $domain->dns_status);
         $this->assertSame(['203.0.113.10'], $domain->dns_found);
         $this->assertSame('2026-10-23 12:00:00', $domain->dns_checked_at->toDateTimeString());
         $this->assertSame([$domain->environment->application->cluster_id], Queue::pushed(SyncCaddy::class)->map(fn (SyncCaddy $sync) => $sync->cluster->id)->all());
@@ -72,7 +72,7 @@ class CheckDomainTest extends TestCase
         $job = (new CheckDomain($domain))->withFakeQueueInteractions();
         $job->handle(app(DnsResolver::class));
 
-        $this->assertSame(DnsStatus::Proxied, $domain->fresh()->dns_status);
+        $this->assertSame(DnsStatus::PROXIED, $domain->fresh()->dns_status);
         Queue::assertPushed(SyncCaddy::class, 1);
         $job->assertNotReleased();
     }
@@ -87,7 +87,7 @@ class CheckDomainTest extends TestCase
         $job->job->attempts = 3;
         $job->handle(app(DnsResolver::class));
 
-        $this->assertSame(DnsStatus::Wrong, $domain->fresh()->dns_status);
+        $this->assertSame(DnsStatus::WRONG, $domain->fresh()->dns_status);
         $this->assertSame(['198.51.100.1', '198.51.100.2'], $domain->fresh()->dns_found);
         Queue::assertNotPushed(SyncCaddy::class);
         $job->assertReleased(delay: 240);
@@ -103,7 +103,7 @@ class CheckDomainTest extends TestCase
         $job->job->attempts = 48;
         $job->handle(app(DnsResolver::class));
 
-        $this->assertSame(DnsStatus::Missing, $domain->fresh()->dns_status);
+        $this->assertSame(DnsStatus::MISSING, $domain->fresh()->dns_status);
         $job->assertNotReleased();
     }
 

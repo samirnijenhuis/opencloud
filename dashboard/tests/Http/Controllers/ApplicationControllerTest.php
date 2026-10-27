@@ -70,8 +70,8 @@ class ApplicationControllerTest extends TestCase
     public function test_the_list_shows_the_status_domain_and_last_deploy_of_production(): void
     {
         $production = $this->makeEnvironment();
-        Deployment::factory()->for($production)->create(['status' => DeploymentStatus::Superseded]);
-        $latest = Deployment::factory()->for($production)->create(['status' => DeploymentStatus::Building]);
+        Deployment::factory()->for($production)->create(['status' => DeploymentStatus::SUPERSEDED]);
+        $latest = Deployment::factory()->for($production)->create(['status' => DeploymentStatus::BUILDING]);
         Domain::factory()->for($production)->create(['hostname' => 'shop.example.com']);
         Domain::factory()->for($production)->create(['hostname' => 'www.example.com']);
         Application::factory()->for($this->cluster)->create(['name' => 'blog']);
@@ -199,8 +199,8 @@ class ApplicationControllerTest extends TestCase
                 'name' => 'shop',
                 'repository' => 'https://github.com/acme/shop.git',
                 'cluster_id' => $this->cluster->id,
-                'type' => ApplicationType::Laravel,
-                'env_profile' => EnvProfileKind::Laravel,
+                'type' => ApplicationType::LARAVEL,
+                'env_profile' => EnvProfileKind::LARAVEL,
                 'port' => null,
                 'branch' => 'main',
                 'env' => [
@@ -254,7 +254,7 @@ class ApplicationControllerTest extends TestCase
         $application = Application::sole();
         $production = $application->environments()->where('name', 'production')->sole();
         $response->assertRedirect("/environments/{$production->id}");
-        $this->assertSame(['shop', ApplicationType::Dockerfile, 3000, EnvironmentKind::Permanent], [$application->name, $application->type, $application->port, $production->kind]);
+        $this->assertSame(['shop', ApplicationType::DOCKERFILE, 3000, EnvironmentKind::PERMANENT], [$application->name, $application->type, $application->port, $production->kind]);
         $this->assertSame(['m', 2, 4, 60, []], [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->processes->all()]);
         $this->assertSame(0, AuditEvent::where('action', 'environment.updated')->count());
     }
@@ -404,10 +404,10 @@ class ApplicationControllerTest extends TestCase
     {
         $production = $this->makeEnvironment(name: 'production');
         $application = $production->application;
-        Environment::factory()->for($application)->create(['name' => 'pr-7', 'kind' => EnvironmentKind::Preview, 'pr_number' => 7]);
-        Environment::factory()->for($application)->create(['name' => 'staging', 'kind' => EnvironmentKind::Permanent]);
-        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate]);
-        Deployment::factory()->for($production)->create(['status' => DeploymentStatus::Live]);
+        Environment::factory()->for($application)->create(['name' => 'pr-7', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 7]);
+        Environment::factory()->for($application)->create(['name' => 'staging', 'kind' => EnvironmentKind::PERMANENT]);
+        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
+        Deployment::factory()->for($production)->create(['status' => DeploymentStatus::LIVE]);
         Domain::factory()->for($production)->create(['hostname' => 'shop.example.com']);
 
         $this->actingAs(User::factory()->create())->get("/applications/{$application->id}")

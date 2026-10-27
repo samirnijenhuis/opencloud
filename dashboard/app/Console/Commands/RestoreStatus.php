@@ -41,7 +41,7 @@ class RestoreStatus extends Command
             $this->line("Deployment {$deployment->id} of {$deployment->environment->application->name}/{$deployment->environment->name}: {$deployment->status->value}");
         }
 
-        if (collect(RestoreStep::cases())->contains(fn (RestoreStep $step) => $state->status($step) === StepStatus::Failed)) {
+        if (collect(RestoreStep::cases())->contains(fn (RestoreStep $step) => $state->status($step) === StepStatus::FAILED)) {
             $this->line('A step failed. Fix the cause, then run: opencloud restore');
 
             return self::FAILURE;

@@ -37,33 +37,33 @@ class DashboardDomainCaddyTest extends TestCase
 
     public function test_a_verified_domain_gets_a_route_to_the_dashboard_on_the_local_cluster(): void
     {
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local]);
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Ok]);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL]);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
 
         $this->assertSame(self::WITH, $this->configJson($local));
     }
 
     public function test_a_proxied_domain_gets_the_route_too(): void
     {
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local]);
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Proxied]);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL]);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::PROXIED]);
 
         $this->assertSame(self::WITH, $this->configJson($local));
     }
 
     public function test_without_a_domain_or_before_the_check_passes_the_config_has_no_dashboard_host(): void
     {
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local]);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL]);
         $this->assertSame(self::WITHOUT, $this->configJson($local));
 
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Wrong]);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::WRONG]);
         $this->assertSame(self::WITHOUT, $this->configJson($local));
     }
 
     public function test_another_cluster_never_gets_the_dashboard_route(): void
     {
-        $connected = Cluster::factory()->create(['kind' => ClusterKind::Connected]);
-        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Ok]);
+        $connected = Cluster::factory()->create(['kind' => ClusterKind::CONNECTED]);
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
 
         $this->assertStringNotContainsString('admin.example.com', $this->configJson($connected));
     }
@@ -71,8 +71,8 @@ class DashboardDomainCaddyTest extends TestCase
     public function test_a_removed_domain_leaves_the_route_and_syncs_caddy(): void
     {
         Queue::fake();
-        $local = Cluster::factory()->create(['kind' => ClusterKind::Local]);
-        $domain = DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Ok]);
+        $local = Cluster::factory()->create(['kind' => ClusterKind::LOCAL]);
+        $domain = DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
 
         app(RemoveDashboardDomain::class)->execute($domain, User::factory()->owner()->create());
 

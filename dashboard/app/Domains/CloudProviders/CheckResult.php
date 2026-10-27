@@ -23,7 +23,7 @@ final readonly class CheckResult
     /** @param  array<string, mixed>  $details */
     public static function ok(string $message, array $details = []): self
     {
-        return new self(CheckStatus::Ok, $message, [], $details);
+        return new self(CheckStatus::OK, $message, [], $details);
     }
 
     /** A provider message could echo the key. */
@@ -34,7 +34,7 @@ final readonly class CheckResult
 
     public static function invalid(string $message): self
     {
-        return new self(CheckStatus::Invalid, $message);
+        return new self(CheckStatus::INVALID, $message);
     }
 
     /**
@@ -43,6 +43,6 @@ final readonly class CheckResult
      */
     public static function missing(string $message, array $missing, array $details = []): self
     {
-        return new self(CheckStatus::MissingRights, $message, $missing, $details);
+        return new self(CheckStatus::MISSING_RIGHTS, $message, $missing, $details);
     }
 }

@@ -15,7 +15,7 @@ class EnvironmentPolicy
 
     public function create(User $user): bool
     {
-        return $user->role->allows(Ability::ManageApplications);
+        return $user->role->allows(Ability::MANAGE_APPLICATIONS);
     }
 
     /**
@@ -24,8 +24,8 @@ class EnvironmentPolicy
     public function update(User $user, Environment $environment): bool
     {
         return $user->role->allows($environment->is_protected
-            ? Ability::ChangeProtectedEnvironment
-            : Ability::ChangeUnprotectedEnvironment);
+            ? Ability::CHANGE_PROTECTED_ENVIRONMENT
+            : Ability::CHANGE_UNPROTECTED_ENVIRONMENT);
     }
 
     /**
@@ -34,12 +34,12 @@ class EnvironmentPolicy
     public function deploy(User $user, Environment $environment): bool
     {
         return $user->role->allows($environment->is_protected
-            ? Ability::ChangeProtectedEnvironment
-            : Ability::Deploy);
+            ? Ability::CHANGE_PROTECTED_ENVIRONMENT
+            : Ability::DEPLOY);
     }
 
     public function delete(User $user, Environment $environment): bool
     {
-        return $user->role->allows(Ability::ManageApplications);
+        return $user->role->allows(Ability::MANAGE_APPLICATIONS);
     }
 }

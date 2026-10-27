@@ -24,8 +24,8 @@ class EnvVarControllerTest extends TestCase
         $environment = $this->makeEnvironment();
         EnvVar::factory()->for($environment)->create(['key' => 'APP_ENV', 'value' => 'production']);
         EnvVar::factory()->for($environment)->create(['key' => 'STRIPE_SECRET', 'value' => 'sk_live_TOP_SECRET_VALUE', 'is_secret' => true]);
-        EnvVar::factory()->for($environment)->create(['key' => 'DB_PASSWORD', 'value' => 'datastore-password-123', 'source' => EnvVarSource::Datastore, 'is_secret' => true]);
-        EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'value' => 'mysql.internal', 'source' => EnvVarSource::Datastore]);
+        EnvVar::factory()->for($environment)->create(['key' => 'DB_PASSWORD', 'value' => 'datastore-password-123', 'source' => EnvVarSource::DATASTORE, 'is_secret' => true]);
+        EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'value' => 'mysql.internal', 'source' => EnvVarSource::DATASTORE]);
 
         $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/settings")->assertOk();
 
@@ -92,7 +92,7 @@ class EnvVarControllerTest extends TestCase
             ->shouldReceive('execute')
             ->once()
             ->withArgs(fn ($given, User $by, string $key, ?string $value, bool $isSecret, EnvVarAvailability $at) => $given->is($environment) && $by->is($developer)
-                && [$key, $value, $isSecret, $at] === ['MAIL_MAILER', 'log', false, EnvVarAvailability::Both]);
+                && [$key, $value, $isSecret, $at] === ['MAIL_MAILER', 'log', false, EnvVarAvailability::BOTH]);
 
         $this->actingAs($developer)->post("/environments/{$environment->id}/env", ['key' => 'MAIL_MAILER', 'value' => 'log', 'is_secret' => false, 'available_at' => 'both'])->assertRedirect();
     }
@@ -119,7 +119,7 @@ class EnvVarControllerTest extends TestCase
             ->assertRedirect();
 
         $envVar = EnvVar::sole();
-        $this->assertSame(['sk_live_1', EnvVarAvailability::Build], [$envVar->value, $envVar->available_at]);
+        $this->assertSame(['sk_live_1', EnvVarAvailability::BUILD], [$envVar->value, $envVar->available_at]);
     }
 
     public function test_a_kept_secret_cannot_become_plain(): void
@@ -137,7 +137,7 @@ class EnvVarControllerTest extends TestCase
     public function test_the_value_form_is_validated(): void
     {
         $environment = $this->makeEnvironment();
-        EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'source' => EnvVarSource::Datastore]);
+        EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'source' => EnvVarSource::DATASTORE]);
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->post("/environments/{$environment->id}/env", ['key' => '1BAD', 'value' => 'x', 'available_at' => 'runtime'])->assertSessionHasErrors('key');
@@ -159,7 +159,7 @@ class EnvVarControllerTest extends TestCase
     public function test_a_datastore_value_cannot_be_deleted(): void
     {
         $environment = $this->makeEnvironment();
-        $envVar = EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'source' => EnvVarSource::Datastore]);
+        $envVar = EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'source' => EnvVarSource::DATASTORE]);
 
         $this->actingAs(User::factory()->admin()->create())->delete("/env-vars/{$envVar->id}")->assertSessionHasErrors('key');
 

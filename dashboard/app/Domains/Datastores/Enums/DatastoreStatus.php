@@ -8,9 +8,9 @@ namespace App\Domains\Datastores\Enums;
  */
 enum DatastoreStatus: string
 {
-    case Pending = 'pending';
-    case Provisioning = 'provisioning';
-    case Ready = 'ready';
-    case Failed = 'failed';
-    case Destroying = 'destroying';
+    case PENDING = 'pending';
+    case PROVISIONING = 'provisioning';
+    case READY = 'ready';
+    case FAILED = 'failed';
+    case DESTROYING = 'destroying';
 }

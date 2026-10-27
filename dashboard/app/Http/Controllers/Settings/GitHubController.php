@@ -86,6 +86,6 @@ class GitHubController extends Controller
 
     private function authorizeOwner(Request $request): void
     {
-        abort_unless($request->user()->role->allows(Ability::ManageCredentials), 403);
+        abort_unless($request->user()->role->allows(Ability::MANAGE_CREDENTIALS), 403);
     }
 }

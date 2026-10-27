@@ -60,29 +60,29 @@ final class RestoreInstall
         }
 
         foreach (RestoreStep::cases() as $step) {
-            if ($state->status($step) === StepStatus::Done) {
+            if ($state->status($step) === StepStatus::DONE) {
                 continue;
             }
 
-            $state->mark($step, StepStatus::Running);
+            $state->mark($step, StepStatus::RUNNING);
 
             try {
                 $detail = match ($step) {
-                    RestoreStep::RetireDeployments => $this->retireDeployments($cluster, $state->startedAt),
-                    RestoreStep::ProvisionDatastores => $this->provisionDatastores($cluster),
-                    RestoreStep::RestoreDatabases => $this->restoreDatabases($cluster, $state->startedAt),
-                    RestoreStep::RestoreBuckets => $this->restoreBuckets($cluster),
-                    RestoreStep::Deploy => $this->deploy($state->redeploy(), $state->startedAt),
-                    RestoreStep::CheckDomains => $this->checkDomains($cluster),
-                    RestoreStep::SyncCaddy => $this->syncCaddy($cluster),
+                    RestoreStep::RETIRE_DEPLOYMENTS => $this->retireDeployments($cluster, $state->startedAt),
+                    RestoreStep::PROVISION_DATASTORES => $this->provisionDatastores($cluster),
+                    RestoreStep::RESTORE_DATABASES => $this->restoreDatabases($cluster, $state->startedAt),
+                    RestoreStep::RESTORE_BUCKETS => $this->restoreBuckets($cluster),
+                    RestoreStep::DEPLOY => $this->deploy($state->redeploy(), $state->startedAt),
+                    RestoreStep::CHECK_DOMAINS => $this->checkDomains($cluster),
+                    RestoreStep::SYNC_CADDY => $this->syncCaddy($cluster),
                 };
             } catch (Throwable $e) {
-                $state->mark($step, StepStatus::Failed, $this->masker($cluster)->mask($e->getMessage()));
+                $state->mark($step, StepStatus::FAILED, $this->masker($cluster)->mask($e->getMessage()));
 
                 return;
             }
 
-            $state->mark($step, StepStatus::Done, $detail);
+            $state->mark($step, StepStatus::DONE, $detail);
         }
     }
 
@@ -104,7 +104,7 @@ final class RestoreInstall
     private function liveCommits(Cluster $cluster, Carbon $before): array
     {
         return $this->oldDeployments($cluster, $before)
-            ->filter(fn (Deployment $deployment) => $deployment->status === DeploymentStatus::Live && $deployment->environment->kind === EnvironmentKind::Permanent)
+            ->filter(fn (Deployment $deployment) => $deployment->status === DeploymentStatus::LIVE && $deployment->environment->kind === EnvironmentKind::PERMANENT)
             ->mapWithKeys(fn (Deployment $deployment) => [$deployment->environment_id => $deployment->commit_sha])
             ->all();
     }
@@ -116,19 +116,19 @@ final class RestoreInstall
         foreach ($deployments as $deployment) {
             $log = DeploymentLog::for($deployment);
 
-            if ($deployment->status === DeploymentStatus::Live) {
+            if ($deployment->status === DeploymentStatus::LIVE) {
                 $log->write('Opencloud restored the install on a new server. This deployment does not run there.');
-                $deployment->moveTo(DeploymentStatus::Superseded);
+                $deployment->moveTo(DeploymentStatus::SUPERSEDED);
 
                 continue;
             }
 
             $log->write('The server was lost during this deployment.');
             $deployment->finished_at = now();
-            $deployment->moveTo(DeploymentStatus::Failed);
+            $deployment->moveTo(DeploymentStatus::FAILED);
         }
 
-        $superseded = $deployments->filter(fn (Deployment $deployment) => $deployment->status === DeploymentStatus::Superseded)->count();
+        $superseded = $deployments->filter(fn (Deployment $deployment) => $deployment->status === DeploymentStatus::SUPERSEDED)->count();
 
         return "{$superseded} superseded, ".($deployments->count() - $superseded).' failed.';
     }
@@ -141,7 +141,7 @@ final class RestoreInstall
             Provisioners::of($attachment->datastore)->provision($attachment);
         }
 
-        $failed = $attachments->filter(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::Failed);
+        $failed = $attachments->filter(fn (DatastoreAttachment $attachment) => $attachment->status === DatastoreStatus::FAILED);
 
         if ($failed->isNotEmpty()) {
             throw new RuntimeException($failed->map(fn (DatastoreAttachment $attachment) => "{$attachment->datastore->kind->value} {$attachment->database_name} failed. {$attachment->error}")->implode(' '));
@@ -274,18 +274,18 @@ final class RestoreInstall
         $notes = [];
 
         foreach ($domains as $domain) {
-            $zone = $domain->dns_mode === DnsMode::Cloudflare ? CloudflareDns::zoneFor($credential, $domain->hostname) : null;
+            $zone = $domain->dns_mode === DnsMode::CLOUDFLARE ? CloudflareDns::zoneFor($credential, $domain->hostname) : null;
 
             if ($zone !== null && $cluster->ingress_ip !== null) {
                 try {
-                    $this->cloudflare->point($credential, $zone, $domain->hostname, $cluster->ingress_ip, $domain->dns_status === DnsStatus::Proxied);
+                    $this->cloudflare->point($credential, $zone, $domain->hostname, $cluster->ingress_ip, $domain->dns_status === DnsStatus::PROXIED);
                     $notes[] = "Cloudflare points {$domain->hostname} at {$cluster->ingress_ip}.";
                 } catch (ValidationException $e) {
                     $notes[] = collect($e->errors())->flatten()->implode(' ');
                 }
             }
 
-            $domain->update(['dns_status' => DnsStatus::Pending]);
+            $domain->update(['dns_status' => DnsStatus::PENDING]);
             CheckDomain::dispatch($domain);
         }
 
@@ -295,7 +295,7 @@ final class RestoreInstall
         if ($dashboardDomain !== null) {
             $hostnames->push($dashboardDomain->hostname);
             $wasVerified = $dashboardDomain->dns_status->routable();
-            $dashboardDomain->update(['dns_status' => DnsStatus::Pending]);
+            $dashboardDomain->update(['dns_status' => DnsStatus::PENDING]);
             CheckDashboardDomain::dispatch($dashboardDomain);
 
             if ($wasVerified) {
@@ -323,7 +323,7 @@ final class RestoreInstall
     {
         return Deployment::query()
             ->with('environment')
-            ->whereIn('status', [DeploymentStatus::Queued, DeploymentStatus::Building, DeploymentStatus::Deploying, DeploymentStatus::Live])
+            ->whereIn('status', [DeploymentStatus::QUEUED, DeploymentStatus::BUILDING, DeploymentStatus::DEPLOYING, DeploymentStatus::LIVE])
             ->where('created_at', '<', $before)
             ->whereHas('environment.application', fn (Builder $query) => $query->where('cluster_id', $cluster->id))
             ->orderBy('id')

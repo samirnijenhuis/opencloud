@@ -15,16 +15,16 @@ class ApplicationPolicy
 
     public function create(User $user): bool
     {
-        return $user->role->allows(Ability::ManageApplications);
+        return $user->role->allows(Ability::MANAGE_APPLICATIONS);
     }
 
     public function update(User $user, Application $application): bool
     {
-        return $user->role->allows(Ability::ManageApplications);
+        return $user->role->allows(Ability::MANAGE_APPLICATIONS);
     }
 
     public function delete(User $user, Application $application): bool
     {
-        return $user->role->allows(Ability::ManageApplications);
+        return $user->role->allows(Ability::MANAGE_APPLICATIONS);
     }
 }

@@ -4,7 +4,7 @@ namespace App\Domains\CloudProviders\Enums;
 
 enum CheckStatus: string
 {
-    case Ok = 'ok';
-    case Invalid = 'invalid';
-    case MissingRights = 'missing_rights';
+    case OK = 'ok';
+    case INVALID = 'invalid';
+    case MISSING_RIGHTS = 'missing_rights';
 }

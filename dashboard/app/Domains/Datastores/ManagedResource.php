@@ -42,7 +42,7 @@ final class ManagedResource implements Provisioner
     /** Only a cluster that opencloud created on DigitalOcean has the VPC and the id that the firewall rule needs. */
     public function refusalOn(Cluster $cluster): ?string
     {
-        if ($cluster->kind !== ClusterKind::Created || $cluster->provider !== 'digitalocean' || $cluster->provider_cluster_id === null) {
+        if ($cluster->kind !== ClusterKind::CREATED || $cluster->provider !== 'digitalocean' || $cluster->provider_cluster_id === null) {
             return $this->refusal;
         }
 
@@ -61,7 +61,7 @@ final class ManagedResource implements Provisioner
         $datastore = Datastore::query()->create([
             'cluster_id' => $environment->application->cluster_id,
             'kind' => $this->kind,
-            'source' => DatastoreSource::Managed,
+            'source' => DatastoreSource::MANAGED,
             'version' => $this->stack->version(),
         ]);
 
@@ -94,7 +94,7 @@ final class ManagedResource implements Provisioner
         DB::transaction(function () use ($attachment, $by, $datastore) {
             $attachment->envVars()->delete();
             $attachment->update(['name' => null, 'is_default' => false]);
-            $datastore->update(['status' => DatastoreStatus::Destroying, 'error' => null]);
+            $datastore->update(['status' => DatastoreStatus::DESTROYING, 'error' => null]);
 
             AuditEvent::record($by, 'datastore.destroy_requested', $attachment->environment, [
                 'datastore_id' => $datastore->id,
@@ -111,12 +111,12 @@ final class ManagedResource implements Provisioner
     {
         $datastore = $attachment->datastore;
 
-        if ($datastore->status === DatastoreStatus::Destroying) {
+        if ($datastore->status === DatastoreStatus::DESTROYING) {
             return;
         }
 
-        $attachment->update(['status' => DatastoreStatus::Provisioning, 'error' => null]);
-        $datastore->update(['status' => DatastoreStatus::Provisioning, 'error' => null, 'tofu_log' => null]);
+        $attachment->update(['status' => DatastoreStatus::PROVISIONING, 'error' => null]);
+        $datastore->update(['status' => DatastoreStatus::PROVISIONING, 'error' => null, 'tofu_log' => null]);
 
         try {
             $address = $this->stack->apply($attachment);
@@ -132,8 +132,8 @@ final class ManagedResource implements Provisioner
             $attachment->update($address);
             AttachmentEnv::write($attachment);
 
-            $datastore->update(['status' => DatastoreStatus::Ready]);
-            $attachment->update(['status' => DatastoreStatus::Ready]);
+            $datastore->update(['status' => DatastoreStatus::READY]);
+            $attachment->update(['status' => DatastoreStatus::READY]);
         });
     }
 
@@ -141,7 +141,7 @@ final class ManagedResource implements Provisioner
     public function release(Datastore $datastore, array $attachment, bool $destroyData): void
     {
         $released = (new DatastoreAttachment)->setRawAttributes($attachment)->setRelation('datastore', $datastore);
-        $datastore->update(['status' => DatastoreStatus::Destroying, 'error' => null, 'tofu_log' => null]);
+        $datastore->update(['status' => DatastoreStatus::DESTROYING, 'error' => null, 'tofu_log' => null]);
 
         try {
             $this->stack->destroy($released);
@@ -173,13 +173,13 @@ final class ManagedResource implements Provisioner
     {
         $error = $e?->getMessage() ?? 'The OpenTofu run failed.';
 
-        $attachment->update(['status' => DatastoreStatus::Failed, 'error' => $error]);
-        $attachment->datastore->update(['status' => DatastoreStatus::Failed, 'error' => $error]);
+        $attachment->update(['status' => DatastoreStatus::FAILED, 'error' => $error]);
+        $attachment->datastore->update(['status' => DatastoreStatus::FAILED, 'error' => $error]);
     }
 
     /** release() calls it for an OpenTofu error, and the job calls it when the queue stops the destroy. */
     public static function destroyFailed(Datastore $datastore, ?Throwable $e): void
     {
-        $datastore->update(['status' => DatastoreStatus::Failed, 'error' => 'The destroy failed. '.($e?->getMessage() ?? '')]);
+        $datastore->update(['status' => DatastoreStatus::FAILED, 'error' => 'The destroy failed. '.($e?->getMessage() ?? '')]);
     }
 }

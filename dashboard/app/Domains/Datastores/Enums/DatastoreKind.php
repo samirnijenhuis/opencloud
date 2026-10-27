@@ -7,18 +7,18 @@ namespace App\Domains\Datastores\Enums;
  */
 enum DatastoreKind: string
 {
-    case Mysql = 'mysql';
-    case Postgres = 'postgres';
-    case Valkey = 'valkey';
-    case Rustfs = 'rustfs';
+    case MYSQL = 'mysql';
+    case POSTGRES = 'postgres';
+    case VALKEY = 'valkey';
+    case RUSTFS = 'rustfs';
 
     /** No default arm, so a new kind does not run until it has a family. */
     public function family(): ResourceFamily
     {
         return match ($this) {
-            self::Mysql, self::Postgres => ResourceFamily::Database,
-            self::Valkey => ResourceFamily::KeyValue,
-            self::Rustfs => ResourceFamily::Bucket,
+            self::MYSQL, self::POSTGRES => ResourceFamily::DATABASE,
+            self::VALKEY => ResourceFamily::KEY_VALUE,
+            self::RUSTFS => ResourceFamily::BUCKET,
         };
     }
 }

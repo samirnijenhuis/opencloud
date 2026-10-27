@@ -98,7 +98,7 @@ class ClusterProviderTest extends TestCase
         $this->actingAs($owner)->post('/clusters/create/fakecloud', $this->form())->assertRedirect();
 
         $cluster = Cluster::query()->where('name', 'mars-prod')->sole();
-        $this->assertSame(['fakecloud', ClusterKind::Created, ClusterStatus::Provisioning], [$cluster->provider, $cluster->kind, $cluster->status]);
+        $this->assertSame(['fakecloud', ClusterKind::CREATED, ClusterStatus::PROVISIONING], [$cluster->provider, $cluster->kind, $cluster->status]);
 
         Queue::pushed(ProvisionCluster::class)->sole()->handle(app(Runner::class), app(ClusterProviders::class));
 
@@ -107,7 +107,7 @@ class ClusterProviderTest extends TestCase
         $this->assertSame(['mars1', 'tiny'], [$this->tofu->ran[1]['variables']['region'], $this->tofu->ran[1]['variables']['node_size']]);
         $cluster->refresh();
         $this->assertSame(
-            [ClusterStatus::Installing, 'fc-1', 'fc-vpc', 'registry.fakecloud.example/acme'],
+            [ClusterStatus::INSTALLING, 'fc-1', 'fc-vpc', 'registry.fakecloud.example/acme'],
             [$cluster->status, $cluster->provider_cluster_id, $cluster->provider_vpc_id, $cluster->registry_url],
         );
         Queue::assertPushed(InstallClusterParts::class);

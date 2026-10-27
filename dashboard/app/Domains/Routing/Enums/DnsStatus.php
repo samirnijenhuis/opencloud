@@ -6,13 +6,13 @@ use Symfony\Component\HttpFoundation\IpUtils;
 
 enum DnsStatus: string
 {
-    case Pending = 'pending';
+    case PENDING = 'pending';
     /** An A record points at the ingress IP of the cluster. */
-    case Ok = 'ok';
+    case OK = 'ok';
     /** Every A record is a Cloudflare address, so Cloudflare forwards to the cluster. */
-    case Proxied = 'proxied';
-    case Wrong = 'wrong';
-    case Missing = 'missing';
+    case PROXIED = 'proxied';
+    case WRONG = 'wrong';
+    case MISSING = 'missing';
 
     /** Cloudflare publishes these at https://www.cloudflare.com/ips-v4. */
     public const CLOUDFLARE_IPV4 = [
@@ -37,15 +37,15 @@ enum DnsStatus: string
     public static function forAddresses(array $addresses, ?string $ingressIp): self
     {
         return match (true) {
-            $addresses === [] => self::Missing,
-            $ingressIp !== null && in_array($ingressIp, $addresses, true) => self::Ok,
-            collect($addresses)->every(fn (string $address) => IpUtils::checkIp($address, self::CLOUDFLARE_IPV4)) => self::Proxied,
-            default => self::Wrong,
+            $addresses === [] => self::MISSING,
+            $ingressIp !== null && in_array($ingressIp, $addresses, true) => self::OK,
+            collect($addresses)->every(fn (string $address) => IpUtils::checkIp($address, self::CLOUDFLARE_IPV4)) => self::PROXIED,
+            default => self::WRONG,
         };
     }
 
     public function routable(): bool
     {
-        return $this === self::Ok || $this === self::Proxied;
+        return $this === self::OK || $this === self::PROXIED;
     }
 }

@@ -81,7 +81,7 @@ class NightlyBackupsTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-23 03:00:00'));
         $kubectl = FakeKubectl::install();
-        $rustfs = Datastore::factory()->for(Cluster::factory()->create(['kind' => ClusterKind::Local]))->create(['kind' => DatastoreKind::Rustfs, 'version' => '1.0.3']);
+        $rustfs = Datastore::factory()->for(Cluster::factory()->create(['kind' => ClusterKind::LOCAL]))->create(['kind' => DatastoreKind::RUSTFS, 'version' => '1.0.3']);
 
         CopyBuckets::dispatchSync($rustfs);
         $withoutTarget = $kubectl->calls;
@@ -98,10 +98,10 @@ class NightlyBackupsTest extends TestCase
     public function test_the_scheduler_starts_the_nightly_backups_at_three(): void
     {
         Queue::fake();
-        $mysql = Datastore::factory()->create(['kind' => DatastoreKind::Mysql]);
-        $postgres = Datastore::factory()->create(['kind' => DatastoreKind::Postgres]);
-        $rustfs = Datastore::factory()->create(['kind' => DatastoreKind::Rustfs]);
-        Datastore::factory()->create(['kind' => DatastoreKind::Valkey]);
+        $mysql = Datastore::factory()->create(['kind' => DatastoreKind::MYSQL]);
+        $postgres = Datastore::factory()->create(['kind' => DatastoreKind::POSTGRES]);
+        $rustfs = Datastore::factory()->create(['kind' => DatastoreKind::RUSTFS]);
+        Datastore::factory()->create(['kind' => DatastoreKind::VALKEY]);
         $event = collect(app(Schedule::class)->events())->first(fn ($event) => $event->description === 'nightly-backups');
 
         $event->run($this->app);

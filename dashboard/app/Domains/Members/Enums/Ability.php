@@ -5,14 +5,14 @@ namespace App\Domains\Members\Enums;
 enum Ability
 {
     /** Cloud keys, the GitHub connection, and kubeconfigs. */
-    case ManageCredentials;
-    case ManageMembers;
+    case MANAGE_CREDENTIALS;
+    case MANAGE_MEMBERS;
     /** Sees the notice about a newer release, because only the owner runs commands on the server. */
-    case UpgradeOpencloud;
+    case UPGRADE_OPENCLOUD;
     /** Applications, datastores, and domains. */
-    case ManageApplications;
-    case ChangeProtectedEnvironment;
-    case ChangeUnprotectedEnvironment;
-    case Deploy;
-    case ReadLogs;
+    case MANAGE_APPLICATIONS;
+    case CHANGE_PROTECTED_ENVIRONMENT;
+    case CHANGE_UNPROTECTED_ENVIRONMENT;
+    case DEPLOY;
+    case READ_LOGS;
 }

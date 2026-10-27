@@ -50,7 +50,7 @@ class SetupTest extends TestCase
 
         $owner = User::sole();
         $this->assertSame('samir@example.com', $owner->email);
-        $this->assertSame(Role::Owner, $owner->role);
+        $this->assertSame(Role::OWNER, $owner->role);
         $this->assertAuthenticatedAs($owner);
 
         $event = AuditEvent::sole();

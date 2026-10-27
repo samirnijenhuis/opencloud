@@ -12,7 +12,7 @@ class CreateOwner
     public function execute(array $data): User
     {
         $owner = new User($data);
-        $owner->role = Role::Owner;
+        $owner->role = Role::OWNER;
         $owner->save();
 
         AuditEvent::record($owner, 'owner.created', $owner);

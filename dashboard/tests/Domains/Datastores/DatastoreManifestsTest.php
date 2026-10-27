@@ -58,12 +58,12 @@ class DatastoreManifestsTest extends TestCase
                     'volumeClaimTemplates' => self::VOLUME_CLAIMS,
                 ],
             ],
-        ], DatastoreManifests::mysql($this->datastore(DatastoreKind::Mysql, '8.4')));
+        ], DatastoreManifests::mysql($this->datastore(DatastoreKind::MYSQL, '8.4')));
     }
 
     public function test_postgres_keeps_its_data_in_a_subfolder_of_the_volume(): void
     {
-        [$secret, $service, $statefulSet] = DatastoreManifests::postgres($this->datastore(DatastoreKind::Postgres, '17'));
+        [$secret, $service, $statefulSet] = DatastoreManifests::postgres($this->datastore(DatastoreKind::POSTGRES, '17'));
 
         $this->assertSame(['name' => 'postgres-5', 'namespace' => 'oc-datastores', 'labels' => ['opencloud.dev/datastore' => '5']], $secret['metadata']);
         $this->assertSame(['POSTGRES_PASSWORD' => 'cm9vdC1wdw=='], $secret['data']);
@@ -84,7 +84,7 @@ class DatastoreManifestsTest extends TestCase
 
     public function test_rustfs_runs_the_server_and_the_rc_admin_client_with_the_root_credentials(): void
     {
-        [$secret, $service, $statefulSet] = DatastoreManifests::rustfs($this->datastore(DatastoreKind::Rustfs, '1.0.3'));
+        [$secret, $service, $statefulSet] = DatastoreManifests::rustfs($this->datastore(DatastoreKind::RUSTFS, '1.0.3'));
 
         $this->assertSame(['RUSTFS_ACCESS_KEY' => 'b3BlbmNsb3Vk', 'RUSTFS_SECRET_KEY' => 'cm9vdC1wdw=='], $secret['data']);
         $this->assertSame('rustfs-5', $service['metadata']['name']);
@@ -120,7 +120,7 @@ class DatastoreManifestsTest extends TestCase
     {
         $attachment = new DatastoreAttachment(['datastore_id' => 6, 'environment_id' => 7, 'password' => 'valkey-pw']);
         $attachment->id = 9;
-        $attachment->setRelation('datastore', $this->datastore(DatastoreKind::Valkey, '9.1', id: 6));
+        $attachment->setRelation('datastore', $this->datastore(DatastoreKind::VALKEY, '9.1', id: 6));
         $labels = ['opencloud.dev/datastore' => '6', 'opencloud.dev/attachment' => '9', 'opencloud.dev/environment' => '7'];
         $metadata = ['name' => 'valkey-9', 'namespace' => 'oc-datastores', 'labels' => $labels];
 
@@ -170,7 +170,7 @@ class DatastoreManifestsTest extends TestCase
     {
         $target = new BackupTarget(['endpoint' => 'https://s3.example.com', 'bucket' => 'backups', 'access_key' => 'AK', 'secret_key' => 'SK']);
 
-        [$secret, $job] = DatastoreManifests::copyBuckets($this->datastore(DatastoreKind::Rustfs, '1.0.3'), $target, '20261023');
+        [$secret, $job] = DatastoreManifests::copyBuckets($this->datastore(DatastoreKind::RUSTFS, '1.0.3'), $target, '20261023');
 
         $this->assertSame(['name' => 'backup-target', 'namespace' => 'oc-datastores'], $secret['metadata']);
         $this->assertSame(['ACCESS_KEY' => 'QUs=', 'SECRET_KEY' => 'U0s='], $secret['data']);

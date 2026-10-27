@@ -26,8 +26,8 @@ class PreviewSettingsTest extends TestCase
 
         $this->application = Application::factory()->for(Cluster::factory()->create(['ingress_ip' => '203.0.113.10']))->create(['name' => 'shop', 'repository' => 'acme/shop']);
         Environment::factory()->for($this->application)->create(['name' => 'production']);
-        $this->template = Environment::factory()->for($this->application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate, 'branch' => null]);
-        Environment::factory()->for($this->application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::Preview, 'pr_number' => 12, 'branch' => 'feature/login']);
+        $this->template = Environment::factory()->for($this->application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
+        Environment::factory()->for($this->application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12, 'branch' => 'feature/login']);
     }
 
     public function test_the_application_page_shows_the_previews_with_their_pull_request_and_the_preview_settings(): void

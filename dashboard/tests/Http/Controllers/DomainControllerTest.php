@@ -22,8 +22,8 @@ class DomainControllerTest extends TestCase
     public function test_the_page_shows_the_dns_state_and_the_ingress_ip(): void
     {
         $environment = $this->makeEnvironment();
-        Domain::factory()->for($environment)->create(['hostname' => 'a.example.com', 'dns_status' => DnsStatus::Wrong, 'dns_found' => ['198.51.100.7']]);
-        Domain::factory()->for($environment)->create(['hostname' => 'b.example.com', 'dns_status' => DnsStatus::Ok, 'certificate_status' => 'issued']);
+        Domain::factory()->for($environment)->create(['hostname' => 'a.example.com', 'dns_status' => DnsStatus::WRONG, 'dns_found' => ['198.51.100.7']]);
+        Domain::factory()->for($environment)->create(['hostname' => 'b.example.com', 'dns_status' => DnsStatus::OK, 'certificate_status' => 'issued']);
 
         $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")
             ->assertOk()
