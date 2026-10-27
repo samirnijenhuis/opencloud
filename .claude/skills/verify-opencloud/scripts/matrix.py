@@ -476,7 +476,10 @@ class LocalRun(CellRun):
             })], capture_output=True, text=True)
             if planned.returncode != 0:
                 raise RuntimeError(f'local-plan.php failed: {planned.stdout}{planned.stderr}')
-            plan = json.loads(planned.stdout)
+            try:
+                plan = json.loads(planned.stdout)
+            except json.JSONDecodeError:
+                raise RuntimeError(f'local-plan.php printed no JSON: {planned.stdout[-2000:]}{planned.stderr}')
             build = docker('build', '--progress=plain', '-f', str(app / plan['dockerfile']), '--build-arg', f"OPENCLOUD_BUILD_ENV={plan['build_env_key']}",
                            '--secret', 'id=VERIFY_BUILD,env=VERIFY_BUILD', '-t', self.name, str(app), env=build_env)
         self.save('build.log', build.stdout + build.stderr)

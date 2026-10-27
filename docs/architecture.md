@@ -307,5 +307,6 @@ Each name is lowercase letters, digits, and dashes. The first label holds at mos
 - Pure classes get unit tests that assert literal expected values.
 - Jobs and controllers get feature tests with `FakeKubectl`.
 - The release test in `tests/e2e/` drives a fresh Ubuntu machine. It is the proof of "it just works".
+- The deploy matrix in `.claude/skills/verify-opencloud/` deploys one fixture app for each preset and env profile on a disposable OrbStack machine. It checks the live HTTPS site after each of three deploys. Each fixture lists the checks that it reports, and the runner prints SKIP for the others. `matrix.py local` builds a fixture with the Dockerfile that `Builder` writes for its preset, and runs it in Docker against MySQL, Postgres, and Valkey, without a machine.
 
 Run the dashboard tests with `XDEBUG_MODE=off php artisan test` in `dashboard/`.
