@@ -2,12 +2,11 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\ApplicationType;
 use App\Presets\EnvProfileKind;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpdateApplicationPresetRequest extends FormRequest
+class UpdateApplicationEnvProfileRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -18,9 +17,7 @@ class UpdateApplicationPresetRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'type' => ['required', Rule::enum(ApplicationType::class)],
             'env_profile' => ['required', Rule::enum(EnvProfileKind::class)],
-            'port' => ['nullable', 'integer', 'between:1,65535'],
         ];
     }
 }

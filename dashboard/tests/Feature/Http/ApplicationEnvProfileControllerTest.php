@@ -21,7 +21,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
-class ApplicationPresetControllerTest extends TestCase
+class ApplicationEnvProfileControllerTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -44,7 +44,7 @@ class ApplicationPresetControllerTest extends TestCase
         $this->template = Environment::factory()->for($this->application)->create(['id' => 9, 'name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate, 'branch' => null]);
     }
 
-    public function test_an_owner_switches_a_laravel_app_to_node_and_every_environment_gets_the_url_names(): void
+    public function test_an_owner_changes_the_env_names_and_every_environment_gets_the_url_names(): void
     {
         $mysql = Datastore::factory()->for($this->application->cluster)->create(['id' => 3, 'kind' => DatastoreKind::Mysql]);
         $postgres = Datastore::factory()->for($this->application->cluster)->create(['id' => 4, 'kind' => DatastoreKind::Postgres]);
@@ -89,7 +89,7 @@ class ApplicationPresetControllerTest extends TestCase
 
         $this->actingAs(User::factory()->owner()->create())
             ->from("/applications/{$this->application->id}")
-            ->patch("/applications/{$this->application->id}/preset", ['type' => 'node', 'env_profile' => 'generic'])
+            ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'generic'])
             ->assertSessionHasNoErrors()
             ->assertRedirect("/applications/{$this->application->id}");
 
@@ -108,79 +108,85 @@ class ApplicationPresetControllerTest extends TestCase
         $this->assertSame([], $this->rows($this->template));
 
         $this->application->refresh();
-        $this->assertSame([ApplicationType::Node, EnvProfileKind::Generic, 8080], [$this->application->type, $this->application->env_profile, $this->application->port]);
+        $this->assertSame([ApplicationType::Laravel, EnvProfileKind::Generic, 8080], [$this->application->type, $this->application->env_profile, $this->application->port]);
         $this->assertSame(
-            ['application.preset_updated', ['changes' => ['type' => ['from' => 'laravel', 'to' => 'node'], 'env_profile' => ['from' => 'laravel', 'to' => 'generic']]]],
+            ['application.env_profile_updated', ['from' => 'laravel', 'to' => 'generic']],
             [AuditEvent::sole()->action, AuditEvent::sole()->context],
         );
 
-        $this->patch("/applications/{$this->application->id}/preset", ['type' => 'node', 'env_profile' => 'generic'])->assertSessionHasNoErrors();
-        $this->assertSame('application.preset_updated', AuditEvent::sole()->action);
+        $this->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'generic'])->assertSessionHasNoErrors();
+        $this->assertSame('application.env_profile_updated', AuditEvent::sole()->action);
     }
 
-    public function test_a_preset_that_chooses_its_port_keeps_the_port_and_a_preset_with_a_fixed_port_gets_it(): void
+    public function test_a_save_with_the_same_env_names_changes_nothing(): void
     {
-        $this->actingAs(User::factory()->admin()->create());
-
-        $this->patch("/applications/{$this->application->id}/preset", ['type' => 'dockerfile', 'env_profile' => 'generic', 'port' => 5000])->assertSessionHasNoErrors();
-        $this->assertSame([ApplicationType::Dockerfile, 5000], [$this->application->fresh()->type, $this->application->fresh()->port]);
-
-        $this->patch("/applications/{$this->application->id}/preset", ['type' => 'node', 'env_profile' => 'generic', 'port' => null])->assertSessionHasNoErrors();
-        $this->assertSame([ApplicationType::Node, 5000], [$this->application->fresh()->type, $this->application->fresh()->port]);
-
-        $this->patch("/applications/{$this->application->id}/preset", ['type' => 'static', 'env_profile' => 'generic', 'port' => 5000])->assertSessionHasNoErrors();
-        $this->assertSame([ApplicationType::Static, 8080], [$this->application->fresh()->type, $this->application->fresh()->port]);
-
-        $this->assertSame([
-            ['type' => ['from' => 'laravel', 'to' => 'dockerfile'], 'env_profile' => ['from' => 'laravel', 'to' => 'generic'], 'port' => ['from' => 8080, 'to' => 5000]],
-            ['type' => ['from' => 'dockerfile', 'to' => 'node']],
-            ['type' => ['from' => 'node', 'to' => 'static'], 'port' => ['from' => 5000, 'to' => 8080]],
-        ], AuditEvent::query()->where('action', 'application.preset_updated')->orderBy('id')->get()->map(fn (AuditEvent $event) => $event->context['changes'])->all());
-    }
-
-    public function test_a_switch_to_laravel_gives_each_environment_without_an_app_key_its_own(): void
-    {
-        $this->application->update(['type' => ApplicationType::Node, 'env_profile' => EnvProfileKind::Generic, 'port' => 3000]);
-        $this->production->envVars()->create(['key' => 'APP_KEY', 'value' => 'base64:kept', 'is_secret' => true, 'source' => EnvVarSource::User]);
-
-        $this->actingAs(User::factory()->owner()->create())
-            ->patch("/applications/{$this->application->id}/preset", ['type' => 'laravel', 'env_profile' => 'laravel'])
-            ->assertSessionHasNoErrors();
-
-        $this->assertSame(['APP_KEY' => ['base64:kept', true, null]], $this->rows($this->production));
-        $this->assertSame([], $this->rows($this->template));
-
-        $key = EnvVar::query()->where('environment_id', $this->preview->id)->sole();
-        $this->assertSame(['APP_KEY', true, EnvVarSource::User], [$key->key, $key->is_secret, $key->source]);
-        $this->assertSame(32, strlen(base64_decode(substr($key->value, strlen('base64:')), true)));
-
-        $this->assertSame(8080, $this->application->fresh()->port);
-        $this->assertSame([
-            ['env_var.created', ['environment_id' => 8, 'key' => 'APP_KEY', 'is_secret' => true, 'available_at' => 'runtime']],
-            ['application.preset_updated', ['changes' => ['type' => ['from' => 'node', 'to' => 'laravel'], 'env_profile' => ['from' => 'generic', 'to' => 'laravel'], 'port' => ['from' => 3000, 'to' => 8080]]]],
-        ], AuditEvent::query()->orderBy('id')->get()->map(fn (AuditEvent $event) => [$event->action, $event->context])->all());
-    }
-
-    public function test_a_developer_cannot_change_the_preset_and_bad_values_are_refused(): void
-    {
-        $this->actingAs(User::factory()->create())
-            ->patch("/applications/{$this->application->id}/preset", ['type' => 'node', 'env_profile' => 'generic'])
-            ->assertForbidden();
+        $mysql = Datastore::factory()->for($this->application->cluster)->create(['id' => 3, 'kind' => DatastoreKind::Mysql]);
+        $attachment = $this->attachment(21, $mysql, $this->production, 'main', true, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7', 'env_7', 'main-pass');
+        AttachmentEnv::write($attachment);
+        $this->production->envVars()->where('key', 'DB_HOST')->sole()->update(['value' => 'edited-by-hand']);
 
         $this->actingAs(User::factory()->admin()->create())
-            ->patch("/applications/{$this->application->id}/preset", ['type' => 'rails', 'port' => 70000])
-            ->assertSessionHasErrors([
-                'type' => 'The selected type is invalid.',
-                'env_profile' => 'The env profile field is required.',
-                'port' => 'The port field must be between 1 and 65535.',
-            ]);
+            ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'laravel'])
+            ->assertSessionHasNoErrors();
 
-        $this->application->refresh();
-        $this->assertSame([ApplicationType::Laravel, EnvProfileKind::Laravel, 8080], [$this->application->type, $this->application->env_profile, $this->application->port]);
+        $this->assertSame('edited-by-hand', $this->rows($this->production)['DB_HOST'][0]);
         $this->assertSame(0, AuditEvent::query()->count());
     }
 
-    public function test_the_application_page_shows_the_preset_the_env_names_and_the_presets_to_pick(): void
+    public function test_a_request_that_sends_the_type_or_the_port_changes_neither(): void
+    {
+        $this->actingAs(User::factory()->owner()->create())
+            ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'generic', 'type' => 'node', 'port' => 3000])
+            ->assertSessionHasNoErrors();
+
+        $this->application->refresh();
+        $this->assertSame([ApplicationType::Laravel, EnvProfileKind::Generic, 8080], [$this->application->type, $this->application->env_profile, $this->application->port]);
+        $this->assertSame(['from' => 'laravel', 'to' => 'generic'], AuditEvent::sole()->context);
+
+        $this->patch("/applications/{$this->application->id}/env-profile", ['type' => 'node', 'port' => 3000])
+            ->assertSessionHasErrors(['env_profile' => 'The env profile field is required.']);
+
+        $this->application->refresh();
+        $this->assertSame([ApplicationType::Laravel, 8080], [$this->application->type, $this->application->port]);
+        $this->assertSame(1, AuditEvent::query()->count());
+    }
+
+    public function test_an_admin_changes_the_env_names_and_a_developer_cannot(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'generic'])
+            ->assertForbidden();
+
+        $this->assertSame(EnvProfileKind::Laravel, $this->application->fresh()->env_profile);
+        $this->assertSame(0, AuditEvent::query()->count());
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'generic'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(EnvProfileKind::Generic, $this->application->fresh()->env_profile);
+    }
+
+    public function test_a_bad_env_profile_is_refused(): void
+    {
+        $this->actingAs(User::factory()->admin()->create())
+            ->patch("/applications/{$this->application->id}/env-profile", ['env_profile' => 'rails'])
+            ->assertSessionHasErrors(['env_profile' => 'The selected env profile is invalid.']);
+
+        $this->assertSame(EnvProfileKind::Laravel, $this->application->fresh()->env_profile);
+        $this->assertSame(0, AuditEvent::query()->count());
+    }
+
+    public function test_the_old_preset_route_is_gone(): void
+    {
+        $this->actingAs(User::factory()->owner()->create())
+            ->patch("/applications/{$this->application->id}/preset", ['type' => 'node', 'env_profile' => 'generic'])
+            ->assertNotFound();
+
+        $this->assertSame(ApplicationType::Laravel, $this->application->fresh()->type);
+    }
+
+    public function test_the_application_page_gets_the_preset_and_the_env_names(): void
     {
         $this->actingAs(User::factory()->admin()->create())->get("/applications/{$this->application->id}")
             ->assertInertia(fn (Assert $page) => $page

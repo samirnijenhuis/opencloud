@@ -10,8 +10,7 @@ import AppLayout from '@/layouts/app-layout';
 import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind, type EnvProfileKind } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-import { PresetForm } from './preset-form';
-import { type Preset } from './presets';
+import { EnvProfileForm } from './env-profile-form';
 
 type EnvironmentRow = {
     id: number;
@@ -36,7 +35,6 @@ type PreviewSettings = {
 
 type Props = {
     application: { id: number; name: string; repository: string; type: ApplicationType; env_profile: EnvProfileKind; port: number };
-    presets: Preset[];
     environments: EnvironmentRow[];
     previews: PreviewSettings;
     canUpdate: boolean;
@@ -111,9 +109,7 @@ function PreviewsForm({ application, previews, canUpdate }: { application: Props
     );
 }
 
-export default function ApplicationShow({ application, presets, environments, previews, canUpdate }: Props) {
-    const production = environments.find((environment) => environment.name === 'production');
-
+export default function ApplicationShow({ application, environments, previews, canUpdate }: Props) {
     return (
         <AppLayout
             breadcrumbs={[
@@ -164,9 +160,9 @@ export default function ApplicationShow({ application, presets, environments, pr
                 <div className="space-y-4">
                     <HeadingSmall
                         title="Preset"
-                        description="How opencloud builds the app, and the env names that its databases, Valkey, and buckets set."
+                        description="The preset is fixed. The env names are the names that the databases, Valkey, and the buckets set."
                     />
-                    <PresetForm application={application} presets={presets} productionId={production?.id ?? null} canUpdate={canUpdate} />
+                    <EnvProfileForm application={application} canUpdate={canUpdate} />
                 </div>
 
                 <div className="space-y-4">
