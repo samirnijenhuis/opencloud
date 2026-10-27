@@ -26,7 +26,7 @@ class PreviewSettingsController extends Controller
             'preview_domain' => ['nullable', 'string', 'max:200', 'regex:'.StoreApplicationRequest::HOSTNAME],
         ], ['preview_domain.regex' => 'Enter a domain like preview.example.com.']);
 
-        $updatePreviewSettings->handle($application, $request->user(), [
+        $updatePreviewSettings->execute($application, $request->user(), [
             'previews_enabled' => (bool) $validated['previews_enabled'],
             'allow_forks' => (bool) $validated['allow_forks'],
             'preview_domain' => $validated['preview_domain'],

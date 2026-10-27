@@ -18,7 +18,7 @@ class ConnectGitHubApp
      *
      * @throws RequestException when GitHub refuses the code
      */
-    public function handle(User $by, string $code): GithubApp
+    public function execute(User $by, string $code): GithubApp
     {
         $converted = $this->client->convertManifest($code);
 

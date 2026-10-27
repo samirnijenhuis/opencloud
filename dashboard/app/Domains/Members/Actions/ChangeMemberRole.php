@@ -8,7 +8,7 @@ use App\Domains\Members\Models\User;
 
 class ChangeMemberRole
 {
-    public function handle(User $member, User $by, Role $role): void
+    public function execute(User $member, User $by, Role $role): void
     {
         $from = $member->role;
 

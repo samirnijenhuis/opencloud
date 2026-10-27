@@ -12,7 +12,7 @@ use InvalidArgumentException;
 class BackupNow
 {
     /** @throws InvalidArgumentException when the attachment has no database to dump, for example Valkey or a managed database */
-    public function handle(DatastoreAttachment $attachment, User $by): void
+    public function execute(DatastoreAttachment $attachment, User $by): void
     {
         $capabilities = Provisioners::of($attachment->datastore)->capabilities();
 

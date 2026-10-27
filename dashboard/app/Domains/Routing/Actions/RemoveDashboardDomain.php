@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Artisan;
 
 class RemoveDashboardDomain
 {
-    public function handle(DashboardDomain $domain, User $by): void
+    public function execute(DashboardDomain $domain, User $by): void
     {
         $domain->delete();
 

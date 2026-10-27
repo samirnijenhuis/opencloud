@@ -9,7 +9,7 @@ use App\Domains\Members\Models\User;
 class RemoveProcess
 {
     /** Removes the process. Its pods keep running until the next deploy deletes its Kubernetes Deployment. */
-    public function handle(Process $process, User $by): void
+    public function execute(Process $process, User $by): void
     {
         $process->delete();
 

@@ -38,12 +38,12 @@ class SyncPreview implements ShouldQueue
     {
         foreach (Application::forGitHubRepository($this->pullRequest->repository) as $application) {
             if (! $this->pullRequest->action->closes()) {
-                $open->handle($application, $this->pullRequest);
+                $open->execute($application, $this->pullRequest);
 
                 continue;
             }
 
-            if (! $close->handle($application, $this->pullRequest->number)) {
+            if (! $close->execute($application, $this->pullRequest->number)) {
                 $this->release(self::RETRY_SECONDS);
 
                 return;

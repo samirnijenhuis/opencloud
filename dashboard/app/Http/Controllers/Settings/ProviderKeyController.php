@@ -53,7 +53,7 @@ class ProviderKeyController extends Controller
         ]);
         abort_unless(in_array($provider, Providers::keys(), true), 404);
 
-        $result = $store->handle($request->user(), $provider, $validated['token']);
+        $result = $store->execute($request->user(), $provider, $validated['token']);
 
         return $this->back($provider, $result);
     }
@@ -62,7 +62,7 @@ class ProviderKeyController extends Controller
     {
         Gate::authorize('update', $credential);
 
-        $result = $store->handle($request->user(), $credential->provider, $credential->token);
+        $result = $store->execute($request->user(), $credential->provider, $credential->token);
 
         return $this->back($credential->provider, $result);
     }
@@ -71,7 +71,7 @@ class ProviderKeyController extends Controller
     {
         Gate::authorize('delete', $credential);
 
-        $delete->handle($credential, $request->user());
+        $delete->execute($credential, $request->user());
 
         return to_route('provider-keys.index');
     }

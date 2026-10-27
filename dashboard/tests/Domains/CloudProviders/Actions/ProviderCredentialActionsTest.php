@@ -24,7 +24,7 @@ class ProviderCredentialActionsTest extends TestCase
         $this->fakeDigitalOcean();
         $owner = User::factory()->owner()->create();
 
-        $result = app(StoreProviderCredential::class)->handle($owner, 'digitalocean', '  '.self::SECRET."\n");
+        $result = app(StoreProviderCredential::class)->execute($owner, 'digitalocean', '  '.self::SECRET."\n");
 
         $this->assertSame(CheckStatus::Ok, $result->status);
         $credential = ProviderCredential::sole();
@@ -42,7 +42,7 @@ class ProviderCredentialActionsTest extends TestCase
     {
         Http::fake(['https://api.digitalocean.com/v2/account' => Http::response(['message' => 'Unable to authenticate you'], 401)]);
 
-        $result = app(StoreProviderCredential::class)->handle(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
+        $result = app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
 
         $this->assertSame(CheckStatus::Invalid, $result->status);
         $this->assertSame(0, ProviderCredential::count());
@@ -53,7 +53,7 @@ class ProviderCredentialActionsTest extends TestCase
     {
         $this->fakeDigitalOcean(registry: 403);
 
-        $result = app(StoreProviderCredential::class)->handle(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
+        $result = app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
 
         $this->assertSame(['registry'], $result->missing);
         $this->assertSame(0, ProviderCredential::count());
@@ -63,7 +63,7 @@ class ProviderCredentialActionsTest extends TestCase
     {
         $this->fakeDigitalOcean(vpcs: 403);
 
-        $result = app(StoreProviderCredential::class)->handle(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
+        $result = app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
 
         $this->assertSame(CheckStatus::MissingRights, $result->status);
         $this->assertSame(['vpc'], ProviderCredential::sole()->missing_rights);
@@ -73,7 +73,7 @@ class ProviderCredentialActionsTest extends TestCase
     {
         $this->fakeDigitalOcean(databases: 403);
 
-        $result = app(StoreProviderCredential::class)->handle(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
+        $result = app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
 
         $this->assertSame(CheckStatus::MissingRights, $result->status);
         $this->assertSame(['database'], ProviderCredential::sole()->missing_rights);
@@ -85,8 +85,8 @@ class ProviderCredentialActionsTest extends TestCase
         $owner = User::factory()->owner()->create();
         $store = app(StoreProviderCredential::class);
 
-        $store->handle($owner, 'digitalocean', self::SECRET);
-        $store->handle($owner, 'digitalocean', 'dop_v1_second');
+        $store->execute($owner, 'digitalocean', self::SECRET);
+        $store->execute($owner, 'digitalocean', 'dop_v1_second');
 
         $this->assertSame('dop_v1_second', ProviderCredential::sole()->token);
     }
@@ -99,7 +99,7 @@ class ProviderCredentialActionsTest extends TestCase
             'https://api.cloudflare.com/client/v4/zones*' => Http::response(['success' => true, 'result' => [['id' => 'z1', 'name' => 'example.com']], 'result_info' => ['total_pages' => 1]]),
         ]);
 
-        app(StoreProviderCredential::class)->handle(User::factory()->owner()->create(), 'cloudflare', 'cf-token');
+        app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'cloudflare', 'cf-token');
 
         $this->assertSame(['zones' => [['id' => 'z1', 'name' => 'example.com']]], ProviderCredential::sole()->details);
     }
@@ -108,7 +108,7 @@ class ProviderCredentialActionsTest extends TestCase
     {
         Http::fake(['https://api.digitalocean.com/v2/account' => Http::response(['message' => 'Bad token '.self::SECRET], 401)]);
 
-        $result = app(StoreProviderCredential::class)->handle(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
+        $result = app(StoreProviderCredential::class)->execute(User::factory()->owner()->create(), 'digitalocean', self::SECRET);
 
         $this->assertSame('Bad token [hidden]', $result->message);
     }
@@ -117,7 +117,7 @@ class ProviderCredentialActionsTest extends TestCase
     {
         $credential = ProviderCredential::factory()->create(['provider' => 'hetzner']);
 
-        app(DeleteProviderCredential::class)->handle($credential, User::factory()->owner()->create());
+        app(DeleteProviderCredential::class)->execute($credential, User::factory()->owner()->create());
 
         $this->assertSame(0, ProviderCredential::count());
         $this->assertSame(['provider' => 'hetzner'], AuditEvent::where('action', 'provider_credential.deleted')->sole()->context);

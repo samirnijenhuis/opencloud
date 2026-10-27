@@ -60,22 +60,22 @@ class PreviewLifecycleTest extends TestCase
         $owner = User::factory()->owner()->create();
         $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local', 'ingress_ip' => '203.0.113.10']);
 
-        $this->application = app(CreateApplication::class)->handle($owner, [
+        $this->application = app(CreateApplication::class)->execute($owner, [
             'name' => 'Shop',
             'repository' => 'acme/shop',
             'cluster_id' => $cluster->id,
             'env' => [['key' => 'STRIPE_SECRET', 'value' => 'sk_live_production', 'is_secret' => true]],
         ]);
-        app(AttachDatastore::class)->handle($this->environment('production'), $owner, DatastoreKind::Valkey);
+        app(AttachDatastore::class)->execute($this->environment('production'), $owner, DatastoreKind::Valkey);
 
         $template = $this->environment('preview-template');
         $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force']]);
         $template->processes()->where('name', 'worker')->delete();
         $template->processes()->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 2, 'exclusive' => false]);
         $setEnvVar = app(SetEnvVar::class);
-        $setEnvVar->handle($template, $owner, 'MAIL_MAILER', 'log', false, EnvVarAvailability::Runtime);
-        $setEnvVar->handle($template, $owner, 'STRIPE_SECRET', 'sk_test_preview', true, EnvVarAvailability::Runtime);
-        $setEnvVar->handle($template, $owner, 'COMPOSER_AUTH', '{"github-oauth":{"github.com":"gho_x"}}', true, EnvVarAvailability::Build);
+        $setEnvVar->execute($template, $owner, 'MAIL_MAILER', 'log', false, EnvVarAvailability::Runtime);
+        $setEnvVar->execute($template, $owner, 'STRIPE_SECRET', 'sk_test_preview', true, EnvVarAvailability::Runtime);
+        $setEnvVar->execute($template, $owner, 'COMPOSER_AUTH', '{"github-oauth":{"github.com":"gho_x"}}', true, EnvVarAvailability::Build);
 
         $this->makeGitHubApp();
         $this->fakeGitHub();
@@ -175,8 +175,8 @@ class PreviewLifecycleTest extends TestCase
     {
         $production = $this->environment('production');
         $owner = User::factory()->owner()->create();
-        $reports = app(AttachDatastore::class)->handle($production, $owner, DatastoreKind::Postgres, name: 'reports');
-        app(SetDefaultDatabase::class)->handle($reports, $owner);
+        $reports = app(AttachDatastore::class)->execute($production, $owner, DatastoreKind::Postgres, name: 'reports');
+        app(SetDefaultDatabase::class)->execute($reports, $owner);
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
 

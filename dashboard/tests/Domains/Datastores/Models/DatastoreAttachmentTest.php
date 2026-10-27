@@ -12,6 +12,7 @@ use App\Domains\Datastores\Actions\SetDefaultDatabase;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\EnvironmentVariables;
 use App\Domains\Environments\Actions\SetEnvVar;
 use App\Domains\Environments\Enums\EnvVarAvailability;
@@ -317,8 +318,8 @@ class DatastoreAttachmentTest extends TestCase
         $reports = $this->attach(DatastoreKind::Postgres, 'reports');
         $env = $this->environment->id;
 
-        app(SetDefaultDatabase::class)->handle($reports, $this->owner);
-        app(SetDefaultDatabase::class)->handle($reports->fresh(), $this->owner);
+        app(SetDefaultDatabase::class)->execute($reports, $this->owner);
+        app(SetDefaultDatabase::class)->execute($reports->fresh(), $this->owner);
 
         $this->assertSame([false, true], [$main->fresh()->is_default, $reports->fresh()->is_default]);
         $this->assertSame([
@@ -342,7 +343,7 @@ class DatastoreAttachmentTest extends TestCase
 
         $this->expectExceptionObject(new InvalidArgumentException('Only a MySQL or Postgres database can be the default.'));
 
-        app(SetDefaultDatabase::class)->handle($valkey, $this->owner);
+        app(SetDefaultDatabase::class)->execute($valkey, $this->owner);
     }
 
     public function test_the_default_is_detached_only_as_the_last_database(): void
@@ -352,16 +353,16 @@ class DatastoreAttachmentTest extends TestCase
         $this->attach(DatastoreKind::Valkey);
 
         try {
-            app(DetachDatastore::class)->handle($main, $this->owner);
+            app(DetachDatastore::class)->execute($main, $this->owner);
             $this->fail('The default was detached.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('Make another database the default first.', $e->getMessage());
         }
 
-        app(DetachDatastore::class)->handle($reports, $this->owner);
+        app(DetachDatastore::class)->execute($reports, $this->owner);
         $this->assertSame(['CACHE_STORE', 'DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME', 'REDIS_CLIENT', 'REDIS_HOST', 'REDIS_PASSWORD', 'REDIS_PORT'], array_keys($this->environmentEnv()));
 
-        app(DetachDatastore::class)->handle($main->fresh(), $this->owner);
+        app(DetachDatastore::class)->execute($main->fresh(), $this->owner);
         $this->assertSame(['CACHE_STORE', 'REDIS_CLIENT', 'REDIS_HOST', 'REDIS_PASSWORD', 'REDIS_PORT'], array_keys($this->environmentEnv()));
 
         $again = $this->attach(DatastoreKind::Postgres);
@@ -373,7 +374,7 @@ class DatastoreAttachmentTest extends TestCase
         $first = $this->attach(DatastoreKind::Mysql);
         $other = Environment::factory()->for($this->environment->application)->create();
 
-        $second = app(AttachDatastore::class)->handle($other, $this->owner, DatastoreKind::Mysql);
+        $second = app(AttachDatastore::class)->execute($other, $this->owner, DatastoreKind::Mysql);
 
         $this->assertSame($first->datastore_id, $second->datastore_id);
         $this->assertSame(["env_{$this->environment->id}", "env_{$other->id}"], [$first->database_name, $second->database_name]);
@@ -381,7 +382,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_a_user_value_beats_the_datastore_value_with_the_same_key(): void
     {
-        app(SetEnvVar::class)->handle($this->environment, $this->owner, 'DB_HOST', 'db.example.com', false, EnvVarAvailability::Runtime);
+        app(SetEnvVar::class)->execute($this->environment, $this->owner, 'DB_HOST', 'db.example.com', false, EnvVarAvailability::Runtime);
 
         $this->attach(DatastoreKind::Mysql);
 
@@ -392,11 +393,11 @@ class DatastoreAttachmentTest extends TestCase
     public function test_detaching_mysql_drops_the_user_and_the_env_values_and_keeps_the_database(): void
     {
         $attachment = $this->attach(DatastoreKind::Mysql);
-        app(SetEnvVar::class)->handle($this->environment, $this->owner, 'DB_HOST', 'db.example.com', false, EnvVarAvailability::Runtime);
+        app(SetEnvVar::class)->execute($this->environment, $this->owner, 'DB_HOST', 'db.example.com', false, EnvVarAvailability::Runtime);
         $this->kubectl->calls = [];
         $env = $this->environment->id;
 
-        app(DetachDatastore::class)->handle($attachment, $this->owner);
+        app(DetachDatastore::class)->execute($attachment, $this->owner);
 
         $this->assertSame(0, DatastoreAttachment::count());
         $this->assertSame([['DB_HOST', 'user']], EnvVar::all()->map(fn (EnvVar $var) => [$var->key, $var->source->value])->all());
@@ -413,7 +414,7 @@ class DatastoreAttachmentTest extends TestCase
         $this->kubectl->calls = [];
         $env = $this->environment->id;
 
-        app(DetachDatastore::class)->destroy($attachment, null);
+        Provisioners::of($attachment->datastore)->detach($attachment, null, destroyData: true);
 
         $this->assertSame("DROP USER IF EXISTS 'env_{$env}'@'%';\nDROP DATABASE IF EXISTS `env_{$env}`;\n", $this->kubectl->calls[0]['stdin']);
         $this->assertSame('datastore.destroyed', AuditEvent::latest('id')->value('action'));
@@ -425,7 +426,7 @@ class DatastoreAttachmentTest extends TestCase
         $name = "env_{$this->environment->id}";
         $this->kubectl->calls = [];
 
-        app(DetachDatastore::class)->handle($attachment, $this->owner);
+        app(DetachDatastore::class)->execute($attachment, $this->owner);
 
         $this->assertSame(
             "SELECT EXISTS (SELECT FROM pg_roles WHERE rolname = '{$name}') AS found \\gset\n".
@@ -446,7 +447,7 @@ class DatastoreAttachmentTest extends TestCase
         $name = "env_{$this->environment->id}";
         $this->kubectl->calls = [];
 
-        app(DetachDatastore::class)->destroy($attachment, $this->owner);
+        Provisioners::of($attachment->datastore)->detach($attachment, $this->owner, destroyData: true);
 
         $this->assertSame("DROP DATABASE IF EXISTS \"{$name}\" WITH (FORCE);\nDROP ROLE IF EXISTS \"{$name}\";\n", $this->kubectl->calls[0]['stdin']);
     }
@@ -458,12 +459,12 @@ class DatastoreAttachmentTest extends TestCase
 
         $attachment = $this->attach(DatastoreKind::Rustfs);
         $this->kubectl->calls = [];
-        app(DetachDatastore::class)->handle($attachment, $this->owner);
+        app(DetachDatastore::class)->execute($attachment, $this->owner);
         $detach = $script($this->kubectl->calls);
 
         $attachment = $this->attach(DatastoreKind::Rustfs);
         $this->kubectl->calls = [];
-        app(DetachDatastore::class)->destroy($attachment, $this->owner);
+        Provisioners::of($attachment->datastore)->detach($attachment, $this->owner, destroyData: true);
 
         $this->assertSame(implode("\n", [
             'set -e',
@@ -486,12 +487,12 @@ class DatastoreAttachmentTest extends TestCase
         $name = "valkey-{$attachment->id}";
         $this->kubectl->calls = [];
 
-        app(DetachDatastore::class)->handle($attachment, $this->owner);
+        app(DetachDatastore::class)->execute($attachment, $this->owner);
         $detached = array_column($this->kubectl->calls, 'args');
 
         $attachment = $this->attach(DatastoreKind::Valkey);
         $this->kubectl->calls = [];
-        app(DetachDatastore::class)->destroy($attachment, $this->owner);
+        Provisioners::of($attachment->datastore)->detach($attachment, $this->owner, destroyData: true);
 
         $this->assertSame([
             ['delete', 'deployment', $name, '--namespace=oc-datastores', '--ignore-not-found', '--wait=false'],
@@ -506,7 +507,7 @@ class DatastoreAttachmentTest extends TestCase
 
     private function attach(DatastoreKind $kind, ?string $name = null): DatastoreAttachment
     {
-        return app(AttachDatastore::class)->handle($this->environment, $this->owner, $kind, name: $name);
+        return app(AttachDatastore::class)->execute($this->environment, $this->owner, $kind, name: $name);
     }
 
     /** @return array<string, array{0: string, 1: bool}> */

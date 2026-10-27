@@ -8,7 +8,7 @@ use App\Domains\Members\Models\User;
 
 class DeleteProviderCredential
 {
-    public function handle(ProviderCredential $credential, User $by): void
+    public function execute(ProviderCredential $credential, User $by): void
     {
         $credential->delete();
 

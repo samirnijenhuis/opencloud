@@ -164,8 +164,8 @@ class ExternalResourcesTest extends TestCase
     public function test_external_databases_are_ready_at_once_with_the_laravel_env_and_detach_removes_only_the_rows(): void
     {
         $attach = app(AttachDatastore::class);
-        $main = $attach->handle($this->environment, $this->owner, DatastoreKind::Mysql, DatastoreSource::External, null, $this->typed(DatastoreKind::Mysql));
-        $reports = $attach->handle($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Postgres));
+        $main = $attach->execute($this->environment, $this->owner, DatastoreKind::Mysql, DatastoreSource::External, null, $this->typed(DatastoreKind::Mysql));
+        $reports = $attach->execute($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Postgres));
 
         $this->assertSame(
             [['main', true, 'ready', null], ['reports', false, 'ready', null]],
@@ -183,7 +183,7 @@ class ExternalResourcesTest extends TestCase
 
         // Attaching again never drops the new address: the name is taken, so the action refuses.
         try {
-            $attach->handle($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Postgres));
+            $attach->execute($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Postgres));
             $this->fail('A second database took the name reports.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('This environment already has a database with the name reports.', $e->getMessage());
@@ -192,14 +192,14 @@ class ExternalResourcesTest extends TestCase
         $detach = app(DetachDatastore::class);
 
         try {
-            $detach->handle($main, $this->owner);
+            $detach->execute($main, $this->owner);
             $this->fail('The default went while another database exists.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('Make another database the default first.', $e->getMessage());
         }
 
-        $detach->handle($reports, $this->owner);
-        $detach->handle($main, $this->owner);
+        $detach->execute($reports, $this->owner);
+        $detach->execute($main, $this->owner);
 
         $this->assertSame([0, 0, []], [DatastoreAttachment::query()->count(), Datastore::query()->count(), $this->env()]);
         $this->assertSame(
@@ -212,7 +212,7 @@ class ExternalResourcesTest extends TestCase
     public function test_an_external_key_value_store_is_ready_at_once_with_the_laravel_env_and_detach_removes_only_the_rows(): void
     {
         $attach = app(AttachDatastore::class);
-        $store = $attach->handle($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
+        $store = $attach->execute($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
 
         $this->assertSame([null, 'ready', true], [$store->name, $store->status->value, $store->tls]);
         $this->assertSame([
@@ -225,15 +225,15 @@ class ExternalResourcesTest extends TestCase
 
         // A second typed address is refused, so it never goes unused. An attach without an address finds the store.
         try {
-            $attach->handle($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
+            $attach->execute($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
             $this->fail('A second key-value store took the place of the first.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('This environment already has a valkey datastore.', $e->getMessage());
         }
-        $this->assertTrue($attach->handle($this->environment, $this->owner, DatastoreKind::Valkey)->is($store));
+        $this->assertTrue($attach->execute($this->environment, $this->owner, DatastoreKind::Valkey)->is($store));
         $this->assertSame(1, DatastoreAttachment::query()->count());
 
-        app(DetachDatastore::class)->handle($store, $this->owner);
+        app(DetachDatastore::class)->execute($store, $this->owner);
 
         $this->assertSame([0, 0, []], [DatastoreAttachment::query()->count(), Datastore::query()->count(), $this->env()]);
         $this->assertNothingRan();
@@ -242,7 +242,7 @@ class ExternalResourcesTest extends TestCase
     public function test_an_external_bucket_is_ready_at_once_with_the_laravel_env_and_detach_removes_only_the_rows(): void
     {
         $attach = app(AttachDatastore::class);
-        $bucket = $attach->handle($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
+        $bucket = $attach->execute($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
 
         $this->assertSame(
             ['https://fsn1.your-objectstorage.com', 'fsn1', 'shop-uploads', 'AKIAEXTERNAL', false, 'ready'],
@@ -259,13 +259,13 @@ class ExternalResourcesTest extends TestCase
         ], $this->env());
 
         try {
-            $attach->handle($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
+            $attach->execute($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
             $this->fail('A second bucket took the place of the first.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('This environment already has a rustfs datastore.', $e->getMessage());
         }
 
-        app(DetachDatastore::class)->handle($bucket, $this->owner);
+        app(DetachDatastore::class)->execute($bucket, $this->owner);
 
         $this->assertSame([0, 0, []], [DatastoreAttachment::query()->count(), Datastore::query()->count(), $this->env()]);
         $this->assertNothingRan();
@@ -276,12 +276,12 @@ class ExternalResourcesTest extends TestCase
         $application = $this->environment->application;
         Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PreviewTemplate]);
         $attach = app(AttachDatastore::class);
-        $attach->handle($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, null, $this->typed(DatastoreKind::Postgres));
-        $attach->handle($this->environment, $this->owner, DatastoreKind::Mysql, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Mysql));
-        $attach->handle($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
-        $attach->handle($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
+        $attach->execute($this->environment, $this->owner, DatastoreKind::Postgres, DatastoreSource::External, null, $this->typed(DatastoreKind::Postgres));
+        $attach->execute($this->environment, $this->owner, DatastoreKind::Mysql, DatastoreSource::External, 'reports', $this->typed(DatastoreKind::Mysql));
+        $attach->execute($this->environment, $this->owner, DatastoreKind::Valkey, DatastoreSource::External, null, $this->typed(DatastoreKind::Valkey));
+        $attach->execute($this->environment, $this->owner, DatastoreKind::Rustfs, DatastoreSource::External, null, $this->typed(DatastoreKind::Rustfs));
 
-        $preview = app(OpenPreview::class)->handle($application, new PullRequestEvent(PullRequestAction::Opened, $application->repository, 12, 'feature/login', str_repeat('1', 40), fromFork: false));
+        $preview = app(OpenPreview::class)->execute($application, new PullRequestEvent(PullRequestAction::Opened, $application->repository, 12, 'feature/login', str_repeat('1', 40), fromFork: false));
 
         $this->assertSame([
             ['postgres', 'standard', 'main', true, 'local'],

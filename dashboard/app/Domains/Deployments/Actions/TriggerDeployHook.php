@@ -17,7 +17,7 @@ class TriggerDeployHook
      *
      * @throws InvalidArgumentException|RuntimeException when the environment cannot deploy its branch
      */
-    public function handle(string $token, ?string $ip): ?Deployment
+    public function execute(string $token, ?string $ip): ?Deployment
     {
         $environment = DeployHook::find($token);
 
@@ -25,7 +25,7 @@ class TriggerDeployHook
             return null;
         }
 
-        $deployment = $this->startDeployment->handle($environment, null);
+        $deployment = $this->startDeployment->execute($environment, null);
 
         AuditEvent::record(null, 'deploy_hook.triggered', $environment, ['deployment_id' => $deployment->id, 'ip' => $ip]);
 

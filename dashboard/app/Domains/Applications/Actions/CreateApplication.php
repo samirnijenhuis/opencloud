@@ -51,7 +51,7 @@ class CreateApplication
      *     settings?: array<string, mixed>,
      * } $data
      */
-    public function handle(User $by, array $data): Application
+    public function execute(User $by, array $data): Application
     {
         $type = $data['type'] ?? ApplicationType::Laravel;
         $type = $type instanceof ApplicationType ? $type : ApplicationType::from($type);
@@ -101,18 +101,18 @@ class CreateApplication
 
             foreach ($processes as $process) {
                 $exclusive = $process['exclusive'] ?? false;
-                $this->addProcess->handle($production, $by, $process['name'], $process['command'], $process['instances'] ?? 1, $exclusive);
-                $this->addProcess->handle($template, $by, $process['name'], $process['command'], 1, $exclusive);
+                $this->addProcess->execute($production, $by, $process['name'], $process['command'], $process['instances'] ?? 1, $exclusive);
+                $this->addProcess->execute($template, $by, $process['name'], $process['command'], 1, $exclusive);
             }
 
             foreach (array_diff_key($type->generatedSecrets(), array_flip(array_column($env, 'key'))) as $key => $value) {
-                $this->setEnvVar->handle($production, $by, $key, $value, true, EnvVarAvailability::Runtime);
+                $this->setEnvVar->execute($production, $by, $key, $value, true, EnvVarAvailability::Runtime);
             }
 
             foreach ($env as $value) {
                 $availableAt = $value['available_at'] ?? EnvVarAvailability::Runtime;
 
-                $this->setEnvVar->handle(
+                $this->setEnvVar->execute(
                     $production,
                     $by,
                     $value['key'],
@@ -123,11 +123,11 @@ class CreateApplication
             }
 
             if ($database !== 'none') {
-                $this->attachDatastore->handle($production, $by, DatastoreKind::from($database));
+                $this->attachDatastore->execute($production, $by, DatastoreKind::from($database));
             }
 
             foreach ($data['domains'] ?? [] as $hostname) {
-                $this->addDomain->handle($production, $by, $hostname);
+                $this->addDomain->execute($production, $by, $hostname);
             }
 
             $this->defaultDomain->add($production, $by);
@@ -135,7 +135,7 @@ class CreateApplication
             return [$application, $production];
         });
 
-        $this->startDeployment->handle($production, $by, $commitSha);
+        $this->startDeployment->execute($production, $by, $commitSha);
 
         return $application;
     }

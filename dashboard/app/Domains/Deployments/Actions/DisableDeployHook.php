@@ -8,7 +8,7 @@ use App\Domains\Members\Models\User;
 
 class DisableDeployHook
 {
-    public function handle(Environment $environment, User $by): Environment
+    public function execute(Environment $environment, User $by): Environment
     {
         if (! $environment->deploy_hook_enabled) {
             return $environment;

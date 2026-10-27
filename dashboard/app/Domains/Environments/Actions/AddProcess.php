@@ -15,7 +15,7 @@ class AddProcess
      *
      * @throws ValidationException when a value breaks a rule or another process has the name
      */
-    public function handle(Environment $environment, User $by, string $name, string $command, int $instances = 1, bool $exclusive = false): Process
+    public function execute(Environment $environment, User $by, string $name, string $command, int $instances = 1, bool $exclusive = false): Process
     {
         $attributes = Process::validate($environment, $name, $command, $instances, $exclusive);
         $process = $environment->processes()->create($attributes);

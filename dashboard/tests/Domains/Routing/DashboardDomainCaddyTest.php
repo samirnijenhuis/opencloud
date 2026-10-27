@@ -74,7 +74,7 @@ class DashboardDomainCaddyTest extends TestCase
         $local = Cluster::factory()->create(['kind' => ClusterKind::Local]);
         $domain = DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::Ok]);
 
-        app(RemoveDashboardDomain::class)->handle($domain, User::factory()->owner()->create());
+        app(RemoveDashboardDomain::class)->execute($domain, User::factory()->owner()->create());
 
         $this->assertSame(self::WITHOUT, $this->configJson($local));
         Queue::assertPushed(SyncCaddy::class, fn (SyncCaddy $sync) => $sync->cluster->is($local));

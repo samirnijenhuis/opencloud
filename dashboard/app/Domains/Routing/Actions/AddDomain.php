@@ -20,7 +20,7 @@ class AddDomain
      *
      * @throws ValidationException when the DNS mode is not possible for this hostname
      */
-    public function handle(Environment $environment, User $by, string $hostname, bool $manageDns = false, bool $proxied = false): Domain
+    public function execute(Environment $environment, User $by, string $hostname, bool $manageDns = false, bool $proxied = false): Domain
     {
         $hostname = rtrim(strtolower(trim($hostname)), '.');
         $attributes = ['hostname' => $hostname];

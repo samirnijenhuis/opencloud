@@ -9,7 +9,7 @@ use App\Domains\Members\Models\User;
 
 class SetEnvironmentColor
 {
-    public function handle(Environment $environment, User $by, EnvironmentColor $color): Environment
+    public function execute(Environment $environment, User $by, EnvironmentColor $color): Environment
     {
         $from = $environment->color;
 

@@ -27,7 +27,7 @@ class DatastoreController extends Controller
     public function store(AttachDatastoreRequest $request, Environment $environment, AttachDatastore $attachDatastore): RedirectResponse
     {
         try {
-            $attachDatastore->handle($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source(), $request->validated('name'), $request->connection());
+            $attachDatastore->execute($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source(), $request->validated('name'), $request->connection());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['kind' => $e->getMessage()]);
         }
@@ -45,7 +45,7 @@ class DatastoreController extends Controller
         }
 
         try {
-            $detachDatastore->handle($attachment, $request->user());
+            $detachDatastore->execute($attachment, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['detach' => $e->getMessage()]);
         }
@@ -58,7 +58,7 @@ class DatastoreController extends Controller
         Gate::authorize('update', $attachment->environment);
 
         try {
-            $setDefaultDatabase->handle($attachment, $request->user());
+            $setDefaultDatabase->execute($attachment, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['default' => $e->getMessage()]);
         }

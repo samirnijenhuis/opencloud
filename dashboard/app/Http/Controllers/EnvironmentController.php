@@ -137,7 +137,7 @@ class EnvironmentController extends Controller
     public function update(UpdateEnvironmentSettingsRequest $request, Environment $environment, UpdateEnvironmentSettings $updateSettings): RedirectResponse
     {
         try {
-            $updateSettings->handle($environment, $request->user(), $request->settings());
+            $updateSettings->execute($environment, $request->user(), $request->settings());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['max_instances' => $e->getMessage()]);
         }

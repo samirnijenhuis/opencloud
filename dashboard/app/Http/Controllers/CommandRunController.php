@@ -42,7 +42,7 @@ class CommandRunController extends Controller
         Gate::authorize('update', $environment);
 
         $validated = $request->validate(['command' => ['required', 'string', 'max:2000']]);
-        $run = $runCommand->handle($environment, $request->user(), $validated['command']);
+        $run = $runCommand->execute($environment, $request->user(), $validated['command']);
 
         if ($request->wantsJson()) {
             return response()->json(['run' => $this->present($run->fresh(['user', 'deployment']), SecretMasker::forEnvironment($environment))], 201);

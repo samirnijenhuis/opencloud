@@ -190,7 +190,7 @@ class DatabaseBackupsTest extends TestCase
         ]);
         $this->kubectl->respond('exec', new KubectlResult(0, gzencode('current state')));
 
-        app(RestoreBackup::class)->handle($backup, $owner);
+        app(RestoreBackup::class)->execute($backup, $owner);
 
         $pod = "mysql-{$this->mysql->id}-0";
         $database = $this->attachment->database_name;
@@ -222,7 +222,7 @@ class DatabaseBackupsTest extends TestCase
             ? new KubectlResult(0)
             : new KubectlResult(1, '', 'ERROR 1064 (42000) at line 1: You have an error in your SQL syntax'));
 
-        app(RestoreBackup::class)->handle($backup, User::factory()->create());
+        app(RestoreBackup::class)->execute($backup, User::factory()->create());
 
         $event = AuditEvent::latest('id')->first();
         $this->assertSame('backup.restore_failed', $event->action);
@@ -237,7 +237,7 @@ class DatabaseBackupsTest extends TestCase
 
         $messages = collect([$failed, $detached])->map(function (Backup $backup) use ($owner) {
             try {
-                app(RestoreBackup::class)->handle($backup, $owner);
+                app(RestoreBackup::class)->execute($backup, $owner);
             } catch (InvalidArgumentException $e) {
                 return $e->getMessage();
             }
@@ -256,10 +256,10 @@ class DatabaseBackupsTest extends TestCase
         $this->kubectl->respond('exec', new KubectlResult(0, gzencode('dump')));
         $valkey = DatastoreAttachment::factory()->for(Datastore::factory()->create(['kind' => DatastoreKind::Valkey]))->create();
 
-        app(BackupNow::class)->handle($this->attachment, $owner);
+        app(BackupNow::class)->execute($this->attachment, $owner);
 
         try {
-            app(BackupNow::class)->handle($valkey, $owner);
+            app(BackupNow::class)->execute($valkey, $owner);
             $this->fail('No exception.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('A valkey datastore has no database to back up.', $e->getMessage());

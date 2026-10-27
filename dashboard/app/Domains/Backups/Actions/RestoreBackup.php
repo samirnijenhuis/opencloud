@@ -18,7 +18,7 @@ class RestoreBackup
      *
      * @throws InvalidArgumentException when the backup did not finish, its database is no longer attached, or it is a managed database
      */
-    public function handle(Backup $backup, User $by): void
+    public function execute(Backup $backup, User $by): void
     {
         if ($backup->status !== BackupStatus::Done) {
             throw new InvalidArgumentException('Only a finished backup can be restored.');

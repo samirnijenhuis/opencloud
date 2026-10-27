@@ -12,7 +12,7 @@ class ApplicationEnvProfileController extends Controller
 {
     public function update(UpdateApplicationEnvProfileRequest $request, Application $application, UpdateApplicationEnvProfile $updateApplicationEnvProfile): RedirectResponse
     {
-        $updateApplicationEnvProfile->handle($application, $request->user(), $request->enum('env_profile', EnvProfileKind::class));
+        $updateApplicationEnvProfile->execute($application, $request->user(), $request->enum('env_profile', EnvProfileKind::class));
 
         return back();
     }

@@ -30,7 +30,7 @@ class DeployPush implements ShouldQueue
                 ->get();
 
             foreach ($environments as $environment) {
-                $startDeployment->handle($environment, null, $this->push->headSha);
+                $startDeployment->execute($environment, null, $this->push->headSha);
             }
         }
     }

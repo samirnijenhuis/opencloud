@@ -47,7 +47,7 @@ class MemberController extends Controller
 
         $validated = $request->validate(['role' => ['required', Rule::enum(Role::class)]]);
 
-        $changeMemberRole->handle($user, $request->user(), Role::from($validated['role']));
+        $changeMemberRole->execute($user, $request->user(), Role::from($validated['role']));
 
         return to_route('members.index');
     }
@@ -56,7 +56,7 @@ class MemberController extends Controller
     {
         Gate::authorize('delete', $user);
 
-        $removeMember->handle($user, $request->user());
+        $removeMember->execute($user, $request->user());
 
         return to_route('members.index');
     }

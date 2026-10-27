@@ -18,7 +18,7 @@ class RunCommand
      *
      * @throws ValidationException when the command is empty or the environment has no live deployment
      */
-    public function handle(Environment $environment, User $by, string $command): CommandRun
+    public function execute(Environment $environment, User $by, string $command): CommandRun
     {
         $command = trim($command);
 

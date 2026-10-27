@@ -18,6 +18,7 @@ use App\Domains\Datastores\Jobs\ProvisionManagedDatabase;
 use App\Domains\Datastores\Jobs\TearDownManagedDatabase;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Datastores\Provisioners;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
@@ -156,7 +157,7 @@ class ManagedBucketTest extends TestCase
         $this->assertSame([DatastoreStatus::Failed, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
         $this->assertSame([], $this->envOf($environment));
 
-        $again = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Rustfs, DatastoreSource::Managed);
+        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Rustfs, DatastoreSource::Managed);
         Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
 
         $id = $attachment->datastore_id;
@@ -181,7 +182,7 @@ class ManagedBucketTest extends TestCase
         Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
         $datastore = $attachment->datastore;
 
-        app(DetachDatastore::class)->handle($attachment->fresh(), $owner);
+        app(DetachDatastore::class)->execute($attachment->fresh(), $owner);
 
         $this->assertSame([], $this->envOf($environment));
         $job = Queue::pushed(TearDownManagedDatabase::class)->sole();
@@ -204,7 +205,7 @@ class ManagedBucketTest extends TestCase
     {
         $attachment = $this->attach($this->environment());
         Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
-        app(DetachDatastore::class)->destroy($attachment->fresh(), null);
+        Provisioners::of($attachment->datastore)->detach($attachment->fresh(), null, destroyData: true);
         $this->tofu->failOn = 'destroy';
         $this->tofu->failStack = 'bucket';
         $this->tofu->failTimes = 1;
@@ -300,7 +301,7 @@ class ManagedBucketTest extends TestCase
 
         $this->assertSame(DatastoreStatus::Failed, $attachment->fresh()->status);
 
-        app(AttachDatastore::class)->handle($attachment->environment, null, DatastoreKind::Rustfs, DatastoreSource::Managed);
+        app(AttachDatastore::class)->execute($attachment->environment, null, DatastoreKind::Rustfs, DatastoreSource::Managed);
         Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
 
         $id = $attachment->datastore_id;
@@ -322,7 +323,7 @@ class ManagedBucketTest extends TestCase
     {
         Str::createRandomStringsUsing(fn () => 'K3x9Q2m7');
 
-        return app(AttachDatastore::class)->handle($environment, $by, DatastoreKind::Rustfs, DatastoreSource::Managed);
+        return app(AttachDatastore::class)->execute($environment, $by, DatastoreKind::Rustfs, DatastoreSource::Managed);
     }
 
     private function environment(): Environment

@@ -60,7 +60,7 @@ class DomainControllerTest extends TestCase
         $environment = $this->makeEnvironment();
         $admin = User::factory()->admin()->create();
 
-        $this->mock(AddDomain::class)->shouldReceive('handle')->once()
+        $this->mock(AddDomain::class)->shouldReceive('execute')->once()
             ->withArgs(fn ($given, User $by, string $hostname) => $given->is($environment) && $by->is($admin) && $hostname === 'shop.example.com');
 
         $this->actingAs($admin)->post("/environments/{$environment->id}/domains", ['hostname' => ' https://Shop.Example.com/ '])->assertRedirect();
@@ -105,7 +105,7 @@ class DomainControllerTest extends TestCase
         $domain = Domain::factory()->for($this->makeEnvironment())->create();
         $admin = User::factory()->admin()->create();
 
-        $this->mock(RemoveDomain::class)->shouldReceive('handle')->once()->withArgs(fn (Domain $given, User $by) => $given->is($domain) && $by->is($admin));
+        $this->mock(RemoveDomain::class)->shouldReceive('execute')->once()->withArgs(fn (Domain $given, User $by) => $given->is($domain) && $by->is($admin));
 
         $this->actingAs($admin)->delete("/domains/{$domain->id}")->assertRedirect();
     }

@@ -107,7 +107,7 @@ class DeploymentControllerTest extends TestCase
         $deployment = Deployment::factory()->for($environment)->create();
 
         $this->mock(StartDeployment::class)
-            ->shouldReceive('handle')
+            ->shouldReceive('execute')
             ->once()
             ->withArgs(fn ($given, User $by, $sha = null) => $given->is($environment) && $by->is($developer) && $sha === null)
             ->andReturn($deployment);

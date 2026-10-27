@@ -17,7 +17,7 @@ class DetachDatastore
      *
      * @throws InvalidArgumentException for the default database while the environment has other databases
      */
-    public function handle(DatastoreAttachment $attachment, User $by): void
+    public function execute(DatastoreAttachment $attachment, User $by): void
     {
         DB::transaction(function () use ($attachment, $by) {
             $attachment->refresh();
@@ -28,11 +28,5 @@ class DetachDatastore
 
             Provisioners::of($attachment->datastore)->detach($attachment, $by, destroyData: false);
         });
-    }
-
-    /** Also removes the data. For a preview environment that goes away. */
-    public function destroy(DatastoreAttachment $attachment, ?User $by): void
-    {
-        Provisioners::of($attachment->datastore)->detach($attachment, $by, destroyData: true);
     }
 }

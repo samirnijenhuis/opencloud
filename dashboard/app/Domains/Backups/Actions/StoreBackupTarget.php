@@ -17,7 +17,7 @@ class StoreBackupTarget
      *
      * @throws InvalidArgumentException when the bucket cannot be reached with these settings
      */
-    public function handle(User $by, string $endpoint, string $bucket, ?string $accessKey, ?string $secretKey, string $region = 'us-east-1', bool $pathStyle = true): BackupTarget
+    public function execute(User $by, string $endpoint, string $bucket, ?string $accessKey, ?string $secretKey, string $region = 'us-east-1', bool $pathStyle = true): BackupTarget
     {
         $target = BackupTarget::query()->latest('id')->first() ?? new BackupTarget;
         $accessKey ??= $target->access_key;

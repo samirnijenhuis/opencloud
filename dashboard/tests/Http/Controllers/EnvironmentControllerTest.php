@@ -152,7 +152,7 @@ class EnvironmentControllerTest extends TestCase
         $developer = User::factory()->create();
 
         $this->mock(UpdateEnvironmentSettings::class)
-            ->shouldReceive('handle')
+            ->shouldReceive('execute')
             ->once()
             ->withArgs(fn ($given, User $by, array $settings) => $given->is($environment) && $by->is($developer) && $settings === [
                 'branch' => 'release',

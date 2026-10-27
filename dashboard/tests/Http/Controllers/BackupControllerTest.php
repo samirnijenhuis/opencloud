@@ -80,8 +80,8 @@ class BackupControllerTest extends TestCase
     public function test_a_developer_cannot_back_up_or_restore_in_a_protected_environment(): void
     {
         $backup = $this->backup();
-        $this->mock(BackupNow::class)->shouldNotReceive('handle');
-        $this->mock(RestoreBackup::class)->shouldNotReceive('handle');
+        $this->mock(BackupNow::class)->shouldNotReceive('execute');
+        $this->mock(RestoreBackup::class)->shouldNotReceive('execute');
         $developer = User::factory()->create();
 
         $this->actingAs($developer)->post("/datastore-attachments/{$this->attachment->id}/backups")->assertForbidden();
@@ -92,7 +92,7 @@ class BackupControllerTest extends TestCase
     {
         $this->attachment->environment->update(['is_protected' => false]);
         $backup = $this->backup();
-        $this->mock(RestoreBackup::class)->shouldNotReceive('handle');
+        $this->mock(RestoreBackup::class)->shouldNotReceive('execute');
 
         $this->actingAs(User::factory()->create())->post("/backups/{$backup->id}/restore", ['confirm' => true])->assertForbidden();
     }
@@ -101,7 +101,7 @@ class BackupControllerTest extends TestCase
     {
         foreach ([User::factory()->owner()->create(), User::factory()->admin()->create()] as $user) {
             $this->mock(BackupNow::class)
-                ->shouldReceive('handle')
+                ->shouldReceive('execute')
                 ->once()
                 ->withArgs(fn (DatastoreAttachment $given, User $by) => $given->is($this->attachment) && $by->is($user));
 
@@ -111,7 +111,7 @@ class BackupControllerTest extends TestCase
 
     public function test_a_backup_refusal_is_shown(): void
     {
-        $this->mock(BackupNow::class)->shouldReceive('handle')->andThrow(new InvalidArgumentException('No database.'));
+        $this->mock(BackupNow::class)->shouldReceive('execute')->andThrow(new InvalidArgumentException('No database.'));
 
         $this->actingAs(User::factory()->owner()->create())->post("/datastore-attachments/{$this->attachment->id}/backups")->assertSessionHasErrors(['backup' => 'No database.']);
     }
@@ -122,7 +122,7 @@ class BackupControllerTest extends TestCase
 
         foreach ([User::factory()->owner()->create(), User::factory()->admin()->create()] as $user) {
             $this->mock(RestoreBackup::class)
-                ->shouldReceive('handle')
+                ->shouldReceive('execute')
                 ->once()
                 ->withArgs(fn (Backup $given, User $by) => $given->is($backup) && $by->is($user));
 
@@ -133,7 +133,7 @@ class BackupControllerTest extends TestCase
     public function test_a_restore_needs_the_confirmation(): void
     {
         $backup = $this->backup();
-        $this->mock(RestoreBackup::class)->shouldNotReceive('handle');
+        $this->mock(RestoreBackup::class)->shouldNotReceive('execute');
         $owner = User::factory()->owner()->create();
 
         $this->actingAs($owner)->post("/backups/{$backup->id}/restore")->assertSessionHasErrors('confirm');

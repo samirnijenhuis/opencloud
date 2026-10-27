@@ -87,7 +87,7 @@ class ManagedDatabaseTest extends TestCase
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
 
-        $attachment = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Mysql, DatastoreSource::Managed);
 
         $datastore = $attachment->datastore;
         $this->assertSame([DatastoreSource::Managed, DatastoreKind::Mysql, '8', $this->cluster->id], [$datastore->source, $datastore->kind, $datastore->version, $datastore->cluster_id]);
@@ -123,7 +123,7 @@ class ManagedDatabaseTest extends TestCase
     public function test_the_apply_writes_the_same_laravel_env_values_as_the_standard_engine(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
 
         (new ProvisionManagedDatabase($attachment))->handle(app(Runner::class));
 
@@ -158,8 +158,8 @@ class ManagedDatabaseTest extends TestCase
     {
         $environment = $this->environment();
         $this->tofu->outputs = [...self::OUTPUTS, 'password' => 'DO/pass+word'];
-        app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed);
-        $reports = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed, 'reports');
+        app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed);
+        $reports = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed, 'reports');
 
         $this->assertSame(['reports', false, "env_{$environment->id}_reports", "env_{$environment->id}_0b7ec688"], [$reports->name, $reports->is_default, $reports->database_name, $reports->username]);
         $this->assertSame([], $this->envOf($environment));
@@ -177,11 +177,11 @@ class ManagedDatabaseTest extends TestCase
     {
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
-        $main = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres);
-        $reports = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed, 'reports');
+        $main = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres);
+        $reports = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed, 'reports');
         $job = new ProvisionManagedDatabase($reports->fresh());
 
-        app(SetDefaultDatabase::class)->handle($reports, $owner);
+        app(SetDefaultDatabase::class)->execute($reports, $owner);
         $this->assertSame(['MAIN_DB_URL'], array_keys($this->envOf($environment)));
 
         $job->handle(app(Runner::class));
@@ -202,11 +202,11 @@ class ManagedDatabaseTest extends TestCase
     {
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
-        $managed = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed);
+        $managed = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed);
         (new ProvisionManagedDatabase($managed))->handle(app(Runner::class));
 
-        app(DetachDatastore::class)->handle($managed->fresh(), $owner);
-        $standard = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres);
+        app(DetachDatastore::class)->execute($managed->fresh(), $owner);
+        $standard = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres);
 
         $this->assertSame([null, false, DatastoreStatus::Destroying], [$managed->fresh()->name, $managed->fresh()->is_default, $managed->datastore->fresh()->status]);
         $this->assertSame(['main', true], [$standard->name, $standard->is_default]);
@@ -215,7 +215,7 @@ class ManagedDatabaseTest extends TestCase
     public function test_postgres_uses_the_pg_engine_and_the_pgsql_connection(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Postgres, DatastoreSource::Managed);
 
         (new ProvisionManagedDatabase($attachment))->handle(app(Runner::class));
 
@@ -226,7 +226,7 @@ class ManagedDatabaseTest extends TestCase
     public function test_a_failed_apply_fails_both_records_and_attach_again_retries_with_opentofu(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
         $this->tofu->failOn = 'apply';
         $this->tofu->error = 'Error: Error creating database cluster: 422 You have reached the database cluster limit';
 
@@ -237,7 +237,7 @@ class ManagedDatabaseTest extends TestCase
         $this->assertSame([DatastoreStatus::Failed, $expected], [$attachment->datastore->fresh()->status, $attachment->datastore->fresh()->error]);
         $this->assertSame(0, $environment->envVars()->count());
 
-        $again = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Mysql, name: 'main');
+        $again = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Mysql, name: 'main');
 
         $this->assertTrue($again->is($attachment));
         $this->assertCount(2, Queue::pushed(ProvisionManagedDatabase::class));
@@ -259,11 +259,11 @@ class ManagedDatabaseTest extends TestCase
     {
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
-        $attachment = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Mysql, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Mysql, DatastoreSource::Managed);
         (new ProvisionManagedDatabase($attachment))->handle(app(Runner::class));
         $datastore = $attachment->datastore;
 
-        app(DetachDatastore::class)->handle($attachment->fresh(), $owner);
+        app(DetachDatastore::class)->execute($attachment->fresh(), $owner);
 
         $this->assertSame(0, $environment->envVars()->count());
         $this->assertSame(DatastoreStatus::Destroying, $datastore->fresh()->status);
@@ -288,8 +288,8 @@ class ManagedDatabaseTest extends TestCase
     public function test_a_failed_destroy_keeps_the_records_with_the_error(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
-        app(DetachDatastore::class)->destroy($attachment, null);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Mysql, DatastoreSource::Managed);
+        Provisioners::of($attachment->datastore)->detach($attachment, null, destroyData: true);
         $this->tofu->failOn = 'destroy';
         $this->tofu->error = 'Error: Error deleting database cluster: 500';
 
@@ -326,7 +326,7 @@ class ManagedDatabaseTest extends TestCase
     private function assertRefused(Environment $environment, DatastoreKind $kind, string $message): void
     {
         try {
-            app(AttachDatastore::class)->handle($environment, null, $kind, DatastoreSource::Managed);
+            app(AttachDatastore::class)->execute($environment, null, $kind, DatastoreSource::Managed);
             $this->fail('The attach was not refused.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame($message, $e->getMessage());

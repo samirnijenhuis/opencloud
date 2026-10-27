@@ -16,7 +16,7 @@ class UpdateApplicationEnvProfile
      * Stores the env profile and writes the datastore env values of every attachment of every environment again.
      * The preset, the port, and the secrets stay, because the preset is chosen at creation only. The next deploy reads the new names.
      */
-    public function handle(Application $application, User $by, EnvProfileKind $envProfile): Application
+    public function execute(Application $application, User $by, EnvProfileKind $envProfile): Application
     {
         $from = $application->env_profile;
 

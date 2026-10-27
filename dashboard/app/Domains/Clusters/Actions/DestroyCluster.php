@@ -19,7 +19,7 @@ class DestroyCluster
      * @throws ValidationException for a cluster that opencloud did not create, during a run, while applications use the
      *                             cluster, or while it has managed databases
      */
-    public function handle(Cluster $cluster, User $by): void
+    public function execute(Cluster $cluster, User $by): void
     {
         if ($cluster->kind !== ClusterKind::Created) {
             throw ValidationException::withMessages(['cluster' => 'Opencloud did not create this cluster, so it does not destroy it. Disconnect it instead.']);

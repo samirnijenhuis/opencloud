@@ -20,7 +20,7 @@ class ConnectCluster
      *
      * @throws ValidationException when kubectl cannot reach the cluster or lacks full rights on it
      */
-    public function handle(User $by, array $data): Cluster
+    public function execute(User $by, array $data): Cluster
     {
         $cluster = new Cluster([...$data, 'kind' => ClusterKind::Connected, 'status' => ClusterStatus::Installing]);
         self::check($cluster);

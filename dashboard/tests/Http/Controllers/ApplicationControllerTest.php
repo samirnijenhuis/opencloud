@@ -193,7 +193,7 @@ class ApplicationControllerTest extends TestCase
         $production = Environment::factory()->for($created)->create(['name' => 'production', 'is_protected' => true]);
 
         $this->mock(CreateApplication::class)
-            ->shouldReceive('handle')
+            ->shouldReceive('execute')
             ->once()
             ->withArgs(fn (User $by, array $data) => $by->is($admin) && $data === [
                 'name' => 'shop',
@@ -347,7 +347,7 @@ class ApplicationControllerTest extends TestCase
     public function test_the_form_is_validated(): void
     {
         $owner = User::factory()->owner()->create();
-        $this->mock(CreateApplication::class)->shouldNotReceive('handle');
+        $this->mock(CreateApplication::class)->shouldNotReceive('execute');
 
         $cases = [
             'repository' => [['repository' => ''], 'repository'],
@@ -374,7 +374,7 @@ class ApplicationControllerTest extends TestCase
     public function test_each_process_row_is_validated_with_a_plain_message(): void
     {
         $owner = User::factory()->owner()->create();
-        $this->mock(CreateApplication::class)->shouldNotReceive('handle');
+        $this->mock(CreateApplication::class)->shouldNotReceive('execute');
         $row = fn (array $values) => ['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 1, 'exclusive' => false, ...$values];
 
         $cases = [

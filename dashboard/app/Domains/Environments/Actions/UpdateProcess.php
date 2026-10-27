@@ -15,7 +15,7 @@ class UpdateProcess
      *
      * @throws ValidationException when a value breaks a rule or another process has the name
      */
-    public function handle(Process $process, User $by, string $name, string $command, int $instances, bool $exclusive): Process
+    public function execute(Process $process, User $by, string $name, string $command, int $instances, bool $exclusive): Process
     {
         $process->fill(Process::validate($process->environment, $name, $command, $instances, $exclusive, ignore: $process));
 

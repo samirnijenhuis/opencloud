@@ -35,7 +35,7 @@ class Bootstrap extends Command
             ->whereNot('parts_version', $version)
             ->get()
             ->each(function (Cluster $cluster) use ($reinstallClusterParts, $version) {
-                $reinstallClusterParts->handle($cluster, null);
+                $reinstallClusterParts->execute($cluster, null);
                 $this->info("Updating the parts on cluster {$cluster->name} from {$cluster->parts_version} to {$version}.");
             });
 

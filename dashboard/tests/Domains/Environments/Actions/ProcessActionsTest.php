@@ -32,7 +32,7 @@ class ProcessActionsTest extends TestCase
 
     public function test_add_process_stores_the_trimmed_values_and_records_an_event(): void
     {
-        $process = app(AddProcess::class)->handle($this->environment, $this->user, ' horizon ', '  php artisan horizon ', 2);
+        $process = app(AddProcess::class)->execute($this->environment, $this->user, ' horizon ', '  php artisan horizon ', 2);
 
         $this->assertSame(
             [$this->environment->id, 'horizon', 'php artisan horizon', 2, false],
@@ -48,7 +48,7 @@ class ProcessActionsTest extends TestCase
 
     public function test_add_process_explains_each_value_it_refuses(): void
     {
-        app(AddProcess::class)->handle($this->environment, $this->user, 'worker', 'php artisan queue:work');
+        app(AddProcess::class)->execute($this->environment, $this->user, 'worker', 'php artisan queue:work');
 
         $cases = [
             [['Worker', 'php artisan queue:work', 1, false], ['name' => ['Use 1 to 30 lowercase letters, digits, and dashes. Start and end with a letter or a digit.']]],
@@ -66,7 +66,7 @@ class ProcessActionsTest extends TestCase
 
         foreach ($cases as [$arguments, $errors]) {
             try {
-                app(AddProcess::class)->handle($this->environment, $this->user, ...$arguments);
+                app(AddProcess::class)->execute($this->environment, $this->user, ...$arguments);
                 $this->fail('AddProcess accepted '.json_encode($arguments).'.');
             } catch (ValidationException $e) {
                 $this->assertSame($errors, $e->errors(), json_encode($arguments));
@@ -79,9 +79,9 @@ class ProcessActionsTest extends TestCase
     public function test_a_process_with_the_same_name_in_another_environment_is_allowed(): void
     {
         $other = Environment::factory()->for($this->environment->application)->create(['name' => 'staging']);
-        app(AddProcess::class)->handle($other, $this->user, 'worker', 'php artisan queue:work');
+        app(AddProcess::class)->execute($other, $this->user, 'worker', 'php artisan queue:work');
 
-        $process = app(AddProcess::class)->handle($this->environment, $this->user, 'worker', 'php artisan queue:work', 1, true);
+        $process = app(AddProcess::class)->execute($this->environment, $this->user, 'worker', 'php artisan queue:work', 1, true);
 
         $this->assertSame(['worker', true], [$process->name, $process->exclusive]);
     }
@@ -90,10 +90,10 @@ class ProcessActionsTest extends TestCase
     {
         $process = $this->environment->processes()->create(['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 1, 'exclusive' => false]);
 
-        app(UpdateProcess::class)->handle($process, $this->user, 'worker', 'php artisan queue:work', 1, false);
+        app(UpdateProcess::class)->execute($process, $this->user, 'worker', 'php artisan queue:work', 1, false);
         $this->assertSame(0, AuditEvent::count());
 
-        app(UpdateProcess::class)->handle($process, $this->user, 'horizon', 'php artisan horizon', 1, true);
+        app(UpdateProcess::class)->execute($process, $this->user, 'horizon', 'php artisan horizon', 1, true);
 
         $this->assertSame(['horizon', 'php artisan horizon', 1, true], array_values($process->fresh()->only(['name', 'command', 'instances', 'exclusive'])));
         $this->assertSame([
@@ -111,11 +111,11 @@ class ProcessActionsTest extends TestCase
         $worker = $this->environment->processes()->create(['name' => 'worker', 'command' => 'php artisan queue:work', 'instances' => 1, 'exclusive' => false]);
         $this->environment->processes()->create(['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true]);
 
-        app(UpdateProcess::class)->handle($worker, $this->user, 'worker', 'php artisan queue:work --queue=high', 3, false);
+        app(UpdateProcess::class)->execute($worker, $this->user, 'worker', 'php artisan queue:work --queue=high', 3, false);
         $this->assertSame(['php artisan queue:work --queue=high', 3], [$worker->fresh()->command, $worker->fresh()->instances]);
 
         try {
-            app(UpdateProcess::class)->handle($worker, $this->user, 'scheduler', 'php artisan queue:work', 1, false);
+            app(UpdateProcess::class)->execute($worker, $this->user, 'scheduler', 'php artisan queue:work', 1, false);
             $this->fail('UpdateProcess took the name of another process.');
         } catch (ValidationException $e) {
             $this->assertSame(['name' => ['This environment already has a process with the name scheduler.']], $e->errors());
@@ -128,7 +128,7 @@ class ProcessActionsTest extends TestCase
     {
         $process = $this->environment->processes()->create(['name' => 'reverb', 'command' => 'php artisan reverb:start', 'instances' => 1, 'exclusive' => false]);
 
-        app(RemoveProcess::class)->handle($process, $this->user);
+        app(RemoveProcess::class)->execute($process, $this->user);
 
         $this->assertSame(0, Process::count());
         $event = AuditEvent::sole();

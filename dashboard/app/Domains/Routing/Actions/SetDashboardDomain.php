@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 class SetDashboardDomain
 {
     /** A new row replaces the old one, so the retries of the old check find no model and stop. */
-    public function handle(User $by, string $hostname): DashboardDomain
+    public function execute(User $by, string $hostname): DashboardDomain
     {
         $hostname = rtrim(strtolower(trim($hostname)), '.');
         $hadRoute = DashboardDomain::verified() !== null;

@@ -33,7 +33,7 @@ class DeployHookController extends Controller
         Gate::authorize('update', $environment);
 
         try {
-            $enable->handle($environment, $request->user());
+            $enable->execute($environment, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['deploy_hook' => $e->getMessage()]);
         }
@@ -45,7 +45,7 @@ class DeployHookController extends Controller
     {
         Gate::authorize('update', $environment);
 
-        $regenerate->handle($environment, $request->user());
+        $regenerate->execute($environment, $request->user());
 
         return back();
     }
@@ -54,7 +54,7 @@ class DeployHookController extends Controller
     {
         Gate::authorize('update', $environment);
 
-        $disable->handle($environment, $request->user());
+        $disable->execute($environment, $request->user());
 
         return back();
     }
@@ -63,7 +63,7 @@ class DeployHookController extends Controller
     public function trigger(Request $request, string $token, TriggerDeployHook $trigger): JsonResponse
     {
         try {
-            $deployment = $trigger->handle($token, $request->ip());
+            $deployment = $trigger->execute($token, $request->ip());
         } catch (InvalidArgumentException|RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

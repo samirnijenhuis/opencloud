@@ -42,7 +42,7 @@ class CreateApplicationTest extends TestCase
         $owner = User::factory()->create();
         $cluster = Cluster::factory()->create(['kind' => ClusterKind::Local, 'name' => 'local']);
 
-        $application = app(CreateApplication::class)->handle($owner, [
+        $application = app(CreateApplication::class)->execute($owner, [
             'name' => 'shop',
             'repository' => 'acme/shop',
             'cluster_id' => $cluster->id,
@@ -128,7 +128,7 @@ class CreateApplicationTest extends TestCase
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
 
-        $application = app(CreateApplication::class)->handle(User::factory()->create(), [
+        $application = app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => 'api',
             'repository' => 'acme/api',
             'cluster_id' => Cluster::factory()->create()->id,
@@ -145,7 +145,7 @@ class CreateApplicationTest extends TestCase
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
         $cluster = Cluster::factory()->create();
-        $create = fn (string $name, string $database) => app(CreateApplication::class)->handle(User::factory()->create(), [
+        $create = fn (string $name, string $database) => app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => $name,
             'repository' => "acme/{$name}",
             'cluster_id' => $cluster->id,
@@ -166,7 +166,7 @@ class CreateApplicationTest extends TestCase
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
 
-        $application = app(CreateApplication::class)->handle(User::factory()->create(), [
+        $application = app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => 'shop',
             'repository' => 'acme/shop',
             'cluster_id' => Cluster::factory()->create()->id,
@@ -213,7 +213,7 @@ class CreateApplicationTest extends TestCase
         $processes->symref = "ref: refs/heads/13.x\tHEAD\n".self::SHA."\tHEAD\n";
         $processes->lsRemote = self::SHA."\trefs/heads/13.x\n";
 
-        $application = app(CreateApplication::class)->handle(User::factory()->create(), [
+        $application = app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => 'laravel',
             'repository' => 'laravel/laravel',
             'cluster_id' => Cluster::factory()->create()->id,
@@ -233,7 +233,7 @@ class CreateApplicationTest extends TestCase
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/production\n";
         $cluster = Cluster::factory()->create();
 
-        $application = app(CreateApplication::class)->handle(User::factory()->create(), [
+        $application = app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => 'shop',
             'repository' => 'acme/shop',
             'cluster_id' => $cluster->id,
@@ -251,7 +251,7 @@ class CreateApplicationTest extends TestCase
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
         $cluster = Cluster::factory()->create();
-        $create = fn (string $name, array $extra) => app(CreateApplication::class)->handle(User::factory()->create(), [
+        $create = fn (string $name, array $extra) => app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => $name,
             'repository' => "acme/{$name}",
             'cluster_id' => $cluster->id,
@@ -276,7 +276,7 @@ class CreateApplicationTest extends TestCase
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
         $cluster = Cluster::factory()->create();
-        $create = fn (string $name, array $extra) => app(CreateApplication::class)->handle(User::factory()->create(), [
+        $create = fn (string $name, array $extra) => app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => $name,
             'repository' => "acme/{$name}",
             'cluster_id' => $cluster->id,
@@ -305,7 +305,7 @@ class CreateApplicationTest extends TestCase
         FakeProcesses::install()->lsRemote = '';
 
         try {
-            app(CreateApplication::class)->handle(User::factory()->create(), [
+            app(CreateApplication::class)->execute(User::factory()->create(), [
                 'name' => 'shop',
                 'repository' => 'acme/shop',
                 'cluster_id' => Cluster::factory()->create()->id,

@@ -4,7 +4,7 @@ namespace App\Domains\Previews\Actions;
 
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
-use App\Domains\Datastores\Actions\DetachDatastore;
+use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Routing\Jobs\SyncCaddy;
@@ -17,10 +17,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ClosePreview
 {
-    public function __construct(private DetachDatastore $detachDatastore) {}
-
     /** @return bool false while a deployment of the preview still builds or rolls out, so the caller tries again later */
-    public function handle(Application $application, int $number): bool
+    public function execute(Application $application, int $number): bool
     {
         $preview = $application->environments()->where('kind', EnvironmentKind::Preview)->where('pr_number', $number)->first();
 
@@ -37,7 +35,7 @@ class ClosePreview
 
         DB::transaction(function () use ($application, $preview, $number) {
             foreach ($preview->datastoreAttachments()->orderBy('id')->get() as $attachment) {
-                $this->detachDatastore->destroy($attachment, null);
+                Provisioners::of($attachment->datastore)->detach($attachment, null, destroyData: true);
             }
 
             $hostnames = $preview->domains()->orderBy('id')->pluck('hostname');

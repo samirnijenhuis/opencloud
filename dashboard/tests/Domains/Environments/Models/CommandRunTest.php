@@ -44,7 +44,7 @@ class CommandRunTest extends TestCase
     {
         $owner = User::factory()->owner()->create();
 
-        $run = app(RunCommand::class)->handle($this->production, $owner, '  php artisan tinker --execute="echo \'hunter22\';"  ');
+        $run = app(RunCommand::class)->execute($this->production, $owner, '  php artisan tinker --execute="echo \'hunter22\';"  ');
 
         $this->assertSame(
             [$this->production->id, $owner->id, $this->live->id, 'php artisan tinker --execute="echo \'hunter22\';"', CommandRunStatus::Queued],
@@ -62,7 +62,7 @@ class CommandRunTest extends TestCase
         $this->live->update(['status' => DeploymentStatus::Superseded]);
 
         try {
-            app(RunCommand::class)->handle($this->production, User::factory()->owner()->create(), 'php artisan --version');
+            app(RunCommand::class)->execute($this->production, User::factory()->owner()->create(), 'php artisan --version');
             $this->fail('The action should refuse.');
         } catch (ValidationException $e) {
             $this->assertSame(['command' => ['The environment has no live deployment. Deploy it first.']], $e->errors());

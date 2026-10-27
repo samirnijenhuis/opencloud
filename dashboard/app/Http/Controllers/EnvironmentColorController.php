@@ -17,7 +17,7 @@ class EnvironmentColorController extends Controller
         Gate::authorize('update', $environment);
 
         $validated = $request->validate(['color' => ['required', Rule::enum(EnvironmentColor::class)]]);
-        $setColor->handle($environment, $request->user(), EnvironmentColor::from($validated['color']));
+        $setColor->execute($environment, $request->user(), EnvironmentColor::from($validated['color']));
 
         return back();
     }

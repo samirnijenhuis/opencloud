@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 class AcceptInvite
 {
     /** @param array{name: string, email: string, password: string} $data */
-    public function handle(Invite $invite, array $data): User
+    public function execute(Invite $invite, array $data): User
     {
         return DB::transaction(function () use ($invite, $data) {
             // Delete first and count the rows, so two requests with one link cannot both create a member.

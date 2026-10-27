@@ -37,7 +37,7 @@ class EnvironmentLogController extends Controller
         $validated = $request->validate(['process' => ['required', 'string', Rule::in($environment->processNames())]]);
 
         try {
-            return response()->json(['log' => $readLogs->handle($environment, $validated['process']), 'error' => null]);
+            return response()->json(['log' => $readLogs->execute($environment, $validated['process']), 'error' => null]);
         } catch (KubectlException) {
             return response()->json(['log' => '', 'error' => 'The logs are not available yet. Deploy the environment first.']);
         }

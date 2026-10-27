@@ -88,7 +88,7 @@ class ApplicationController extends Controller
         $user = $request->user();
 
         try {
-            $application = $createApplication->handle($user, [
+            $application = $createApplication->execute($user, [
                 'name' => $data['name'] ?? basename(preg_replace('/\.git$/', '', $data['repository'])),
                 'repository' => $data['repository'],
                 'cluster_id' => $data['cluster_id'],

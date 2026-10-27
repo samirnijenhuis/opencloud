@@ -43,7 +43,7 @@ class ConnectClusterTest extends TestCase
     {
         $this->kubectl->respond('auth can-i', new KubectlResult(0, "yes\n"));
 
-        $cluster = app(ConnectCluster::class)->handle($owner = User::factory()->owner()->create(), $this->data());
+        $cluster = app(ConnectCluster::class)->execute($owner = User::factory()->owner()->create(), $this->data());
 
         $this->assertSame([
             ['cluster' => 'fra1', 'args' => ['version', '--request-timeout=15s'], 'stdin' => null],
@@ -181,7 +181,7 @@ class ConnectClusterTest extends TestCase
     {
         $cluster = $this->cluster(['status' => ClusterStatus::Failed, 'error' => 'timeout']);
 
-        app(ReinstallClusterParts::class)->handle($cluster, User::factory()->owner()->create());
+        app(ReinstallClusterParts::class)->execute($cluster, User::factory()->owner()->create());
 
         $this->assertSame([ClusterStatus::Installing, null], [$cluster->fresh()->status, $cluster->fresh()->error]);
         $this->assertSame([$cluster->id], Queue::pushed(InstallClusterParts::class)->map(fn (InstallClusterParts $job) => $job->cluster->id)->all());
@@ -195,11 +195,11 @@ class ConnectClusterTest extends TestCase
 
         $this->assertSame(
             ['cluster' => ['The installer manages the parts of the local cluster. Run opencloud upgrade on the server.']],
-            $this->errors(fn () => app(ReinstallClusterParts::class)->handle($local, $owner)),
+            $this->errors(fn () => app(ReinstallClusterParts::class)->execute($local, $owner)),
         );
         $this->assertSame(
             ['cluster' => ['The local cluster runs the dashboard, so it cannot be disconnected.']],
-            $this->errors(fn () => app(DisconnectCluster::class)->handle($local, $owner, removeParts: true)),
+            $this->errors(fn () => app(DisconnectCluster::class)->execute($local, $owner, removeParts: true)),
         );
         Queue::assertNothingPushed();
         $this->assertSame([], $this->kubectl->calls);
@@ -214,7 +214,7 @@ class ConnectClusterTest extends TestCase
 
         $this->assertSame(
             ['cluster' => ['This cluster still runs 2 applications and 1 datastores. Remove them first.']],
-            $this->errors(fn () => app(DisconnectCluster::class)->handle($cluster, User::factory()->owner()->create(), removeParts: true)),
+            $this->errors(fn () => app(DisconnectCluster::class)->execute($cluster, User::factory()->owner()->create(), removeParts: true)),
         );
         $this->assertSame([], $this->kubectl->calls);
         $this->assertNotNull($cluster->fresh());
@@ -224,7 +224,7 @@ class ConnectClusterTest extends TestCase
     {
         $cluster = $this->cluster();
 
-        app(DisconnectCluster::class)->handle($cluster, User::factory()->owner()->create(), removeParts: true);
+        app(DisconnectCluster::class)->execute($cluster, User::factory()->owner()->create(), removeParts: true);
 
         $this->assertSame([
             ['delete', 'namespace', 'opencloud', '--ignore-not-found', '--wait=false'],
@@ -238,7 +238,7 @@ class ConnectClusterTest extends TestCase
     {
         $cluster = $this->cluster();
 
-        app(DisconnectCluster::class)->handle($cluster, User::factory()->owner()->create(), removeParts: false);
+        app(DisconnectCluster::class)->execute($cluster, User::factory()->owner()->create(), removeParts: false);
 
         $this->assertSame([], $this->kubectl->calls);
         $this->assertNull($cluster->fresh());
@@ -251,7 +251,7 @@ class ConnectClusterTest extends TestCase
 
         $this->assertSame(
             ['cluster' => ['Opencloud could not remove its namespaces. Unable to connect to the server Try again, or disconnect without removing them.']],
-            $this->errors(fn () => app(DisconnectCluster::class)->handle($cluster, User::factory()->owner()->create(), removeParts: true)),
+            $this->errors(fn () => app(DisconnectCluster::class)->execute($cluster, User::factory()->owner()->create(), removeParts: true)),
         );
         $this->assertNotNull($cluster->fresh());
     }
@@ -260,7 +260,7 @@ class ConnectClusterTest extends TestCase
     {
         $this->assertSame(
             ['kubeconfig' => [$message]],
-            $this->errors(fn () => app(ConnectCluster::class)->handle(User::factory()->owner()->create(), $this->data())),
+            $this->errors(fn () => app(ConnectCluster::class)->execute(User::factory()->owner()->create(), $this->data())),
         );
         $this->assertSame(0, Cluster::query()->count());
         Queue::assertNothingPushed();

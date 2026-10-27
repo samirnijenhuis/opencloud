@@ -256,7 +256,7 @@ final class RestoreInstall
                 continue;
             }
 
-            $this->startDeployment->handle($environment, null, $commitSha);
+            $this->startDeployment->execute($environment, null, $commitSha);
             $started++;
         }
 

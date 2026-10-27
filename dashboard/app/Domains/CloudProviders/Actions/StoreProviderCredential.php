@@ -13,7 +13,7 @@ class StoreProviderCredential
     /**
      * Checks the key with the provider first. The key is stored only when the check passes or only optional rights are missing.
      */
-    public function handle(User $by, string $provider, string $token): CheckResult
+    public function execute(User $by, string $provider, string $token): CheckResult
     {
         $guide = Providers::find($provider);
         $token = trim($token);

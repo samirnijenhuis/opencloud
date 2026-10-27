@@ -133,8 +133,8 @@ class DatastoreControllerTest extends TestCase
         $this->actingAs($developer)->get("/environments/{$environment->id}")->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('can.update', false));
 
-        $this->mock(AttachDatastore::class)->shouldNotReceive('handle');
-        $this->mock(DetachDatastore::class)->shouldNotReceive('handle');
+        $this->mock(AttachDatastore::class)->shouldNotReceive('execute');
+        $this->mock(DetachDatastore::class)->shouldNotReceive('execute');
 
         $this->actingAs($developer)->post("/environments/{$environment->id}/datastores", ['kind' => 'valkey'])->assertForbidden();
         $this->actingAs($developer)->delete("/datastore-attachments/{$attachment->id}")->assertForbidden();
@@ -146,7 +146,7 @@ class DatastoreControllerTest extends TestCase
 
         foreach ([User::factory()->owner()->create(), User::factory()->admin()->create()] as $user) {
             $this->mock(AttachDatastore::class)
-                ->shouldReceive('handle')
+                ->shouldReceive('execute')
                 ->once()
                 ->withArgs(fn (Environment $given, User $by, DatastoreKind $kind) => $given->is($environment) && $by->is($user) && $kind === DatastoreKind::Rustfs);
 
@@ -160,7 +160,7 @@ class DatastoreControllerTest extends TestCase
         $developer = User::factory()->create();
 
         $this->mock(AttachDatastore::class)
-            ->shouldReceive('handle')
+            ->shouldReceive('execute')
             ->once()
             ->withArgs(fn (Environment $given, User $by, DatastoreKind $kind) => $given->is($environment) && $by->is($developer) && $kind === DatastoreKind::Valkey);
 
@@ -320,7 +320,7 @@ class DatastoreControllerTest extends TestCase
     public function test_the_action_message_is_shown_on_a_refusal(): void
     {
         $environment = $this->makeEnvironment();
-        $this->mock(AttachDatastore::class)->shouldReceive('handle')->andThrow(new InvalidArgumentException('Nope.'));
+        $this->mock(AttachDatastore::class)->shouldReceive('execute')->andThrow(new InvalidArgumentException('Nope.'));
 
         $this->actingAs(User::factory()->owner()->create())->post("/environments/{$environment->id}/datastores", ['kind' => 'mysql'])->assertSessionHasErrors(['kind' => 'Nope.']);
     }
@@ -332,7 +332,7 @@ class DatastoreControllerTest extends TestCase
         $admin = User::factory()->admin()->create();
 
         $this->mock(DetachDatastore::class)
-            ->shouldReceive('handle')
+            ->shouldReceive('execute')
             ->once()
             ->withArgs(fn (DatastoreAttachment $given, User $by) => $given->is($attachment) && $by->is($admin));
 

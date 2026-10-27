@@ -9,7 +9,7 @@ use App\Domains\Members\Models\User;
 class DeleteBackupTarget
 {
     /** New backups go to the disk of the dashboard again. Backups in the bucket stay there. */
-    public function handle(BackupTarget $target, User $by): void
+    public function execute(BackupTarget $target, User $by): void
     {
         $context = ['endpoint' => $target->endpoint, 'bucket' => $target->bucket];
 

@@ -84,7 +84,7 @@ class DeploymentController extends Controller
         Gate::authorize('deploy', $environment);
 
         try {
-            $deployment = $startDeployment->handle($environment, $request->user());
+            $deployment = $startDeployment->execute($environment, $request->user());
         } catch (InvalidArgumentException|RuntimeException) {
             return back()->withErrors(['deploy' => "We could not read the branch {$environment->branch}. Check the branch name in the settings."]);
         }

@@ -11,7 +11,7 @@ use InvalidArgumentException;
 class ReadLogs
 {
     /** @throws InvalidArgumentException when $process is not web or a process of the environment */
-    public function handle(Environment $environment, string $process, int $lines = 200): string
+    public function execute(Environment $environment, string $process, int $lines = 200): string
     {
         $names = $environment->processNames();
 

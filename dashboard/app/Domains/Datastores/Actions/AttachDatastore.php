@@ -32,7 +32,7 @@ class AttachDatastore
      *
      * @throws InvalidArgumentException when the name is not valid or taken, or the source cannot serve the kind here
      */
-    public function handle(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = DatastoreSource::Standard, ?string $name = null, ?Connection $connection = null): DatastoreAttachment
+    public function execute(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = DatastoreSource::Standard, ?string $name = null, ?Connection $connection = null): DatastoreAttachment
     {
         $provisioner = Provisioners::for($kind, $source);
         $refusal = $provisioner->refusalOn($environment->application->cluster);

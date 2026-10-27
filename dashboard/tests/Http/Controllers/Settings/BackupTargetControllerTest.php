@@ -125,8 +125,8 @@ class BackupTargetControllerTest extends TestCase
     public function test_an_admin_cannot_save_or_delete_the_target(): void
     {
         $target = BackupTarget::factory()->create();
-        $this->mock(StoreBackupTarget::class)->shouldNotReceive('handle');
-        $this->mock(DeleteBackupTarget::class)->shouldNotReceive('handle');
+        $this->mock(StoreBackupTarget::class)->shouldNotReceive('execute');
+        $this->mock(DeleteBackupTarget::class)->shouldNotReceive('execute');
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->put('/settings/backups', $this->input())->assertForbidden();
@@ -140,12 +140,12 @@ class BackupTargetControllerTest extends TestCase
         $target = BackupTarget::factory()->create();
 
         $this->mock(StoreBackupTarget::class)
-            ->shouldReceive('handle')
+            ->shouldReceive('execute')
             ->once()
             ->withArgs(fn (User $by, string $endpoint, string $bucket, ?string $access, ?string $secret) => $by->is($owner)
                 && [$endpoint, $bucket, $access, $secret] === ['https://s3.example.com', 'opencloud-backups', 'AKIAEXAMPLE', 'super-secret-key']);
         $this->mock(DeleteBackupTarget::class)
-            ->shouldReceive('handle')
+            ->shouldReceive('execute')
             ->once()
             ->withArgs(fn (BackupTarget $given, User $by) => $given->is($target) && $by->is($owner));
 

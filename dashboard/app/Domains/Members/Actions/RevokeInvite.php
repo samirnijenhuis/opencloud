@@ -8,7 +8,7 @@ use App\Domains\Members\Models\User;
 
 class RevokeInvite
 {
-    public function handle(Invite $invite, User $by): void
+    public function execute(Invite $invite, User $by): void
     {
         $invite->delete();
 

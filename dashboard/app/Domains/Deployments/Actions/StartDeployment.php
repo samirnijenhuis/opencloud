@@ -20,7 +20,7 @@ class StartDeployment
      * @throws InvalidArgumentException for the preview template, which is never deployed
      * @throws RuntimeException when the branch does not exist
      */
-    public function handle(Environment $environment, ?User $by, ?string $commitSha = null): Deployment
+    public function execute(Environment $environment, ?User $by, ?string $commitSha = null): Deployment
     {
         if ($environment->kind === EnvironmentKind::PreviewTemplate) {
             throw new InvalidArgumentException('The preview template holds settings for previews. It is never deployed.');

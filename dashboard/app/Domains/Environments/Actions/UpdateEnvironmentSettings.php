@@ -31,7 +31,7 @@ class UpdateEnvironmentSettings
      *
      * @throws InvalidArgumentException when the minimum of instances is above the maximum
      */
-    public function handle(Environment $environment, User $by, array $settings): Environment
+    public function execute(Environment $environment, User $by, array $settings): Environment
     {
         $settings = Arr::only($settings, self::FIELDS);
 

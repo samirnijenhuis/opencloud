@@ -27,7 +27,7 @@ class InviteAcceptController extends Controller
     {
         $invite = Invite::findValid($token) ?? abort(404);
 
-        $member = $acceptInvite->handle($invite, $request->validate(User::newAccountRules()));
+        $member = $acceptInvite->execute($invite, $request->validate(User::newAccountRules()));
 
         Auth::login($member);
         $request->session()->regenerate();

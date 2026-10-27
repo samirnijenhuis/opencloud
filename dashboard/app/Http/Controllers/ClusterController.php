@@ -41,7 +41,7 @@ class ClusterController extends Controller
 
     public function store(ConnectClusterRequest $request, ConnectCluster $connectCluster): RedirectResponse
     {
-        $cluster = $connectCluster->handle($request->user(), [...$request->validated(), 'registry_insecure' => $request->boolean('registry_insecure')]);
+        $cluster = $connectCluster->execute($request->user(), [...$request->validated(), 'registry_insecure' => $request->boolean('registry_insecure')]);
 
         return to_route('clusters.show', $cluster);
     }
@@ -91,7 +91,7 @@ class ClusterController extends Controller
     {
         Gate::authorize('update', $cluster);
 
-        $reinstallClusterParts->handle($cluster, $request->user());
+        $reinstallClusterParts->execute($cluster, $request->user());
 
         return to_route('clusters.show', $cluster);
     }
@@ -100,7 +100,7 @@ class ClusterController extends Controller
     {
         Gate::authorize('delete', $cluster);
 
-        $disconnectCluster->handle($cluster, $request->user(), $request->boolean('remove_parts'));
+        $disconnectCluster->execute($cluster, $request->user(), $request->boolean('remove_parts'));
 
         return to_route('clusters.index');
     }

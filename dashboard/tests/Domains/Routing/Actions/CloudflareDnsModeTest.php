@@ -47,7 +47,7 @@ class CloudflareDnsModeTest extends TestCase
             self::CF.'/zones/zone-1/dns_records' => Http::response(['success' => true, 'result' => ['id' => 'rec-9']]),
         ]);
 
-        $domain = app(AddDomain::class)->handle($this->makeEnvironment(), User::factory()->owner()->create(), 'App.Example.com.', manageDns: true, proxied: true);
+        $domain = app(AddDomain::class)->execute($this->makeEnvironment(), User::factory()->owner()->create(), 'App.Example.com.', manageDns: true, proxied: true);
 
         $this->assertSame(DnsMode::Cloudflare, $domain->fresh()->dns_mode);
         $this->assertSame(['zone-1', 'rec-9'], [$domain->fresh()->cloudflare_zone_id, $domain->fresh()->cloudflare_record_id]);
@@ -69,7 +69,7 @@ class CloudflareDnsModeTest extends TestCase
             self::CF.'/zones/zone-1/dns_records/rec-old' => Http::response(['success' => true, 'result' => ['id' => 'rec-old']]),
         ]);
 
-        $domain = app(AddDomain::class)->handle($this->makeEnvironment(), User::factory()->owner()->create(), 'app.example.com', manageDns: true);
+        $domain = app(AddDomain::class)->execute($this->makeEnvironment(), User::factory()->owner()->create(), 'app.example.com', manageDns: true);
 
         $this->assertSame(DnsMode::Cloudflare, $domain->fresh()->dns_mode);
         $this->assertNull($domain->fresh()->cloudflare_record_id);
@@ -87,7 +87,7 @@ class CloudflareDnsModeTest extends TestCase
             self::CF.'/zones/zone-2/dns_records' => Http::response(['success' => true, 'result' => ['id' => 'rec-1']]),
         ]);
 
-        $domain = app(AddDomain::class)->handle($this->makeEnvironment(), User::factory()->owner()->create(), 'www.shop.example.com', manageDns: true);
+        $domain = app(AddDomain::class)->execute($this->makeEnvironment(), User::factory()->owner()->create(), 'www.shop.example.com', manageDns: true);
 
         $this->assertSame('zone-2', $domain->fresh()->cloudflare_zone_id);
     }
@@ -97,7 +97,7 @@ class CloudflareDnsModeTest extends TestCase
         Http::fake();
 
         try {
-            app(AddDomain::class)->handle($this->makeEnvironment(), User::factory()->owner()->create(), 'app.other.org', manageDns: true);
+            app(AddDomain::class)->execute($this->makeEnvironment(), User::factory()->owner()->create(), 'app.other.org', manageDns: true);
             $this->fail('The action should refuse.');
         } catch (ValidationException $e) {
             $this->assertSame(['manage_dns' => ['The Cloudflare key does not cover the zone of this domain.']], $e->errors());
@@ -115,7 +115,7 @@ class CloudflareDnsModeTest extends TestCase
         ]);
 
         try {
-            app(AddDomain::class)->handle($this->makeEnvironment(), User::factory()->owner()->create(), 'app.example.com', manageDns: true);
+            app(AddDomain::class)->execute($this->makeEnvironment(), User::factory()->owner()->create(), 'app.example.com', manageDns: true);
             $this->fail('The action should refuse.');
         } catch (ValidationException $e) {
             $this->assertSame(['manage_dns' => ['Cloudflare refused the DNS record: A CNAME record with that host already exists.']], $e->errors());
@@ -128,7 +128,7 @@ class CloudflareDnsModeTest extends TestCase
     {
         Http::fake();
 
-        $domain = app(AddDomain::class)->handle($this->makeEnvironment(), User::factory()->owner()->create(), 'app.example.com');
+        $domain = app(AddDomain::class)->execute($this->makeEnvironment(), User::factory()->owner()->create(), 'app.example.com');
 
         $this->assertSame(DnsMode::Manual, $domain->fresh()->dns_mode);
         Http::assertNothingSent();
@@ -144,7 +144,7 @@ class CloudflareDnsModeTest extends TestCase
             'cloudflare_record_id' => 'rec-9',
         ]);
 
-        app(RemoveDomain::class)->handle($domain, User::factory()->owner()->create());
+        app(RemoveDomain::class)->execute($domain, User::factory()->owner()->create());
 
         $this->assertSame(0, Domain::count());
         Http::assertSent(fn (Request $request) => $request->method() === 'DELETE' && $request->url() === self::CF.'/zones/zone-1/dns_records/rec-9');
@@ -156,7 +156,7 @@ class CloudflareDnsModeTest extends TestCase
         Http::fake();
         $domain = Domain::factory()->for($this->makeEnvironment())->create(['dns_mode' => DnsMode::Cloudflare]);
 
-        app(RemoveDomain::class)->handle($domain, User::factory()->owner()->create());
+        app(RemoveDomain::class)->execute($domain, User::factory()->owner()->create());
 
         $this->assertSame(0, Domain::count());
         Http::assertNothingSent();
@@ -167,7 +167,7 @@ class CloudflareDnsModeTest extends TestCase
         Http::fake([self::CF.'/zones/zone-1/dns_records/rec-9' => Http::response(['success' => false, 'errors' => [['message' => 'Record does not exist']]], 404)]);
         $domain = Domain::factory()->for($this->makeEnvironment())->create(['cloudflare_zone_id' => 'zone-1', 'cloudflare_record_id' => 'rec-9']);
 
-        app(RemoveDomain::class)->handle($domain, User::factory()->owner()->create());
+        app(RemoveDomain::class)->execute($domain, User::factory()->owner()->create());
 
         $this->assertSame(0, Domain::count());
     }

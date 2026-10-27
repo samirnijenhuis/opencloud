@@ -18,7 +18,7 @@ class ProcessController extends Controller
         Gate::authorize('update', $environment);
 
         $data = $this->validated($request);
-        $addProcess->handle($environment, $request->user(), $data['name'], $data['command'], (int) $data['instances'], (bool) $data['exclusive']);
+        $addProcess->execute($environment, $request->user(), $data['name'], $data['command'], (int) $data['instances'], (bool) $data['exclusive']);
 
         return back();
     }
@@ -28,7 +28,7 @@ class ProcessController extends Controller
         Gate::authorize('update', $process->environment);
 
         $data = $this->validated($request);
-        $updateProcess->handle($process, $request->user(), $data['name'], $data['command'], (int) $data['instances'], (bool) $data['exclusive']);
+        $updateProcess->execute($process, $request->user(), $data['name'], $data['command'], (int) $data['instances'], (bool) $data['exclusive']);
 
         return back();
     }
@@ -37,7 +37,7 @@ class ProcessController extends Controller
     {
         Gate::authorize('update', $process->environment);
 
-        $removeProcess->handle($process, $request->user());
+        $removeProcess->execute($process, $request->user());
 
         return back();
     }

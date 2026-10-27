@@ -13,7 +13,7 @@ class UpdatePreviewSettings
      *
      * @param  array{previews_enabled: bool, allow_forks: bool, preview_domain: ?string}  $settings
      */
-    public function handle(Application $application, User $by, array $settings): void
+    public function execute(Application $application, User $by, array $settings): void
     {
         $application->update($settings);
 

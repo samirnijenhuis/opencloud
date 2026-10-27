@@ -23,7 +23,7 @@ class CreateCluster
      *
      * @throws ValidationException when there is no key for the provider
      */
-    public function handle(User $by, ClusterProvider $provider, array $data): Cluster
+    public function execute(User $by, ClusterProvider $provider, array $data): Cluster
     {
         if (! $this->providers->hasCredential($provider)) {
             throw ValidationException::withMessages(['name' => "Add a {$provider->label()} key in Settings, Provider keys, first."]);

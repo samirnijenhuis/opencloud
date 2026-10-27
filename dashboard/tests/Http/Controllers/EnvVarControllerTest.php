@@ -89,7 +89,7 @@ class EnvVarControllerTest extends TestCase
         $developer = User::factory()->create();
 
         $this->mock(SetEnvVar::class)
-            ->shouldReceive('handle')
+            ->shouldReceive('execute')
             ->once()
             ->withArgs(fn ($given, User $by, string $key, ?string $value, bool $isSecret, EnvVarAvailability $at) => $given->is($environment) && $by->is($developer)
                 && [$key, $value, $isSecret, $at] === ['MAIL_MAILER', 'log', false, EnvVarAvailability::Both]);
@@ -151,7 +151,7 @@ class EnvVarControllerTest extends TestCase
         $envVar = EnvVar::factory()->for($environment)->create(['key' => 'OLD']);
         $admin = User::factory()->admin()->create();
 
-        $this->mock(DeleteEnvVar::class)->shouldReceive('handle')->once()->withArgs(fn (EnvVar $given, User $by) => $given->is($envVar) && $by->is($admin));
+        $this->mock(DeleteEnvVar::class)->shouldReceive('execute')->once()->withArgs(fn (EnvVar $given, User $by) => $given->is($envVar) && $by->is($admin));
 
         $this->actingAs($admin)->delete("/env-vars/{$envVar->id}")->assertRedirect();
     }

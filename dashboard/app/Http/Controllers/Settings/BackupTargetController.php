@@ -39,7 +39,7 @@ class BackupTargetController extends Controller
         $validated = $request->validated();
 
         try {
-            $storeBackupTarget->handle($request->user(), $validated['endpoint'], $validated['bucket'], $validated['access_key'] ?? null, $validated['secret_key'] ?? null, $validated['region'] ?? 'us-east-1', $request->boolean('path_style', true));
+            $storeBackupTarget->execute($request->user(), $validated['endpoint'], $validated['bucket'], $validated['access_key'] ?? null, $validated['secret_key'] ?? null, $validated['region'] ?? 'us-east-1', $request->boolean('path_style', true));
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['bucket' => $e->getMessage()]);
         }
@@ -54,7 +54,7 @@ class BackupTargetController extends Controller
         $target = BackupTarget::query()->latest('id')->first();
 
         if ($target !== null) {
-            $deleteBackupTarget->handle($target, $request->user());
+            $deleteBackupTarget->execute($target, $request->user());
         }
 
         return back();

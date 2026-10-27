@@ -105,7 +105,7 @@ class DefaultDomainTest extends TestCase
     /** @param  array<string, mixed>  $data */
     private function create(string $name, array $data = [], ?User $by = null): Application
     {
-        return app(CreateApplication::class)->handle($by ?? User::factory()->owner()->create(), [
+        return app(CreateApplication::class)->execute($by ?? User::factory()->owner()->create(), [
             'name' => $name,
             'repository' => 'acme/'.strtolower($name),
             'cluster_id' => $this->cluster->id,

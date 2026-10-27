@@ -18,7 +18,7 @@ class DisconnectCluster
      *
      * @throws ValidationException for the local cluster, while applications or datastores use the cluster, or when the delete fails
      */
-    public function handle(Cluster $cluster, User $by, bool $removeParts): void
+    public function execute(Cluster $cluster, User $by, bool $removeParts): void
     {
         if ($cluster->kind === ClusterKind::Local) {
             throw ValidationException::withMessages(['cluster' => 'The local cluster runs the dashboard, so it cannot be disconnected.']);

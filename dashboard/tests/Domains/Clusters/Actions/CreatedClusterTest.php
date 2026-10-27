@@ -73,7 +73,7 @@ class CreatedClusterTest extends TestCase
     {
         $owner = User::factory()->owner()->create();
 
-        $cluster = app(CreateCluster::class)->handle($owner, new DigitalOceanCluster, $this->form());
+        $cluster = app(CreateCluster::class)->execute($owner, new DigitalOceanCluster, $this->form());
 
         $this->assertSame(
             ['ams3-prod', ClusterKind::Created, 'digitalocean', ClusterStatus::Provisioning, 'ams3', 's-2vcpu-4gb', 1, 3],
@@ -90,7 +90,7 @@ class CreatedClusterTest extends TestCase
         ProviderCredential::query()->delete();
 
         try {
-            app(CreateCluster::class)->handle(User::factory()->owner()->create(), new DigitalOceanCluster, $this->form());
+            app(CreateCluster::class)->execute(User::factory()->owner()->create(), new DigitalOceanCluster, $this->form());
             $this->fail('The create was not refused.');
         } catch (ValidationException $e) {
             $this->assertSame(['name' => ['Add a DigitalOcean key in Settings, Provider keys, first.']], $e->errors());
@@ -168,7 +168,7 @@ class CreatedClusterTest extends TestCase
     {
         $cluster = $this->createdCluster(['status' => ClusterStatus::Failed, 'error' => 'tofu apply failed.']);
 
-        app(ReinstallClusterParts::class)->handle($cluster, User::factory()->owner()->create());
+        app(ReinstallClusterParts::class)->execute($cluster, User::factory()->owner()->create());
 
         Queue::assertPushed(ProvisionCluster::class);
         Queue::assertNotPushed(InstallClusterParts::class);
@@ -208,7 +208,7 @@ class CreatedClusterTest extends TestCase
         $cluster = $this->createdCluster(['status' => ClusterStatus::Ready]);
         Datastore::factory()->for($cluster)->create(['source' => DatastoreSource::Standard]);
 
-        app(DestroyCluster::class)->handle($cluster, $owner);
+        app(DestroyCluster::class)->execute($cluster, $owner);
 
         $this->assertSame(ClusterStatus::Destroying, $cluster->fresh()->status);
         $job = Queue::pushed(TearDownCluster::class)->sole();
@@ -270,7 +270,7 @@ class CreatedClusterTest extends TestCase
         $status = $cluster->status;
 
         try {
-            app(DestroyCluster::class)->handle($cluster, User::factory()->owner()->create());
+            app(DestroyCluster::class)->execute($cluster, User::factory()->owner()->create());
             $this->fail('The destroy was not refused.');
         } catch (ValidationException $e) {
             $this->assertSame(['cluster' => [$message]], $e->errors());

@@ -19,7 +19,7 @@ class BackupController extends Controller
         Gate::authorize('update', $attachment->environment);
 
         try {
-            $backupNow->handle($attachment, $request->user());
+            $backupNow->execute($attachment, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['backup' => $e->getMessage()]);
         }
@@ -30,7 +30,7 @@ class BackupController extends Controller
     public function restore(RestoreBackupRequest $request, Backup $backup, RestoreBackup $restoreBackup): RedirectResponse
     {
         try {
-            $restoreBackup->handle($backup, $request->user());
+            $restoreBackup->execute($backup, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['backup' => $e->getMessage()]);
         }

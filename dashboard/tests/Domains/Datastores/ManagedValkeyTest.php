@@ -80,10 +80,10 @@ class ManagedValkeyTest extends TestCase
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
         $attach = app(AttachDatastore::class);
-        $managed = $attach->handle($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
-        app(DetachDatastore::class)->handle($managed, $owner);
+        $managed = $attach->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        app(DetachDatastore::class)->execute($managed, $owner);
 
-        $local = $attach->handle($environment, $owner, DatastoreKind::Valkey);
+        $local = $attach->execute($environment, $owner, DatastoreKind::Valkey);
 
         $this->assertNotSame($managed->id, $local->id);
         $this->assertSame(
@@ -97,7 +97,7 @@ class ManagedValkeyTest extends TestCase
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
 
-        $attachment = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
 
         $datastore = $attachment->datastore;
         $this->assertSame([DatastoreSource::Managed, '8', null, null], [$datastore->source, $datastore->version, $attachment->name, $attachment->host]);
@@ -132,7 +132,7 @@ class ManagedValkeyTest extends TestCase
     public function test_the_apply_writes_the_laravel_redis_values(): void
     {
         $environment = $this->environment();
-        $attachment = app(AttachDatastore::class)->handle($environment, null, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, null, DatastoreKind::Valkey, DatastoreSource::Managed);
 
         (new ProvisionManagedDatabase($attachment))->handle();
 
@@ -152,7 +152,7 @@ class ManagedValkeyTest extends TestCase
         $this->tofu->failOn = 'apply';
         $this->tofu->failTimes = 1;
         $this->tofu->error = 'Error: Error creating database cluster: 422 invalid size slug for engine valkey';
-        $attachment = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
 
         Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
 
@@ -161,7 +161,7 @@ class ManagedValkeyTest extends TestCase
         $this->assertSame([DatastoreStatus::Failed, $failed], [$attachment->datastore->fresh()->status, $attachment->datastore->fresh()->error]);
         $this->assertSame([], $this->envOf($environment));
 
-        $again = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
         Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
 
         $this->assertTrue($again->is($attachment));
@@ -174,11 +174,11 @@ class ManagedValkeyTest extends TestCase
     {
         $environment = $this->environment();
         $owner = User::factory()->owner()->create();
-        $attachment = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Valkey, DatastoreSource::Managed);
         (new ProvisionManagedDatabase($attachment))->handle();
         $datastore = $attachment->datastore;
 
-        app(DetachDatastore::class)->handle($attachment->fresh(), $owner);
+        app(DetachDatastore::class)->execute($attachment->fresh(), $owner);
 
         $this->assertSame([], $this->envOf($environment));
         $this->assertSame(DatastoreStatus::Destroying, $datastore->fresh()->status);
@@ -197,10 +197,10 @@ class ManagedValkeyTest extends TestCase
 
     public function test_a_manual_backup_says_why_opencloud_does_not_back_it_up(): void
     {
-        $attachment = app(AttachDatastore::class)->handle($this->environment(), null, DatastoreKind::Valkey, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($this->environment(), null, DatastoreKind::Valkey, DatastoreSource::Managed);
 
         try {
-            app(BackupNow::class)->handle($attachment, User::factory()->owner()->create());
+            app(BackupNow::class)->execute($attachment, User::factory()->owner()->create());
             $this->fail('The backup was not refused.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('DigitalOcean does not back up Valkey, and opencloud does not either. Keep only data that the app can make again.', $e->getMessage());

@@ -54,7 +54,7 @@ class EnvironmentActionsTest extends TestCase
         $processes = FakeProcesses::install();
         $processes->lsRemote = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/heads/main\n";
 
-        $deployment = app(StartDeployment::class)->handle($this->environment, $this->user);
+        $deployment = app(StartDeployment::class)->execute($this->environment, $this->user);
 
         $this->assertSame([['git', 'ls-remote', 'https://github.com/acme/shop.git', 'refs/heads/main']], $processes->commands());
         $this->assertSame(['GIT_TERMINAL_PROMPT' => '0'], $processes->ran[0]['env']);
@@ -70,24 +70,24 @@ class EnvironmentActionsTest extends TestCase
     {
         $processes = FakeProcesses::install();
 
-        $deployment = app(StartDeployment::class)->handle($this->environment, null, 'cccccccccccccccccccccccccccccccccccccccc');
+        $deployment = app(StartDeployment::class)->execute($this->environment, null, 'cccccccccccccccccccccccccccccccccccccccc');
 
         $this->assertSame([], $processes->ran);
         $this->assertSame(['cccccccccccccccccccccccccccccccccccccccc', null], [$deployment->commit_sha, $deployment->triggered_by]);
 
         $template = Environment::factory()->for($this->environment->application)->create(['kind' => EnvironmentKind::PreviewTemplate]);
         $this->expectExceptionObject(new InvalidArgumentException('The preview template holds settings for previews. It is never deployed.'));
-        app(StartDeployment::class)->handle($template, $this->user, 'cccccccccccccccccccccccccccccccccccccccc');
+        app(StartDeployment::class)->execute($template, $this->user, 'cccccccccccccccccccccccccccccccccccccccc');
     }
 
     public function test_set_env_var_keeps_a_secret_when_the_new_value_is_null(): void
     {
         $set = app(SetEnvVar::class);
 
-        $set->handle($this->environment, $this->user, 'STRIPE_SECRET', 'sk_live_1', true, EnvVarAvailability::Runtime);
-        $kept = $set->handle($this->environment, $this->user, 'STRIPE_SECRET', null, true, EnvVarAvailability::Both);
-        $set->handle($this->environment, $this->user, 'APP_NAME', 'Shop', false, EnvVarAvailability::Runtime);
-        $set->handle($this->environment, $this->user, 'APP_NAME', 'Shop 2', false, EnvVarAvailability::Runtime);
+        $set->execute($this->environment, $this->user, 'STRIPE_SECRET', 'sk_live_1', true, EnvVarAvailability::Runtime);
+        $kept = $set->execute($this->environment, $this->user, 'STRIPE_SECRET', null, true, EnvVarAvailability::Both);
+        $set->execute($this->environment, $this->user, 'APP_NAME', 'Shop', false, EnvVarAvailability::Runtime);
+        $set->execute($this->environment, $this->user, 'APP_NAME', 'Shop 2', false, EnvVarAvailability::Runtime);
 
         $this->assertSame(['sk_live_1', true, EnvVarAvailability::Both], [$kept->fresh()->value, $kept->is_secret, $kept->fresh()->available_at]);
         $this->assertSame(
@@ -106,7 +106,7 @@ class EnvironmentActionsTest extends TestCase
     {
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'value' => 'mysql', 'source' => EnvVarSource::Datastore]);
 
-        app(SetEnvVar::class)->handle($this->environment, $this->user, 'DB_HOST', 'my-own-db', false, EnvVarAvailability::Runtime);
+        app(SetEnvVar::class)->execute($this->environment, $this->user, 'DB_HOST', 'my-own-db', false, EnvVarAvailability::Runtime);
 
         $this->assertSame(
             [['datastore', 'mysql'], ['user', 'my-own-db']],
@@ -117,17 +117,17 @@ class EnvironmentActionsTest extends TestCase
     public function test_set_env_var_refuses_to_reveal_a_kept_secret_and_bad_keys(): void
     {
         $set = app(SetEnvVar::class);
-        $set->handle($this->environment, $this->user, 'TOKEN', 'abcd1234', true, EnvVarAvailability::Runtime);
+        $set->execute($this->environment, $this->user, 'TOKEN', 'abcd1234', true, EnvVarAvailability::Runtime);
 
         try {
-            $set->handle($this->environment, $this->user, 'TOKEN', null, false, EnvVarAvailability::Runtime);
+            $set->execute($this->environment, $this->user, 'TOKEN', null, false, EnvVarAvailability::Runtime);
             $this->fail('A kept secret became plain.');
         } catch (InvalidArgumentException $e) {
             $this->assertSame('Give TOKEN a new value to make it a plain value.', $e->getMessage());
         }
 
         $this->expectExceptionObject(new InvalidArgumentException('1BAD-KEY is not a valid env name. Use letters, digits, and underscores.'));
-        $set->handle($this->environment, $this->user, '1BAD-KEY', 'x', false, EnvVarAvailability::Runtime);
+        $set->execute($this->environment, $this->user, '1BAD-KEY', 'x', false, EnvVarAvailability::Runtime);
     }
 
     public function test_delete_env_var_deletes_a_user_value_and_refuses_a_datastore_value(): void
@@ -135,18 +135,18 @@ class EnvironmentActionsTest extends TestCase
         $user = EnvVar::factory()->for($this->environment)->create(['key' => 'MAIL_HOST']);
         $datastore = EnvVar::factory()->for($this->environment)->create(['key' => 'DB_HOST', 'source' => EnvVarSource::Datastore]);
 
-        app(DeleteEnvVar::class)->handle($user, $this->user);
+        app(DeleteEnvVar::class)->execute($user, $this->user);
 
         $this->assertSame(['DB_HOST'], $this->environment->envVars()->pluck('key')->all());
         $this->assertSame(['env_var.deleted', ['key' => 'MAIL_HOST']], [AuditEvent::sole()->action, AuditEvent::sole()->context]);
 
         $this->expectExceptionObject(new InvalidArgumentException('DB_HOST comes from a datastore. Detach the datastore to remove it.'));
-        app(DeleteEnvVar::class)->handle($datastore, $this->user);
+        app(DeleteEnvVar::class)->execute($datastore, $this->user);
     }
 
     public function test_add_domain_normalizes_the_hostname_and_checks_dns(): void
     {
-        $domain = app(AddDomain::class)->handle($this->environment, $this->user, '  WWW.Shop.Example.COM. ');
+        $domain = app(AddDomain::class)->execute($this->environment, $this->user, '  WWW.Shop.Example.COM. ');
 
         $this->assertSame('www.shop.example.com', $domain->hostname);
         Queue::assertPushed(CheckDomain::class, fn (CheckDomain $job) => $job->domain->is($domain));
@@ -160,7 +160,7 @@ class EnvironmentActionsTest extends TestCase
     {
         $domain = Domain::factory()->for($this->environment)->create(['hostname' => 'old.example.com']);
 
-        app(RemoveDomain::class)->handle($domain, $this->user);
+        app(RemoveDomain::class)->execute($domain, $this->user);
 
         $this->assertSame(0, Domain::count());
         Queue::assertPushed(SyncCaddy::class, fn (SyncCaddy $job) => $job->cluster->is($this->environment->application->cluster));
@@ -174,7 +174,7 @@ class EnvironmentActionsTest extends TestCase
         $kubectl->respond('logs', new KubectlResult(0, "[pod/web-1/web] connecting with hunter22\n"));
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);
 
-        $logs = app(ReadLogs::class)->handle($this->environment, 'worker', 50);
+        $logs = app(ReadLogs::class)->execute($this->environment, 'worker', 50);
 
         $this->assertSame("[pod/web-1/web] connecting with ********\n", $logs);
         $this->assertSame([
@@ -187,6 +187,6 @@ class EnvironmentActionsTest extends TestCase
         ], $kubectl->calls[0]['args']);
 
         $this->expectExceptionObject(new InvalidArgumentException('deploy is not a process of this environment. Use one of: web, worker.'));
-        app(ReadLogs::class)->handle($this->environment, 'deploy');
+        app(ReadLogs::class)->execute($this->environment, 'deploy');
     }
 }

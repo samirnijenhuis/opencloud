@@ -16,7 +16,7 @@ class EnableDeployHook
      *
      * @throws InvalidArgumentException for the preview template, which is never deployed
      */
-    public function handle(Environment $environment, User $by): Environment
+    public function execute(Environment $environment, User $by): Environment
     {
         if ($environment->kind === EnvironmentKind::PreviewTemplate) {
             throw new InvalidArgumentException('The preview template is never deployed, so it has no deploy hook.');

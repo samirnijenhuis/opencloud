@@ -21,7 +21,7 @@ class InviteController extends Controller
 
         $validated = $request->validate(['role' => ['required', Rule::enum(Role::class)]]);
 
-        [, $token] = $issueInvite->handle($request->user(), Role::from($validated['role']));
+        [, $token] = $issueInvite->execute($request->user(), Role::from($validated['role']));
 
         return to_route('members.index')->with('invite_link', route('invites.show', $token));
     }
@@ -30,7 +30,7 @@ class InviteController extends Controller
     {
         Gate::authorize('invite', User::class);
 
-        $revokeInvite->handle($invite, $request->user());
+        $revokeInvite->execute($invite, $request->user());
 
         return to_route('members.index');
     }

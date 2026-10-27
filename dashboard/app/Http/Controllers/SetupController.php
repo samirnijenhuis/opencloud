@@ -23,7 +23,7 @@ class SetupController extends Controller
     {
         $this->ensureSetupIsOpen($token);
 
-        $owner = $createOwner->handle($request->validate(User::newAccountRules()));
+        $owner = $createOwner->execute($request->validate(User::newAccountRules()));
 
         Auth::login($owner);
         $request->session()->regenerate();

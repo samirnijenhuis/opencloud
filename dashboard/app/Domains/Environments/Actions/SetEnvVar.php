@@ -17,7 +17,7 @@ class SetEnvVar
      *
      * @throws InvalidArgumentException when the key is not a valid env name, or a kept secret would become plain
      */
-    public function handle(Environment $environment, User $by, string $key, ?string $value, bool $isSecret, EnvVarAvailability $availableAt): EnvVar
+    public function execute(Environment $environment, User $by, string $key, ?string $value, bool $isSecret, EnvVarAvailability $availableAt): EnvVar
     {
         if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) {
             throw new InvalidArgumentException("{$key} is not a valid env name. Use letters, digits, and underscores.");

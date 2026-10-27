@@ -22,7 +22,7 @@ class DomainController extends Controller
 
     public function store(DomainRequest $request, Environment $environment, AddDomain $addDomain): RedirectResponse
     {
-        $addDomain->handle(
+        $addDomain->execute(
             $environment,
             $request->user(),
             $request->validated('hostname'),
@@ -46,7 +46,7 @@ class DomainController extends Controller
     {
         Gate::authorize('update', $domain->environment->application);
 
-        $removeDomain->handle($domain, $request->user());
+        $removeDomain->execute($domain, $request->user());
 
         return back();
     }

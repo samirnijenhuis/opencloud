@@ -39,7 +39,7 @@ class CreatedClusterController extends Controller
 
     public function store(CreateClusterRequest $request, CreateCluster $createCluster): RedirectResponse
     {
-        $cluster = $createCluster->handle($request->user(), $request->provider(), $request->cluster());
+        $cluster = $createCluster->execute($request->user(), $request->provider(), $request->cluster());
 
         return to_route('clusters.show', $cluster);
     }
@@ -53,7 +53,7 @@ class CreatedClusterController extends Controller
             ['confirm.required' => 'Type the name of the cluster to confirm.', 'confirm.in' => 'Type the name of the cluster to confirm.'],
         );
 
-        $destroyCluster->handle($cluster, $request->user());
+        $destroyCluster->execute($cluster, $request->user());
 
         return to_route('clusters.show', $cluster);
     }

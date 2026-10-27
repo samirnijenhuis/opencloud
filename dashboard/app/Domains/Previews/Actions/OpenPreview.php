@@ -37,7 +37,7 @@ class OpenPreview
     ) {}
 
     /** @return Environment|null null when the application gets no preview for this pull request */
-    public function handle(Application $application, PullRequestEvent $pullRequest): ?Environment
+    public function execute(Application $application, PullRequestEvent $pullRequest): ?Environment
     {
         $skipped = match (true) {
             ! $application->previews_enabled => 'previews_disabled',
@@ -55,7 +55,7 @@ class OpenPreview
             ?? $this->create($application, $pullRequest);
 
         if ($preview !== null) {
-            $this->startDeployment->handle($preview, null, $pullRequest->headSha);
+            $this->startDeployment->execute($preview, null, $pullRequest->headSha);
         }
 
         return $preview;
@@ -109,7 +109,7 @@ class OpenPreview
 
             foreach ($attachments as $attachment) {
                 // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
-                $this->attachDatastore->handle($preview, null, $attachment->datastore->kind, DatastoreSource::Standard, $attachment->name);
+                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::Standard, $attachment->name);
             }
 
             $hostname = $this->hostname($application, $pullRequest->number);

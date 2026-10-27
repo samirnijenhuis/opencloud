@@ -17,7 +17,7 @@ class SetDefaultDatabase
      *
      * @throws InvalidArgumentException for an attachment that is not a MySQL or Postgres database with a name
      */
-    public function handle(DatastoreAttachment $attachment, User $by): void
+    public function execute(DatastoreAttachment $attachment, User $by): void
     {
         if ($attachment->name === null) {
             throw new InvalidArgumentException('Only a MySQL or Postgres database can be the default.');

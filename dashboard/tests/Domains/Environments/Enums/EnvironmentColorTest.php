@@ -32,8 +32,8 @@ class EnvironmentColorTest extends TestCase
         $environment = $this->makeEnvironment();
         $owner = User::factory()->owner()->create();
 
-        app(SetEnvironmentColor::class)->handle($environment, $owner, EnvironmentColor::Red);
-        app(SetEnvironmentColor::class)->handle($environment, $owner, EnvironmentColor::Red);
+        app(SetEnvironmentColor::class)->execute($environment, $owner, EnvironmentColor::Red);
+        app(SetEnvironmentColor::class)->execute($environment, $owner, EnvironmentColor::Red);
 
         $this->assertSame('red', $environment->fresh()->getRawOriginal('color'));
         $this->assertSame(

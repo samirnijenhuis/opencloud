@@ -36,7 +36,7 @@ class DashboardDomainController extends Controller
 
     public function update(DashboardDomainRequest $request, SetDashboardDomain $setDashboardDomain): RedirectResponse
     {
-        $setDashboardDomain->handle($request->user(), $request->validated('hostname'));
+        $setDashboardDomain->execute($request->user(), $request->validated('hostname'));
 
         return back();
     }
@@ -61,7 +61,7 @@ class DashboardDomainController extends Controller
         $domain = DashboardDomain::current();
 
         if ($domain !== null) {
-            $removeDashboardDomain->handle($domain, $request->user());
+            $removeDashboardDomain->execute($domain, $request->user());
         }
 
         return back();

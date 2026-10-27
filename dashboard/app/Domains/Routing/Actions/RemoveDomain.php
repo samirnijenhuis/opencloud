@@ -16,7 +16,7 @@ class RemoveDomain
     /**
      * @throws ValidationException when Cloudflare refuses to delete the record that opencloud created
      */
-    public function handle(Domain $domain, User $by): void
+    public function execute(Domain $domain, User $by): void
     {
         $this->cloudflare->remove($domain);
 

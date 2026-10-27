@@ -42,13 +42,13 @@ class DeployHookTest extends TestCase
     {
         $environment = $this->makeEnvironment();
 
-        app(EnableDeployHook::class)->handle($environment, $this->owner);
+        app(EnableDeployHook::class)->execute($environment, $this->owner);
         $first = $environment->fresh()->deploy_hook_token;
-        app(EnableDeployHook::class)->handle($environment, $this->owner);
-        app(DisableDeployHook::class)->handle($environment, $this->owner);
-        app(EnableDeployHook::class)->handle($environment, $this->owner);
+        app(EnableDeployHook::class)->execute($environment, $this->owner);
+        app(DisableDeployHook::class)->execute($environment, $this->owner);
+        app(EnableDeployHook::class)->execute($environment, $this->owner);
         $again = $environment->fresh()->deploy_hook_token;
-        app(RegenerateDeployHook::class)->handle($environment, $this->owner);
+        app(RegenerateDeployHook::class)->execute($environment, $this->owner);
         $fresh = $environment->fresh();
 
         $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{48}$/', $first);
@@ -70,13 +70,13 @@ class DeployHookTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        app(EnableDeployHook::class)->handle($template, $this->owner);
+        app(EnableDeployHook::class)->execute($template, $this->owner);
     }
 
     public function test_a_post_to_the_hook_starts_a_deployment_of_the_branch_head(): void
     {
         $environment = $this->makeEnvironment();
-        app(EnableDeployHook::class)->handle($environment, $this->owner);
+        app(EnableDeployHook::class)->execute($environment, $this->owner);
 
         $response = $this->postJson($this->hookPath($environment));
 
@@ -93,9 +93,9 @@ class DeployHookTest extends TestCase
     public function test_a_disabled_hook_and_a_wrong_token_both_answer_404(): void
     {
         $environment = $this->makeEnvironment();
-        app(EnableDeployHook::class)->handle($environment, $this->owner);
+        app(EnableDeployHook::class)->execute($environment, $this->owner);
         $path = $this->hookPath($environment);
-        app(DisableDeployHook::class)->handle($environment, $this->owner);
+        app(DisableDeployHook::class)->execute($environment, $this->owner);
 
         $this->postJson($path)->assertNotFound()->assertExactJson(['message' => 'No deploy hook has this URL.']);
         $this->postJson('/hooks/deploy/'.str_repeat('x', 48))->assertNotFound();
@@ -122,7 +122,7 @@ class DeployHookTest extends TestCase
     {
         $production = $this->makeEnvironment();
         $staging = Environment::factory()->for($production->application)->create(['name' => 'staging', 'is_protected' => false]);
-        app(EnableDeployHook::class)->handle($production, $this->owner);
+        app(EnableDeployHook::class)->execute($production, $this->owner);
         $developer = User::factory()->create();
 
         $this->actingAs($this->owner)->getJson("/environments/{$production->id}/deploy-hook")

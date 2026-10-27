@@ -26,7 +26,7 @@ class EnvVarController extends Controller
         $validated = $request->validated();
 
         try {
-            $setEnvVar->handle(
+            $setEnvVar->execute(
                 $environment,
                 $request->user(),
                 $validated['key'],
@@ -46,7 +46,7 @@ class EnvVarController extends Controller
         Gate::authorize('update', $envVar->environment);
 
         try {
-            $deleteEnvVar->handle($envVar, $request->user());
+            $deleteEnvVar->execute($envVar, $request->user());
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['key' => $e->getMessage()]);
         }

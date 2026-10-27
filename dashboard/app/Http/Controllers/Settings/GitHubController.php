@@ -49,7 +49,7 @@ class GitHubController extends Controller
         }
 
         try {
-            $connect->handle($request->user(), $code);
+            $connect->execute($request->user(), $code);
         } catch (RequestException $e) {
             return to_route('github.index')->withErrors(['github' => "GitHub did not accept the code. It answered with status {$e->response->status()}. Create the GitHub App again."]);
         }

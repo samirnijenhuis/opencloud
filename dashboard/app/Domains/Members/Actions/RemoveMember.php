@@ -7,7 +7,7 @@ use App\Domains\Members\Models\User;
 
 class RemoveMember
 {
-    public function handle(User $member, User $by): void
+    public function execute(User $member, User $by): void
     {
         $member->delete();
 

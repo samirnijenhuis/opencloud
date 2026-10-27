@@ -9,7 +9,7 @@ use App\Domains\Members\Models\User;
 class CreateOwner
 {
     /** @param array{name: string, email: string, password: string} $data */
-    public function handle(array $data): User
+    public function execute(array $data): User
     {
         $owner = new User($data);
         $owner->role = Role::Owner;

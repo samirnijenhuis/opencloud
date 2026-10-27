@@ -10,7 +10,7 @@ use App\Domains\Members\Models\User;
 class IssueInvite
 {
     /** @return array{Invite, string} The invite and the plain token for its link. */
-    public function handle(User $by, Role $role): array
+    public function execute(User $by, Role $role): array
     {
         [$invite, $token] = Invite::issue($role);
 

@@ -166,13 +166,13 @@ class ProvisionersTest extends TestCase
         $this->tofu->failTimes = 1;
         $this->tofu->error = 'Error: Error creating database cluster: 422 You have reached the database cluster limit';
 
-        $attachment = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed);
+        $attachment = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed);
 
         $failed = 'tofu apply failed. Error: Error creating database cluster: 422 You have reached the database cluster limit';
         $this->assertSame([DatastoreStatus::Failed, $failed], [$attachment->fresh()->status, $attachment->fresh()->error]);
         $this->assertSame([], $this->envOf($environment));
 
-        $again = app(AttachDatastore::class)->handle($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed, 'main');
+        $again = app(AttachDatastore::class)->execute($environment, $owner, DatastoreKind::Postgres, DatastoreSource::Managed, 'main');
 
         $id = $environment->id;
         $this->assertTrue($again->is($attachment));
