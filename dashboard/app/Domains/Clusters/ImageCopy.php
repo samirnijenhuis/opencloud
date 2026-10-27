@@ -4,6 +4,7 @@ namespace App\Domains\Clusters;
 
 use App\Domains\Builds\Builder;
 use App\Domains\Deployments\DeploymentLog;
+use App\Domains\Deployments\Enums\DeploymentStep;
 use App\Domains\Deployments\EnvironmentManifests;
 use App\Domains\Deployments\Models\Deployment;
 use App\Support\Kube\Kubectl;
@@ -31,7 +32,11 @@ final class ImageCopy
         $cluster = $environment->application->cluster;
         $registry = $cluster->registry();
 
+        $log->step(DeploymentStep::PUSHING_APPLICATION);
+
         if ($registry === null) {
+            $log->write('The cluster pulls the image from the local registry. Nothing to push.');
+
             return $builtImage;
         }
 

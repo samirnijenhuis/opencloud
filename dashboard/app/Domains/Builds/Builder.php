@@ -5,6 +5,7 @@ namespace App\Domains\Builds;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Builds\Exceptions\RepositoryDoesNotFit;
 use App\Domains\Deployments\DeploymentLog;
+use App\Domains\Deployments\Enums\DeploymentStep;
 use App\Domains\Deployments\EnvironmentVariables;
 use App\Domains\Deployments\Models\Deployment;
 use Illuminate\Support\Facades\File;
@@ -52,12 +53,14 @@ final class Builder
         File::makeDirectory($dir, 0700);
 
         try {
+            $log->step(DeploymentStep::PREPARING_BUILD);
             $log->write("Cloning {$application->repository} at {$deployment->commit_sha}.");
             Git::checkout($application->cloneUrl(), $deployment->commit_sha, $dir);
 
             $buildEnv = EnvironmentVariables::build($environment);
             $dockerfile = $this->prepare($application->type, $dir, array_keys($buildEnv), $environment->build_command);
             $image = self::imageReference($deployment);
+            $log->step(DeploymentStep::RUNNING_BUILD);
             $log->write("Building {$image} from {$dockerfile}.");
 
             $exitCode = Process::path($dir)

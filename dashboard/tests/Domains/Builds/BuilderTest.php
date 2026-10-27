@@ -68,7 +68,9 @@ class BuilderTest extends TestCase
         );
         $this->assertStringContainsString("FROM base AS vendor\n# Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.\nARG OPENCLOUD_BUILD_ENV\nCOPY . .\n", $processes->dockerfiles[0]);
         $this->assertSame(
+            "2026-10-23T12:00:00Z \x1epreparing_build\n".
             '2026-10-23T12:00:00Z Cloning acme/shop at '.self::SHA.".\n".
+            "2026-10-23T12:00:00Z \x1erunning_build\n".
             "2026-10-23T12:00:00Z Building {$image} from .opencloud.Dockerfile.\n".
             "2026-10-23T12:00:00Z #1 [internal] load build definition\n".
             "2026-10-23T12:00:00Z #5 composer install with token ********\n".

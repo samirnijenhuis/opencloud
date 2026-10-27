@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domains\Deployments\Actions\StartDeployment;
+use App\Domains\Deployments\DeploymentSteps;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Models\Environment;
@@ -41,10 +42,8 @@ class DeploymentController extends Controller
 
         return Inertia::render('deployments/show', [
             ...$this->environmentProps($environment, $request->user()),
-            'deployment' => [
-                ...$this->deploymentProps($deployment),
-                'log' => (string) $deployment->log,
-            ],
+            'deployment' => $this->deploymentProps($deployment),
+            'steps' => DeploymentSteps::of($deployment),
             'waiting_for' => $this->waitingFor($deployment),
         ]);
     }

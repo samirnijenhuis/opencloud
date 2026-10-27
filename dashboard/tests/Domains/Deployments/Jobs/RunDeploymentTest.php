@@ -8,6 +8,7 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Deployments\DeploymentSteps;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
@@ -124,16 +125,30 @@ class RunDeploymentTest extends TestCase
         $this->assertSame('2026-10-23 12:00:00', $new->started_at->toDateTimeString());
         $this->assertSame('2026-10-23 12:00:00', $new->finished_at->toDateTimeString());
         $this->assertSame(
+            "2026-10-23T12:00:00Z \x1epreparing_build\n".
             '2026-10-23T12:00:00Z Cloning acme/shop at '.self::SHA.".\n".
+            "2026-10-23T12:00:00Z \x1erunning_build\n".
             "2026-10-23T12:00:00Z Building {$image} from .opencloud.Dockerfile.\n".
             "2026-10-23T12:00:00Z #9 DONE 3.1s\n".
+            "2026-10-23T12:00:00Z \x1epushing_application\n".
+            "2026-10-23T12:00:00Z The cluster pulls the image from the local registry. Nothing to push.\n".
+            "2026-10-23T12:00:00Z \x1epreparing_deploy\n".
+            "2026-10-23T12:00:00Z Applied the namespace and the env Secret.\n".
+            "2026-10-23T12:00:00Z \x1erunning_deploy_commands\n".
             "2026-10-23T12:00:00Z Running the deploy commands: php artisan migrate --force\n".
             "2026-10-23T12:00:00Z Migrating: create_users_table\n".
             "2026-10-23T12:00:00Z connected with ********\n".
+            "2026-10-23T12:00:00Z \x1eupdating_stack\n".
             "2026-10-23T12:00:00Z Starting the new version.\n".
+            "2026-10-23T12:00:00Z \x1erouting_traffic\n".
             "2026-10-23T12:00:00Z The deployment is live.\n",
             $new->log,
         );
+        $this->assertSame(
+            ['preparing_build', 'running_build', 'pushing_application', 'preparing_deploy', 'running_deploy_commands', 'updating_stack', 'routing_traffic'],
+            array_column(DeploymentSteps::of($new), 'key'),
+        );
+        $this->assertSame(array_fill(0, 7, 'finished'), array_column(DeploymentSteps::of($new), 'status'));
     }
 
     public function test_the_deployment_goes_live_only_after_the_old_pods_stopped(): void
@@ -278,6 +293,8 @@ class RunDeploymentTest extends TestCase
         Sleep::assertSleptTimes(3);
         $this->assertStringContainsString(
             "2026-10-23T12:00:00Z Waiting for the datastores: mysql.\n".
+            "2026-10-23T12:00:15Z Applied the namespace and the env Secret.\n".
+            "2026-10-23T12:00:15Z \x1erunning_deploy_commands\n".
             "2026-10-23T12:00:15Z Running the deploy commands: php artisan migrate --force\n",
             $this->new->fresh()->log,
         );

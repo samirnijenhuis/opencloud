@@ -9,6 +9,7 @@ use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\DeploymentLog;
 use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Enums\DeploymentStep;
 use App\Domains\Deployments\EnvironmentManifests;
 use App\Domains\Deployments\EnvironmentVariables;
 use App\Domains\Deployments\Models\Deployment;
@@ -96,16 +97,23 @@ class RunDeployment implements ShouldQueue
         $deployment->image = ImageCopy::toCluster($deployment, $builder->build($deployment, $log), $log);
         $deployment->moveTo(DeploymentStatus::DEPLOYING);
 
+        $log->step(DeploymentStep::PREPARING_DEPLOY);
         $this->waitForDatastores($environment, $log);
 
         $kubectl = Kubectl::for($application->cluster);
         $manifests = new EnvironmentManifests($environment);
         $kubectl->apply([$manifests->namespace(), $manifests->secret($deployment, EnvironmentVariables::runtime($environment))]);
+        $log->write('Applied the namespace and the env Secret.');
 
-        if ($environment->deploy_commands !== []) {
+        $log->step(DeploymentStep::RUNNING_DEPLOY_COMMANDS);
+
+        if ($environment->deploy_commands === []) {
+            $log->write('This environment has no deploy commands.');
+        } else {
             $this->runDeployCommands($kubectl, $manifests, $deployment, $log);
         }
 
+        $log->step(DeploymentStep::UPDATING_STACK);
         $log->write('Starting the new version.');
         $kubectl->apply($manifests->workloads($deployment));
         $this->waitForRollout($kubectl, $environment, $log);
@@ -118,6 +126,7 @@ class RunDeployment implements ShouldQueue
             $kubectl->delete($kind, $name, $environment->kubeNamespace());
         }
 
+        $log->step(DeploymentStep::ROUTING_TRAFFIC);
         $this->waitForOldPods($kubectl, $environment, $deployment, $log);
 
         DB::transaction(function () use ($deployment) {

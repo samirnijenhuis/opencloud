@@ -96,6 +96,18 @@ export interface Deployment {
     warning: string | null;
 }
 
+export type DeploymentStepStatus = 'finished' | 'running' | 'failed' | 'skipped';
+
+export interface DeploymentStep {
+    key: string | null;
+    title: string;
+    phase: 'build' | 'deploy' | null;
+    status: DeploymentStepStatus;
+    started_at: string | null;
+    finished_at: string | null;
+    lines: { offset: number; text: string }[];
+}
+
 export interface EnvironmentPageProps {
     application: { id: number; name: string; repository: string; type: ApplicationType; environments: EnvironmentLink[] };
     environment: {

@@ -2,6 +2,7 @@
 
 namespace App\Domains\Deployments;
 
+use App\Domains\Deployments\Enums\DeploymentStep;
 use App\Domains\Deployments\Models\Deployment;
 use App\Support\SecretMasker;
 use App\Support\TerminalText;
@@ -12,6 +13,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class DeploymentLog
 {
+    /** Starts a step marker. `write()` removes this character from app output, so only `step()` can write a marker. */
+    public const MARKER = "\x1e";
+
     private string $partial = '';
 
     public function __construct(private readonly Deployment $deployment, private readonly SecretMasker $masker) {}
@@ -33,9 +37,19 @@ final class DeploymentLog
         $block = '';
 
         foreach (preg_split('/\R/', $text) as $line) {
-            $block .= "{$time} {$this->masker->mask(TerminalText::plain($line))}\n";
+            $block .= "{$time} {$this->masker->mask(TerminalText::plain(str_replace(self::MARKER, '', $line)))}\n";
         }
 
+        $this->append($block);
+    }
+
+    public function step(DeploymentStep $step): void
+    {
+        $this->append(now()->toIso8601ZuluString().' '.self::MARKER.$step->value."\n");
+    }
+
+    private function append(string $block): void
+    {
         // Appending in SQL keeps a long build log from being rewritten on every line.
         DB::update("update deployments set log = coalesce(log, '') || ? where id = ?", [$block, $this->deployment->id]);
     }
