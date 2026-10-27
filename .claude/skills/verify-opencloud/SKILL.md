@@ -43,7 +43,7 @@ Each cell does three deploys:
 2. **Change and redeploy.** The cell changes `VERIFY_MARKER` to `-v2`, adds the database `reports` and Valkey when the cell has them, and clicks Deploy. The new value must show. The MySQL and Postgres rows from step 1 must still be there.
 3. **Redeploy under traffic.** The cell polls the verify endpoint four times a second during a third deploy. No request may fail.
 
-Each deploy log must contain `deploy-marker-<cell>`, which proves that the deploy commands ran. At the end, the settings page must not contain the secret value.
+Each deploy log must contain `deploy-marker-<cell>` in its step "Running deploy commands", which proves that the deploy commands ran. A live deployment must show each of the 7 steps as finished. The runner reads the steps from the deployment page and writes them as `deployment-N.log`. At the end, the settings page must not contain the secret value.
 
 ## Launch
 

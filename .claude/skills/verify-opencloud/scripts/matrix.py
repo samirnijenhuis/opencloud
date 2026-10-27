@@ -315,10 +315,15 @@ class CellRun:
     def deployed(self, step, deployment_id, timeout=900):
         status, seconds = self.dash.wait_deployment(deployment_id, timeout)
         self.timings[f'deployment-{step}'] = seconds
-        log = self.dash.props(f'/deployments/{deployment_id}')['deployment']['log']
+        steps = self.dash.props(f'/deployments/{deployment_id}')['steps']
+        log = ''.join(f"== {s['title']}: {s['status']}\n" + ''.join(f"{l['offset']:>5}s {l['text']}\n" for l in s['lines']) for s in steps)
         self.save(f'deployment-{step}.log', log)
         ok = self.check(f'deployment {step} goes live', status == 'live', f'{status} after {seconds}s')
-        self.check(f'deployment {step} ran the deploy commands', f'deploy-marker-{self.cell.id}' in log)
+        commands = next((s for s in steps if s['key'] == 'running_deploy_commands'), {'lines': []})
+        self.check(f'deployment {step} ran the deploy commands', any(f'deploy-marker-{self.cell.id}' in l['text'] for l in commands['lines']))
+        if ok:
+            unfinished = [s['title'] for s in steps if s['status'] != 'finished']
+            self.check(f'deployment {step} finished each of the 7 steps', len(steps) == 7 and not unfinished, f'{len(steps)} steps, unfinished: {unfinished}')
         return ok
 
     def change_step(self):
