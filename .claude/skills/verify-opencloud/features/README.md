@@ -24,6 +24,7 @@ This directory is the maintained source for verifying what an opencloud user get
 - Each mutation needs a second view. For example, the database rows of step 1 must still be in the step 2 response.
 - Record the cell id and the run id with every claim.
 - Report an unreachable cell with the failed check and its evidence file. Do not report it as verified through another cell.
+- A `SKIP` line marks a check that the fixture does not report. Report a skipped check as not verified, never as a pass.
 
 ## Feature entry contract
 
@@ -36,8 +37,8 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 ## Features
 
-- [Create an application](./create-application.md) covers the create form, the first deploy, and the free HTTPS address.
-- [Datastores](./datastores.md) covers MySQL, Postgres, SQLite, Valkey, and a second SQL database with a connection name.
+- [Create an application](./create-application.md) covers the create form, the presets, the first deploy, and the free HTTPS address.
+- [Datastores](./datastores.md) covers MySQL, Postgres, SQLite, Valkey, a second SQL database with a connection name, and the Laravel and generic env names.
 - [Environment values](./env-values.md) covers runtime values, build values, and write-only secrets.
-- [Build and deploy commands](./build-and-deploy-commands.md) covers the Laravel build command, Dockerfile builds, and deploy commands.
+- [Build and deploy commands](./build-and-deploy-commands.md) covers the build of each preset, the build command, and deploy commands.
 - [Redeploy](./redeploy.md) covers a redeploy after a change, data that stays, and a redeploy with no failed request.

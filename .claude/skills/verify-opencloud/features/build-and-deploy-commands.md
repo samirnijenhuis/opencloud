@@ -6,6 +6,9 @@ A user gives a build command that runs in the image build and deploy commands th
 
 - `build-laravel` runs the build command as a `RUN` line in the final stage of the Laravel template.
 - `build-dockerfile` builds the Dockerfile of the branch, which ignores the build command.
+- `build-node` runs `npm ci` with the lock file, then the build script, then the build command.
+- `build-static` runs the build script of a static site in a Node stage and serves the first output folder (`dist`, `build`, `out`, `_site`, or `public`). It ignores the build command.
+- `build-python-ruby` builds a Python or Ruby app with its locked packages, runs the build command, and starts the first `web:` line of the `Procfile`.
 - `deploy-commands` run each deploy command with the new image and the env values before the rollout.
 - `deploy-log` shows the output of the build and the deploy commands in the deployment log.
 
@@ -23,11 +26,12 @@ Preconditions:
 
 - **Laravel build command.** Deploy a Laravel cell. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'laravel-mysql-none'`. The output shows `PASS step 1: the build saw its env value or command (laravel-mysql-none)`, which the build command wrote to `storage/app/build-marker`.
 - **SQLite build command.** Deploy a Laravel SQLite cell. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'laravel-sqlite-none'`. The build command migrates a SQLite file into the image, and the output shows `PASS step 1: the sqlite database answers`.
+- **Presets with no Dockerfile.** Deploy the Node.js, static site, Python, and Ruby apps. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'node-none-none' --only 'site-none-none' --only 'python-none-none' --only 'ruby-none-none'`. Each cell shows `PASS step 1: the build saw its env value or command (<cell>)`. The Node.js and static cells prove the build script. The Python and Ruby cells prove the build command.
 - **Deploy commands.** Deploy any cell. The output shows `PASS deployment 1 ran the deploy commands` for each deployment. For MySQL and Postgres cells, it also shows `PASS step N: each deploy command wrote a row`.
 - **Proof.** Open `deployment-1.log` of the cell. It holds `deploy-marker-<cell>`, and for Laravel the output of `php artisan migrate --force`.
 
 ## Gotchas
 
-- A Dockerfile app ignores the build command. Only the Laravel template runs it.
+- A Dockerfile app and a static site ignore the build command. The Laravel, Node.js, Python, and Ruby templates run it.
 - A deploy command runs in its own pod. A file that it writes never reaches the web pods, so a SQLite file that a deploy command migrates is lost.
 - A failing deploy command fails the deployment and keeps the old version live. `tests/e2e/release-test.sh` proves that case, and this matrix does not.
