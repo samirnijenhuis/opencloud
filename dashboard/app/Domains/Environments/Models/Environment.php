@@ -8,15 +8,18 @@ use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentColor;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Policies\EnvironmentPolicy;
 use App\Domains\Routing\Models\Domain;
 use Database\Factories\EnvironmentFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[UseFactory(EnvironmentFactory::class)]
+#[UsePolicy(EnvironmentPolicy::class)]
 class Environment extends Model
 {
     use HasFactory;

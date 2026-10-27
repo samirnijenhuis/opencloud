@@ -4,11 +4,13 @@ namespace App\Domains\Applications\Models;
 
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Enums\EnvProfileKind;
+use App\Domains\Applications\Policies\ApplicationPolicy;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\GitHub\RepositoryName;
 use Database\Factories\ApplicationFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[UseFactory(ApplicationFactory::class)]
+#[UsePolicy(ApplicationPolicy::class)]
 class Application extends Model
 {
     use HasFactory;

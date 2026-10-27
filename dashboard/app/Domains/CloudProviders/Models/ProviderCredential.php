@@ -2,12 +2,15 @@
 
 namespace App\Domains\CloudProviders\Models;
 
+use App\Domains\CloudProviders\Policies\ProviderCredentialPolicy;
 use Database\Factories\ProviderCredentialFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 #[UseFactory(ProviderCredentialFactory::class)]
+#[UsePolicy(ProviderCredentialPolicy::class)]
 class ProviderCredential extends Model
 {
     use HasFactory;

@@ -6,14 +6,17 @@ use App\Domains\Applications\Models\Application;
 use App\Domains\Clusters\ClusterRegistry;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Enums\ClusterStatus;
+use App\Domains\Clusters\Policies\ClusterPolicy;
 use App\Domains\Datastores\Models\Datastore;
 use Database\Factories\ClusterFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[UseFactory(ClusterFactory::class)]
+#[UsePolicy(ClusterPolicy::class)]
 class Cluster extends Model
 {
     use HasFactory;
