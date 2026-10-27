@@ -30,6 +30,9 @@ MATRIX = json.loads((SKILL / 'matrix.json').read_text())
 DRIVER = {'mysql': 'mysql', 'postgres': 'pgsql', 'mysqlpostgres': 'mysql', 'sqlite': 'sqlite'}
 # The most specific condition wins when a fixture gives a value for more than one.
 PRIORITY = ['valkey', 'sqlite', 'server-sql', 'sql', 'no-sql', 'always']
+# The checks of the verify endpoint. The "checks" of a fixture list the ones that it reports. The runner skips the others.
+CHECKS = {'marker', 'build', 'secret', 'db', 'extra', 'cache'}
+REPORTS_URL = {'laravel': 'REPORTS_DB_URL', 'generic': 'REPORTS_DATABASE_URL'}
 
 
 def repository_url():
@@ -48,6 +51,8 @@ class Cell:
         self.id = cell_id
         self.fixture_name, self.db, self.cache = cell_id.split('-')
         self.fixture = MATRIX['fixtures'][self.fixture_name]
+        if not set(self.fixture['checks']) <= CHECKS:
+            sys.exit(f'matrix.json: the fixture {self.fixture_name} has unknown checks {set(self.fixture["checks"]) - CHECKS}')
 
     def conditions(self, step):
         found = {'always', 'no-sql' if self.db == 'none' else 'sql'}
@@ -74,30 +79,28 @@ class Cell:
         return None if text is None else text.replace('{cell}', self.id)
 
     def create_database(self):
-        # A Dockerfile fixture gets its database on the second deploy, so the matrix also proves Add resource.
-        if self.fixture['type'] != 'laravel':
+        # A fixture without database_in_create_form gets its database on the second deploy, so the matrix also proves Add resource.
+        if not self.fixture.get('database_in_create_form'):
             return 'none'
         return {'mysql': 'mysql', 'mysqlpostgres': 'mysql', 'postgres': 'postgres'}.get(self.db, 'none')
 
     def db_step(self):
         """The step from which the app has its SQL database."""
-        added_later = self.fixture['type'] != 'laravel' and self.db in ('mysql', 'postgres', 'mysqlpostgres')
+        added_later = not self.fixture.get('database_in_create_form') and self.db in ('mysql', 'postgres', 'mysqlpostgres')
         return 2 if added_later else 1
 
     def expected_cache(self, step):
-        reports = self.fixture['reports']['cache']
-        if reports == 'never' or (reports == 'valkey' and (self.cache != 'valkey' or step < 2)):
-            return None
+        """The cache driver that the verify endpoint must report, or None when it must report no cache."""
         if self.cache == 'valkey' and step >= 2:
             return 'redis'
-        return 'file' if self.db == 'none' else 'database'
+        return self.pick('cache_without_valkey')
 
 
 def cells_for(set_name, patterns):
-    if set_name == 'full':
-        cells = [f'{f}-{d}-{c}' for f in MATRIX['fixtures'] for d in MATRIX['databases'] for c in MATRIX['caches']]
-    else:
-        cells = MATRIX['sets'][set_name]
+    full = [f'{name}-{d}-{c}' for name, spec in MATRIX['fixtures'].items() for d in spec['databases'] for c in spec['caches']]
+    cells = full if set_name == 'full' else MATRIX['sets'][set_name]
+    if set(cells) - set(full):
+        sys.exit(f'matrix.json: the set {set_name} has cells that no fixture supports: {sorted(set(cells) - set(full))}')
     return [c for c in cells if not patterns or any(fnmatch.fnmatch(c, p) for p in patterns)]
 
 
@@ -213,11 +216,16 @@ class Poller(threading.Thread):
 class CellRun:
     def __init__(self, dashboard, cluster_id, cell, out):
         self.dash, self.cluster_id, self.cell, self.out = dashboard, cluster_id, cell, out
-        self.checks, self.timings, self.hits = [], {}, None
+        self.checks, self.skipped, self.timings, self.hits = [], [], {}, None
         self.secret = secrets.token_hex(12)
         out.mkdir(parents=True, exist_ok=True)
 
-    def check(self, name, ok, detail=''):
+    def check(self, name, ok, detail='', needs=None):
+        """needs names the entry of CHECKS that the check reads. A fixture without it gets a SKIP line, never a PASS."""
+        if needs is not None and needs not in self.cell.fixture['checks']:
+            self.skipped.append(name)
+            print(f'  SKIP {name} (the {self.cell.fixture_name} fixture does not report {needs})', flush=True)
+            return None
         self.checks.append({'name': name, 'ok': bool(ok), 'detail': str(detail)})
         print(f"  {'PASS' if ok else 'FAIL'} {name}" + (f' ({detail})' if detail != '' else ''), flush=True)
         return bool(ok)
@@ -233,7 +241,7 @@ class CellRun:
         except Exception as error:  # noqa: BLE001 - one broken cell must not stop the matrix
             self.check('the cell ran to the end', False, f'{type(error).__name__}: {error}')
         verdict = 'pass' if self.checks and all(c['ok'] for c in self.checks) else 'fail'
-        self.save('result.json', {'cell': self.cell.id, 'verdict': verdict, 'timings': self.timings, 'checks': self.checks})
+        self.save('result.json', {'cell': self.cell.id, 'verdict': verdict, 'timings': self.timings, 'checks': self.checks, 'skipped': self.skipped})
         return verdict
 
     def drive(self):
@@ -360,33 +368,32 @@ class CellRun:
             self.check(f'step {step}: {fixture["verify_path"]} answers JSON', False, f'{status} {text[:200]}')
             return
         marker = f'{cell.id}-v{min(step, 2)}'
-        self.check(f'step {step}: the runtime env value', report.get('marker') == marker, report.get('marker'))
-        self.check(f'step {step}: the build saw its env value or command', report.get('build') == cell.id, report.get('build'))
-        if fixture['reports']['secret']:
-            self.check(f'step {step}: the app reads the secret', report.get('secret_sha') == hashlib.sha1(self.secret.encode()).hexdigest())
+        self.check(f'step {step}: the runtime env value', report.get('marker') == marker, report.get('marker'), needs='marker')
+        self.check(f'step {step}: the build saw its env value or command', report.get('build') == cell.id, report.get('build'), needs='build')
+        self.check(f'step {step}: the app reads the secret', report.get('secret_sha') == hashlib.sha1(self.secret.encode()).hexdigest(), needs='secret')
 
         db = report.get('db') or {}
-        if fixture['reports']['db'] and cell.db != 'none' and step < cell.db_step():
-            self.check(f'step {step}: no database is attached yet', report.get('db') is None, json.dumps(report.get('db')))
-        elif fixture['reports']['db'] and cell.db != 'none':
-            self.check(f'step {step}: the {DRIVER[cell.db]} database answers', db.get('ok') and db.get('driver') == DRIVER[cell.db], json.dumps(report.get('db')))
+        if cell.db != 'none' and step < cell.db_step():
+            self.check(f'step {step}: no database is attached yet', report.get('db') is None, json.dumps(report.get('db')), needs='db')
+        elif cell.db != 'none':
+            self.check(f'step {step}: the {DRIVER[cell.db]} database answers', db.get('ok') and db.get('driver') == DRIVER[cell.db], json.dumps(report.get('db')), needs='db')
             if cell.db != 'sqlite':
                 deploys = step - cell.db_step() + 1
-                self.check(f'step {step}: each deploy command wrote a row', db.get('deploys', 0) >= deploys, f"{db.get('deploys')} >= {deploys}")
+                self.check(f'step {step}: each deploy command wrote a row', db.get('deploys', 0) >= deploys, f"{db.get('deploys')} >= {deploys}", needs='db')
                 if self.hits is not None:
-                    self.check(f'step {step}: the rows of earlier steps are still there', db.get('hits', 0) > self.hits, f"{db.get('hits')} > {self.hits}")
+                    self.check(f'step {step}: the rows of earlier steps are still there', db.get('hits', 0) > self.hits, f"{db.get('hits')} > {self.hits}", needs='db')
             self.hits = db.get('hits')
 
-        if fixture['reports']['db'] and cell.db == 'mysqlpostgres' and step >= 2:
+        if cell.db == 'mysqlpostgres' and step >= 2:
             reports = (report.get('extra') or {}).get('reports') or {}
-            self.check(f'step {step}: the pgsql database answers through REPORTS_DB_URL', reports.get('ok') is True and reports.get('driver') == 'pgsql', json.dumps(report.get('extra')))
+            self.check(f'step {step}: the pgsql database answers through {REPORTS_URL[fixture["env_profile"]]}', reports.get('ok') is True and reports.get('driver') == 'pgsql', json.dumps(report.get('extra')), needs='extra')
 
         expected = cell.expected_cache(step)
         cache = report.get('cache')
         if expected is None:
-            self.check(f'step {step}: no cache is in use', cache is None, json.dumps(cache))
+            self.check(f'step {step}: no cache is in use', cache is None, json.dumps(cache), needs='cache')
         else:
-            self.check(f'step {step}: the {expected} cache works', cache and cache.get('ok') and cache.get('driver') == expected, json.dumps(cache))
+            self.check(f'step {step}: the {expected} cache works', cache and cache.get('ok') and cache.get('driver') == expected, json.dumps(cache), needs='cache')
 
 
 def run(args):
@@ -408,10 +415,10 @@ def run(args):
         cell_run = CellRun(dashboard, cluster_id, Cell(cell_id), out / cell_id)
         verdict = cell_run.run()
         failed = [c['name'] for c in cell_run.checks if not c['ok']]
-        rows.append((cell_id, verdict, round(time.time() - started), cell_run.timings.get('deployment-1', '-'), '; '.join(failed)))
+        rows.append((cell_id, verdict, round(time.time() - started), cell_run.timings.get('deployment-1', '-'), len(cell_run.skipped), '; '.join(failed)))
 
-    lines = ['| Cell | Verdict | Seconds | First deploy (s) | Failed checks |', '|---|---|---|---|---|']
-    lines += [f'| {c} | {v} | {s} | {f} | {x or "-"} |' for c, v, s, f, x in rows]
+    lines = ['| Cell | Verdict | Seconds | First deploy (s) | Skipped checks | Failed checks |', '|---|---|---|---|---|---|']
+    lines += [f'| {c} | {v} | {s} | {f} | {k} | {x or "-"} |' for c, v, s, f, k, x in rows]
     (out / 'summary.md').write_text('\n'.join(lines) + '\n')
     print('\n'.join(lines))
     passed = sum(1 for r in rows if r[1] == 'pass')
@@ -502,7 +509,7 @@ def main():
     fixture_parser.set_defaults(func=fixtures)
     for name, func in (('list', None), ('run', run)):
         sub = commands.add_parser(name)
-        sub.add_argument('--set', default='smoke', choices=['smoke', 'full'], help='smoke is 8 cells that cover each value once; full is all 30')
+        sub.add_argument('--set', default='smoke', choices=['smoke', 'full'], help='smoke covers each value of each fixture at least once; full is every cell')
         sub.add_argument('--only', action='append', default=[], help='keep the cells that match this glob, for example "php-*"')
         sub.set_defaults(func=func or (lambda a: print('\n'.join(cells_for(a.set, a.only))) or 0))
     args = parser.parse_args()

@@ -7,7 +7,9 @@
       "env_profile": "laravel",
       "port": 8080,
       "verify_path": "/verify",
-      "reports": { "db": false, "cache": "never", "secret": false },
+      "checks": ["marker", "build"],
+      "databases": ["none", "mysql", "postgres", "mysqlpostgres", "sqlite"],
+      "caches": ["none", "valkey"],
       "build_command": {},
       "deploy_commands": { "always": ["echo deploy-marker-{cell}"] },
       "env": {}
@@ -18,7 +20,9 @@
       "env_profile": "laravel",
       "port": 8080,
       "verify_path": "/verify.php",
-      "reports": { "db": true, "cache": "valkey", "secret": true },
+      "checks": ["marker", "build", "secret", "db", "extra", "cache"],
+      "databases": ["none", "mysql", "postgres", "mysqlpostgres", "sqlite"],
+      "caches": ["none", "valkey"],
       "build_command": {},
       "deploy_commands": { "always": ["php /var/www/deploy.php {cell}"] },
       "env": {
@@ -34,7 +38,11 @@
       "type": "laravel",
       "env_profile": "laravel",
       "verify_path": "/verify",
-      "reports": { "db": true, "cache": "always", "secret": true },
+      "checks": ["marker", "build", "secret", "db", "extra", "cache"],
+      "databases": ["none", "mysql", "postgres", "mysqlpostgres", "sqlite"],
+      "caches": ["none", "valkey"],
+      "database_in_create_form": true,
+      "cache_without_valkey": { "sql": "database", "no-sql": "file" },
       "build_command": {
         "sqlite": "touch database/database.sqlite && php artisan migrate --force && echo {cell} > storage/app/build-marker",
         "always": "echo {cell} > storage/app/build-marker"
@@ -50,8 +58,6 @@
       }
     }
   },
-  "databases": ["none", "mysql", "postgres", "mysqlpostgres", "sqlite"],
-  "caches": ["none", "valkey"],
   "sets": {
     "smoke": [
       "static-none-none",
