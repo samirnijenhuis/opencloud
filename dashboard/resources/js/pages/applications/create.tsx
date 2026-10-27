@@ -1,5 +1,6 @@
 import InputError from '@/components/input-error';
 import ProcessFields from '@/components/process-fields';
+import { ShellEditor } from '@/components/shell-editor';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -38,11 +39,13 @@ type FormData = {
 
 const looksSecret = (key: string) => /(SECRET|PASSWORD|TOKEN|KEY|AUTH)/i.test(key);
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Row({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: React.ReactNode }) {
     return (
         <div className="grid gap-2 border-b py-5 sm:grid-cols-[11rem_1fr] sm:gap-6">
             <div>
-                <Label className="text-sm font-medium">{label}</Label>
+                <Label htmlFor={htmlFor} className="text-sm font-medium">
+                    {label}
+                </Label>
                 {hint && <p className="text-muted-foreground mt-1 text-xs">{hint}</p>}
             </div>
             <div className="min-w-0 space-y-2">{children}</div>
@@ -254,23 +257,24 @@ export default function ApplicationCreate({
                         <InputError message={errors.cpu_target} />
                     </Row>
 
-                    <Row label="Build command" hint="Optional">
-                        <Input
-                            className="font-mono text-sm"
+                    <Row label="Build command" htmlFor="build_command" hint="Optional. One command per line. A # starts a comment.">
+                        <ShellEditor
+                            id="build_command"
+                            rows={2}
                             placeholder={presetText[preset.value].buildCommand}
                             disabled={!preset.uses_build_command}
                             value={data.build_command}
-                            onChange={(e) => setData('build_command', e.target.value)}
+                            onChange={(value) => setData('build_command', value)}
                         />
                         <InputError message={errors.build_command} />
                     </Row>
 
-                    <Row label="Deploy commands" hint="One per line. They run before the new version takes traffic.">
-                        <Textarea
-                            className="font-mono text-sm"
+                    <Row label="Deploy commands" htmlFor="deploy_commands" hint="One per line. They run before the new version takes traffic.">
+                        <ShellEditor
+                            id="deploy_commands"
                             rows={2}
                             value={data.deploy_commands}
-                            onChange={(e) => setData('deploy_commands', e.target.value)}
+                            onChange={(value) => setData('deploy_commands', value)}
                         />
                         <InputError message={errors.deploy_commands} />
                     </Row>

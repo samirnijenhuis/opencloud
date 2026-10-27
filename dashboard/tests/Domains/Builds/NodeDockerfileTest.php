@@ -30,13 +30,17 @@ class NodeDockerfileTest extends TestCase
             COPY . .
             RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN npm ci $NPM_FLAGS
             RUN --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN npm run build
-            RUN --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN npx prisma generate
+            RUN --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN <<'OPENCLOUD_BUILD'
+            set -e
+            npm run lint
+            npx prisma generate
+            OPENCLOUD_BUILD
             # Some frameworks, for example Astro and Nuxt, listen on HOST. A probe cannot reach an app that listens on localhost.
             ENV HOST=0.0.0.0
             ENTRYPOINT ["/usr/bin/tini", "--"]
             CMD ["npm", "run", "start"]
 
-            DOCKERFILE, NodeDockerfile::render(new NodeProject($package, 'package-lock.json'), ['NPM_TOKEN'], ' npx prisma generate '));
+            DOCKERFILE, NodeDockerfile::render(new NodeProject($package, 'package-lock.json'), ['NPM_TOKEN'], "npm run lint\nnpx prisma generate\n"));
     }
 
     /** @return array<string, array{array<string, mixed>, string|null, list<string>}> */

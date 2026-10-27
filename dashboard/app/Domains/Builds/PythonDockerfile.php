@@ -17,14 +17,13 @@ final class PythonDockerfile
     {
         $mounts = DockerfileTemplate::secretMounts($buildSecrets);
         $tool = $project->tool();
-        $buildCommand = trim((string) $buildCommand);
 
         return DockerfileTemplate::render('python', [], [
             'python' => $project->pythonVersion(),
             'tool' => $tool === '' ? '' : "RUN {$tool}",
             'secret_mounts' => $mounts,
             'install' => $project->install(),
-            'build_command' => $buildCommand === '' ? '' : "RUN {$mounts}{$buildCommand}",
+            'build_command' => DockerfileTemplate::run($buildCommand, $mounts),
             'start' => DockerfileTemplate::execForm(EnvironmentManifests::shellCommand($project->start())),
         ]);
     }

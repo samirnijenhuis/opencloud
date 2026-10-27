@@ -86,7 +86,11 @@ class LaravelDockerfileTest extends TestCase
             COPY . .
             COPY --from=vendor /app/vendor ./vendor
             RUN composer dump-autoload --optimize --no-dev && php artisan package:discover --ansi
-            RUN php artisan icons:cache
+            RUN <<'OPENCLOUD_BUILD'
+            set -e
+            php artisan icons:cache
+            php artisan view:cache
+            OPENCLOUD_BUILD
             ENV SERVER_NAME=:8080
             EXPOSE 8080
             CMD ["sh", "-c", "php artisan optimize || echo 'opencloud: php artisan optimize failed, so the app starts without caches'; exec frankenphp run --config /etc/frankenphp/Caddyfile --adapter caddyfile"]
@@ -95,7 +99,7 @@ class LaravelDockerfileTest extends TestCase
             $composer,
             null,
             ['COMPOSER_AUTH', 'NOVA_LICENSE'],
-            ' php artisan icons:cache ',
+            "php artisan icons:cache\nphp artisan view:cache",
         ));
     }
 

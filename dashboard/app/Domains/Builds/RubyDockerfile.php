@@ -16,14 +16,13 @@ final class RubyDockerfile
     public static function render(RubyProject $project, array $buildSecrets = [], ?string $buildCommand = null): string
     {
         $mounts = DockerfileTemplate::secretMounts($buildSecrets);
-        $buildCommand = trim((string) $buildCommand);
 
         return DockerfileTemplate::render('ruby', [], [
             'ruby' => $project->rubyVersion(),
             'secret_mounts' => $mounts,
             // The precompile loads the app, and production refuses to load without a secret key base.
             'assets' => $project->hasAssets() ? "RUN {$mounts}SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile" : '',
-            'build_command' => $buildCommand === '' ? '' : "RUN {$mounts}{$buildCommand}",
+            'build_command' => DockerfileTemplate::run($buildCommand, $mounts),
             'start' => DockerfileTemplate::execForm(EnvironmentManifests::shellCommand($project->start())),
         ]);
     }

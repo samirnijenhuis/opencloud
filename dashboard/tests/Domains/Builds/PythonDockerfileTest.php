@@ -46,7 +46,10 @@ class PythonDockerfileTest extends TestCase
             WORKDIR /app
             COPY . .
             RUN --mount=type=cache,target=/root/.cache --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL uv sync --locked --no-dev
-            RUN --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL python manage.py collectstatic --noinput
+            RUN --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL <<'OPENCLOUD_BUILD'
+            set -e
+            python manage.py collectstatic --noinput
+            OPENCLOUD_BUILD
             ENTRYPOINT ["/usr/bin/tini", "--"]
             CMD ["sh", "-c", "exec gunicorn mysite.wsgi --bind 0.0.0.0:$PORT"]
 

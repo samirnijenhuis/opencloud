@@ -170,6 +170,30 @@ class EnvironmentControllerTest extends TestCase
         $this->actingAs($developer)->from('/back')->patch("/environments/{$environment->id}/settings", $this->settings())->assertRedirect('/back');
     }
 
+    public function test_the_settings_keep_a_build_command_with_several_lines_and_drop_comment_and_empty_lines(): void
+    {
+        $environment = $this->makeEnvironment(false, 'staging');
+
+        $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", $this->settings([
+            'build_command' => "npm run lint\n\n  # build the assets\n  npm run build  \n",
+            'deploy_commands' => ['# migrate first', 'php artisan migrate --force', '   ', 'php artisan optimize'],
+        ]))->assertSessionHasNoErrors();
+
+        $environment->refresh();
+        $this->assertSame("npm run lint\nnpm run build", $environment->build_command);
+        $this->assertSame(['php artisan migrate --force', 'php artisan optimize'], $environment->deploy_commands);
+    }
+
+    public function test_a_build_command_with_only_comments_clears_the_build_command(): void
+    {
+        $environment = $this->makeEnvironment(false, 'staging', ['build_command' => 'npm run build']);
+
+        $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", $this->settings(['build_command' => "# nothing\n"]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($environment->refresh()->build_command);
+    }
+
     public function test_an_admin_saves_the_settings_of_a_protected_environment(): void
     {
         $environment = $this->makeEnvironment(true);

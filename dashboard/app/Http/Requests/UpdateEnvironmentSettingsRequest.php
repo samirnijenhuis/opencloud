@@ -19,6 +19,10 @@ class UpdateEnvironmentSettingsRequest extends FormRequest
         if (is_array($this->input('deploy_commands'))) {
             $this->merge(['deploy_commands' => StoreApplicationRequest::cleanLines($this->input('deploy_commands'))]);
         }
+
+        if (is_string($this->input('build_command'))) {
+            $this->merge(['build_command' => StoreApplicationRequest::cleanScript($this->input('build_command'))]);
+        }
     }
 
     /** @return array<string, mixed> */

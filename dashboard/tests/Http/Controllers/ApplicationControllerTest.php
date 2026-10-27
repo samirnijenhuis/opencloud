@@ -231,6 +231,24 @@ class ApplicationControllerTest extends TestCase
         ]))->assertRedirect("/environments/{$production->id}");
     }
 
+    public function test_the_create_form_keeps_a_build_command_with_several_lines_and_drops_comment_and_empty_lines(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $production = $this->makeEnvironment();
+
+        $this->mock(CreateApplication::class)
+            ->shouldReceive('execute')
+            ->once()
+            ->withArgs(fn (User $by, array $data) => $data['settings']['build_command'] === "npm run lint\nnpm run build"
+                && $data['settings']['deploy_commands'] === ['php artisan migrate --force'])
+            ->andReturn($production->application);
+
+        $this->actingAs($admin)->post('/applications', $this->validForm([
+            'build_command' => "npm run lint\n\n# build last\nnpm run build\n",
+            'deploy_commands' => ['# migrate', 'php artisan migrate --force', ''],
+        ]))->assertSessionHasNoErrors();
+    }
+
     public function test_it_creates_an_application_end_to_end_from_a_repository_alone(): void
     {
         Queue::fake();

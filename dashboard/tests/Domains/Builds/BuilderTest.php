@@ -113,7 +113,7 @@ class BuilderTest extends TestCase
             'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
             'RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile',
             'RUN pnpm run build',
-            'RUN npx prisma generate',
+            "RUN <<'OPENCLOUD_BUILD'",
             'ENTRYPOINT ["/usr/bin/tini", "--"]',
             'CMD ["pnpm", "run", "start"]',
         ], array_values(preg_grep('/^(FROM|RUN|ENTRYPOINT|CMD) /', explode("\n", $processes->dockerfiles[0]))));
@@ -142,7 +142,7 @@ class BuilderTest extends TestCase
             'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
             'RUN python -m venv /opt/venv',
             'RUN --mount=type=cache,target=/root/.cache --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL pip install -r requirements.txt',
-            'RUN --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL flask --app shop assets build',
+            "RUN --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL <<'OPENCLOUD_BUILD'",
             'ENTRYPOINT ["/usr/bin/tini", "--"]',
             'CMD ["sh", "-c", "exec gunicorn shop.wsgi:app --bind 0.0.0.0:$PORT"]',
         ], array_values(preg_grep('/^(FROM|RUN|ENTRYPOINT|CMD) /', explode("\n", $processes->dockerfiles[0]))));
