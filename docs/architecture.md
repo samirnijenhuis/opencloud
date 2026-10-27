@@ -129,6 +129,24 @@ In the Laravel preset, BuildKit cache mounts keep the Composer and npm downloads
 
 `App\Domains\Deployments\Jobs\RunDeployment` runs one deployment from start to end. It builds, runs the deploy commands in a Kubernetes Job, applies the manifests, waits for the rollout, and syncs Caddy. If a step fails, the deployment becomes `failed`, and the old live deployment stays live.
 
+`DeploymentStatus::isRunning()` is true for `queued`, `building`, and `deploying`. The dashboard polls while the latest deployment of an environment runs. The deployment page, the canvas, and the deployments tab reload only their `deployment`, `deployments`, `steps`, and `environment` props every 2 seconds, so each status badge moves to `live` or `failed` without a reload.
+
+### Deployment steps
+
+The enum `App\Domains\Deployments\Enums\DeploymentStep` lists the steps in order. Each step has a phase, `build` or `deploy`, and a title:
+
+| Step | Phase | Work |
+|---|---|---|
+| `preparing_build` | build | Clone the commit and write the Dockerfile. |
+| `running_build` | build | Run `buildctl`. |
+| `pushing_application` | build | Copy the image to the registry of the cluster. |
+| `preparing_deploy` | deploy | Wait for the datastores, apply the namespace and the env Secret. |
+| `running_deploy_commands` | deploy | Run the deploy command Job. |
+| `updating_stack` | deploy | Apply the workloads, wait for the rollout, and remove old processes. |
+| `routing_traffic` | deploy | Wait for the old pods, move to live, sync Caddy, and check the home page. |
+
+The log holds the steps. `DeploymentLog::step()` appends one marker line, `<ISO time> <U+001E><step value>`, with the same SQL append as the other lines. `DeploymentLog::write()` removes the character U+001E from each output line, so app output cannot write a marker. A step with no work, for example no deploy commands, writes a line that says so. `App\Domains\Deployments\DeploymentSteps::of()` parses the log into a list of steps. Each step has its key, title, phase, status, start time, end time, and lines. A line has its offset in seconds from `started_at`. The status is `finished` when a later step started, `running` for the last step of a running deployment, `failed` for the last step of a failed deployment, and `skipped` for a step that a finished deployment never reached. A log without markers gives one step without a key. The deployment page gets `steps` and no raw log, and it shows the build steps and the deploy steps in two cards.
+
 ## Processes
 
 Each environment runs `web` and a list of other processes. Web is special, because it serves HTTP. The environment holds its settings: size, minimum and maximum instances, CPU target, and health path. The readiness probe of web sends the first domain of the environment as the Host header, because an app that checks the host, for example Django with `ALLOWED_HOSTS`, refuses the pod address that the kubelet sends. Each other process is one row in the table `processes`.

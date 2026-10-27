@@ -43,11 +43,12 @@ class DeploymentControllerTest extends TestCase
                 ->missing('deployments.0.log'));
     }
 
-    public function test_a_deployment_page_has_the_log_and_the_warning(): void
+    public function test_a_deployment_page_has_the_steps_and_the_warning(): void
     {
         $deployment = Deployment::factory()->for($this->makeEnvironment())->create([
-            'status' => DeploymentStatus::DEPLOYING,
-            'log' => "2026-10-23T10:00:00Z Cloning\n2026-10-23T10:00:05Z Building\n",
+            'status' => DeploymentStatus::BUILDING,
+            'started_at' => '2026-10-23T10:00:00Z',
+            'log' => "2026-10-23T10:00:00Z \x1epreparing_build\n2026-10-23T10:00:00Z Cloning\n2026-10-23T10:00:05Z \x1erunning_build\n2026-10-23T10:00:06Z Building\n",
             'warning' => 'The health check was slow.',
         ]);
 
@@ -55,9 +56,15 @@ class DeploymentControllerTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('deployments/show')
-                ->where('deployment.status', 'deploying')
+                ->where('deployment.status', 'building')
                 ->where('deployment.warning', 'The health check was slow.')
-                ->where('deployment.log', "2026-10-23T10:00:00Z Cloning\n2026-10-23T10:00:05Z Building\n")
+                ->missing('deployment.log')
+                ->has('steps', 2)
+                ->where('steps.0.title', 'Preparing build environment')
+                ->where('steps.0.status', 'finished')
+                ->where('steps.0.lines', [['offset' => 0, 'text' => 'Cloning']])
+                ->where('steps.1.status', 'running')
+                ->where('steps.1.lines', [['offset' => 6, 'text' => 'Building']])
                 ->where('environment.name', 'production'));
     }
 
@@ -81,12 +88,12 @@ class DeploymentControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('waiting_for', null));
     }
 
-    public function test_a_deployment_without_a_log_has_an_empty_log(): void
+    public function test_a_deployment_without_a_log_has_no_steps(): void
     {
         $deployment = Deployment::factory()->for($this->makeEnvironment())->create();
 
         $this->actingAs(User::factory()->create())->get("/deployments/{$deployment->id}")
-            ->assertInertia(fn (Assert $page) => $page->where('deployment.log', ''));
+            ->assertInertia(fn (Assert $page) => $page->where('steps', []));
     }
 
     public function test_a_developer_cannot_deploy_a_protected_environment(): void
