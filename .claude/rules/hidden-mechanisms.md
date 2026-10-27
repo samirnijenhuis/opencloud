@@ -4,18 +4,18 @@ This file lists behavior that you cannot see at the call site. Check it before y
 
 ## On each boot and each start
 
-- `AppServiceProvider::boot()` calls `DashboardDomain::applyRootUrl()` (`app/Providers/AppServiceProvider.php:25`). With a verified dashboard domain, it sets `app.url`, forces the root URL, and forces `https` (`app/Domains/Routing/Models/DashboardDomain.php:70-86`).
+- `AppServiceProvider::boot()` calls `DashboardDomain::applyRootUrl()` (`app/Providers/AppServiceProvider.php:42`). With a verified dashboard domain, it sets `app.url`, forces the root URL, and forces `https` (`app/Domains/Routing/Models/DashboardDomain.php:70-86`).
 - `applyRootUrl()` reads the `dashboard_domains` table on each boot. It ignores a `QueryException`, so the app boots before the first migration.
-- A queue worker reads the root URL once, when it boots. So each change of the dashboard domain runs `queue:restart` (`app/Domains/Routing/Jobs/CheckDashboardDomain.php:40`, `app/Domains/Routing/Actions/RemoveDashboardDomain.php:24`, `app/Domains/Restore/RestoreInstall.php:303`).
+- A queue worker reads the root URL once, when it boots. So each change of the dashboard domain runs `queue:restart` (`app/Domains/Routing/Jobs/CheckDashboardDomain.php:41`, `app/Domains/Routing/Actions/RemoveDashboardDomain.php:25`, `app/Domains/Restore/RestoreInstall.php:304`).
 - At each start, the `web` container runs `php artisan migrate --force`, then `opencloud:bootstrap` when that command exists, then `config:cache`, `route:cache`, and `view:cache` (`docker/entrypoint.sh:17-27`).
 - The `worker`, `builder`, and `scheduler` containers wait until no migration is pending (`docker/entrypoint.sh:4-10`).
 - `opencloud:bootstrap` creates or updates the `local` cluster. It also runs `ReinstallClusterParts` for each other cluster with parts of an older release (`app/Console/Commands/Bootstrap.php:22-40`).
 
 ## Model hooks
 
-- `AppServiceProvider::boot()` registers `DeploymentObserver` on `Deployment` (`app/Providers/AppServiceProvider.php:26`).
+- `AppServiceProvider::boot()` registers `DeploymentObserver` on `Deployment` (`app/Providers/AppServiceProvider.php:43`).
 - `DeploymentObserver::updated()` queues `PostPreviewComment` when the status of a preview deployment changes to `live` (`app/Domains/Previews/Observers/DeploymentObserver.php:12-16`). A save through the model starts it. An update through the query builder does not.
-- `Environment::booted()` sets `color` on create from `EnvironmentColor::defaultFor($kind)` when the caller gives no color (`app/Domains/Environments/Models/Environment.php:58-63`).
+- `Environment::booted()` sets `color` on create from `EnvironmentColor::defaultFor($kind)` when the caller gives no color (`app/Domains/Environments/Models/Environment.php:61-66`).
 - `Deployment::moveTo()` saves the new status only when `DeploymentStatus::canMoveTo()` allows the move, and else throws a `LogicException` (`app/Domains/Deployments/Models/Deployment.php:36-44`). A direct write to `status` skips that check.
 
 ## Kubernetes, processes, and the fakes

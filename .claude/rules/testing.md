@@ -22,7 +22,7 @@ paths:
 
 ## Where a test goes
 
-- The test tree mirrors `app/`. The test of `app/Domains/Clusters/Actions/ConnectCluster.php` is `tests/Domains/Clusters/Actions/ConnectClusterTest.php`. The same holds for `tests/Http`, `tests/Console`, and `tests/Support`.
+- The test tree mirrors `app/`. The test of `app/Domains/Clusters/Actions/ConnectCluster.php` is `tests/Domains/Clusters/Actions/ConnectClusterTest.php`. The same holds for `tests/Http`, `tests/Console`, and `tests/Support`. `tests/Database` mirrors `database/`, for example `tests/Database/Migrations` for `database/migrations`.
 - Name the test class after the class under test: `RunDeploymentTest` for `RunDeployment`.
 - `tests/Fakes` holds the fakes. `tests/Fixtures` holds the golden env file and a local OpenTofu module. `tests/Concerns` holds the shared test traits `BuildsEnvironments` and `WithGitHubApp`. `tests/Database` holds the migration, seeder, and SQLite tests.
 - Name each test method `test_` and a sentence in snake_case that states the behavior: `test_a_developer_sees_the_domains_but_cannot_change_them`.

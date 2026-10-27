@@ -10,6 +10,7 @@ This document is the contract for the code. The design document `docs/superpower
 | `bin/opencloud` | The CLI that the installer puts on the server, for example `opencloud upgrade`. |
 | `platform/` | Kubernetes manifests for the opencloud parts on the `local` cluster. `platform/images/caddy/` holds the Caddy image. |
 | `dashboard/` | The Laravel app. It is the dashboard, the API, and the queue worker. |
+| `dashboard/app/` | The PHP code in five folders: `Console`, `Domains/<Domain>`, `Http`, `Providers`, and `Support`. `.claude/rules/architecture.md` lists the domains and says what goes in each folder. |
 | `dashboard/Dockerfile` | The image of the dashboard. CI publishes it. |
 | `dashboard/resources/docker/` | The Dockerfile templates of the Laravel, Node.js, and static presets. |
 | `tofu/` | OpenTofu modules for `created` clusters and managed services. |
@@ -304,8 +305,10 @@ Each name is lowercase letters, digits, and dashes. The first label holds at mos
 
 ## Tests
 
-- Pure classes get unit tests that assert literal expected values.
-- Jobs and controllers get feature tests with `FakeKubectl`.
+- Each test sits in the folder under `dashboard/tests/` that mirrors its class under `dashboard/app/`, for example `tests/Domains/Deployments/Jobs/RunDeploymentTest.php`.
+- Pure classes get tests that assert literal expected values.
+- Jobs and controllers get tests with `FakeKubectl`.
+- The `Architecture` suite in `dashboard/tests/Architecture` checks the placement, the names, and the dependencies of the classes. Its `baseline.json` lists the old violations. The list can only get shorter.
 - The release test in `tests/e2e/` drives a fresh Ubuntu machine. It is the proof of "it just works".
 - The deploy matrix in `.claude/skills/verify-opencloud/` deploys one fixture app for each preset and env profile on a disposable OrbStack machine. It checks the live HTTPS site after each of three deploys. Each fixture lists the checks that it reports, and the runner prints SKIP for the others. `matrix.py local` builds a fixture with the Dockerfile that `Builder` writes for its preset, and runs it in Docker against MySQL, Postgres, and Valkey, without a machine.
 

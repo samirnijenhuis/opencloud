@@ -14,7 +14,7 @@ Each request that changes something follows one chain: Form Request, policy, Act
 - A controller method that calls an Action takes a Form Request.
 - Authorize in a Form Request also for a page that only reads. Do not call `Gate::authorize()`, `abort()`, `abort_if()`, `abort_unless()`, or `$request->validate()` in a controller.
 - Let route model binding answer 404 for a missing record. Do not look the record up again in the controller.
-- Read the user with `$request->user()` in a controller and `$this->user()` in a Form Request. Never use `Auth::` or `auth()`.
+- Read the user with `$request->user()` in a controller and `$this->user()` in a Form Request. Never read the user with `Auth::` or `auth()`. `Auth::login()` and `Auth::logout()` stay for the session.
 - Give each behavior its own route, Form Request, and controller method. Do not branch on `$request->isMethod()` or on a mode parameter.
 - Clean the input in `prepareForValidation()`, before the rules run. `DomainRequest::normalizeHostname()` turns `https://Shop.Example.com/` into `shop.example.com`.
 - Parse typed input in the Form Request. Add a public method that returns the enum or the value object. Call it from the controller, as `AttachDatastoreRequest::source()` and `connection()` show.

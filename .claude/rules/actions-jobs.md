@@ -23,7 +23,7 @@ paths:
 - Do not give a new Action a `$data` or `$settings` array. `CreateApplication`, `CreateCluster`, `ConnectCluster`, `UpdateEnvironmentSettings`, `UpdatePreviewSettings`, `AcceptInvite`, and `CreateOwner` still take an array. Do not copy them.
 - Put the subject model first, the acting user `$by` second, and the other values after them: `AddDomain::execute(Environment $environment, User $by, string $hostname, bool $manageDns = false)`.
 - Type the user as `?User $by` when opencloud itself can act. A null user means opencloud, for example after an upgrade, for a deploy hook, or for a pull request.
-- When an Action needs a second public entry point, move that logic to a service class that the Action injects. `DetachDatastore::destroy()` is an old example of a second entry point.
+- When an Action needs a second public entry point, move that logic to a service class that the Action injects.
 - Return the record that the Action made or changed, or nothing.
 - An Action that writes a record or dispatches a Job calls `AuditEvent::record($by, $action, $subject, $context)`. An Action that only reads records nothing, for example `ReadLogs`, which the UI polls.
 - Refuse a request that the user can fix with `ValidationException::withMessages(['field' => 'Message.'])`. Laravel shows the message on the form, so the controller needs no `try` or `catch`.
