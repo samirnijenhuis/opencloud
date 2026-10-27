@@ -152,7 +152,7 @@ class ProvisionersTest extends TestCase
             'managed postgres' => $managed('SqlConnection', $oneStack),
             'managed valkey' => $managed('KeyValueConnection', $oneStack),
             'managed rustfs' => $managed('BucketConnection', [
-                'init', 'apply', 'output', 'init', 'apply', 'output',
+                'init', 'apply', 'output', 'init', 'apply', 'output', 'init', 'destroy',
                 'init', 'apply', 'output', 'init', 'destroy', 'init', 'destroy',
             ]),
         ], $seen);

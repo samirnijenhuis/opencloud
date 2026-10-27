@@ -27,6 +27,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Tests\Fakes\FakeTofu;
 use Tests\TestCase;
@@ -48,6 +49,7 @@ class ManagedBucketTest extends TestCase
         parent::setUp();
 
         Queue::fake();
+        Sleep::fake();
         $this->data = sys_get_temp_dir().'/opencloud-managed-bucket-'.getmypid();
         config(['opencloud.data_path' => $this->data]);
         $this->tofu = FakeTofu::install();
@@ -81,7 +83,7 @@ class ManagedBucketTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_the_admin_key_stack_runs_first_and_the_bucket_stack_gets_its_key(): void
+    public function test_the_admin_key_exists_only_while_the_bucket_stack_runs(): void
     {
         $attachment = $this->attach($this->environment());
 
@@ -91,7 +93,7 @@ class ManagedBucketTest extends TestCase
 
         $id = $attachment->datastore_id;
         $this->assertSame(
-            ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} apply", "bucket-{$id} output"],
+            ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} apply", "bucket-{$id} output", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy"],
             $this->runs(),
         );
         $this->assertSame(['name' => 'ams3-prod-env-1-k3x9q2m7-opentofu'], $this->tofu->ran[1]['variables']);
@@ -160,10 +162,13 @@ class ManagedBucketTest extends TestCase
         $id = $attachment->datastore_id;
         $this->assertTrue($again->is($attachment));
         $this->assertSame(
-            ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} apply", "bucket-{$id} output"],
+            [
+                "spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy",
+                "spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} apply", "bucket-{$id} output", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy",
+            ],
             $this->runs(),
         );
-        $this->assertSame('ams3-prod-env-1-k3x9q2m7', $this->tofu->ran[6]['variables']['name']);
+        $this->assertSame('ams3-prod-env-1-k3x9q2m7', $this->tofu->ran[8]['variables']['name']);
         $this->assertSame([DatastoreStatus::Ready, null, DatastoreStatus::Ready], [$attachment->fresh()->status, $attachment->fresh()->error, $attachment->datastore->fresh()->status]);
         $this->assertSame(['DO00BUCKETKEYID', false], $this->envOf($environment)['AWS_ACCESS_KEY_ID']);
     }
@@ -187,20 +192,21 @@ class ManagedBucketTest extends TestCase
         $id = $datastore->id;
         $this->assertSame(
             ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} destroy", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy"],
-            array_slice($this->runs(), 6),
+            array_slice($this->runs(), 8),
         );
-        $this->assertSame(['name' => 'ams3-prod-env-1-k3x9q2m7', 'region' => 'ams3'], $this->tofu->ran[10]['variables']);
-        $this->assertSame('DO_ADMIN_SECRET_KEY', $this->credentials(10)['SPACES_SECRET_ACCESS_KEY']);
+        $this->assertSame(['name' => 'ams3-prod-env-1-k3x9q2m7', 'region' => 'ams3'], $this->tofu->ran[12]['variables']);
+        $this->assertSame('DO_ADMIN_SECRET_KEY', $this->credentials(12)['SPACES_SECRET_ACCESS_KEY']);
         $this->assertNull($attachment->fresh());
         $this->assertNull($datastore->fresh());
     }
 
-    public function test_a_failed_bucket_destroy_keeps_the_admin_key_and_the_records_for_the_next_detach(): void
+    public function test_a_failed_bucket_destroy_still_destroys_the_admin_key_and_keeps_the_records(): void
     {
         $attachment = $this->attach($this->environment());
         Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
         app(DetachDatastore::class)->destroy($attachment->fresh(), null);
         $this->tofu->failOn = 'destroy';
+        $this->tofu->failStack = 'bucket';
         $this->tofu->failTimes = 1;
         $this->tofu->error = 'Error: deleting Spaces bucket: 503 Service Unavailable';
 
@@ -209,13 +215,97 @@ class ManagedBucketTest extends TestCase
         $datastore = $attachment->datastore->fresh();
         $id = $datastore->id;
         $this->assertSame([DatastoreStatus::Failed, 'The destroy failed. tofu destroy failed. Error: deleting Spaces bucket: 503 Service Unavailable'], [$datastore->status, $datastore->error]);
-        $this->assertSame("bucket-{$id} destroy", Arr::last($this->runs()));
+        $this->assertSame(
+            ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} destroy", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy"],
+            array_slice($this->runs(), 8),
+        );
         $this->assertNotNull($attachment->fresh());
 
         Queue::pushed(TearDownManagedDatabase::class)->sole()->handle();
 
-        $this->assertSame(["bucket-{$id} destroy", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy"], array_slice($this->runs(), -3));
+        $this->assertSame(
+            ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} destroy", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy"],
+            array_slice($this->runs(), -7),
+        );
         $this->assertNull($datastore->fresh());
+    }
+
+    public function test_a_failed_bucket_apply_destroys_the_admin_key_and_shows_the_bucket_error(): void
+    {
+        $attachment = $this->attach($this->environment());
+        $this->tofu->failOn = 'apply';
+        $this->tofu->failStack = 'bucket';
+        $this->tofu->error = 'Error: creating Spaces bucket: 503 Service Unavailable';
+
+        Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
+
+        $id = $attachment->datastore_id;
+        $this->assertSame(
+            ["spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output", "bucket-{$id} init", "bucket-{$id} apply", "spacesadmin-{$id} init", "spacesadmin-{$id} destroy"],
+            $this->runs(),
+        );
+        $this->assertSame([DatastoreStatus::Failed, 'tofu apply failed. Error: creating Spaces bucket: 503 Service Unavailable'], [$attachment->fresh()->status, $attachment->fresh()->error]);
+        Sleep::assertNeverSlept();
+    }
+
+    public function test_the_bucket_step_runs_again_after_an_unknown_access_key_error(): void
+    {
+        $attachment = $this->attach($this->environment());
+        $this->tofu->failOn = 'apply';
+        $this->tofu->failStack = 'bucket';
+        $this->tofu->failTimes = 2;
+        $this->tofu->error = 'Error: creating Spaces bucket: InvalidAccessKeyId: The Access Key Id you provided does not exist in our records.';
+
+        Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
+
+        $id = $attachment->datastore_id;
+        $this->assertSame(
+            [
+                "spacesadmin-{$id} init", "spacesadmin-{$id} apply", "spacesadmin-{$id} output",
+                "bucket-{$id} init", "bucket-{$id} apply", "bucket-{$id} init", "bucket-{$id} apply", "bucket-{$id} init", "bucket-{$id} apply", "bucket-{$id} output",
+                "spacesadmin-{$id} init", "spacesadmin-{$id} destroy",
+            ],
+            $this->runs(),
+        );
+        Sleep::assertSleptTimes(2);
+        Sleep::assertSequence([Sleep::for(10)->seconds(), Sleep::for(10)->seconds()]);
+        $this->assertSame(DatastoreStatus::Ready, $attachment->fresh()->status);
+    }
+
+    public function test_the_bucket_step_gives_up_after_five_tries_with_an_unknown_access_key(): void
+    {
+        $attachment = $this->attach($this->environment());
+        $this->tofu->failOn = 'apply';
+        $this->tofu->failStack = 'bucket';
+        $this->tofu->error = 'Error: creating Spaces bucket: InvalidAccessKeyId';
+
+        Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
+
+        $id = $attachment->datastore_id;
+        $this->assertSame(5, count(array_keys($this->runs(), "bucket-{$id} apply")));
+        $this->assertSame("spacesadmin-{$id} destroy", Arr::last($this->runs()));
+        Sleep::assertSleptTimes(4);
+        $this->assertSame(DatastoreStatus::Failed, $attachment->fresh()->status);
+    }
+
+    public function test_an_admin_key_that_stays_after_a_good_apply_fails_the_run_and_the_next_run_destroys_it(): void
+    {
+        $attachment = $this->attach($this->environment());
+        $this->tofu->failOn = 'destroy';
+        $this->tofu->failStack = 'spacesadmin';
+        $this->tofu->failTimes = 1;
+        $this->tofu->error = 'Error: deleting Spaces key: 503 Service Unavailable';
+
+        Queue::pushed(ProvisionManagedDatabase::class)->sole()->handle();
+
+        $this->assertSame(DatastoreStatus::Failed, $attachment->fresh()->status);
+
+        app(AttachDatastore::class)->handle($attachment->environment, null, DatastoreKind::Rustfs, DatastoreSource::Managed);
+        Queue::pushed(ProvisionManagedDatabase::class)->last()->handle();
+
+        $id = $attachment->datastore_id;
+        $this->assertSame("spacesadmin-{$id} destroy", Arr::last($this->runs()));
+        $this->assertSame(DatastoreStatus::Ready, $attachment->fresh()->status);
     }
 
     public function test_the_nightly_bucket_copy_skips_a_spaces_bucket(): void

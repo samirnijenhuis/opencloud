@@ -7,18 +7,31 @@ use App\Models\DatastoreAttachment;
 use App\Models\Environment;
 use App\Tofu\Runner;
 use App\Tofu\Stack;
+use Closure;
+use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
+use RuntimeException;
+use Throwable;
 
 /**
  * A DigitalOcean Spaces bucket for one environment, with a key that can read and write that bucket only.
  *
  * The provider creates a bucket through the S3 API of Spaces, which takes a Spaces key and not the API token. A
  * provider cannot take its credentials from a resource of the same apply, so two stacks run in order: spacesadmin
- * makes a full-access key with the API token, and bucket uses that key. The full-access key stays in the encrypted
- * state of its stack until the bucket is destroyed. The app gets only the bucket key.
+ * makes a full-access key with the API token, and bucket uses that key. The full-access key lives only during one
+ * run. Each run applies spacesadmin first and destroys it last, also when the bucket step fails, so no full-access key
+ * stays in the account between runs. A run that stops between the steps leaves the state of spacesadmin, and the next
+ * run applies it again and destroys it. The app gets only the bucket key.
  */
 final class ManagedBucket implements ManagedStack
 {
+    private const KEY_TRIES = 5;
+
+    private const KEY_WAIT_SECONDS = 10;
+
+    /** What the S3 API of Spaces answers for a key that it does not know. */
+    private const UNKNOWN_KEY = '/InvalidAccessKeyId|access key id you provided does not exist|invalid access key/i';
+
     /** Spaces has no version. */
     public function version(): string
     {
@@ -38,9 +51,9 @@ final class ManagedBucket implements ManagedStack
 
     public function apply(DatastoreAttachment $attachment): array
     {
-        $runner = app(Runner::class);
-        $admin = $runner->apply($this->adminStack($attachment), $attachment->datastore);
-        $outputs = $runner->apply($this->bucketStack($attachment, $admin), $attachment->datastore);
+        $outputs = $this->withAdminKey($attachment, fn (array $admin) => $this->untilKeyWorks(
+            fn () => app(Runner::class)->apply($this->bucketStack($attachment, $admin), $attachment->datastore),
+        ));
 
         return [
             'host' => (string) $outputs['endpoint'],
@@ -52,18 +65,70 @@ final class ManagedBucket implements ManagedStack
         ];
     }
 
-    /** The apply of spacesadmin gives the full-access key back, or makes it again after a failed destroy. */
     public function destroy(DatastoreAttachment $attachment): void
     {
-        $runner = app(Runner::class);
-        $admin = $runner->apply($this->adminStack($attachment), $attachment->datastore);
-        $runner->destroy($this->bucketStack($attachment, $admin), $attachment->datastore);
-        $runner->destroy($this->adminStack($attachment), $attachment->datastore);
+        $this->withAdminKey($attachment, fn (array $admin) => $this->untilKeyWorks(
+            fn () => app(Runner::class)->destroy($this->bucketStack($attachment, $admin), $attachment->datastore),
+        ));
     }
 
     public function connection(DatastoreAttachment $attachment): ?Connection
     {
         return BucketConnection::of($attachment);
+    }
+
+    /**
+     * Applies spacesadmin, runs $use with its outputs, and destroys spacesadmin. A failed $use destroys it too, and
+     * the error of $use stays the error of the run. A failed destroy after a good $use fails the run, so the next
+     * run destroys the key.
+     *
+     * @template T
+     *
+     * @param  Closure(array<string, mixed>): T  $use
+     * @return T
+     */
+    private function withAdminKey(DatastoreAttachment $attachment, Closure $use): mixed
+    {
+        $runner = app(Runner::class);
+
+        try {
+            $result = $use($runner->apply($this->adminStack($attachment), $attachment->datastore));
+        } catch (Throwable $e) {
+            try {
+                $runner->destroy($this->adminStack($attachment), $attachment->datastore);
+            } catch (Throwable) {
+                // The first error is the one that the owner needs to see.
+            }
+
+            throw $e;
+        }
+
+        $runner->destroy($this->adminStack($attachment), $attachment->datastore);
+
+        return $result;
+    }
+
+    /**
+     * Spaces may not know a new key at once. Only an error about the access key runs the step again.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $step
+     * @return T
+     */
+    private function untilKeyWorks(Closure $step): mixed
+    {
+        for ($try = 1; ; $try++) {
+            try {
+                return $step();
+            } catch (RuntimeException $e) {
+                if ($try === self::KEY_TRIES || ! preg_match(self::UNKNOWN_KEY, $e->getMessage())) {
+                    throw $e;
+                }
+
+                Sleep::for(self::KEY_WAIT_SECONDS)->seconds();
+            }
+        }
     }
 
     private function adminStack(DatastoreAttachment $attachment): Stack
