@@ -153,7 +153,6 @@ class ApplicationController extends Controller
                 'env_profile' => $application->env_profile,
                 'port' => $application->port,
             ],
-            'presets' => self::presets(),
             'previews' => [
                 'previews_enabled' => $application->previews_enabled,
                 'allow_forks' => $application->allow_forks,
