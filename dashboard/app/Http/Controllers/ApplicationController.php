@@ -10,6 +10,7 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\GitHub\RepositoryName;
@@ -106,9 +107,9 @@ class ApplicationController extends Controller
                 'database' => $data['database'],
                 ...(isset($data['processes']) ? ['processes' => array_map(fn (array $row) => [
                     'name' => $row['name'],
+                    'kind' => ProcessKind::from($row['kind']),
                     'command' => $row['command'],
-                    'instances' => (int) $row['instances'],
-                    'exclusive' => (bool) $row['exclusive'],
+                    'schedule' => $row['schedule'] ?? null,
                 ], $data['processes'])] : []),
                 'settings' => [
                     'size' => $data['size'],

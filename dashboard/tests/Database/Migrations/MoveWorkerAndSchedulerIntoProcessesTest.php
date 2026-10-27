@@ -26,6 +26,8 @@ class MoveWorkerAndSchedulerIntoProcessesTest extends TestCase
     {
         parent::setUp();
 
+        // A later migration gives the rows a kind, so the table goes back to the shape that this migration wrote.
+        (require database_path('migrations/2026_10_27_200001_add_kind_and_scaling_to_processes_table.php'))->down();
         $this->migration = require database_path('migrations/2026_10_24_100002_move_worker_and_scheduler_into_processes.php');
         $this->migration->down();
     }

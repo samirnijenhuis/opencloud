@@ -16,6 +16,7 @@ use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -70,8 +71,8 @@ class CreateApplicationTest extends TestCase
 
         $production = $application->environments()->where('name', 'production')->sole();
         $defaults = [
-            ['worker', 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 1, false],
-            ['scheduler', 'php artisan schedule:work', 1, true],
+            ['worker', 'long_running', 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', null, 's', 1, 1, 70],
+            ['scheduler', 'scheduled', 'php artisan schedule:run', '* * * * *', 's', null, null, null],
         ];
         $this->assertSame([$defaults, $defaults], $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => self::processes($e))->all());
 
@@ -172,8 +173,8 @@ class CreateApplicationTest extends TestCase
             'cluster_id' => Cluster::factory()->create()->id,
             'database' => 'none',
             'processes' => [
-                ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
-                ['name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 3],
+                ['name' => 'scheduler', 'kind' => ProcessKind::SCHEDULED, 'command' => 'php artisan schedule:run', 'schedule' => '*/5 * * * *'],
+                ['name' => 'horizon', 'kind' => ProcessKind::LONG_RUNNING, 'command' => 'php artisan horizon'],
             ],
             'settings' => [
                 'size' => 'l',
@@ -192,7 +193,7 @@ class CreateApplicationTest extends TestCase
             [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->build_command, $production->deploy_commands],
         );
         $this->assertSame(
-            [['scheduler', 'php artisan schedule:work', 1, true], ['horizon', 'php artisan horizon', 3, false]],
+            [['scheduler', 'scheduled', 'php artisan schedule:run', '*/5 * * * *', 'l', null, null, null], ['horizon', 'long_running', 'php artisan horizon', null, 'l', 1, 1, 60]],
             self::processes($production),
         );
         $this->assertSame(
@@ -200,7 +201,7 @@ class CreateApplicationTest extends TestCase
             [$template->size->value, $template->min_instances, $template->max_instances, $template->cpu_target, $template->build_command, $template->deploy_commands],
         );
         $this->assertSame(
-            [['scheduler', 'php artisan schedule:work', 1, true], ['horizon', 'php artisan horizon', 1, false]],
+            [['scheduler', 'scheduled', 'php artisan schedule:run', '*/5 * * * *', 's', null, null, null], ['horizon', 'long_running', 'php artisan horizon', null, 's', 1, 1, 70]],
             self::processes($template),
         );
         Queue::assertPushed(RunDeployment::class, fn (RunDeployment $job) => $job->deployment->environment->is($production));
@@ -261,14 +262,14 @@ class CreateApplicationTest extends TestCase
         ]);
 
         $application = $create('site', []);
-        $worker = $create('jobs', ['processes' => [['name' => 'queue', 'command' => 'node queue.js', 'instances' => 2]]]);
+        $worker = $create('jobs', ['processes' => [['name' => 'queue', 'kind' => ProcessKind::LONG_RUNNING, 'command' => 'node queue.js']]]);
 
         $production = $application->environments()->where('name', 'production')->sole();
         $this->assertSame([ApplicationType::DOCKERFILE, 3000], [$application->type, $application->port]);
         $this->assertSame([[], '/'], [$production->deploy_commands, $production->health_path]);
         $this->assertSame(0, $production->envVars()->count());
         $this->assertSame([], self::processes($production));
-        $this->assertSame([['queue', 'node queue.js', 2, false]], self::processes($worker->environments()->where('name', 'production')->sole()));
+        $this->assertSame([['queue', 'long_running', 'node queue.js', null, 's', 1, 1, 70]], self::processes($worker->environments()->where('name', 'production')->sole()));
     }
 
     public function test_a_new_application_gets_the_env_profile_and_the_port_of_its_preset_unless_it_asks_for_others(): void
@@ -320,9 +321,11 @@ class CreateApplicationTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    /** @return list<array{0: string, 1: string, 2: int, 3: bool}> */
+    /** @return list<list<mixed>> */
     private static function processes(Environment $environment): array
     {
-        return $environment->processes->map(fn (Process $p) => [$p->name, $p->command, $p->instances, $p->exclusive])->all();
+        return $environment->processes->map(fn (Process $p) => [
+            $p->name, $p->kind->value, $p->command, $p->schedule, $p->size->value, $p->min_instances, $p->max_instances, $p->cpu_target,
+        ])->all();
     }
 }

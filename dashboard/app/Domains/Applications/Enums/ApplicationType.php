@@ -2,6 +2,8 @@
 
 namespace App\Domains\Applications\Enums;
 
+use App\Domains\Environments\Enums\ProcessKind;
+
 /**
  * The preset of an application: the defaults for one kind of app. Builder::prepare() picks the Dockerfile by the
  * preset. Every other choice of a preset is a method here.
@@ -43,13 +45,17 @@ enum ApplicationType: string
         };
     }
 
-    /** @return list<array{name: string, command: string, instances: int, exclusive: bool}> */
+    /**
+     * The scheduler runs schedule:run each minute, as the server cron of the Laravel docs does.
+     *
+     * @return list<array{name: string, kind: ProcessKind, command: string, schedule: ?string}>
+     */
     public function processes(): array
     {
         return match ($this) {
             self::LARAVEL => [
-                ['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false],
-                ['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true],
+                ['name' => 'worker', 'kind' => ProcessKind::LONG_RUNNING, 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'schedule' => null],
+                ['name' => 'scheduler', 'kind' => ProcessKind::SCHEDULED, 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *'],
             ],
             self::NODE, self::PYTHON, self::RUBY, self::STATIC, self::DOCKERFILE => [],
         };

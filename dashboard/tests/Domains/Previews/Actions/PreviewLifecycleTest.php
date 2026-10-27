@@ -21,6 +21,7 @@ use App\Domains\Environments\Actions\SetEnvVar;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -71,7 +72,7 @@ class PreviewLifecycleTest extends TestCase
         $template = $this->environment('preview-template');
         $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force']]);
         $template->processes()->where('name', 'worker')->delete();
-        $template->processes()->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 2, 'exclusive' => false]);
+        Process::factory()->for($template)->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'size' => Size::M, 'min_instances' => 1, 'max_instances' => 3, 'cpu_target' => 60]);
         $setEnvVar = app(SetEnvVar::class);
         $setEnvVar->execute($template, $owner, 'MAIL_MAILER', 'log', false, EnvVarAvailability::RUNTIME);
         $setEnvVar->execute($template, $owner, 'STRIPE_SECRET', 'sk_test_preview', true, EnvVarAvailability::RUNTIME);
@@ -92,8 +93,13 @@ class PreviewLifecycleTest extends TestCase
             [$preview->kind, $preview->pr_number, $preview->branch, $preview->is_protected, $preview->size->value, $preview->min_instances, $preview->max_instances, $preview->health_path, $preview->deploy_commands],
         );
         $this->assertSame(
-            [['scheduler', 'php artisan schedule:work', 1, true], ['horizon', 'php artisan horizon', 2, false]],
-            $preview->processes->map(fn (Process $p) => [$p->name, $p->command, $p->instances, $p->exclusive])->all(),
+            [
+                ['scheduler', 'scheduled', 'php artisan schedule:run', '* * * * *', 's', null, null, null],
+                ['horizon', 'long_running', 'php artisan horizon', null, 'm', 1, 3, 60],
+            ],
+            $preview->processes->map(fn (Process $p) => [
+                $p->name, $p->kind->value, $p->command, $p->schedule, $p->size->value, $p->min_instances, $p->max_instances, $p->cpu_target,
+            ])->all(),
         );
         $this->assertSame(
             ['pr_number' => 12, 'branch' => 'feature/login', 'from_fork' => false, 'processes' => ['scheduler', 'horizon']],

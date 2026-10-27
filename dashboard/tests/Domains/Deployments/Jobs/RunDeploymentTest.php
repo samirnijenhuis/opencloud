@@ -11,8 +11,10 @@ use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Environments\Models\Process;
 use App\Support\Kube\FakeKubectl;
 use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -56,7 +58,8 @@ class RunDeploymentTest extends TestCase
         $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
         $application = Application::factory()->for($cluster)->create(['repository' => 'acme/shop', 'type' => ApplicationType::LARAVEL]);
         $this->environment = Environment::factory()->for($application)->create(['deploy_commands' => ['php artisan migrate --force']]);
-        $this->environment->processes()->createMany(ApplicationType::LARAVEL->processes());
+        Process::factory()->for($this->environment)->create(['command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600']);
+        Process::factory()->for($this->environment)->scheduled()->create();
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);
         $this->old = Deployment::factory()->for($this->environment)->create(['status' => DeploymentStatus::LIVE, 'image' => 'old-image']);
         $this->new = Deployment::factory()->for($this->environment)->create(['commit_sha' => self::SHA]);
@@ -89,13 +92,20 @@ class RunDeploymentTest extends TestCase
             self::APPLY,
             ['rollout', 'status', 'deployment/web', "--namespace={$namespace}", '--timeout=300s'],
             ['rollout', 'status', 'deployment/worker', "--namespace={$namespace}", '--timeout=300s'],
-            ['rollout', 'status', 'deployment/scheduler', "--namespace={$namespace}", '--timeout=300s'],
+            self::APPLY,
             [
-                'delete', 'deployment', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process,opencloud.dev/process notin (web,worker,scheduler)",
+                'delete', 'deployment', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process,opencloud.dev/process notin (web,worker)",
                 "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
             ],
-            ['delete', 'horizontalpodautoscaler', 'web', "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
-            ['get', 'pods', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process in (web,worker,scheduler),opencloud.dev/deployment!={$this->new->id}", "--namespace={$namespace}", '-o', 'name'],
+            [
+                'delete', 'cronjob', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process,opencloud.dev/process notin (scheduler)",
+                "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
+            ],
+            [
+                'delete', 'horizontalpodautoscaler', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process",
+                "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
+            ],
+            ['get', 'pods', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process in (web,worker),opencloud.dev/deployment!={$this->new->id}", "--namespace={$namespace}", '-o', 'name'],
             ['exec', '-i', 'deploy/caddy', '--namespace=opencloud', '--', 'sh', '-c', 'cat > /tmp/caddy.json && wget -q -O- --header "Content-Type: application/json" --post-file /tmp/caddy.json http://127.0.0.1:2019/load'],
             ['get', 'secrets', "--selector=opencloud.dev/application={$this->environment->application_id},opencloud.dev/environment={$this->environment->id}", "--namespace={$namespace}", '--ignore-not-found', '-o', 'json'],
             ['delete', 'secret', 'env', "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
@@ -104,9 +114,10 @@ class RunDeploymentTest extends TestCase
 
         $applied = $this->kubectl->appliedManifests();
         $this->assertSame(
-            ['Namespace', 'Secret', 'Job', 'Deployment', 'Deployment', 'Deployment', 'Service'],
+            ['Namespace', 'Secret', 'Job', 'Deployment', 'Deployment', 'Service', 'CronJob'],
             array_column($applied, 'kind'),
         );
+        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[6]['spec']['jobTemplate']['spec']['template']['spec']['containers'][0]['envFrom']);
         $this->assertSame(
             ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'DB_PASSWORD' => 'hunter22', 'LOG_CHANNEL' => 'stderr'],
             array_map(base64_decode(...), $applied[1]['data']),
@@ -166,7 +177,7 @@ class RunDeploymentTest extends TestCase
     public function test_the_processes_in_the_list_roll_out_and_the_deployments_of_removed_ones_are_deleted(): void
     {
         $this->environment->processes()->delete();
-        $this->environment->processes()->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'instances' => 2, 'exclusive' => false]);
+        Process::factory()->for($this->environment)->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'min_instances' => 2, 'max_instances' => 2]);
 
         RunDeployment::dispatchSync($this->new);
 
@@ -186,6 +197,35 @@ class RunDeploymentTest extends TestCase
             [2, ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]], ['sh', '-c', 'exec php artisan horizon']],
             [$horizon['spec']['replicas'], $horizon['spec']['strategy'], $horizon['spec']['template']['spec']['containers'][0]['command']],
         );
+    }
+
+    public function test_a_process_that_changed_kind_loses_the_object_of_its_old_kind_on_the_next_deploy(): void
+    {
+        $this->environment->processes()->where('name', 'worker')->sole()->update([
+            'kind' => ProcessKind::SCHEDULED, 'schedule' => '*/5 * * * *', 'min_instances' => null, 'max_instances' => null, 'cpu_target' => null,
+        ]);
+        $this->environment->processes()->where('name', 'scheduler')->sole()->update([
+            'kind' => ProcessKind::LONG_RUNNING, 'command' => 'php artisan schedule:work', 'schedule' => null, 'min_instances' => 1, 'max_instances' => 1, 'cpu_target' => 70,
+        ]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        $namespace = "oc-env-{$this->environment->id}";
+        $environment = "opencloud.dev/environment={$this->environment->id}";
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
+        $this->assertSame(
+            [['rollout', 'status', 'deployment/web', "--namespace={$namespace}", '--timeout=300s'], ['rollout', 'status', 'deployment/scheduler', "--namespace={$namespace}", '--timeout=300s']],
+            array_column($this->kubectl->callsStartingWith('rollout'), 'args'),
+        );
+        $this->assertSame(
+            [['Deployment', 'web'], ['Deployment', 'scheduler'], ['Service', 'web'], ['CronJob', 'worker']],
+            array_map(fn (array $m) => [$m['kind'], $m['metadata']['name']], array_slice($this->kubectl->appliedManifests(), 3)),
+        );
+        $this->assertSame([
+            ['delete', 'deployment', "--selector={$environment},opencloud.dev/process,opencloud.dev/process notin (web,scheduler)", "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
+            ['delete', 'cronjob', "--selector={$environment},opencloud.dev/process,opencloud.dev/process notin (worker)", "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
+            ['delete', 'horizontalpodautoscaler', "--selector={$environment},opencloud.dev/process", "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
+        ], array_values(array_filter(array_column($this->kubectl->callsStartingWith('delete'), 'args'), fn (array $args) => $args[1] !== 'secret')));
     }
 
     public function test_a_failing_deploy_command_fails_the_deployment_and_keeps_the_old_one_live(): void
@@ -223,9 +263,13 @@ class RunDeploymentTest extends TestCase
             ['rollout', 'status', 'deployment/worker', "--namespace={$namespace}", '--timeout=300s'],
             ['rollout', 'undo', 'deployment/web', "--namespace={$namespace}"],
             ['rollout', 'undo', 'deployment/worker', "--namespace={$namespace}"],
-            ['rollout', 'undo', 'deployment/scheduler', "--namespace={$namespace}"],
         ], array_column($this->kubectl->callsStartingWith('rollout'), 'args'));
         $this->assertSame([], $this->kubectl->callsStartingWith('delete'));
+        $this->assertSame(
+            ['Namespace', 'Secret', 'Job', 'Deployment', 'Deployment', 'Service'],
+            array_column($this->kubectl->appliedManifests(), 'kind'),
+            'The CronJob keeps the old schedule, because it has no rollout to undo.',
+        );
         $this->assertStringEndsWith(
             "2026-10-23T12:00:00Z error: deployment \"worker\" exceeded its progress deadline\n".
             "2026-10-23T12:00:00Z The deployment failed. The new worker pods did not become ready. Opencloud rolled the processes back.\n",

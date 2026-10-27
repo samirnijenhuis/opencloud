@@ -65,6 +65,9 @@ class StoreApplicationRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
+        $processes = Process::rules('processes.*.');
+        $processes['processes.*.name'][] = 'distinct';
+
         return [
             'repository' => ['required', 'string', 'max:500', 'regex:#^https://[^\s/]+/\S+$#'],
             'name' => ['nullable', 'string', 'max:100'],
@@ -82,9 +85,7 @@ class StoreApplicationRequest extends FormRequest
             'deploy_commands.*' => ['string', 'max:1000'],
             'processes' => ['array', 'max:20'],
             'processes.*' => ['array'],
-            ...$this->eachProcess(fn (bool $exclusive, string $prefix) => Process::rules($exclusive, $prefix)),
-            // Laravel merges a wildcard rule into the explicit rules above it, but an explicit rule below replaces it.
-            'processes.*.name' => ['distinct'],
+            ...$processes,
             'env' => ['array', 'max:200'],
             'env.*.key' => ['required', 'string', 'max:255', 'regex:/^[A-Za-z_][A-Za-z0-9_]*$/', 'distinct'],
             'env.*.value' => ['nullable', 'string', 'max:65535'],
@@ -104,22 +105,7 @@ class StoreApplicationRequest extends FormRequest
             'domain.regex' => 'Enter a host name like shop.example.com.',
             'domain.unique' => 'This domain is already in use.',
             'processes.*.name.distinct' => 'Two processes have this name. Give each process its own name.',
-            ...$this->eachProcess(fn (bool $exclusive, string $prefix) => Process::messages($exclusive, $prefix)),
+            ...Process::messages('processes.*.'),
         ];
-    }
-
-    /**
-     * The limit on instances depends on the exclusive flag of the same row, so each row gets its own rules.
-     *
-     * @param  callable(bool, string): array<string, mixed>  $build
-     * @return array<string, mixed>
-     */
-    private function eachProcess(callable $build): array
-    {
-        $rows = $this->input('processes');
-
-        return collect(is_array($rows) ? $rows : [])
-            ->flatMap(fn (mixed $row, int|string $index) => $build(is_array($row) && filter_var($row['exclusive'] ?? false, FILTER_VALIDATE_BOOL), "processes.{$index}."))
-            ->all();
     }
 }

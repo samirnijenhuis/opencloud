@@ -110,12 +110,17 @@ class RunDeployment implements ShouldQueue
         $kubectl->apply($manifests->workloads($deployment));
         $this->waitForRollout($kubectl, $environment, $log);
 
-        $kubectl->run([
-            'delete', 'deployment', '--selector='.$manifests->removedProcessesSelector(), "--namespace={$environment->kubeNamespace()}", '--ignore-not-found', '--wait=false',
-        ])->throw();
+        // A CronJob has no rollout to undo, so it changes only after the new pods are ready. A failed deployment keeps the old schedule.
+        $cronJobs = $manifests->cronJobs($deployment);
 
-        foreach ($manifests->absent() as [$kind, $name]) {
-            $kubectl->delete($kind, $name, $environment->kubeNamespace());
+        if ($cronJobs !== []) {
+            $kubectl->apply($cronJobs);
+        }
+
+        foreach ($manifests->strays() as $kind => $selector) {
+            $kubectl->run([
+                'delete', $kind, "--selector={$selector}", "--namespace={$environment->kubeNamespace()}", '--ignore-not-found', '--wait=false',
+            ])->throw();
         }
 
         $this->waitForOldPods($kubectl, $environment, $deployment, $log);
@@ -138,10 +143,11 @@ class RunDeployment implements ShouldQueue
     /**
      * A rollout ends when the old pods start to stop. Each old pod still answers during its preStop sleep, and Caddy reuses
      * its pooled connections to that pod. Live means that only the new version answers, so the deployment waits for the old pods.
+     * The finished pod of the last scheduled run keeps the label of an older deployment, so the wait leaves scheduled processes out.
      */
     private function waitForOldPods(Kubectl $kubectl, Environment $environment, Deployment $deployment, DeploymentLog $log): void
     {
-        $selector = Labels::ENVIRONMENT."={$environment->id},".Labels::PROCESS.' in ('.implode(',', $environment->processNames()).'),'.Labels::DEPLOYMENT."!={$deployment->id}";
+        $selector = Labels::ENVIRONMENT."={$environment->id},".Labels::PROCESS.' in ('.implode(',', $environment->longRunningNames()).'),'.Labels::DEPLOYMENT."!={$deployment->id}";
         $deadline = now()->addSeconds(self::OLD_PODS_WAIT_SECONDS);
         $waiting = false;
 
@@ -236,7 +242,7 @@ class RunDeployment implements ShouldQueue
     {
         $namespace = $environment->kubeNamespace();
 
-        foreach ($environment->processNames() as $process) {
+        foreach ($environment->longRunningNames() as $process) {
             $result = $kubectl->rolloutStatus($namespace, 'deployment', $process, self::ROLLOUT_TIMEOUT_SECONDS);
 
             if ($result->ok()) {
@@ -245,7 +251,7 @@ class RunDeployment implements ShouldQueue
 
             $log->write($result->error ?: $result->output);
 
-            foreach ($environment->processNames() as $undo) {
+            foreach ($environment->longRunningNames() as $undo) {
                 $kubectl->run(['rollout', 'undo', "deployment/{$undo}", "--namespace={$namespace}"]);
             }
 

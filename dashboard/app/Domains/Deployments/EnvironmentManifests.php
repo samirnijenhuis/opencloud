@@ -4,9 +4,12 @@ namespace App\Domains\Deployments;
 
 use App\Domains\Clusters\ClusterRegistry;
 use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\ProcessKind;
+use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
 use App\Support\Kube\Labels;
+use Illuminate\Support\Collection;
 use stdClass;
 
 /**
@@ -27,34 +30,57 @@ final readonly class EnvironmentManifests
         return $this->environment->max_instances > $this->environment->min_instances;
     }
 
-    /** @return list<array<string, mixed>> the process Deployments, the Service, and the autoscaler when it applies */
+    /** @return list<array<string, mixed>> the Deployments of web and the long-running processes, the Service, and the autoscalers */
     public function workloads(Deployment $deployment): array
     {
         return [
             $this->web($deployment),
-            ...$this->environment->processes->map(fn (Process $process) => $this->process($process, $deployment)),
+            ...$this->longRunning()->map(fn (Process $process) => $this->process($process, $deployment)),
             $this->service(),
-            ...($this->autoscales() ? [$this->autoscaler()] : []),
+            ...$this->autoscalers(),
         ];
     }
 
-    /**
-     * Server-side apply never removes objects, so the autoscaler of a web with a fixed count must be deleted.
-     *
-     * @return list<array{0: string, 1: string}> kind and name pairs
-     */
-    public function absent(): array
+    /** @return list<array<string, mixed>> one CronJob for each scheduled process */
+    public function cronJobs(Deployment $deployment): array
     {
-        return $this->autoscales() ? [] : [['horizontalpodautoscaler', Process::WEB]];
+        return $this->scheduled()->map(fn (Process $process) => $this->cronJob($process, $deployment))->values()->all();
     }
 
     /**
-     * Selects the Deployment of each process that left the list. Server-side apply never removes objects,
-     * and the dashboard keeps no record of a removed process, so the selector matches each name that is not in the list.
+     * Selects the objects of each kind that no process uses now, for example the Deployment of a process that became
+     * scheduled, or the autoscaler of a process with a fixed count. Server-side apply never removes objects, and the
+     * dashboard keeps no record of a removed process, so each selector matches each name that the kind does not keep.
+     *
+     * @return array<string, string> the label selector for each Kubernetes kind
      */
-    public function removedProcessesSelector(): string
+    public function strays(): array
     {
-        return Labels::ENVIRONMENT.'='.$this->environment->id.','.Labels::PROCESS.','.Labels::PROCESS.' notin ('.implode(',', $this->environment->processNames()).')';
+        return [
+            'deployment' => $this->selectorExcept($this->environment->longRunningNames()),
+            'cronjob' => $this->selectorExcept($this->scheduled()->pluck('name')->all()),
+            'horizontalpodautoscaler' => $this->selectorExcept(array_map(fn (array $autoscaler) => $autoscaler['metadata']['name'], $this->autoscalers())),
+        ];
+    }
+
+    /** @param  list<string>  $keep */
+    private function selectorExcept(array $keep): string
+    {
+        $selector = Labels::ENVIRONMENT.'='.$this->environment->id.','.Labels::PROCESS;
+
+        return $keep === [] ? $selector : $selector.','.Labels::PROCESS.' notin ('.implode(',', $keep).')';
+    }
+
+    /** @return Collection<int, Process> */
+    private function longRunning(): Collection
+    {
+        return $this->environment->processes->where('kind', ProcessKind::LONG_RUNNING)->values();
+    }
+
+    /** @return Collection<int, Process> */
+    private function scheduled(): Collection
+    {
+        return $this->environment->processes->where('kind', ProcessKind::SCHEDULED)->values();
     }
 
     /** @return array<string, mixed> */
@@ -113,7 +139,7 @@ final readonly class EnvironmentManifests
             Process::WEB,
             $deployment,
             replicas: $this->autoscales() ? null : $this->environment->min_instances,
-            strategy: self::ROLLING,
+            size: $this->environment->size,
             container: [
                 'ports' => [['name' => 'http', 'containerPort' => $this->environment->application->port]],
                 'readinessProbe' => ['httpGet' => ['path' => $this->environment->health_path, 'port' => 'http', ...$this->probeHost()]],
@@ -137,7 +163,7 @@ final readonly class EnvironmentManifests
     }
 
     /**
-     * The command runs in a shell, so a process can use a normal command line.
+     * The Deployment of a long-running process. The command runs in a shell, so a process can use a normal command line.
      *
      * @return array<string, mixed>
      */
@@ -146,11 +172,63 @@ final readonly class EnvironmentManifests
         return $this->processDeployment(
             $process->name,
             $deployment,
-            replicas: $process->instances,
-            strategy: $process->exclusive ? ['type' => 'Recreate'] : self::ROLLING,
-            // An image with tini as its entrypoint gets only the arguments, so tini stays PID 1 and passes SIGTERM on.
-            container: [$this->environment->application->type->imageRunsTini() ? 'args' : 'command' => self::shellCommand($process->command)],
+            replicas: self::scales($process) ? null : $process->min_instances,
+            size: $process->size,
+            container: $this->commandOf($process),
         );
+    }
+
+    /**
+     * The CronJob of a scheduled process. Its pods get the labels, the image, the env Secret, and the command of a
+     * long-running process. Each run starts one pod, and a failed run waits for the next time on the schedule.
+     *
+     * @return array<string, mixed>
+     */
+    public function cronJob(Process $process, Deployment $deployment): array
+    {
+        $labels = Labels::deployment($this->environment, $process->name, $deployment);
+
+        return [
+            'apiVersion' => 'batch/v1',
+            'kind' => 'CronJob',
+            'metadata' => $this->metadata($process->name, Labels::process($this->environment, $process->name)),
+            'spec' => [
+                'schedule' => $process->schedule,
+                // schedule:run and a server cron start a new run each minute without a wait. A skipped minute loses its tasks.
+                'concurrencyPolicy' => 'Allow',
+                'successfulJobsHistoryLimit' => 1,
+                'failedJobsHistoryLimit' => 1,
+                'jobTemplate' => [
+                    'metadata' => ['labels' => $labels],
+                    'spec' => [
+                        'backoffLimit' => 0,
+                        'template' => [
+                            'metadata' => ['labels' => $labels],
+                            'spec' => [
+                                'restartPolicy' => 'Never',
+                                ...$this->imagePullSecrets(),
+                                'containers' => [$this->container($process->name, $deployment, $process->size, $this->commandOf($process))],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * An image with tini as its entrypoint gets only the arguments, so tini stays PID 1 and passes SIGTERM on.
+     *
+     * @return array<string, list<string>>
+     */
+    private function commandOf(Process $process): array
+    {
+        return [$this->environment->application->type->imageRunsTini() ? 'args' : 'command' => self::shellCommand($process->command)];
+    }
+
+    private static function scales(Process $process): bool
+    {
+        return $process->max_instances > $process->min_instances;
     }
 
     /**
@@ -181,22 +259,35 @@ final readonly class EnvironmentManifests
         ];
     }
 
+    /** @return list<array<string, mixed>> one HorizontalPodAutoscaler for web and for each long-running process whose maximum is above its minimum */
+    public function autoscalers(): array
+    {
+        $environment = $this->environment;
+        $autoscalers = $this->autoscales() ? [$this->autoscaler(Process::WEB, $environment->min_instances, $environment->max_instances, $environment->cpu_target)] : [];
+
+        foreach ($this->longRunning()->filter(self::scales(...)) as $process) {
+            $autoscalers[] = $this->autoscaler($process->name, $process->min_instances, $process->max_instances, $process->cpu_target);
+        }
+
+        return $autoscalers;
+    }
+
     /** @return array<string, mixed> */
-    public function autoscaler(): array
+    private function autoscaler(string $process, int $min, int $max, int $cpuTarget): array
     {
         return [
             'apiVersion' => 'autoscaling/v2',
             'kind' => 'HorizontalPodAutoscaler',
-            'metadata' => $this->metadata(Process::WEB, Labels::process($this->environment, Process::WEB)),
+            'metadata' => $this->metadata($process, Labels::process($this->environment, $process)),
             'spec' => [
-                'scaleTargetRef' => ['apiVersion' => 'apps/v1', 'kind' => 'Deployment', 'name' => Process::WEB],
-                'minReplicas' => $this->environment->min_instances,
-                'maxReplicas' => $this->environment->max_instances,
+                'scaleTargetRef' => ['apiVersion' => 'apps/v1', 'kind' => 'Deployment', 'name' => $process],
+                'minReplicas' => $min,
+                'maxReplicas' => $max,
                 'metrics' => [[
                     'type' => 'Resource',
                     'resource' => [
                         'name' => 'cpu',
-                        'target' => ['type' => 'Utilization', 'averageUtilization' => $this->environment->cpu_target],
+                        'target' => ['type' => 'Utilization', 'averageUtilization' => $cpuTarget],
                     ],
                 ]],
             ],
@@ -221,7 +312,7 @@ final readonly class EnvironmentManifests
                     'spec' => [
                         'restartPolicy' => 'Never',
                         ...$this->imagePullSecrets(),
-                        'containers' => [$this->container(Process::DEPLOY, $deployment, [
+                        'containers' => [$this->container(Process::DEPLOY, $deployment, $this->environment->size, [
                             'command' => ['sh', '-c', implode(' && ', $this->environment->deploy_commands)],
                         ])],
                     ],
@@ -241,11 +332,10 @@ final readonly class EnvironmentManifests
     }
 
     /**
-     * @param  array<string, mixed>  $strategy
      * @param  array<string, mixed>  $container
      * @return array<string, mixed>
      */
-    private function processDeployment(string $process, Deployment $deployment, ?int $replicas, array $strategy, array $container): array
+    private function processDeployment(string $process, Deployment $deployment, ?int $replicas, Size $size, array $container): array
     {
         return [
             'apiVersion' => 'apps/v1',
@@ -254,10 +344,10 @@ final readonly class EnvironmentManifests
             'spec' => [
                 ...($replicas !== null ? ['replicas' => $replicas] : []),
                 'selector' => ['matchLabels' => Labels::process($this->environment, $process)],
-                'strategy' => $strategy,
+                'strategy' => self::ROLLING,
                 'template' => [
                     'metadata' => ['labels' => Labels::deployment($this->environment, $process, $deployment)],
-                    'spec' => [...$this->imagePullSecrets(), 'containers' => [$this->container($process, $deployment, $container)]],
+                    'spec' => [...$this->imagePullSecrets(), 'containers' => [$this->container($process, $deployment, $size, $container)]],
                 ],
             ],
         ];
@@ -273,9 +363,8 @@ final readonly class EnvironmentManifests
      * @param  array<string, mixed>  $extra
      * @return array<string, mixed>
      */
-    private function container(string $process, Deployment $deployment, array $extra): array
+    private function container(string $process, Deployment $deployment, Size $size, array $extra): array
     {
-        $size = $this->environment->size;
         $resources = ['cpu' => $size->cpuMillicores().'m', 'memory' => $size->memoryMib().'Mi'];
 
         return [

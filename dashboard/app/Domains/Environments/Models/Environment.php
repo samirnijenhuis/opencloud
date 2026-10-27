@@ -7,6 +7,7 @@ use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentColor;
 use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Policies\EnvironmentPolicy;
 use App\Domains\Routing\Models\Domain;
@@ -89,10 +90,16 @@ class Environment extends Model
         return "oc-env-{$this->id}";
     }
 
-    /** @return list<string> web and the names of the other processes, each one a Kubernetes Deployment */
+    /** @return list<string> web and the names of the other processes */
     public function processNames(): array
     {
         return [Process::WEB, ...$this->processes->pluck('name')];
+    }
+
+    /** @return list<string> web and the names of the long-running processes, each one a Kubernetes Deployment */
+    public function longRunningNames(): array
+    {
+        return [Process::WEB, ...$this->processes->where('kind', ProcessKind::LONG_RUNNING)->pluck('name')];
     }
 
     /** @return BelongsTo<Application, $this> */

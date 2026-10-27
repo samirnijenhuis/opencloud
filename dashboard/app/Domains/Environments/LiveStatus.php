@@ -30,6 +30,7 @@ final class LiveStatus
      *     state: 'ok'|'unknown',
      *     error: ?string,
      *     processes: list<array{name: string, desired: int, ready: int, restarts: int, cpu_millicores: ?int, memory_mib: ?int}>,
+     *     scheduled: list<array{name: string, last_run_at: ?string, last_run_failed: bool}>,
      *     requests: array{cpu_millicores: int, memory_mib: int}|null,
      *     checked_at: string,
      * }
@@ -38,7 +39,7 @@ final class LiveStatus
     {
         return Cache::remember("live-status:environment:{$environment->id}", self::CACHE_SECONDS, fn () => $this->read(
             fn () => $this->readEnvironment($environment),
-            ['processes' => [], 'requests' => null],
+            ['processes' => [], 'scheduled' => [], 'requests' => null],
         ));
     }
 
@@ -83,6 +84,7 @@ final class LiveStatus
         $kubectl = Kubectl::for($environment->application->cluster);
         $namespace = $environment->kubeNamespace();
         $deployments = $this->items($kubectl, ['get', 'deployments', "--namespace={$namespace}"]);
+        $cronJobs = $this->items($kubectl, ['get', 'cronjobs', "--namespace={$namespace}"]);
         $pods = $this->items($kubectl, ['get', 'pods', "--namespace={$namespace}", self::NOT_FINISHED]);
         $usage = $this->usage($kubectl, "/apis/metrics.k8s.io/v1beta1/namespaces/{$namespace}/pods");
 
@@ -111,7 +113,34 @@ final class LiveStatus
 
         usort($processes, fn (array $a, array $b) => [$a['name'] !== 'web', $a['name']] <=> [$b['name'] !== 'web', $b['name']]);
 
-        return ['processes' => $processes, 'requests' => $this->requests($pods)];
+        return ['processes' => $processes, 'scheduled' => $this->scheduled($cronJobs), 'requests' => $this->requests($pods)];
+    }
+
+    /**
+     * The last run failed when it no longer runs and no success came after its start. With concurrencyPolicy Allow,
+     * a newer run can end before an older one, so this reads the newest start, not each run.
+     *
+     * @param  list<array<string, mixed>>  $cronJobs
+     * @return list<array{name: string, last_run_at: ?string, last_run_failed: bool}>
+     */
+    private function scheduled(array $cronJobs): array
+    {
+        return collect($cronJobs)
+            ->filter(fn (array $cronJob) => isset($cronJob['metadata']['labels'][Labels::PROCESS]))
+            ->map(function (array $cronJob) {
+                $started = $cronJob['status']['lastScheduleTime'] ?? null;
+                $succeeded = $cronJob['status']['lastSuccessfulTime'] ?? null;
+                $running = ($cronJob['status']['active'] ?? []) !== [];
+
+                return [
+                    'name' => $cronJob['metadata']['labels'][Labels::PROCESS],
+                    'last_run_at' => $started,
+                    'last_run_failed' => $started !== null && ! $running && ($succeeded === null || strtotime($succeeded) < strtotime($started)),
+                ];
+            })
+            ->sortBy('name')
+            ->values()
+            ->all();
     }
 
     /** @return array<string, mixed> */

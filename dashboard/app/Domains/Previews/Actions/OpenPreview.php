@@ -95,7 +95,7 @@ class OpenPreview
             ]);
 
             foreach ($template->processes as $process) {
-                $preview->processes()->create($process->only(['name', 'command', 'instances', 'exclusive']));
+                $preview->processes()->create($process->only(['name', 'kind', 'command', 'schedule', 'size', 'min_instances', 'max_instances', 'cpu_target']));
             }
 
             AuditEvent::record(null, 'preview.created', $preview, [

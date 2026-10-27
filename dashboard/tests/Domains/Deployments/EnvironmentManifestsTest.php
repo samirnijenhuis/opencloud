@@ -9,6 +9,7 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Deployments\EnvironmentManifests;
 use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
@@ -28,6 +29,11 @@ class EnvironmentManifestsTest extends TestCase
     private const RESOURCES = [
         'requests' => ['cpu' => '500m', 'memory' => '512Mi'],
         'limits' => ['cpu' => '500m', 'memory' => '512Mi'],
+    ];
+
+    private const XS_RESOURCES = [
+        'requests' => ['cpu' => '250m', 'memory' => '256Mi'],
+        'limits' => ['cpu' => '250m', 'memory' => '256Mi'],
     ];
 
     public function test_the_namespace_carries_the_environment_labels(): void
@@ -111,10 +117,10 @@ class EnvironmentManifestsTest extends TestCase
         ], $web['spec']['template']['spec']['containers'][0]);
     }
 
-    public function test_a_process_runs_its_command_in_a_shell_with_its_instances(): void
+    public function test_a_long_running_process_runs_its_command_in_a_shell_with_its_own_size_and_instances(): void
     {
         $labels = ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/process' => 'reverb'];
-        $reverb = new Process(['name' => 'reverb', 'command' => 'php artisan reverb:start --host=0.0.0.0 --port=8080', 'instances' => 3, 'exclusive' => false]);
+        $reverb = self::process(['name' => 'reverb', 'command' => 'php artisan reverb:start --host=0.0.0.0 --port=8080', 'size' => Size::XS, 'min_instances' => 3, 'max_instances' => 3]);
 
         $this->assertSame([
             'apiVersion' => 'apps/v1',
@@ -131,38 +137,48 @@ class EnvironmentManifestsTest extends TestCase
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                         'command' => ['sh', '-c', 'exec php artisan reverb:start --host=0.0.0.0 --port=8080'],
                         'envFrom' => [['secretRef' => ['name' => 'env-12']]],
-                        'resources' => self::RESOURCES,
+                        'resources' => self::XS_RESOURCES,
                     ]]],
                 ],
             ],
-        ], $this->manifests()->process($reverb, $this->deployment()));
+        ], $this->manifests(['size' => Size::L])->process($reverb, $this->deployment()));
     }
 
-    public function test_an_exclusive_process_runs_exactly_one_pod_and_recreates_it(): void
+    public function test_a_scheduled_process_runs_as_a_cron_job_that_starts_each_run_without_a_wait(): void
     {
         $labels = ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/process' => 'scheduler'];
-        $scheduler = new Process(['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true]);
+        $pods = [...$labels, 'opencloud.dev/deployment' => '12'];
 
         $this->assertSame([
-            'apiVersion' => 'apps/v1',
-            'kind' => 'Deployment',
+            'apiVersion' => 'batch/v1',
+            'kind' => 'CronJob',
             'metadata' => ['name' => 'scheduler', 'namespace' => 'oc-env-7', 'labels' => $labels],
             'spec' => [
-                'replicas' => 1,
-                'selector' => ['matchLabels' => $labels],
-                'strategy' => ['type' => 'Recreate'],
-                'template' => [
-                    'metadata' => ['labels' => [...$labels, 'opencloud.dev/deployment' => '12']],
-                    'spec' => ['containers' => [[
-                        'name' => 'scheduler',
-                        'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
-                        'command' => ['sh', '-c', 'exec php artisan schedule:work'],
-                        'envFrom' => [['secretRef' => ['name' => 'env-12']]],
-                        'resources' => self::RESOURCES,
-                    ]]],
+                'schedule' => '* * * * *',
+                'concurrencyPolicy' => 'Allow',
+                'successfulJobsHistoryLimit' => 1,
+                'failedJobsHistoryLimit' => 1,
+                'jobTemplate' => [
+                    'metadata' => ['labels' => $pods],
+                    'spec' => [
+                        'backoffLimit' => 0,
+                        'template' => [
+                            'metadata' => ['labels' => $pods],
+                            'spec' => [
+                                'restartPolicy' => 'Never',
+                                'containers' => [[
+                                    'name' => 'scheduler',
+                                    'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
+                                    'command' => ['sh', '-c', 'exec php artisan schedule:run'],
+                                    'envFrom' => [['secretRef' => ['name' => 'env-12']]],
+                                    'resources' => self::XS_RESOURCES,
+                                ]],
+                            ],
+                        ],
+                    ],
                 ],
             ],
-        ], $this->manifests(['min_instances' => 3, 'max_instances' => 6])->process($scheduler, $this->deployment()));
+        ], $this->manifests(['size' => Size::L])->cronJob(self::scheduler(['size' => Size::XS]), $this->deployment()));
     }
 
     public function test_the_service_listens_on_8080_and_targets_the_named_port(): void
@@ -180,7 +196,7 @@ class EnvironmentManifestsTest extends TestCase
 
     public function test_the_autoscaler_scales_web_on_cpu(): void
     {
-        $this->assertSame([
+        $this->assertSame([[
             'apiVersion' => 'autoscaling/v2',
             'kind' => 'HorizontalPodAutoscaler',
             'metadata' => ['name' => 'web', 'namespace' => 'oc-env-7', 'labels' => self::WEB_LABELS],
@@ -193,7 +209,30 @@ class EnvironmentManifestsTest extends TestCase
                     'resource' => ['name' => 'cpu', 'target' => ['type' => 'Utilization', 'averageUtilization' => 60]],
                 ]],
             ],
-        ], $this->manifests(['min_instances' => 2, 'max_instances' => 5, 'cpu_target' => 60])->autoscaler());
+        ]], $this->manifests(['min_instances' => 2, 'max_instances' => 5, 'cpu_target' => 60])->autoscalers());
+    }
+
+    public function test_a_long_running_process_with_a_range_of_instances_gets_its_own_autoscaler_and_leaves_the_replicas_to_it(): void
+    {
+        $labels = ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/process' => 'worker'];
+        $worker = self::process(['min_instances' => 1, 'max_instances' => 3, 'cpu_target' => 80]);
+        $manifests = $this->manifests(processes: [$worker, self::process(['name' => 'horizon', 'min_instances' => 2, 'max_instances' => 2]), self::scheduler()]);
+
+        $this->assertSame([[
+            'apiVersion' => 'autoscaling/v2',
+            'kind' => 'HorizontalPodAutoscaler',
+            'metadata' => ['name' => 'worker', 'namespace' => 'oc-env-7', 'labels' => $labels],
+            'spec' => [
+                'scaleTargetRef' => ['apiVersion' => 'apps/v1', 'kind' => 'Deployment', 'name' => 'worker'],
+                'minReplicas' => 1,
+                'maxReplicas' => 3,
+                'metrics' => [[
+                    'type' => 'Resource',
+                    'resource' => ['name' => 'cpu', 'target' => ['type' => 'Utilization', 'averageUtilization' => 80]],
+                ]],
+            ],
+        ]], $manifests->autoscalers());
+        $this->assertArrayNotHasKey('replicas', $manifests->process($worker, $this->deployment())['spec']);
     }
 
     public function test_the_deploy_job_runs_the_commands_once(): void
@@ -262,24 +301,25 @@ class EnvironmentManifestsTest extends TestCase
         $this->assertSame([['name' => 'opencloud-registry']], $web['imagePullSecrets']);
         $this->assertSame('192.0.2.5:5000/team/3/7:abc1234-12', $web['containers'][0]['image']);
         $this->assertSame([['name' => 'opencloud-registry']], $job['imagePullSecrets']);
-        $this->assertSame([['name' => 'opencloud-registry']], $manifests->process(self::worker(), $deployment)['spec']['template']['spec']['imagePullSecrets']);
+        $this->assertSame([['name' => 'opencloud-registry']], $manifests->process(self::process(), $deployment)['spec']['template']['spec']['imagePullSecrets']);
+        $this->assertSame([['name' => 'opencloud-registry']], $manifests->cronJob(self::scheduler(), $deployment)['spec']['jobTemplate']['spec']['template']['spec']['imagePullSecrets']);
         $this->assertSame(['containers'], array_keys($this->manifests()->web($deployment)['spec']['template']['spec']), 'The local cluster pulls without a secret.');
     }
 
-    public function test_each_process_gets_a_deployment_and_the_selector_finds_the_removed_ones(): void
+    public function test_each_kind_of_process_gets_its_own_object_and_the_selectors_find_each_object_that_no_process_uses(): void
     {
-        $scheduler = new Process(['name' => 'scheduler', 'command' => 'php artisan schedule:work', 'instances' => 1, 'exclusive' => true]);
-        $manifests = $this->manifests(processes: [self::worker(), $scheduler]);
+        $manifests = $this->manifests(processes: [self::process(), self::scheduler(), self::process(['name' => 'horizon', 'max_instances' => 2])]);
 
         $this->assertSame(
-            [['Deployment', 'web'], ['Deployment', 'worker'], ['Deployment', 'scheduler'], ['Service', 'web']],
+            [['Deployment', 'web'], ['Deployment', 'worker'], ['Deployment', 'horizon'], ['Service', 'web'], ['HorizontalPodAutoscaler', 'horizon']],
             array_map(fn (array $m) => [$m['kind'], $m['metadata']['name']], $manifests->workloads($this->deployment())),
         );
-        $this->assertSame([['horizontalpodautoscaler', 'web']], $manifests->absent());
-        $this->assertSame(
-            'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (web,worker,scheduler)',
-            $manifests->removedProcessesSelector(),
-        );
+        $this->assertSame([['CronJob', 'scheduler']], array_map(fn (array $m) => [$m['kind'], $m['metadata']['name']], $manifests->cronJobs($this->deployment())));
+        $this->assertSame([
+            'deployment' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (web,worker,horizon)',
+            'cronjob' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (scheduler)',
+            'horizontalpodautoscaler' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (horizon)',
+        ], $manifests->strays());
     }
 
     public function test_without_processes_only_web_runs_and_an_autoscaled_web_gets_an_autoscaler(): void
@@ -290,13 +330,17 @@ class EnvironmentManifestsTest extends TestCase
             [['Deployment', 'web'], ['Service', 'web'], ['HorizontalPodAutoscaler', 'web']],
             array_map(fn (array $m) => [$m['kind'], $m['metadata']['name']], $manifests->workloads($this->deployment())),
         );
-        $this->assertSame([], $manifests->absent());
-        $this->assertSame('opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (web)', $manifests->removedProcessesSelector());
+        $this->assertSame([], $manifests->cronJobs($this->deployment()));
+        $this->assertSame([
+            'deployment' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (web)',
+            'cronjob' => 'opencloud.dev/environment=7,opencloud.dev/process',
+            'horizontalpodautoscaler' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (web)',
+        ], $manifests->strays());
     }
 
     public function test_a_dockerfile_app_runs_its_own_processes(): void
     {
-        $queue = new Process(['name' => 'queue', 'command' => 'node queue.js', 'instances' => 2, 'exclusive' => false]);
+        $queue = self::process(['name' => 'queue', 'command' => 'node queue.js', 'min_instances' => 2, 'max_instances' => 2]);
         $manifests = $this->manifests(type: ApplicationType::DOCKERFILE, processes: [$queue]);
 
         $workloads = $manifests->workloads($this->deployment());
@@ -310,12 +354,13 @@ class EnvironmentManifestsTest extends TestCase
 
     public function test_a_process_of_a_tini_image_passes_only_its_arguments_so_tini_stays_pid_1(): void
     {
-        $worker = new Process(['name' => 'worker', 'command' => 'node worker.js', 'instances' => 1, 'exclusive' => false]);
+        $manifests = $this->manifests(type: ApplicationType::NODE, processes: [self::process(['command' => 'node worker.js']), self::scheduler(['command' => 'node cron.js'])]);
 
-        $container = $this->manifests(type: ApplicationType::NODE, processes: [$worker])
-            ->workloads($this->deployment())[1]['spec']['template']['spec']['containers'][0];
+        $container = $manifests->workloads($this->deployment())[1]['spec']['template']['spec']['containers'][0];
+        $cron = $manifests->cronJobs($this->deployment())[0]['spec']['jobTemplate']['spec']['template']['spec']['containers'][0];
 
         $this->assertSame([['sh', '-c', 'exec node worker.js'], false], [$container['args'], array_key_exists('command', $container)]);
+        $this->assertSame([['sh', '-c', 'exec node cron.js'], false], [$cron['args'], array_key_exists('command', $cron)]);
     }
 
     public function test_the_probe_sends_the_first_domain_of_the_environment_as_the_host(): void
@@ -386,9 +431,25 @@ class EnvironmentManifestsTest extends TestCase
         ]);
     }
 
-    private static function worker(): Process
+    /** @param  array<string, mixed>  $attributes */
+    private static function process(array $attributes = []): Process
     {
-        return new Process(['name' => 'worker', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'instances' => 1, 'exclusive' => false]);
+        return new Process([
+            'name' => 'worker',
+            'kind' => ProcessKind::LONG_RUNNING,
+            'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600',
+            'size' => Size::S,
+            'min_instances' => 1,
+            'max_instances' => 1,
+            'cpu_target' => 70,
+            ...$attributes,
+        ]);
+    }
+
+    /** @param  array<string, mixed>  $attributes */
+    private static function scheduler(array $attributes = []): Process
+    {
+        return new Process(['name' => 'scheduler', 'kind' => ProcessKind::SCHEDULED, 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *', 'size' => Size::S, ...$attributes]);
     }
 
     private function deployment(): Deployment
