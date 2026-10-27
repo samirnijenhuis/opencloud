@@ -83,6 +83,19 @@
       "deploy_commands": { "always": ["python deploy.py {cell}"] },
       "env": {}
     },
+    "ruby": {
+      "branch": "ruby",
+      "type": "ruby",
+      "env_profile": "generic",
+      "verify_path": "/verify",
+      "checks": ["marker", "build", "secret", "db", "extra", "cache"],
+      "databases": ["none", "mysql", "postgres", "mysqlpostgres"],
+      "caches": ["none", "valkey"],
+      "database_in_create_form": true,
+      "build_command": { "always": "echo \"$VERIFY_BUILD\" > build-marker" },
+      "deploy_commands": { "always": ["bundle exec ruby deploy.rb {cell}"] },
+      "env": {}
+    },
     "site": {
       "branch": "site",
       "type": "static",
@@ -108,7 +121,8 @@
       "laravel-mysqlpostgres-none",
       "node-postgres-valkey",
       "site-none-none",
-      "python-mysql-valkey"
+      "python-mysql-valkey",
+      "ruby-postgres-none"
     ]
   }
 }
