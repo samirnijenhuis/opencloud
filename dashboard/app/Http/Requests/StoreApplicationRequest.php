@@ -36,6 +36,10 @@ class StoreApplicationRequest extends FormRequest
             $merge['deploy_commands'] = self::cleanLines($this->input('deploy_commands'));
         }
 
+        if (is_string($this->input('build_command'))) {
+            $merge['build_command'] = self::cleanScript($this->input('build_command'));
+        }
+
         $this->merge($merge);
     }
 
@@ -52,6 +56,8 @@ class StoreApplicationRequest extends FormRequest
     }
 
     /**
+     * The one rule for a command field: a command is a line that is not empty and does not start with "#".
+     *
      * @param  array<array-key, mixed>  $lines
      * @return list<mixed>
      */
@@ -59,7 +65,15 @@ class StoreApplicationRequest extends FormRequest
     {
         $lines = array_map(fn ($line) => is_string($line) ? trim($line) : $line, $lines);
 
-        return array_values(array_filter($lines, fn ($line) => $line !== '' && $line !== null));
+        return array_values(array_filter($lines, fn ($line) => $line !== null && $line !== '' && ! (is_string($line) && str_starts_with($line, '#'))));
+    }
+
+    /** The build command is one text with a command on each line. It is null when no command is left. */
+    public static function cleanScript(string $script): ?string
+    {
+        $commands = self::cleanLines(preg_split('/\R/', $script));
+
+        return $commands === [] ? null : implode("\n", $commands);
     }
 
     /** @return array<string, mixed> */

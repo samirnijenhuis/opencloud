@@ -35,11 +35,15 @@ class RubyDockerfileTest extends TestCase
             COPY . .
             RUN --mount=type=cache,target=/usr/local/bundle/cache --mount=type=secret,id=BUNDLE_GEMS__CONTRIBSYS__COM,env=BUNDLE_GEMS__CONTRIBSYS__COM bundle install
             RUN --mount=type=secret,id=BUNDLE_GEMS__CONTRIBSYS__COM,env=BUNDLE_GEMS__CONTRIBSYS__COM SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile
-            RUN --mount=type=secret,id=BUNDLE_GEMS__CONTRIBSYS__COM,env=BUNDLE_GEMS__CONTRIBSYS__COM bin/rails sitemap:create
+            RUN --mount=type=secret,id=BUNDLE_GEMS__CONTRIBSYS__COM,env=BUNDLE_GEMS__CONTRIBSYS__COM <<'OPENCLOUD_BUILD'
+            set -e
+            bin/rails db:schema:cache:dump
+            bin/rails sitemap:create
+            OPENCLOUD_BUILD
             ENTRYPOINT ["/usr/bin/tini", "--"]
             CMD ["sh", "-c", "exec bin/rails server -b 0.0.0.0 -p $PORT"]
 
-            DOCKERFILE, RubyDockerfile::render($project, ['BUNDLE_GEMS__CONTRIBSYS__COM'], ' bin/rails sitemap:create '));
+            DOCKERFILE, RubyDockerfile::render($project, ['BUNDLE_GEMS__CONTRIBSYS__COM'], "bin/rails db:schema:cache:dump\nbin/rails sitemap:create"));
     }
 
     /** @return array<string, array{array<string, string>, string}> */

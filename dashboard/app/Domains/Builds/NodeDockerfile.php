@@ -15,14 +15,13 @@ final class NodeDockerfile
     public static function render(NodeProject $project, array $buildSecrets = [], ?string $buildCommand = null): string
     {
         $mounts = DockerfileTemplate::secretMounts($buildSecrets);
-        $buildCommand = trim((string) $buildCommand);
 
         return DockerfileTemplate::render('node', [], [
             'node' => $project->nodeVersion(),
             'secret_mounts' => $mounts,
             'install' => $project->install(),
             'build_script' => $project->hasScript('build') ? "RUN {$mounts}{$project->run('build')}" : '',
-            'build_command' => $buildCommand === '' ? '' : "RUN {$mounts}{$buildCommand}",
+            'build_command' => DockerfileTemplate::run($buildCommand, $mounts),
             'start' => DockerfileTemplate::execForm($project->start()),
         ]);
     }

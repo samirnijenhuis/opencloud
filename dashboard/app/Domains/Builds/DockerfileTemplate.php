@@ -50,4 +50,15 @@ final class DockerfileTemplate
     {
         return implode('', array_map(fn (string $key) => "--mount=type=secret,id={$key},env={$key} ", $keys));
     }
+
+    /**
+     * One RUN for a build command. A command with several lines runs as a script that stops at the first failing command.
+     * A heredoc keeps a newline from ending the instruction, and the quoted delimiter stops BuildKit from expanding $VARIABLES.
+     */
+    public static function run(?string $command, string $mounts = ''): string
+    {
+        $command = trim((string) $command);
+
+        return $command === '' ? '' : "RUN {$mounts}<<'OPENCLOUD_BUILD'\nset -e\n{$command}\nOPENCLOUD_BUILD";
+    }
 }

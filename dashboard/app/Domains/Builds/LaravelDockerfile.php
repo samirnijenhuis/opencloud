@@ -50,7 +50,7 @@ final readonly class LaravelDockerfile
             'base_extensions' => implode(' ', self::BASE_EXTENSIONS),
             'extra_extensions' => $extra === [] ? '' : 'RUN install-php-extensions '.implode(' ', $extra),
             'secret_mounts' => DockerfileTemplate::secretMounts($buildSecrets),
-            'build_command' => $buildCommand === null || trim($buildCommand) === '' ? '' : 'RUN '.trim($buildCommand),
+            'build_command' => DockerfileTemplate::run($buildCommand),
             'pnpm_version' => NodeProject::pnpmVersion($package ?? []),
         ]);
     }

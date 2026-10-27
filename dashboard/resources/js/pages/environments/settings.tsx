@@ -2,11 +2,11 @@ import { environmentColors } from '@/components/environment-color';
 import { DeployHook } from '@/components/environment/deploy-hook';
 import { EnvValues, type EnvVar } from '@/components/environment/env-values';
 import InputError from '@/components/input-error';
+import { ShellEditor } from '@/components/shell-editor';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import EnvironmentLayout from '@/layouts/environment-layout';
 import { cn } from '@/lib/utils';
 import { type EnvironmentColor, type EnvironmentPageProps } from '@/types';
@@ -167,22 +167,30 @@ function DeploymentsForm({ environmentId, settings, locked }: { environmentId: n
     return (
         <form onSubmit={submit} className="divide-y rounded-lg border">
             <fieldset disabled={locked} className="divide-y">
-                <Field label="Build command" description="Runs in the image build, for example npm run build." htmlFor="build_command">
-                    <Input
+                <Field
+                    label="Build command"
+                    description="Runs in the image build. One command per line. The build stops at the first command that fails. A line that starts with # is a comment."
+                    htmlFor="build_command"
+                >
+                    <ShellEditor
                         id="build_command"
-                        className="font-mono text-sm"
+                        rows={2}
+                        placeholder="npm run build"
                         value={form.data.build_command}
-                        onChange={(e) => form.setData('build_command', e.target.value)}
+                        onChange={(value) => form.setData('build_command', value)}
                     />
                     <InputError message={form.errors.build_command} />
                 </Field>
-                <Field label="Deploy commands" description="Run before the new version gets traffic. One command per line." htmlFor="deploy_commands">
-                    <Textarea
+                <Field
+                    label="Deploy commands"
+                    description="Run before the new version gets traffic. One command per line. A line that starts with # is a comment."
+                    htmlFor="deploy_commands"
+                >
+                    <ShellEditor
                         id="deploy_commands"
-                        className="font-mono text-sm"
                         rows={3}
                         value={form.data.deploy_commands}
-                        onChange={(e) => form.setData('deploy_commands', e.target.value)}
+                        onChange={(value) => form.setData('deploy_commands', value)}
                     />
                     <InputError message={form.errors.deploy_commands} />
                 </Field>
