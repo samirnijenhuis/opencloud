@@ -5,12 +5,14 @@
   matrix.py fixtures sync|check         push the fixture apps to their branches, or compare them
   matrix.py list [--set S] [--only P]   print the cells that a run would drive
   matrix.py run [--set S] [--only P]    drive the cells and write the evidence to .verify/runs/<run id>/
+  matrix.py local [--set S] [--only P]  build and run the cells in Docker on this computer, with no machine
 """
 import argparse
 import fnmatch
 import hashlib
 import html
 import json
+import os
 import re
 import secrets
 import shutil
@@ -30,6 +32,9 @@ MATRIX = json.loads((SKILL / 'matrix.json').read_text())
 DRIVER = {'mysql': 'mysql', 'postgres': 'pgsql', 'mysqlpostgres': 'mysql', 'sqlite': 'sqlite'}
 # The most specific condition wins when a fixture gives a value for more than one.
 PRIORITY = ['valkey', 'sqlite', 'server-sql', 'sql', 'no-sql', 'always']
+# The checks of the verify endpoint. The "checks" of a fixture list the ones that it reports. The runner skips the others.
+CHECKS = {'marker', 'build', 'secret', 'db', 'extra', 'cache'}
+REPORTS_URL = {'laravel': 'REPORTS_DB_URL', 'generic': 'REPORTS_DATABASE_URL'}
 
 
 def repository_url():
@@ -48,6 +53,8 @@ class Cell:
         self.id = cell_id
         self.fixture_name, self.db, self.cache = cell_id.split('-')
         self.fixture = MATRIX['fixtures'][self.fixture_name]
+        if not set(self.fixture['checks']) <= CHECKS:
+            sys.exit(f'matrix.json: the fixture {self.fixture_name} has unknown checks {set(self.fixture["checks"]) - CHECKS}')
 
     def conditions(self, step):
         found = {'always', 'no-sql' if self.db == 'none' else 'sql'}
@@ -74,30 +81,28 @@ class Cell:
         return None if text is None else text.replace('{cell}', self.id)
 
     def create_database(self):
-        # A Dockerfile fixture gets its database on the second deploy, so the matrix also proves Add resource.
-        if self.fixture['type'] != 'laravel':
+        # A fixture without database_in_create_form gets its database on the second deploy, so the matrix also proves Add resource.
+        if not self.fixture.get('database_in_create_form'):
             return 'none'
         return {'mysql': 'mysql', 'mysqlpostgres': 'mysql', 'postgres': 'postgres'}.get(self.db, 'none')
 
     def db_step(self):
         """The step from which the app has its SQL database."""
-        added_later = self.fixture['type'] != 'laravel' and self.db in ('mysql', 'postgres', 'mysqlpostgres')
+        added_later = not self.fixture.get('database_in_create_form') and self.db in ('mysql', 'postgres', 'mysqlpostgres')
         return 2 if added_later else 1
 
     def expected_cache(self, step):
-        reports = self.fixture['reports']['cache']
-        if reports == 'never' or (reports == 'valkey' and (self.cache != 'valkey' or step < 2)):
-            return None
+        """The cache driver that the verify endpoint must report, or None when it must report no cache."""
         if self.cache == 'valkey' and step >= 2:
             return 'redis'
-        return 'file' if self.db == 'none' else 'database'
+        return self.pick('cache_without_valkey')
 
 
 def cells_for(set_name, patterns):
-    if set_name == 'full':
-        cells = [f'{f}-{d}-{c}' for f in MATRIX['fixtures'] for d in MATRIX['databases'] for c in MATRIX['caches']]
-    else:
-        cells = MATRIX['sets'][set_name]
+    full = [f'{name}-{d}-{c}' for name, spec in MATRIX['fixtures'].items() for d in spec['databases'] for c in spec['caches']]
+    cells = full if set_name == 'full' else MATRIX['sets'][set_name]
+    if set(cells) - set(full):
+        sys.exit(f'matrix.json: the set {set_name} has cells that no fixture supports: {sorted(set(cells) - set(full))}')
     return [c for c in cells if not patterns or any(fnmatch.fnmatch(c, p) for p in patterns)]
 
 
@@ -213,11 +218,16 @@ class Poller(threading.Thread):
 class CellRun:
     def __init__(self, dashboard, cluster_id, cell, out):
         self.dash, self.cluster_id, self.cell, self.out = dashboard, cluster_id, cell, out
-        self.checks, self.timings, self.hits = [], {}, None
+        self.checks, self.skipped, self.timings, self.hits = [], [], {}, None
         self.secret = secrets.token_hex(12)
         out.mkdir(parents=True, exist_ok=True)
 
-    def check(self, name, ok, detail=''):
+    def check(self, name, ok, detail='', needs=None):
+        """needs names the entry of CHECKS that the check reads. A fixture without it gets a SKIP line, never a PASS."""
+        if needs is not None and needs not in self.cell.fixture['checks']:
+            self.skipped.append(name)
+            print(f'  SKIP {name} (the {self.cell.fixture_name} fixture does not report {needs})', flush=True)
+            return None
         self.checks.append({'name': name, 'ok': bool(ok), 'detail': str(detail)})
         print(f"  {'PASS' if ok else 'FAIL'} {name}" + (f' ({detail})' if detail != '' else ''), flush=True)
         return bool(ok)
@@ -233,7 +243,7 @@ class CellRun:
         except Exception as error:  # noqa: BLE001 - one broken cell must not stop the matrix
             self.check('the cell ran to the end', False, f'{type(error).__name__}: {error}')
         verdict = 'pass' if self.checks and all(c['ok'] for c in self.checks) else 'fail'
-        self.save('result.json', {'cell': self.cell.id, 'verdict': verdict, 'timings': self.timings, 'checks': self.checks})
+        self.save('result.json', {'cell': self.cell.id, 'verdict': verdict, 'timings': self.timings, 'checks': self.checks, 'skipped': self.skipped})
         return verdict
 
     def drive(self):
@@ -350,7 +360,7 @@ class CellRun:
             time.sleep(5)
             status, page = fetch(self.url + '/')
         self.save(f'step-{step}-page.html', page)
-        self.check(f'step {step}: the page answers 200 over HTTPS', status == 200 and '<title>' in page, f'{status} {self.url}/')
+        self.check(f'step {step}: the page answers 200 over {self.url.split(":")[0].upper()}', status == 200 and '<title>' in page, f'{status} {self.url}/')
 
         status, text = fetch(self.url + fixture['verify_path'])
         self.save(f'step-{step}-verify.json', text)
@@ -360,33 +370,32 @@ class CellRun:
             self.check(f'step {step}: {fixture["verify_path"]} answers JSON', False, f'{status} {text[:200]}')
             return
         marker = f'{cell.id}-v{min(step, 2)}'
-        self.check(f'step {step}: the runtime env value', report.get('marker') == marker, report.get('marker'))
-        self.check(f'step {step}: the build saw its env value or command', report.get('build') == cell.id, report.get('build'))
-        if fixture['reports']['secret']:
-            self.check(f'step {step}: the app reads the secret', report.get('secret_sha') == hashlib.sha1(self.secret.encode()).hexdigest())
+        self.check(f'step {step}: the runtime env value', report.get('marker') == marker, report.get('marker'), needs='marker')
+        self.check(f'step {step}: the build saw its env value or command', report.get('build') == cell.id, report.get('build'), needs='build')
+        self.check(f'step {step}: the app reads the secret', report.get('secret_sha') == hashlib.sha1(self.secret.encode()).hexdigest(), needs='secret')
 
         db = report.get('db') or {}
-        if fixture['reports']['db'] and cell.db != 'none' and step < cell.db_step():
-            self.check(f'step {step}: no database is attached yet', report.get('db') is None, json.dumps(report.get('db')))
-        elif fixture['reports']['db'] and cell.db != 'none':
-            self.check(f'step {step}: the {DRIVER[cell.db]} database answers', db.get('ok') and db.get('driver') == DRIVER[cell.db], json.dumps(report.get('db')))
+        if cell.db != 'none' and step < cell.db_step():
+            self.check(f'step {step}: no database is attached yet', report.get('db') is None, json.dumps(report.get('db')), needs='db')
+        elif cell.db != 'none':
+            self.check(f'step {step}: the {DRIVER[cell.db]} database answers', db.get('ok') and db.get('driver') == DRIVER[cell.db], json.dumps(report.get('db')), needs='db')
             if cell.db != 'sqlite':
                 deploys = step - cell.db_step() + 1
-                self.check(f'step {step}: each deploy command wrote a row', db.get('deploys', 0) >= deploys, f"{db.get('deploys')} >= {deploys}")
+                self.check(f'step {step}: each deploy command wrote a row', db.get('deploys', 0) >= deploys, f"{db.get('deploys')} >= {deploys}", needs='db')
                 if self.hits is not None:
-                    self.check(f'step {step}: the rows of earlier steps are still there', db.get('hits', 0) > self.hits, f"{db.get('hits')} > {self.hits}")
+                    self.check(f'step {step}: the rows of earlier steps are still there', db.get('hits', 0) > self.hits, f"{db.get('hits')} > {self.hits}", needs='db')
             self.hits = db.get('hits')
 
-        if fixture['reports']['db'] and cell.db == 'mysqlpostgres' and step >= 2:
+        if cell.db == 'mysqlpostgres' and step >= 2:
             reports = (report.get('extra') or {}).get('reports') or {}
-            self.check(f'step {step}: the pgsql database answers through REPORTS_DB_URL', reports.get('ok') is True and reports.get('driver') == 'pgsql', json.dumps(report.get('extra')))
+            self.check(f'step {step}: the pgsql database answers through {REPORTS_URL[fixture["env_profile"]]}', reports.get('ok') is True and reports.get('driver') == 'pgsql', json.dumps(report.get('extra')), needs='extra')
 
         expected = cell.expected_cache(step)
         cache = report.get('cache')
         if expected is None:
-            self.check(f'step {step}: no cache is in use', cache is None, json.dumps(cache))
+            self.check(f'step {step}: no cache is in use', cache is None, json.dumps(cache), needs='cache')
         else:
-            self.check(f'step {step}: the {expected} cache works', cache and cache.get('ok') and cache.get('driver') == expected, json.dumps(cache))
+            self.check(f'step {step}: the {expected} cache works', cache and cache.get('ok') and cache.get('driver') == expected, json.dumps(cache), needs='cache')
 
 
 def run(args):
@@ -408,15 +417,110 @@ def run(args):
         cell_run = CellRun(dashboard, cluster_id, Cell(cell_id), out / cell_id)
         verdict = cell_run.run()
         failed = [c['name'] for c in cell_run.checks if not c['ok']]
-        rows.append((cell_id, verdict, round(time.time() - started), cell_run.timings.get('deployment-1', '-'), '; '.join(failed)))
+        rows.append((cell_id, verdict, round(time.time() - started), cell_run.timings.get('deployment-1', '-'), len(cell_run.skipped), '; '.join(failed)))
 
-    lines = ['| Cell | Verdict | Seconds | First deploy (s) | Failed checks |', '|---|---|---|---|---|']
-    lines += [f'| {c} | {v} | {s} | {f} | {x or "-"} |' for c, v, s, f, x in rows]
+    lines = ['| Cell | Verdict | Seconds | First deploy (s) | Skipped checks | Failed checks |', '|---|---|---|---|---|---|']
+    lines += [f'| {c} | {v} | {s} | {f} | {k} | {x or "-"} |' for c, v, s, f, k, x in rows]
     (out / 'summary.md').write_text('\n'.join(lines) + '\n')
     print('\n'.join(lines))
     passed = sum(1 for r in rows if r[1] == 'pass')
     print(f'\n{passed} of {len(rows)} cells pass. Evidence: {out}')
     return 0 if passed == len(rows) else 1
+
+
+def docker(*args, env=None):
+    return subprocess.run(['docker', *args], capture_output=True, text=True, errors='replace', env=None if env is None else {**os.environ, **env})
+
+
+# A password with URL characters, so a fixture must decode the URLs that the env profile encodes.
+LOCAL_PASSWORD = 'pa:ss@w/rd+1'
+LOCAL_SERVERS = {
+    'mysql': {'image': 'mysql', 'port': 3306, 'args': ['-e', 'MYSQL_RANDOM_ROOT_PASSWORD=yes', '-e', 'MYSQL_DATABASE=verify', '-e', 'MYSQL_USER=verify', '-e', f'MYSQL_PASSWORD={LOCAL_PASSWORD}'],
+              'command': [], 'ready': ['mysqladmin', 'ping', '-h', '127.0.0.1', '-u', 'verify', f'-p{LOCAL_PASSWORD}']},
+    'postgres': {'image': 'postgres', 'port': 5432, 'args': ['-e', 'POSTGRES_DB=verify', '-e', 'POSTGRES_USER=verify', '-e', f'POSTGRES_PASSWORD={LOCAL_PASSWORD}'],
+                 'command': [], 'ready': ['pg_isready', '-h', '127.0.0.1', '-U', 'verify']},
+    'valkey': {'image': 'valkey/valkey', 'port': 6379, 'args': [], 'command': ['valkey-server', '--requirepass', LOCAL_PASSWORD],
+               'ready': ['valkey-cli', '--no-auth-warning', '-a', LOCAL_PASSWORD, 'ping']},
+}
+
+
+class LocalRun(CellRun):
+    """
+    Runs one cell in Docker on this computer, after step 2 of a real run: the image from the Dockerfile that the preset of
+    this checkout writes, the datastores of the cell, three runs of the deploy commands, and the web container. Then the
+    same checks as steps 2 and 3. It proves a fixture before a matrix run, and it needs no machine.
+    """
+
+    def __init__(self, cell, out):
+        super().__init__(None, None, cell, out)
+        self.name = f'oc-verify-local-{cell.id}'
+
+    def attachments(self):
+        cell = self.cell
+        sql = {'mysql': [('mysql', 'main')], 'postgres': [('postgres', 'main')], 'mysqlpostgres': [('mysql', 'main'), ('postgres', 'reports')]}.get(cell.db, [])
+        found = [{'kind': kind, 'host': f'{self.name}-{kind}', 'port': LOCAL_SERVERS[kind]['port'], 'database': 'verify', 'username': 'verify',
+                  'password': LOCAL_PASSWORD, 'name': name, 'default': name == 'main'} for kind, name in sql]
+        if cell.cache == 'valkey':
+            found.append({'kind': 'valkey', 'host': f'{self.name}-valkey', 'port': 6379, 'password': LOCAL_PASSWORD})
+        return found
+
+    def drive(self):
+        cell, attachments, build_env = self.cell, self.attachments(), {'VERIFY_BUILD': self.cell.id}
+        with tempfile.TemporaryDirectory(prefix=f'{self.name}-') as work:
+            app = Path(work) / 'app'
+            fixture_tree(cell.fixture_name, cell.fixture, app)
+            planned = subprocess.run(['php', str(SKILL / 'scripts' / 'local-plan.php'), json.dumps({
+                'dashboard': str(ROOT / 'dashboard'), 'dir': str(app), 'type': cell.fixture['type'], 'env_profile': cell.fixture['env_profile'],
+                'port': cell.fixture.get('port'), 'build_env': build_env, 'build_command': cell.fill(cell.pick('build_command')),
+                'attachments': attachments,
+            })], capture_output=True, text=True)
+            if planned.returncode != 0:
+                raise RuntimeError(f'local-plan.php failed: {planned.stdout}{planned.stderr}')
+            plan = json.loads(planned.stdout)
+            build = docker('build', '--progress=plain', '-f', str(app / plan['dockerfile']), '--build-arg', f"OPENCLOUD_BUILD_ENV={plan['build_env_key']}",
+                           '--secret', 'id=VERIFY_BUILD,env=VERIFY_BUILD', '-t', self.name, str(app), env=build_env)
+        self.save('build.log', build.stdout + build.stderr)
+        if not self.check('the image builds with the Dockerfile of the preset', build.returncode == 0, f"{plan['dockerfile']}, see build.log"):
+            print('\n'.join((build.stdout + build.stderr).splitlines()[-30:]))
+            return
+
+        env = {**plan['env'], 'VERIFY_MARKER': f'{cell.id}-v2', **{k: cell.fill(v) for k, v in cell.env(2).items()}, 'VERIFY_SECRET': self.secret}
+        pass_env = [arg for key in env for arg in ('-e', key)]
+        try:
+            docker('network', 'create', self.name)
+            for a in attachments:
+                server = LOCAL_SERVERS[a['kind']]
+                docker('run', '-d', '--name', a['host'], '--network', self.name, *server['args'], f"{server['image']}:{plan['versions'][a['kind']]}", *server['command'])
+            for a in attachments:
+                start = time.time()
+                while docker('exec', a['host'], *LOCAL_SERVERS[a['kind']]['ready']).returncode != 0 and time.time() - start < 180:
+                    time.sleep(2)
+                self.check(f"the local {a['kind']} server answers", time.time() - start < 180, f'after {round(time.time() - start)}s')
+            commands = ' && '.join(cell.fill(c) for c in cell.pick('deploy_commands') or [])
+            for step in (1, 2, 3):
+                deploy = docker('run', '--rm', '--network', self.name, *pass_env, '--entrypoint', 'sh', self.name, '-c', commands, env=env)
+                self.save(f'deployment-{step}.log', deploy.stdout + deploy.stderr)
+                self.check(f'deployment {step} ran the deploy commands', deploy.returncode == 0 and f'deploy-marker-{cell.id}' in deploy.stdout, f'exit {deploy.returncode}')
+            docker('run', '-d', '--name', f'{self.name}-web', '--network', self.name, *pass_env, '-p', f"127.0.0.1::{plan['port']}", self.name, env=env)
+            address = docker('port', f'{self.name}-web', f"{plan['port']}/tcp").stdout.split()
+            if not self.check('the web container publishes its port', address, plan['port']):
+                return
+            self.url = f'http://{address[0]}'
+            self.verify_step(2)
+            self.verify_step(3)
+        finally:
+            logs = docker('logs', f'{self.name}-web')
+            self.save('web.log', logs.stdout + logs.stderr)
+            docker('rm', '-f', f'{self.name}-web', *(a['host'] for a in attachments))
+            docker('network', 'rm', self.name)
+            docker('rmi', self.name)
+
+
+def local(args):
+    out = RUNS / time.strftime('%Y%m%d-%H%M%S-local')
+    verdicts = [LocalRun(Cell(cell_id), out / cell_id).run() for cell_id in cells_for(args.set, args.only)]
+    print(f"\n{verdicts.count('pass')} of {len(verdicts)} cells pass locally. Evidence: {out}")
+    return 0 if verdicts.count('pass') == len(verdicts) else 1
 
 
 def doctor(_args):
@@ -500,9 +604,9 @@ def main():
     fixture_parser = commands.add_parser('fixtures')
     fixture_parser.add_argument('action', choices=['sync', 'check'])
     fixture_parser.set_defaults(func=fixtures)
-    for name, func in (('list', None), ('run', run)):
+    for name, func in (('list', None), ('run', run), ('local', local)):
         sub = commands.add_parser(name)
-        sub.add_argument('--set', default='smoke', choices=['smoke', 'full'], help='smoke is 8 cells that cover each value once; full is all 30')
+        sub.add_argument('--set', default='smoke', choices=['smoke', 'full'], help='smoke covers each value of each fixture at least once; full is every cell')
         sub.add_argument('--only', action='append', default=[], help='keep the cells that match this glob, for example "php-*"')
         sub.set_defaults(func=func or (lambda a: print('\n'.join(cells_for(a.set, a.only))) or 0))
     args = parser.parse_args()

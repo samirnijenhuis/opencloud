@@ -1,0 +1,13 @@
+{
+  "name": "opencloud-verify-node",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
+    "redis": "^6.3.0"
+  }
+}

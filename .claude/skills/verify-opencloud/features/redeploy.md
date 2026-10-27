@@ -27,5 +27,6 @@ Preconditions:
 ## Gotchas
 
 - A SQLite database starts empty after each redeploy. The matrix checks no rows across deploys for SQLite cells.
+- The `site` cell has no database and no runtime env value. Its redeploy proves only that the site goes live again and serves every request.
 - Every request to a verify endpoint with a database writes a row. The row count grows during the third deploy, and that is expected.
 - The traffic check needs at least one request. A deploy that ends in a few seconds still sends about a dozen.

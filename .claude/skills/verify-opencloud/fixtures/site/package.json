@@ -1,0 +1,7 @@
+{
+  "name": "opencloud-verify-site",
+  "private": true,
+  "scripts": {
+    "build": "node build.js"
+  }
+}
