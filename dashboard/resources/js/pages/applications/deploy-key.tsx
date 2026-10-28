@@ -1,9 +1,11 @@
 import HeadingSmall from '@/components/heading-small';
+import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Link, router } from '@inertiajs/react';
+import { Textarea } from '@/components/ui/textarea';
+import { Link, router, useForm } from '@inertiajs/react';
 import { Copy } from 'lucide-react';
-import { useState } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 type Change = 'replace' | 'remove';
 
@@ -36,6 +38,25 @@ export function DeployKey({
     const [copied, setCopied] = useState(false);
     const [confirming, setConfirming] = useState<Change | null>(null);
     const [busy, setBusy] = useState(false);
+    const [pasting, setPasting] = useState(false);
+    const ownKey = useForm({ deploy_private_key: '' });
+
+    const closeOwnKey = () => {
+        ownKey.reset();
+        ownKey.clearErrors();
+        setPasting(false);
+    };
+
+    const saveOwnKey: FormEventHandler = (e) => {
+        e.preventDefault();
+        ownKey.post(route('applications.deploy-key.store', applicationId), { preserveScroll: true, onSuccess: closeOwnKey });
+    };
+
+    const ownKeyButton = !pasting && (
+        <Button variant="secondary" size="sm" disabled={busy} onClick={() => setPasting(true)}>
+            Use my own key
+        </Button>
+    );
 
     const send = (change: 'add' | Change) =>
         router.visit(route(change === 'remove' ? 'applications.deploy-key.destroy' : 'applications.deploy-key.store', applicationId), {
@@ -63,9 +84,12 @@ export function DeployKey({
                     <>
                         <p className="text-sm">A public repository needs no key. A private repository can use a deploy key or the GitHub App.</p>
                         {canUpdate && (
-                            <Button size="sm" disabled={busy} onClick={() => send('add')}>
-                                Add deploy key
-                            </Button>
+                            <div className="flex flex-wrap gap-2">
+                                <Button size="sm" disabled={busy} onClick={() => send('add')}>
+                                    Add deploy key
+                                </Button>
+                                {ownKeyButton}
+                            </div>
                         )}
                     </>
                 )}
@@ -103,12 +127,41 @@ export function DeployKey({
                                 <Button variant="secondary" size="sm" disabled={busy} onClick={() => setConfirming('replace')}>
                                     New key
                                 </Button>
+                                {ownKeyButton}
                                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming('remove')}>
                                     Remove
                                 </Button>
                             </div>
                         )}
                     </>
+                )}
+
+                {canUpdate && pasting && (
+                    <form onSubmit={saveOwnKey} className="space-y-2">
+                        <Textarea
+                            aria-label="Private key"
+                            className="font-mono text-xs"
+                            rows={6}
+                            placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                            autoComplete="off"
+                            spellCheck={false}
+                            value={ownKey.data.deploy_private_key}
+                            onChange={(e) => ownKey.setData('deploy_private_key', e.target.value)}
+                        />
+                        <p className="text-muted-foreground text-sm">
+                            Paste the private key file, for example ~/.ssh/id_ed25519. The key must not have a passphrase.
+                            {publicKey !== null && ' It replaces the current key at once.'} The page never shows the key again.
+                        </p>
+                        <InputError message={ownKey.errors.deploy_private_key} />
+                        <div className="flex gap-2">
+                            <Button size="sm" disabled={ownKey.processing || ownKey.data.deploy_private_key.trim() === ''}>
+                                Save
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={closeOwnKey}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </form>
                 )}
             </div>
 

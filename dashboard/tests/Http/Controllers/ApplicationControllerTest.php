@@ -196,6 +196,7 @@ class ApplicationControllerTest extends TestCase
                 'port' => null,
                 'branch' => 'main',
                 'deploy_key' => false,
+                'deploy_private_key' => null,
                 'env' => [
                     ['key' => 'APP_ENV', 'value' => 'production', 'is_secret' => false, 'available_at' => 'runtime'],
                     ['key' => 'STRIPE_SECRET', 'value' => 'sk_live_1', 'is_secret' => true, 'available_at' => 'runtime'],
@@ -237,6 +238,52 @@ class ApplicationControllerTest extends TestCase
         $this->actingAs(User::factory()->admin()->create())
             ->post('/applications', $this->validForm(['branch' => '', 'deploy_key' => true]))
             ->assertRedirect("/applications/{$created->id}");
+    }
+
+    public function test_an_own_key_reaches_create_application_and_opens_the_environment_page_of_the_first_deployment(): void
+    {
+        $production = $this->makeEnvironment();
+
+        $this->mock(CreateApplication::class)
+            ->shouldReceive('execute')
+            ->once()
+            ->withArgs(fn (User $by, array $data) => [$data['deploy_key'], $data['deploy_private_key']] === [false, trim(FakeProcesses::PRIVATE_KEY)])
+            ->andReturn($production->application);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post('/applications', $this->validForm(['deploy_private_key' => FakeProcesses::PRIVATE_KEY]))
+            ->assertRedirect("/environments/{$production->id}");
+    }
+
+    public function test_the_create_form_refuses_a_new_key_and_an_own_key_together(): void
+    {
+        $this->mock(CreateApplication::class)->shouldNotReceive('execute');
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post('/applications', $this->validForm(['deploy_key' => true, 'deploy_private_key' => FakeProcesses::PRIVATE_KEY]))
+            ->assertSessionHasErrors(['deploy_private_key' => 'Choose a new key or your own key. Do not choose both.']);
+    }
+
+    /** A bad key fails in CreateApplication, and a refused key fails in the controller. Each path keeps the other input and drops the key. */
+    public function test_a_bad_or_refused_own_key_comes_back_on_the_key_field_creates_nothing_and_never_reaches_the_session(): void
+    {
+        Queue::fake();
+        $processes = FakeProcesses::install();
+        $this->actingAs(User::factory()->owner()->create())->from('/applications/create');
+
+        $this->post('/applications', $this->validForm(['deploy_private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nsecret-key-text\n-----END OPENSSH PRIVATE KEY-----"]))
+            ->assertRedirect('/applications/create')
+            ->assertSessionHasErrors(['deploy_private_key' => 'Paste an OpenSSH private key without a passphrase.']);
+        $this->assertSame(['acme/shop', null], [session()->getOldInput('repository'), session()->getOldInput('deploy_private_key')]);
+
+        $processes->lsRemoteError = "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n";
+        $this->post('/applications', $this->validForm(['deploy_private_key' => FakeProcesses::PRIVATE_KEY]))
+            ->assertRedirect('/applications/create')
+            ->assertSessionHasErrors(['deploy_private_key' => 'GitHub refused the deploy key. Add the public key to the repository under Settings, Deploy keys.']);
+        $this->assertSame(['https://github.com/acme/shop.git', null], [session()->getOldInput('repository'), session()->getOldInput('deploy_private_key')]);
+
+        $this->assertSame([0, 0], [Application::count(), AuditEvent::count()]);
+        Queue::assertNothingPushed();
     }
 
     public function test_the_create_form_keeps_a_build_command_with_several_lines_and_drops_comment_and_empty_lines(): void

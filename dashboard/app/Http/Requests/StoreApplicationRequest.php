@@ -86,6 +86,7 @@ class StoreApplicationRequest extends FormRequest
             'name' => ['nullable', 'string', 'max:100'],
             'branch' => ['nullable', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
             'deploy_key' => ['boolean'],
+            'deploy_private_key' => ['nullable', 'string', 'max:16384', 'prohibited_if_accepted:deploy_key'],
             'cluster_id' => ['required', 'integer', 'exists:clusters,id'],
             'type' => ['required', Rule::enum(ApplicationType::class)],
             'port' => ['nullable', 'integer', 'between:1,65535'],
@@ -114,6 +115,7 @@ class StoreApplicationRequest extends FormRequest
     {
         return [
             'repository.regex' => 'Use owner/repo, git@github.com:owner/repo.git, or a full https address.',
+            'deploy_private_key.prohibited_if_accepted' => 'Choose a new key or your own key. Do not choose both.',
             'env.*.key.regex' => 'Use letters, digits, and underscores. Do not start with a digit.',
             'domain.regex' => 'Enter a host name like shop.example.com.',
             'domain.unique' => 'This domain is already in use.',

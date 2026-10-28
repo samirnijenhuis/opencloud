@@ -48,7 +48,7 @@ This file lists behavior that you cannot see at the call site. Check it before y
 
 - `routes/webhooks.php` loads as the `api` group with an empty prefix (`bootstrap/app.php:13-14`). Its routes have no session, no cookies, and no CSRF check. A webhook route in `routes/web.php` gets a 419.
 - `trustProxies(at: '*')` trusts the forwarded scheme, host, and client address from each sender (`bootstrap/app.php:20`). `$request->ip()` returns the forwarded address.
-- `dontFlash(['kubeconfig', 'registry_password'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`).
+- `dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`). A hand-written `back()->withInput()` flashes every field, so `ApplicationController::store()` leaves out `deploy_private_key` itself.
 - `HandleInertiaRequests::share()` sends each page `auth.user`, three `can` flags, and, for a signed-in user, the version and the newer release for the owner (`app/Http/Middleware/HandleInertiaRequests.php:40-62`). `auth.user` is the whole `User` model without its `$hidden` fields.
 - `GitHubWebhookController` stores each `X-GitHub-Delivery` id for one day with `Cache::add()` (`app/Http/Controllers/GitHubWebhookController.php:30-34`). A repeated id answers 200 and queues nothing.
 

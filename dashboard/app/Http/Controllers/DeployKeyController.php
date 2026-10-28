@@ -12,7 +12,7 @@ class DeployKeyController extends Controller
 {
     public function store(DeployKeyRequest $request, Application $application, AddDeployKey $addDeployKey): RedirectResponse
     {
-        $addDeployKey->execute($application, $request->user());
+        $addDeployKey->execute($application, $request->user(), $request->validated('deploy_private_key'));
 
         return back();
     }

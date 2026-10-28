@@ -6,6 +6,7 @@ use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Builds\Git;
+use App\Domains\Builds\SshKeygen;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Deployments\Actions\StartDeployment;
@@ -30,6 +31,7 @@ class CreateApplication
         private AddProcess $addProcess,
         private DefaultDomain $defaultDomain,
         private AddDeployKey $addDeployKey,
+        private SshKeygen $sshKeygen,
     ) {}
 
     /**
@@ -37,6 +39,7 @@ class CreateApplication
      * the processes, the database, the domains, and the free sslip.io domain. Then it starts the first deployment of production.
      * Each value that `$data` leaves out comes from the preset in `type`.
      * With `deploy_key`, it makes the deploy key and starts no deployment, because GitHub does not know the new key yet.
+     * With `deploy_private_key`, it reads the repository with that key and deploys, because GitHub can already know the key.
      *
      * @param array{
      *     name: string,
@@ -46,6 +49,7 @@ class CreateApplication
      *     port?: int|null,
      *     branch?: string,
      *     deploy_key?: bool,
+     *     deploy_private_key?: string|null,
      *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
      *     domains?: list<string>,
      *     database?: 'mysql'|'postgres'|'none',
@@ -61,14 +65,16 @@ class CreateApplication
         $database = $data['database'] ?? $type->database();
         $processes = $data['processes'] ?? $type->processes();
         $deployKey = $data['deploy_key'] ?? false;
+        // A bad own key fails here with its own message. Git would only report that GitHub refused the key.
+        $ownKey = isset($data['deploy_private_key']) ? $this->sshKeygen->keyPairOf($data['deploy_private_key'])['private'] : null;
 
         // A wrong repository or branch fails here, before any record exists. A new deploy key cannot read the
         // repository until the user adds it on GitHub, so that path makes no remote call and takes main as the default branch.
-        $draft = new Application(['repository' => $data['repository']]);
+        $draft = new Application(['repository' => $data['repository'], 'deploy_private_key' => $ownKey]);
         $branch = ($data['branch'] ?? null) ?: ($deployKey ? 'main' : Git::defaultBranch($draft));
         $commitSha = $deployKey ? null : Git::head($draft, $branch);
 
-        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database, $processes, $deployKey) {
+        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database, $processes, $deployKey, $ownKey) {
             $application = Application::create([
                 'name' => $data['name'],
                 'repository' => $data['repository'],
@@ -102,8 +108,8 @@ class CreateApplication
 
             AuditEvent::record($by, 'application.created', $application, ['repository' => $application->repository, 'type' => $type->value]);
 
-            if ($deployKey) {
-                $this->addDeployKey->execute($application, $by);
+            if ($deployKey || $ownKey !== null) {
+                $this->addDeployKey->execute($application, $by, $ownKey);
             }
 
             // A new process takes the size and the CPU target of web, with one instance. A scheduled process drops the instances.

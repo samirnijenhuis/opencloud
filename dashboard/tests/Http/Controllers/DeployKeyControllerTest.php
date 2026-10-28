@@ -6,6 +6,7 @@ use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
 
@@ -36,9 +37,46 @@ class DeployKeyControllerTest extends TestCase
         $application->refresh();
         $this->assertSame([FakeProcesses::PRIVATE_KEY, FakeProcesses::PUBLIC_KEY.' opencloud shop'], [$application->deploy_private_key, $application->deploy_public_key]);
         $this->assertSame(
-            [['application.deploy_key_added', $application->id, []], ['application.deploy_key_added', $application->id, []]],
+            [['application.deploy_key_added', $application->id, ['source' => 'new']], ['application.deploy_key_added', $application->id, ['source' => 'new']]],
             AuditEvent::query()->orderBy('id')->get()->map(fn (AuditEvent $event) => [$event->action, $event->subject_id, $event->context])->all(),
         );
+    }
+
+    public function test_an_admin_uses_an_own_key_in_place_of_the_old_key_and_the_page_shows_only_its_public_key(): void
+    {
+        $processes = FakeProcesses::install();
+        $application = Application::factory()->create(['deploy_private_key' => self::OLD_PRIVATE_KEY, 'deploy_public_key' => self::OLD_PUBLIC_KEY]);
+
+        // The form field arrives without its last newline, because Laravel trims each string.
+        $this->actingAs(User::factory()->admin()->create())->from("/applications/{$application->id}")
+            ->post("/applications/{$application->id}/deploy-key", ['deploy_private_key' => trim(FakeProcesses::PRIVATE_KEY)])
+            ->assertRedirect("/applications/{$application->id}")
+            ->assertSessionHasNoErrors();
+
+        $application->refresh();
+        $this->assertSame([FakeProcesses::PRIVATE_KEY, FakeProcesses::PUBLIC_KEY.' me@example.com'], [$application->deploy_private_key, $application->deploy_public_key]);
+        $this->assertSame([['ssh-keygen', '-y', '-P', '', '-f']], array_map(fn (array $command) => array_slice($command, 0, -1), $processes->commands()));
+        $this->assertSame(['application.deploy_key_added', ['source' => 'own']], [AuditEvent::sole()->action, AuditEvent::sole()->context]);
+        $this->get("/applications/{$application->id}")
+            ->assertDontSee('fake-private-key')
+            ->assertInertia(fn (Assert $page) => $page->where('deployPublicKey', FakeProcesses::PUBLIC_KEY.' me@example.com'));
+    }
+
+    public function test_a_key_that_ssh_keygen_cannot_read_gives_the_message_keeps_the_old_key_and_never_reaches_the_session(): void
+    {
+        FakeProcesses::install();
+        $application = Application::factory()->create(['deploy_private_key' => self::OLD_PRIVATE_KEY, 'deploy_public_key' => self::OLD_PUBLIC_KEY]);
+
+        $this->actingAs(User::factory()->admin()->create())->from("/applications/{$application->id}")
+            ->post("/applications/{$application->id}/deploy-key", ['deploy_private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nsecret-key-text\n-----END OPENSSH PRIVATE KEY-----", 'note' => 'kept'])
+            ->assertRedirect("/applications/{$application->id}")
+            ->assertSessionHasErrors(['deploy_private_key' => 'Paste an OpenSSH private key without a passphrase.']);
+
+        $application->refresh();
+        $this->assertSame([self::OLD_PRIVATE_KEY, self::OLD_PUBLIC_KEY], [$application->deploy_private_key, $application->deploy_public_key]);
+        $this->assertSame(0, AuditEvent::query()->count());
+        $this->assertSame(['kept', null], [session()->getOldInput('note'), session()->getOldInput('deploy_private_key')]);
+        $this->get("/applications/{$application->id}")->assertDontSee('secret-key-text');
     }
 
     public function test_an_owner_removes_the_deploy_key(): void
@@ -56,12 +94,13 @@ class DeployKeyControllerTest extends TestCase
         $this->assertSame([], $processes->commands());
     }
 
-    public function test_a_developer_can_neither_add_nor_remove_the_deploy_key(): void
+    public function test_a_developer_can_neither_add_nor_use_nor_remove_the_deploy_key(): void
     {
         $processes = FakeProcesses::install();
         $application = Application::factory()->create(['deploy_private_key' => self::OLD_PRIVATE_KEY, 'deploy_public_key' => self::OLD_PUBLIC_KEY]);
 
         $this->actingAs(User::factory()->create())->post("/applications/{$application->id}/deploy-key")->assertForbidden();
+        $this->post("/applications/{$application->id}/deploy-key", ['deploy_private_key' => FakeProcesses::PRIVATE_KEY])->assertForbidden();
         $this->delete("/applications/{$application->id}/deploy-key")->assertForbidden();
 
         $application->refresh();

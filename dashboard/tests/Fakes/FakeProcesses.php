@@ -8,13 +8,16 @@ use Illuminate\Support\Facades\Process;
 
 /**
  * Stands in for git, buildctl, crane, and ssh-keygen. A fake checkout writes $repository into the build folder.
- * A fake ssh-keygen writes PRIVATE_KEY and PUBLIC_KEY with the comment of the call.
+ * A fake ssh-keygen writes PRIVATE_KEY and PUBLIC_KEY with the comment of the call. A fake ssh-keygen -y reads
+ * PUBLIC_KEY with the comment OWN_COMMENT from PRIVATE_KEY, and it refuses each other key as ssh-keygen does.
  */
 final class FakeProcesses
 {
     public const PRIVATE_KEY = "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-private-key\n-----END OPENSSH PRIVATE KEY-----\n";
 
     public const PUBLIC_KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakePublicKey';
+
+    public const OWN_COMMENT = 'me@example.com';
 
     /** @var list<array{command: list<string>, path: ?string, env: array<string, string>}> */
     public array $ran = [];
@@ -30,6 +33,9 @@ final class FakeProcesses
     public string $lsRemote = '';
 
     public string $symref = "ref: refs/heads/main\tHEAD\n";
+
+    /** When set, each git ls-remote fails with this error output. */
+    public ?string $lsRemoteError = null;
 
     /** @var list<string> the Dockerfile text that each build saw */
     public array $dockerfiles = [];
@@ -78,6 +84,10 @@ final class FakeProcesses
             }
         }
 
+        if ($command[0] === 'git' && $command[1] === 'ls-remote' && $this->lsRemoteError !== null) {
+            return Process::result(errorOutput: $this->lsRemoteError, exitCode: 128);
+        }
+
         if ($command[0] === 'git' && $command[1] === 'ls-remote' && $command[2] === '--symref') {
             return Process::result($this->symref);
         }
@@ -92,6 +102,14 @@ final class FakeProcesses
             $this->dockerignores[] = is_file("{$process->path}/{$filename}.dockerignore") ? file_get_contents("{$process->path}/{$filename}.dockerignore") : null;
 
             return (new FakeProcessDescription)->output($this->buildOutput)->exitCode($this->buildExitCode);
+        }
+
+        if ($command[0] === 'ssh-keygen' && in_array('-y', $command, true)) {
+            $path = $command[array_search('-f', $command, true) + 1];
+
+            return file_get_contents($path) === self::PRIVATE_KEY
+                ? Process::result(self::PUBLIC_KEY.' '.self::OWN_COMMENT."\n")
+                : Process::result(errorOutput: "Load key \"{$path}\": invalid format\n", exitCode: 255);
         }
 
         if ($command[0] === 'ssh-keygen') {
