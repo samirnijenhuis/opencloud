@@ -10,6 +10,7 @@ import AppLayout from '@/layouts/app-layout';
 import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
+import { DeployKey } from './deploy-key';
 
 type EnvironmentRow = {
     id: number;
@@ -36,6 +37,7 @@ type Props = {
     application: { id: number; name: string; repository: string; type: ApplicationType; port: number };
     environments: EnvironmentRow[];
     previews: PreviewSettings;
+    deployPublicKey: string | null;
     canUpdate: boolean;
 };
 
@@ -108,7 +110,7 @@ function PreviewsForm({ application, previews, canUpdate }: { application: Props
     );
 }
 
-export default function ApplicationShow({ application, environments, previews, canUpdate }: Props) {
+export default function ApplicationShow({ application, environments, previews, deployPublicKey, canUpdate }: Props) {
     return (
         <AppLayout
             breadcrumbs={[
@@ -155,6 +157,14 @@ export default function ApplicationShow({ application, environments, previews, c
                         </li>
                     ))}
                 </ul>
+
+                {/* The controller sorts production first. */}
+                <DeployKey
+                    applicationId={application.id}
+                    publicKey={deployPublicKey}
+                    settingsUrl={`${route('environments.settings', environments[0].id)}#deployments`}
+                    canUpdate={canUpdate}
+                />
 
                 <div className="space-y-4">
                     <HeadingSmall

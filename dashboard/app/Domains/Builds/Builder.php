@@ -55,7 +55,7 @@ final class Builder
         try {
             $log->step(DeploymentStep::PREPARING_BUILD);
             $log->write("Cloning {$application->repository} at {$deployment->commit_sha}.");
-            Git::checkout($application->cloneUrl(), $deployment->commit_sha, $dir);
+            Git::checkout($application, $deployment->commit_sha, $dir);
 
             $buildEnv = EnvironmentVariables::build($environment);
             $dockerfile = $this->prepare($application->type, $dir, array_keys($buildEnv), $environment->build_command);

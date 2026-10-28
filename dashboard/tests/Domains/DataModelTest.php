@@ -76,6 +76,7 @@ class DataModelTest extends TestCase
     public static function encryptedFields(): array
     {
         return [
+            'application deploy key' => [Application::class, 'deploy_private_key', 'openssh-private-key-text'],
             'github app private key' => [GithubApp::class, 'private_key', 'pem-private-key-text'],
             'github app webhook secret' => [GithubApp::class, 'webhook_secret', 'webhook-secret-text'],
             'provider token' => [ProviderCredential::class, 'token', 'dop_v1_provider-token'],

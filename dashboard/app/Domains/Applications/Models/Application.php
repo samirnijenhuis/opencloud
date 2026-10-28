@@ -22,7 +22,9 @@ class Application extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'allow_forks', 'preview_domain'];
+    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'allow_forks', 'preview_domain', 'deploy_private_key', 'deploy_public_key'];
+
+    protected $hidden = ['deploy_private_key'];
 
     protected $attributes = [
         'port' => 8080,
@@ -37,6 +39,7 @@ class Application extends Model
             'port' => 'integer',
             'previews_enabled' => 'boolean',
             'allow_forks' => 'boolean',
+            'deploy_private_key' => 'encrypted',
         ];
     }
 

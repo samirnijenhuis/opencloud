@@ -1,0 +1,135 @@
+import HeadingSmall from '@/components/heading-small';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Link, router } from '@inertiajs/react';
+import { Copy } from 'lucide-react';
+import { useState } from 'react';
+
+type Change = 'replace' | 'remove';
+
+const confirmations: Record<Change, { title: string; description: string; button: string }> = {
+    replace: {
+        title: 'Make a new deploy key?',
+        description:
+            'Opencloud uses the new key at once, and GitHub refuses it until you add it. Add the new key on GitHub, and delete the old key there.',
+        button: 'Make a new key',
+    },
+    remove: {
+        title: 'Remove the deploy key?',
+        description:
+            'Opencloud then reads the repository without a key. A private repository then needs the GitHub App. Delete the key on GitHub too.',
+        button: 'Remove',
+    },
+};
+
+export function DeployKey({
+    applicationId,
+    publicKey,
+    settingsUrl,
+    canUpdate,
+}: {
+    applicationId: number;
+    publicKey: string | null;
+    settingsUrl: string;
+    canUpdate: boolean;
+}) {
+    const [copied, setCopied] = useState(false);
+    const [confirming, setConfirming] = useState<Change | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const send = (change: 'add' | Change) =>
+        router.visit(route(change === 'remove' ? 'applications.deploy-key.destroy' : 'applications.deploy-key.store', applicationId), {
+            method: change === 'remove' ? 'delete' : 'post',
+            preserveScroll: true,
+            onStart: () => setBusy(true),
+            onFinish: () => {
+                setBusy(false);
+                setConfirming(null);
+            },
+        });
+
+    const copy = async (text: string) => {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="space-y-4">
+            <HeadingSmall title="Deploy key" description="A deploy key lets opencloud read a private repository on GitHub. The key can only read." />
+
+            <div className="space-y-3 rounded-lg border p-4">
+                {publicKey === null && (
+                    <>
+                        <p className="text-sm">A public repository needs no key. A private repository can use a deploy key or the GitHub App.</p>
+                        {canUpdate && (
+                            <Button size="sm" disabled={busy} onClick={() => send('add')}>
+                                Add deploy key
+                            </Button>
+                        )}
+                    </>
+                )}
+
+                {publicKey !== null && (
+                    <>
+                        <div className="flex items-center gap-1 rounded-md border">
+                            <code className="min-w-0 flex-1 truncate px-3 py-2 font-mono text-xs" title={publicKey}>
+                                {publicKey}
+                            </code>
+                            <Button variant="ghost" size="icon" aria-label="Copy the public key" onClick={() => copy(publicKey)}>
+                                <Copy />
+                            </Button>
+                        </div>
+                        {copied && <p className="text-muted-foreground text-xs">Copied.</p>}
+
+                        <ol className="list-decimal space-y-1 pl-5 text-sm">
+                            <li>Open the repository on GitHub.</li>
+                            <li>Go to Settings, then Deploy keys, and select Add deploy key.</li>
+                            <li>Paste the key.</li>
+                            <li>Keep Allow write access off.</li>
+                            <li>Deploy an environment from its page.</li>
+                        </ol>
+
+                        <p className="text-muted-foreground text-sm">
+                            A push can deploy through the deploy hook of an environment. Turn on the deploy hook in the{' '}
+                            <Link href={settingsUrl} className="text-foreground font-medium hover:underline">
+                                environment settings
+                            </Link>
+                            . Then add its URL on GitHub as a webhook, under Settings, Webhooks.
+                        </p>
+
+                        {canUpdate && (
+                            <div className="flex flex-wrap gap-2">
+                                <Button variant="secondary" size="sm" disabled={busy} onClick={() => setConfirming('replace')}>
+                                    New key
+                                </Button>
+                                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming('remove')}>
+                                    Remove
+                                </Button>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+                {confirming && (
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{confirmations[confirming].title}</DialogTitle>
+                            <DialogDescription>{confirmations[confirming].description}</DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="secondary" onClick={() => setConfirming(null)}>
+                                Cancel
+                            </Button>
+                            <Button variant="destructive" disabled={busy} onClick={() => send(confirming)}>
+                                {confirmations[confirming].button}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                )}
+            </Dialog>
+        </div>
+    );
+}

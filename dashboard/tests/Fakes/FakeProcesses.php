@@ -7,10 +7,15 @@ use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Stands in for git, buildctl, and crane. A fake checkout writes $repository into the build folder.
+ * Stands in for git, buildctl, crane, and ssh-keygen. A fake checkout writes $repository into the build folder.
+ * A fake ssh-keygen writes PRIVATE_KEY and PUBLIC_KEY with the comment of the call.
  */
 final class FakeProcesses
 {
+    public const PRIVATE_KEY = "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-private-key\n-----END OPENSSH PRIVATE KEY-----\n";
+
+    public const PUBLIC_KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakePublicKey';
+
     /** @var list<array{command: list<string>, path: ?string, env: array<string, string>}> */
     public array $ran = [];
 
@@ -87,6 +92,12 @@ final class FakeProcesses
             $this->dockerignores[] = is_file("{$process->path}/{$filename}.dockerignore") ? file_get_contents("{$process->path}/{$filename}.dockerignore") : null;
 
             return (new FakeProcessDescription)->output($this->buildOutput)->exitCode($this->buildExitCode);
+        }
+
+        if ($command[0] === 'ssh-keygen') {
+            $path = $command[array_search('-f', $command, true) + 1];
+            file_put_contents($path, self::PRIVATE_KEY);
+            file_put_contents("{$path}.pub", self::PUBLIC_KEY.' '.$command[array_search('-C', $command, true) + 1]."\n");
         }
 
         if ($command[0] === 'crane') {

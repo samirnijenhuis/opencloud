@@ -29,12 +29,14 @@ class CreateApplication
         private AttachDatastore $attachDatastore,
         private AddProcess $addProcess,
         private DefaultDomain $defaultDomain,
+        private AddDeployKey $addDeployKey,
     ) {}
 
     /**
      * Creates the application, its protected production environment, the preview template, the env values,
      * the processes, the database, the domains, and the free sslip.io domain. Then it starts the first deployment of production.
      * Each value that `$data` leaves out comes from the preset in `type`.
+     * With `deploy_key`, it makes the deploy key and starts no deployment, because GitHub does not know the new key yet.
      *
      * @param array{
      *     name: string,
@@ -43,6 +45,7 @@ class CreateApplication
      *     type?: ApplicationType|string,
      *     port?: int|null,
      *     branch?: string,
+     *     deploy_key?: bool,
      *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
      *     domains?: list<string>,
      *     database?: 'mysql'|'postgres'|'none',
@@ -57,13 +60,15 @@ class CreateApplication
         $env = $data['env'] ?? [];
         $database = $data['database'] ?? $type->database();
         $processes = $data['processes'] ?? $type->processes();
+        $deployKey = $data['deploy_key'] ?? false;
 
-        // A wrong repository or branch fails here, before any record exists.
-        $cloneUrl = (new Application(['repository' => $data['repository']]))->cloneUrl();
-        $branch = ($data['branch'] ?? null) ?: Git::defaultBranch($cloneUrl);
-        $commitSha = Git::head($cloneUrl, $branch);
+        // A wrong repository or branch fails here, before any record exists. A new deploy key cannot read the
+        // repository until the user adds it on GitHub, so that path makes no remote call and takes main as the default branch.
+        $draft = new Application(['repository' => $data['repository']]);
+        $branch = ($data['branch'] ?? null) ?: ($deployKey ? 'main' : Git::defaultBranch($draft));
+        $commitSha = $deployKey ? null : Git::head($draft, $branch);
 
-        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database, $processes) {
+        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database, $processes, $deployKey) {
             $application = Application::create([
                 'name' => $data['name'],
                 'repository' => $data['repository'],
@@ -96,6 +101,10 @@ class CreateApplication
             ]);
 
             AuditEvent::record($by, 'application.created', $application, ['repository' => $application->repository, 'type' => $type->value]);
+
+            if ($deployKey) {
+                $this->addDeployKey->execute($application, $by);
+            }
 
             // A new process takes the size and the CPU target of web, with one instance. A scheduled process drops the instances.
             foreach ($processes as $process) {
@@ -137,7 +146,9 @@ class CreateApplication
             return [$application, $production];
         });
 
-        $this->startDeployment->execute($production, $by, $commitSha);
+        if (! $deployKey) {
+            $this->startDeployment->execute($production, $by, $commitSha);
+        }
 
         return $application;
     }

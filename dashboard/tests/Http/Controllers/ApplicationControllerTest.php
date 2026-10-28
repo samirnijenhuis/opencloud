@@ -195,6 +195,7 @@ class ApplicationControllerTest extends TestCase
                 'type' => ApplicationType::LARAVEL,
                 'port' => null,
                 'branch' => 'main',
+                'deploy_key' => false,
                 'env' => [
                     ['key' => 'APP_ENV', 'value' => 'production', 'is_secret' => false, 'available_at' => 'runtime'],
                     ['key' => 'STRIPE_SECRET', 'value' => 'sk_live_1', 'is_secret' => true, 'available_at' => 'runtime'],
@@ -221,6 +222,21 @@ class ApplicationControllerTest extends TestCase
             'domain' => 'Shop.Example.com',
             'database' => 'postgres',
         ]))->assertRedirect("/environments/{$production->id}");
+    }
+
+    public function test_the_deploy_key_choice_reaches_create_application_and_opens_the_application_page(): void
+    {
+        $created = Application::factory()->for($this->makeCluster())->create();
+
+        $this->mock(CreateApplication::class)
+            ->shouldReceive('execute')
+            ->once()
+            ->withArgs(fn (User $by, array $data) => [$data['deploy_key'], $data['branch']] === [true, null])
+            ->andReturn($created);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post('/applications', $this->validForm(['branch' => '', 'deploy_key' => true]))
+            ->assertRedirect("/applications/{$created->id}");
     }
 
     public function test_the_create_form_keeps_a_build_command_with_several_lines_and_drops_comment_and_empty_lines(): void
@@ -404,7 +420,7 @@ class ApplicationControllerTest extends TestCase
 
         $cases = [
             'repository' => [['repository' => ''], 'repository'],
-            'a repository that is not owner/repo or https' => [['repository' => 'git@github.com:acme/shop.git'], 'repository'],
+            'a repository that is not owner/repo, a github.com SSH address, or https' => [['repository' => 'git@gitlab.com:acme/shop.git'], 'repository'],
             'an unknown cluster' => [['cluster_id' => 999], 'cluster_id'],
             'an unknown preset' => [['type' => 'rails'], 'type'],
             'a port above 65535' => [['type' => 'dockerfile', 'port' => 65536], 'port'],
@@ -477,5 +493,19 @@ class ApplicationControllerTest extends TestCase
                 ->where('environments.1.name', 'staging')
                 ->where('environments.2.name', 'pr-7')
                 ->where('environments.2.pr_number', 7));
+    }
+
+    public function test_the_application_page_shows_the_public_key_of_the_deploy_key_to_a_developer_and_never_the_private_key(): void
+    {
+        $application = $this->makeEnvironment()->application;
+        $application->update(['deploy_private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nsecret-key-text\n-----END OPENSSH PRIVATE KEY-----\n", 'deploy_public_key' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKey opencloud shop']);
+
+        $this->actingAs(User::factory()->create())->get("/applications/{$application->id}")
+            ->assertOk()
+            ->assertDontSee('secret-key-text')
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('applications/show')
+                ->where('deployPublicKey', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKey opencloud shop')
+                ->where('canUpdate', false));
     }
 }

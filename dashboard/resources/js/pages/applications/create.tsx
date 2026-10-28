@@ -21,6 +21,7 @@ type Database = 'mysql' | 'postgres' | 'none';
 type FormData = {
     repository: string;
     branch: string;
+    deploy_key: boolean;
     cluster_id: string;
     type: ApplicationType;
     port: string;
@@ -73,6 +74,7 @@ export default function ApplicationCreate({
     const form = useForm<FormData>({
         repository: '',
         branch: '',
+        deploy_key: false,
         cluster_id: defaultClusterId ? String(defaultClusterId) : '',
         size: 's',
         min_instances: 1,
@@ -145,7 +147,7 @@ export default function ApplicationCreate({
                 <p className="text-muted-foreground mt-1 text-sm">A repository is enough. Every other field has a default that works.</p>
 
                 <div className="mt-4">
-                    <Row label="Repository" hint="owner/repo, or a full https address">
+                    <Row label="Repository" hint="owner/repo, git@github.com:owner/repo.git, or a full https address">
                         <div className="flex gap-2">
                             <Input
                                 aria-label="Repository"
@@ -158,13 +160,23 @@ export default function ApplicationCreate({
                             <Input
                                 aria-label="Branch"
                                 className="w-32"
-                                placeholder="default branch"
+                                placeholder={data.deploy_key ? 'main' : 'default branch'}
                                 value={data.branch}
                                 onChange={(e) => setData('branch', e.target.value)}
                             />
                         </div>
                         <InputError message={errors.repository} />
                         <InputError message={errors.branch} />
+                        <Label className="flex items-center gap-2 font-normal">
+                            <Checkbox checked={data.deploy_key} onCheckedChange={(checked) => setData('deploy_key', checked === true)} />
+                            Private repository: use a deploy key
+                        </Label>
+                        {data.deploy_key && (
+                            <p className="text-muted-foreground text-sm">
+                                Opencloud makes a deploy key and does not deploy yet. The application page then shows the key and the steps to add it
+                                on GitHub. Without a branch, opencloud uses main.
+                            </p>
+                        )}
                     </Row>
 
                     <Row label="Cluster">
@@ -423,7 +435,9 @@ export default function ApplicationCreate({
                 </div>
 
                 <div className="mt-6 flex items-center gap-3">
-                    <Button disabled={processing || data.repository.trim() === ''}>{processing ? 'Creating' : 'Create and deploy'}</Button>
+                    <Button disabled={processing || data.repository.trim() === ''}>
+                        {processing ? 'Creating' : data.deploy_key ? 'Create' : 'Create and deploy'}
+                    </Button>
                     <Button variant="ghost" asChild>
                         <Link href={route('applications.index')}>Cancel</Link>
                     </Button>

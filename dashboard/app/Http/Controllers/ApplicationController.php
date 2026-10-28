@@ -95,6 +95,7 @@ class ApplicationController extends Controller
                 'type' => ApplicationType::from($data['type']),
                 'port' => $data['port'] ?? null,
                 'branch' => $data['branch'] ?? null,
+                'deploy_key' => $request->boolean('deploy_key'),
                 'env' => array_map(fn (array $row) => [
                     'key' => $row['key'],
                     'value' => $row['value'] ?? '',
@@ -120,6 +121,11 @@ class ApplicationController extends Controller
             ]);
         } catch (RuntimeException) {
             return back()->withInput()->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
+        }
+
+        // No deployment runs yet, so the user goes to the page that shows the key and the steps to add it on GitHub.
+        if ($request->boolean('deploy_key')) {
+            return to_route('applications.show', $application);
         }
 
         $production = $application->environments()->where('name', 'production')->firstOrFail();
@@ -159,6 +165,7 @@ class ApplicationController extends Controller
                 'max_previews' => config('opencloud.max_previews'),
                 'template_id' => $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->value('id'),
             ],
+            'deployPublicKey' => $application->deploy_public_key,
             'canUpdate' => $request->user()->can('update', $application),
             'environments' => $environments
                 ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::PERMANENT ? 1 : 2), $environment->name])
