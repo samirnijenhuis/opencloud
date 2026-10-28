@@ -183,6 +183,53 @@ class EnvVarControllerTest extends TestCase
         $this->actingAs($admin)->delete("/env-vars/{$envVar->id}")->assertRedirect();
     }
 
+    public function test_the_page_sends_the_plain_values_as_dotenv_text(): void
+    {
+        $environment = $this->makeEnvironment();
+        EnvVar::factory()->for($environment)->create(['key' => 'B_KEY', 'value' => 'two words']);
+        EnvVar::factory()->for($environment)->create(['key' => 'A_KEY', 'value' => 'one']);
+        EnvVar::factory()->for($environment)->create(['key' => 'TOKEN', 'value' => 'sk_live_TOP_SECRET_VALUE', 'is_secret' => true]);
+        EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'value' => 'mysql.internal', 'source' => EnvVarSource::DATASTORE]);
+
+        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/settings");
+
+        $response->assertInertia(fn (Assert $page) => $page->where('envText', "A_KEY=one\nB_KEY='two words'\n"));
+        $this->assertStringNotContainsString('sk_live_TOP_SECRET_VALUE', $response->getContent());
+        $this->assertStringNotContainsString('mysql.internal', $response->getContent());
+    }
+
+    public function test_the_text_route_saves_the_whole_text_once(): void
+    {
+        $environment = $this->makeEnvironment(false, 'staging');
+        EnvVar::factory()->for($environment)->create(['key' => 'OLD', 'value' => '1']);
+
+        $this->actingAs(User::factory()->create())->put("/environments/{$environment->id}/env", ['text' => "NEW=2\n"])->assertRedirect();
+
+        $this->assertSame(['NEW' => '2'], $environment->envVars()->pluck('value', 'key')->all());
+    }
+
+    public function test_the_text_route_shows_the_bad_lines(): void
+    {
+        $environment = $this->makeEnvironment();
+        EnvVar::factory()->for($environment)->create(['key' => 'OLD', 'value' => '1']);
+
+        $this->actingAs(User::factory()->admin()->create())->put("/environments/{$environment->id}/env", ['text' => "A=1\nB"])
+            ->assertSessionHasErrors(['text' => 'Line 2 has no = sign.']);
+
+        $this->assertSame(['OLD'], $environment->envVars()->pluck('key')->all());
+    }
+
+    public function test_a_developer_cannot_save_the_text_of_a_protected_environment(): void
+    {
+        $environment = $this->makeEnvironment(true);
+        EnvVar::factory()->for($environment)->create(['key' => 'OLD', 'value' => '1']);
+
+        $this->actingAs(User::factory()->create())->put("/environments/{$environment->id}/env", ['text' => ''])->assertForbidden();
+
+        $this->assertSame(['OLD'], $environment->envVars()->pluck('key')->all());
+        $this->assertSame(0, AuditEvent::count());
+    }
+
     public function test_a_datastore_value_cannot_be_deleted(): void
     {
         $environment = $this->makeEnvironment();
