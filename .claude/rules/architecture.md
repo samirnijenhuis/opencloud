@@ -31,7 +31,7 @@ dashboard/
 
 ## Domains
 
-- `Applications`. The `Application` model, the presets in `ApplicationType`, `EnvProfileKind`, and the actions that create an application and change its env profile.
+- `Applications`. The `Application` model, the presets in `ApplicationType` with the env profiles of each preset, and the action that creates an application.
 - `Audit`. The `AuditEvent` model, the record of what users and opencloud changed. The settings page shows it as the audit log.
 - `Backups`. Database dumps on request and each night, and the copy of the dashboard database. It also holds the bucket copies, the backup target, and the restore of one database from a dump.
 - `Builds`. `Builder` clones the commit, writes the Dockerfile of the preset, and runs `buildctl` against BuildKit. `Git` is the only class that runs `git` against a remote.

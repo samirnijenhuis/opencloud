@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Domains\Applications\Enums\ApplicationType;
-use App\Domains\Applications\Enums\EnvProfileKind;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\Size;
@@ -88,7 +87,6 @@ class StoreApplicationRequest extends FormRequest
             'branch' => ['nullable', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
             'cluster_id' => ['required', 'integer', 'exists:clusters,id'],
             'type' => ['required', Rule::enum(ApplicationType::class)],
-            'env_profile' => ['required', Rule::enum(EnvProfileKind::class)],
             'port' => ['nullable', 'integer', 'between:1,65535'],
             'size' => ['required', Rule::enum(Size::class)],
             'min_instances' => ['required', 'integer', 'min:1', 'max:50'],

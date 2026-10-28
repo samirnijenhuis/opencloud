@@ -2,6 +2,7 @@
 
 namespace Tests\Domains\Datastores;
 
+use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
@@ -28,6 +29,9 @@ use Tests\TestCase;
  * with fixed ids and passwords and calls only AttachmentEnv::write() and EnvironmentVariables::runtime(), which keep
  * their signatures through both workstreams, so the same test runs before the move, in each worktree, and after both
  * merge.
+ *
+ * The Dockerfile golden file came later, when the preset started to decide the env names. It holds the same shapes
+ * for a Dockerfile app, which gets the Laravel names and the generic names.
  */
 class EnvPinTest extends TestCase
 {
@@ -35,17 +39,29 @@ class EnvPinTest extends TestCase
 
     private const GOLDEN = 'tests/Fixtures/env/laravel.json';
 
+    private const GOLDEN_DOCKERFILE = 'tests/Fixtures/env/dockerfile.json';
+
     /** Workstream B's proof. The rows and the merged runtime env stay the same, byte for byte. */
     public function test_every_attachment_shape_writes_the_same_laravel_env(): void
     {
-        $json = json_encode($this->scenario(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
-        $golden = base_path(self::GOLDEN);
+        $this->assertGolden(self::GOLDEN, ApplicationType::LARAVEL);
+    }
+
+    public function test_every_attachment_shape_writes_the_same_env_for_a_dockerfile_app(): void
+    {
+        $this->assertGolden(self::GOLDEN_DOCKERFILE, ApplicationType::DOCKERFILE);
+    }
+
+    private function assertGolden(string $path, ApplicationType $type): void
+    {
+        $json = json_encode($this->scenario($type), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
+        $golden = base_path($path);
 
         if (! file_exists($golden)) {
-            // Runs once, in the contract commit, on the code before the move. The commit holds the result.
+            // Runs once, in the commit that adds the golden file. The commit holds the result.
             @mkdir(dirname($golden), 0755, true);
             file_put_contents($golden, $json);
-            $this->markTestIncomplete('Recorded '.self::GOLDEN.' from the current code. Commit it and run the test again.');
+            $this->markTestIncomplete("Recorded {$path} from the current code. Commit it and run the test again.");
         }
 
         $this->assertSame(file_get_contents($golden), $json);
@@ -54,7 +70,7 @@ class EnvPinTest extends TestCase
     /** Workstream C's proof. The registry gives each shape the connection that the engines give it at the contract commit. */
     public function test_every_attachment_shape_has_the_same_connection(): void
     {
-        $this->scenario();
+        $this->scenario(ApplicationType::LARAVEL);
 
         $this->assertEquals([
             21 => new SqlConnection(DatastoreKind::MYSQL, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_7', 'env_7', 'mysql-main-pass', 'main', true),
@@ -75,17 +91,17 @@ class EnvPinTest extends TestCase
     }
 
     /**
-     * Four environments of one Laravel app. "shop" has every local shape, "blog" has managed Postgres before and
+     * Four environments of one app of the preset. "shop" has every local shape, "blog" has managed Postgres before and
      * after the apply, and "swap" moves the default from one database to another. "files" came later, with the
      * named buckets: a second bucket, then the default moves to it. Its entries come after the others, so the
      * entries from before named buckets stay the same.
      *
      * @return array<string, mixed>
      */
-    private function scenario(): array
+    private function scenario(ApplicationType $type): array
     {
         $cluster = Cluster::factory()->create(['id' => 1, 'name' => 'local', 'kind' => ClusterKind::LOCAL]);
-        $application = Application::factory()->for($cluster)->create(['id' => 1, 'name' => 'shop']);
+        $application = Application::factory()->for($cluster)->create(['id' => 1, 'name' => 'shop', 'type' => $type]);
         [$shop, $blog, $swap] = array_map(
             fn (array $row) => Environment::factory()->for($application)->create($row),
             [['id' => 7, 'name' => 'shop'], ['id' => 8, 'name' => 'blog'], ['id' => 9, 'name' => 'swap']],

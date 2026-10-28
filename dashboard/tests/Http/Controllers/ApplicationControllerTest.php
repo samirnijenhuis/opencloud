@@ -4,7 +4,6 @@ namespace Tests\Http\Controllers;
 
 use App\Domains\Applications\Actions\CreateApplication;
 use App\Domains\Applications\Enums\ApplicationType;
-use App\Domains\Applications\Enums\EnvProfileKind;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Deployments\Enums\DeploymentStatus;
@@ -39,7 +38,6 @@ class ApplicationControllerTest extends TestCase
             'branch' => 'main',
             'cluster_id' => $this->makeCluster()->id,
             'type' => 'laravel',
-            'env_profile' => 'laravel',
             'size' => 's',
             'min_instances' => 1,
             'max_instances' => 3,
@@ -123,7 +121,6 @@ class ApplicationControllerTest extends TestCase
                             ['name' => 'scheduler', 'kind' => 'scheduled', 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *'],
                         ],
                         'database' => 'mysql',
-                        'env_profile' => 'laravel',
                     ],
                     [
                         'value' => 'node',
@@ -133,7 +130,6 @@ class ApplicationControllerTest extends TestCase
                         'deploy_commands' => [],
                         'processes' => [],
                         'database' => 'none',
-                        'env_profile' => 'generic',
                     ],
                     [
                         'value' => 'python',
@@ -143,7 +139,6 @@ class ApplicationControllerTest extends TestCase
                         'deploy_commands' => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'],
                         'processes' => [],
                         'database' => 'none',
-                        'env_profile' => 'generic',
                     ],
                     [
                         'value' => 'ruby',
@@ -153,7 +148,6 @@ class ApplicationControllerTest extends TestCase
                         'deploy_commands' => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'],
                         'processes' => [],
                         'database' => 'none',
-                        'env_profile' => 'generic',
                     ],
                     [
                         'value' => 'static',
@@ -163,7 +157,6 @@ class ApplicationControllerTest extends TestCase
                         'deploy_commands' => [],
                         'processes' => [],
                         'database' => 'none',
-                        'env_profile' => 'generic',
                     ],
                     [
                         'value' => 'dockerfile',
@@ -173,7 +166,6 @@ class ApplicationControllerTest extends TestCase
                         'deploy_commands' => [],
                         'processes' => [],
                         'database' => 'none',
-                        'env_profile' => 'generic',
                     ],
                 ]));
     }
@@ -201,7 +193,6 @@ class ApplicationControllerTest extends TestCase
                 'repository' => 'https://github.com/acme/shop.git',
                 'cluster_id' => $this->cluster->id,
                 'type' => ApplicationType::LARAVEL,
-                'env_profile' => EnvProfileKind::LARAVEL,
                 'port' => null,
                 'branch' => 'main',
                 'env' => [
@@ -261,7 +252,6 @@ class ApplicationControllerTest extends TestCase
             'repository' => 'https://github.com/acme/shop.git',
             'cluster_id' => $this->makeCluster()->id,
             'type' => 'dockerfile',
-            'env_profile' => 'generic',
             'port' => 3000,
             'size' => 'm',
             'min_instances' => 2,
@@ -279,8 +269,8 @@ class ApplicationControllerTest extends TestCase
     }
 
     /**
-     * What the form posts after a click on each preset, and what opencloud stores: the type, the env profile, the
-     * port, the deploy commands, the health path, the processes, the user env keys, and the databases.
+     * What the form posts after a click on each preset, and what opencloud stores: the type, the port, the deploy
+     * commands, the health path, the processes, the user env keys, and the databases.
      *
      * @return array<string, array{array<string, mixed>, list<mixed>}>
      */
@@ -293,32 +283,32 @@ class ApplicationControllerTest extends TestCase
 
         return [
             'laravel' => [
-                ['type' => 'laravel', 'env_profile' => 'laravel', 'port' => null, 'deploy_commands' => ['php artisan migrate --force'], 'processes' => $laravelProcesses, 'database' => 'mysql'],
-                ['laravel', 'laravel', 8080, ['php artisan migrate --force'], '/up', ['worker', 'scheduler'], ['APP_KEY'], ['mysql']],
+                ['type' => 'laravel', 'port' => null, 'deploy_commands' => ['php artisan migrate --force'], 'processes' => $laravelProcesses, 'database' => 'mysql'],
+                ['laravel', 8080, ['php artisan migrate --force'], '/up', ['worker', 'scheduler'], ['APP_KEY'], ['mysql']],
             ],
             'node with postgres' => [
-                ['type' => 'node', 'env_profile' => 'generic', 'port' => 3000, 'deploy_commands' => ['npx prisma migrate deploy'], 'processes' => [], 'database' => 'postgres'],
-                ['node', 'generic', 3000, ['npx prisma migrate deploy'], '/', [], [], ['postgres']],
+                ['type' => 'node', 'port' => 3000, 'deploy_commands' => ['npx prisma migrate deploy'], 'processes' => [], 'database' => 'postgres'],
+                ['node', 3000, ['npx prisma migrate deploy'], '/', [], [], ['postgres']],
             ],
             'python with postgres' => [
-                ['type' => 'python', 'env_profile' => 'generic', 'port' => 8000, 'deploy_commands' => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], 'processes' => [], 'database' => 'postgres'],
-                ['python', 'generic', 8000, ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], '/', [], ['SECRET_KEY'], ['postgres']],
+                ['type' => 'python', 'port' => 8000, 'deploy_commands' => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], 'processes' => [], 'database' => 'postgres'],
+                ['python', 8000, ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], '/', [], ['SECRET_KEY'], ['postgres']],
             ],
             'ruby with mysql and its own port' => [
-                ['type' => 'ruby', 'env_profile' => 'generic', 'port' => 9292, 'deploy_commands' => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], 'processes' => [], 'database' => 'mysql'],
-                ['ruby', 'generic', 9292, ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], '/', [], ['SECRET_KEY_BASE'], ['mysql']],
+                ['type' => 'ruby', 'port' => 9292, 'deploy_commands' => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], 'processes' => [], 'database' => 'mysql'],
+                ['ruby', 9292, ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], '/', [], ['SECRET_KEY_BASE'], ['mysql']],
             ],
             'static' => [
-                ['type' => 'static', 'env_profile' => 'generic', 'port' => null, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
-                ['static', 'generic', 8080, [], '/', [], [], []],
+                ['type' => 'static', 'port' => null, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
+                ['static', 8080, [], '/', [], [], []],
             ],
             'dockerfile' => [
-                ['type' => 'dockerfile', 'env_profile' => 'generic', 'port' => 3000, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
-                ['dockerfile', 'generic', 3000, [], '/', [], [], []],
+                ['type' => 'dockerfile', 'port' => 3000, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
+                ['dockerfile', 3000, [], '/', [], [], []],
             ],
-            'dockerfile with the laravel names and postgres' => [
-                ['type' => 'dockerfile', 'env_profile' => 'laravel', 'port' => 8080, 'deploy_commands' => ['php /var/www/deploy.php'], 'processes' => [], 'database' => 'postgres'],
-                ['dockerfile', 'laravel', 8080, ['php /var/www/deploy.php'], '/', [], [], ['postgres']],
+            'dockerfile with postgres and a deploy command' => [
+                ['type' => 'dockerfile', 'port' => 8080, 'deploy_commands' => ['php /var/www/deploy.php'], 'processes' => [], 'database' => 'postgres'],
+                ['dockerfile', 8080, ['php /var/www/deploy.php'], '/', [], [], ['postgres']],
             ],
         ];
     }
@@ -341,7 +331,6 @@ class ApplicationControllerTest extends TestCase
         $production = $application->environments()->where('name', 'production')->sole();
         $this->assertSame($expected, [
             $application->type->value,
-            $application->env_profile->value,
             $application->port,
             $production->deploy_commands,
             $production->health_path,
@@ -349,6 +338,51 @@ class ApplicationControllerTest extends TestCase
             $production->envVars()->where('source', 'user')->orderBy('key')->pluck('key')->all(),
             $production->datastoreAttachments()->with('datastore')->get()->map(fn ($attachment) => $attachment->datastore->kind->value)->all(),
         ]);
+    }
+
+    public function test_the_create_form_takes_no_env_names_and_the_preset_names_the_database_values(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+
+        $this->actingAs(User::factory()->owner()->create())
+            ->post('/applications', $this->validForm(['env_profile' => 'django']))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $application = Application::sole();
+        $this->assertArrayNotHasKey('env_profile', $application->getAttributes());
+        $this->assertSame(
+            ['DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME'],
+            $application->environments()->where('name', 'production')->sole()->envVars()->where('source', 'datastore')->orderBy('key')->pluck('key')->all(),
+        );
+    }
+
+    public function test_the_routes_that_changed_the_preset_and_the_env_names_are_gone(): void
+    {
+        $application = $this->makeEnvironment()->application;
+
+        foreach (['preset' => ['type' => 'node'], 'env-profile' => ['env_profile' => 'generic']] as $path => $body) {
+            $this->actingAs(User::factory()->owner()->create())
+                ->patch("/applications/{$application->id}/{$path}", $body)
+                ->assertNotFound();
+        }
+
+        $this->assertSame(ApplicationType::LARAVEL, $application->fresh()->type);
+        $this->assertSame(0, AuditEvent::query()->count());
+    }
+
+    public function test_the_application_page_shows_the_preset_and_no_env_names(): void
+    {
+        $application = $this->makeEnvironment()->application;
+
+        $this->actingAs(User::factory()->admin()->create())->get("/applications/{$application->id}")
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('applications/show')
+                ->where('application.type', 'laravel')
+                ->missing('application.env_profile')
+                ->missing('presets')
+                ->where('canUpdate', true));
     }
 
     public function test_a_repository_that_git_cannot_read_comes_back_as_a_form_error(): void
@@ -373,7 +407,6 @@ class ApplicationControllerTest extends TestCase
             'a repository that is not owner/repo or https' => [['repository' => 'git@github.com:acme/shop.git'], 'repository'],
             'an unknown cluster' => [['cluster_id' => 999], 'cluster_id'],
             'an unknown preset' => [['type' => 'rails'], 'type'],
-            'an unknown env profile' => [['env_profile' => 'django'], 'env_profile'],
             'a port above 65535' => [['type' => 'dockerfile', 'port' => 65536], 'port'],
             'a maximum below the minimum' => [['min_instances' => 3, 'max_instances' => 2], 'max_instances'],
             'an unknown size' => [['size' => 'xl'], 'size'],

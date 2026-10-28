@@ -13,7 +13,7 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 
 `matrix.json` is the source of the cells. A cell id is `<fixture>-<database>-<cache>`, for example `laravel-postgres-valkey`.
 
-- **Fixtures.** Each one is an app on its own branch of `https://github.com/samirnijenhuis/opencloud-verify-fixtures`. The folders in `fixtures/` are the source. The first three read the Laravel env names (`env_profile: laravel`). The other four read the generic env names (`env_profile: generic`): `DATABASE_URL`, `<NAME>_DATABASE_URL`, and `REDIS_URL`.
+- **Fixtures.** Each one is an app on its own branch of `https://github.com/samirnijenhuis/opencloud-verify-fixtures`. The folders in `fixtures/` are the source. The preset of a fixture decides its env names. `laravel` gets the Laravel env names. `static` and `php` are Dockerfile apps, so they get the Laravel names and the generic names, and `php` reads the Laravel names. The other four get the generic env names: `DATABASE_URL`, `<NAME>_DATABASE_URL`, and `REDIS_URL`.
   - `static` is nginx with its own Dockerfile, so it proves the Dockerfile preset. Its build reads a build env value from a BuildKit secret, and its deploy command is an `echo`.
   - `php` is plain PHP on Apache with `pdo_mysql`, `pdo_pgsql`, and `redis`, with its own Dockerfile. Its deploy command is `php /var/www/deploy.php <cell>`.
   - `laravel` is laravel/laravel at the commit in `matrix.json`, plus a `/verify` route, the command `verify:mark-deploy`, and a migration. Its build command writes a marker file. Its deploy commands are `migrate` and `verify:mark-deploy`.
@@ -26,7 +26,7 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 - **Databases.** The `databases` of a fixture list the values that it supports.
   - `none` attaches no database.
   - `mysql` and `postgres` use the database option of the create form for a fixture with `database_in_create_form`: `laravel`, `node`, `python`, and `ruby`. The `static` and `php` cells add it with "Add resource" before the second deploy, the way a user does, so the matrix proves both paths.
-  - `mysqlpostgres` creates the app with MySQL, the default database `main`. In step 2 it adds Postgres with Add resource and the connection name `reports`. The app gets `REPORTS_DB_URL` with the Laravel env names and `REPORTS_DATABASE_URL` with the generic env names, and the verify endpoint connects with it. From step 2 on, `extra.reports` must report `ok` with the driver `pgsql`.
+  - `mysqlpostgres` creates the app with MySQL, the default database `main`. In step 2 it adds Postgres with Add resource and the connection name `reports`. The app gets `REPORTS_DB_URL` with the Laravel env names and `REPORTS_DATABASE_URL` with the generic env names. A Dockerfile app gets both. The verify endpoint connects with the name that its fixture reads. From step 2 on, `extra.reports` must report `ok` with the driver `pgsql`.
   - `sqlite` sets `DB_CONNECTION=sqlite`. Laravel bakes a migrated file into the image with its build command. PHP writes to a file in the pod. Each pod has its own copy, and a redeploy starts empty, so the matrix checks no persistence for SQLite. The generic fixtures have no `sqlite` cells.
   - `site` supports only `none`.
 - **Caches.**
@@ -146,7 +146,7 @@ Proof standards:
 - The runner sends every request through `curl`. macOS Local Network privacy can block the sockets of Python, including Homebrew's and Apple's, to the OrbStack address with "No route to host". It allows `curl`, which is a system binary. Do not change the runner back to `urllib`. If a quick check from Python fails with that error, use `curl` instead.
 - A second run on the same machine reuses the app names. The free address then gets the app id in its name. The runner reads the address from the page props, so this is harmless.
 - A Dockerfile app and a static site ignore the build command. The Laravel, Node.js, Python, and Ruby templates run it. A Dockerfile fixture reads a build env value with `RUN --mount=type=secret,id=<KEY>`. The Node.js and static templates put each build env value in the env of the build script, so `node` and `site` read `process.env.VERIFY_BUILD`.
-- The runner creates each fixture with the `env_profile` in `matrix.json`. A fixture that reads the wrong names reports no database and no cache.
+- The `type` of a fixture in `matrix.json` decides its env names. The create form has no field for them. A fixture that reads the wrong names reports no database and no cache.
 - A static site has no server process. It cannot read a runtime env value, a secret, or a datastore, so `site` skips those checks. Its verify endpoint is the file `/verify.json`, because the static preset answers each other path with `index.html`.
 - The `python` and `ruby` cells need the Python and Ruby presets. The Ruby preset must have a C compiler and the MySQL client headers, because `puma`, `nio4r`, and `mysql2` compile. `pg` installs as a binary gem.
 - The first build of each fixture on a new machine downloads every package and can take several minutes. Later builds use the BuildKit cache and take seconds.

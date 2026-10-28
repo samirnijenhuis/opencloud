@@ -3,7 +3,6 @@
 namespace App\Domains\Applications\Actions;
 
 use App\Domains\Applications\Enums\ApplicationType;
-use App\Domains\Applications\Enums\EnvProfileKind;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Builds\Git;
@@ -42,7 +41,6 @@ class CreateApplication
      *     repository: string,
      *     cluster_id: int,
      *     type?: ApplicationType|string,
-     *     env_profile?: EnvProfileKind|string,
      *     port?: int|null,
      *     branch?: string,
      *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
@@ -71,7 +69,6 @@ class CreateApplication
                 'repository' => $data['repository'],
                 'cluster_id' => $data['cluster_id'],
                 'type' => $type,
-                'env_profile' => $data['env_profile'] ?? $type->envProfile(),
                 'port' => $type->choosesPort() ? ($data['port'] ?? $type->defaultPort()) : $type->defaultPort(),
             ]);
 

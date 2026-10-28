@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Domains\Applications\Actions\CreateApplication;
 use App\Domains\Applications\Enums\ApplicationType;
-use App\Domains\Applications\Enums\EnvProfileKind;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
@@ -94,7 +93,6 @@ class ApplicationController extends Controller
                 'repository' => $data['repository'],
                 'cluster_id' => $data['cluster_id'],
                 'type' => ApplicationType::from($data['type']),
-                'env_profile' => EnvProfileKind::from($data['env_profile']),
                 'port' => $data['port'] ?? null,
                 'branch' => $data['branch'] ?? null,
                 'env' => array_map(fn (array $row) => [
@@ -151,7 +149,6 @@ class ApplicationController extends Controller
                 'name' => $application->name,
                 'repository' => $application->repository,
                 'type' => $application->type,
-                'env_profile' => $application->env_profile,
                 'port' => $application->port,
             ],
             'previews' => [
@@ -191,7 +188,6 @@ class ApplicationController extends Controller
             'deploy_commands' => $type->deployCommands(),
             'processes' => $type->processes(),
             'database' => $type->database(),
-            'env_profile' => $type->envProfile(),
         ], ApplicationType::cases());
     }
 }

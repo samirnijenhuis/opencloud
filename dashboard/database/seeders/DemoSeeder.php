@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Domains\Applications\Enums\ApplicationType;
-use App\Domains\Applications\Enums\EnvProfileKind;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Backups\Enums\BackupStatus;
@@ -51,7 +50,7 @@ class DemoSeeder extends Seeder
         ]);
 
         $shop = Application::create(['name' => 'shop', 'repository' => 'https://github.com/acme/shop.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::LARAVEL]);
-        $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::NODE, 'env_profile' => EnvProfileKind::GENERIC, 'port' => 3000]);
+        $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::NODE, 'port' => 3000]);
 
         $production = $this->environment($shop, 'production', EnvironmentKind::PERMANENT, protected: true, attributes: [
             'size' => Size::M,

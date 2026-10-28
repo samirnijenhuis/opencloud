@@ -10,7 +10,7 @@ use App\Domains\Datastores\SqlConnection;
 /**
  * The names that most frameworks outside PHP read: one URL per database and per key-value server, and the standard
  * AWS SDK names for a bucket. These are the names that Laravel Cloud injects for JavaScript, Go, Python, Ruby, and
- * Rust apps. An application with env_profile generic selects it.
+ * Rust apps. The Node.js, Python, Ruby, static, and Dockerfile presets use it.
  *
  * The profile sets no framework behavior: no cache store and no default disk.
  */

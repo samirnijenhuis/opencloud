@@ -272,7 +272,7 @@ class CreateApplicationTest extends TestCase
         $this->assertSame([['queue', 'long_running', 'node queue.js', null, 's', 1, 1, 70]], self::processes($worker->environments()->where('name', 'production')->sole()));
     }
 
-    public function test_a_new_application_gets_the_env_profile_and_the_port_of_its_preset_unless_it_asks_for_others(): void
+    public function test_a_new_application_gets_the_port_of_its_preset_unless_it_asks_for_another(): void
     {
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
@@ -291,12 +291,12 @@ class CreateApplicationTest extends TestCase
             $create('worker', ['type' => 'node', 'port' => 4000]),
             $create('docs', ['type' => 'static', 'port' => 3000]),
             $create('site', ['type' => 'dockerfile']),
-            $create('php', ['type' => 'dockerfile', 'env_profile' => 'laravel', 'port' => 9000]),
+            $create('php', ['type' => 'dockerfile', 'port' => 9000]),
         ];
 
         $this->assertSame(
-            [['shop', 'laravel', 8080], ['api', 'generic', 3000], ['worker', 'generic', 4000], ['docs', 'generic', 8080], ['site', 'generic', 8080], ['php', 'laravel', 9000]],
-            array_map(fn (Application $application) => [$application->name, $application->env_profile->value, $application->port], $applications),
+            [['shop', 8080], ['api', 3000], ['worker', 4000], ['docs', 8080], ['site', 8080], ['php', 9000]],
+            array_map(fn (Application $application) => [$application->name, $application->port], $applications),
         );
     }
 

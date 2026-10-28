@@ -4,6 +4,7 @@ A user attaches a database or a cache to an environment, and the app gets the co
 
 ## Sub-features
 
+- `datastore-env-names` gives the env names of the preset. A Laravel app gets the Laravel env names. A Node.js, Python, Ruby, or static app gets the generic env names. A Dockerfile app gets both sets for the same resource.
 - `datastore-mysql` attaches MySQL 8.4 from the create form or with Add resource. With the Laravel env names it sets `DB_CONNECTION=mysql` and the other `DB_*` values. With the generic env names it sets `DATABASE_URL=mysql://...`.
 - `datastore-postgres` attaches Postgres 17. With the Laravel env names it sets `DB_CONNECTION=pgsql`. With the generic env names it sets `DATABASE_URL=postgresql://...`.
 - `datastore-sqlite` uses a SQLite file in the image or in the pod, with no attachment.

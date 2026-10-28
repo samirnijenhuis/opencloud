@@ -83,9 +83,6 @@ export const applicationTypeLabels: Record<ApplicationType, string> = {
     dockerfile: 'Dockerfile',
 };
 
-/** The env names that a database, Valkey, or a bucket sets: the Laravel names, or URLs that most other frameworks read. */
-export type EnvProfileKind = 'laravel' | 'generic';
-
 /** A process of an environment. Only a long-running process has instances, and only a scheduled process has a schedule. */
 export type Process = { id: number; name: string; command: string; size: Size } & (
     | { kind: 'long_running'; schedule: null; min_instances: number; max_instances: number; cpu_target: number }

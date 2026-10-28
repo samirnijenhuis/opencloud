@@ -4,7 +4,6 @@
     "static": {
       "branch": "static",
       "type": "dockerfile",
-      "env_profile": "laravel",
       "port": 8080,
       "verify_path": "/verify",
       "checks": ["marker", "build"],
@@ -17,7 +16,6 @@
     "php": {
       "branch": "php",
       "type": "dockerfile",
-      "env_profile": "laravel",
       "port": 8080,
       "verify_path": "/verify.php",
       "checks": ["marker", "build", "secret", "db", "extra", "cache"],
@@ -36,7 +34,6 @@
         "commit": "9ffef3bc4241e3cc333ef267258a404d0d95f194"
       },
       "type": "laravel",
-      "env_profile": "laravel",
       "verify_path": "/verify",
       "checks": ["marker", "build", "secret", "db", "extra", "cache"],
       "databases": ["none", "mysql", "postgres", "mysqlpostgres", "sqlite"],
@@ -60,7 +57,6 @@
     "node": {
       "branch": "node",
       "type": "node",
-      "env_profile": "generic",
       "verify_path": "/verify",
       "checks": ["marker", "build", "secret", "db", "extra", "cache"],
       "databases": ["none", "mysql", "postgres", "mysqlpostgres"],
@@ -73,7 +69,6 @@
     "python": {
       "branch": "python",
       "type": "python",
-      "env_profile": "generic",
       "verify_path": "/verify",
       "checks": ["marker", "build", "secret", "db", "extra", "cache"],
       "databases": ["none", "mysql", "postgres", "mysqlpostgres"],
@@ -86,7 +81,6 @@
     "ruby": {
       "branch": "ruby",
       "type": "ruby",
-      "env_profile": "generic",
       "verify_path": "/verify",
       "checks": ["marker", "build", "secret", "db", "extra", "cache"],
       "databases": ["none", "mysql", "postgres", "mysqlpostgres"],
@@ -99,7 +93,6 @@
     "site": {
       "branch": "site",
       "type": "static",
-      "env_profile": "generic",
       "verify_path": "/verify.json",
       "checks": ["build"],
       "databases": ["none"],

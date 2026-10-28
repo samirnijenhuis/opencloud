@@ -65,7 +65,6 @@
     },
     "domain.no-facades": {
         "app/Domains/Applications/Actions/CreateApplication.php": 1,
-        "app/Domains/Applications/Actions/UpdateApplicationEnvProfile.php": 1,
         "app/Domains/Backups/BackupDisk.php": 2,
         "app/Domains/Backups/Jobs/BackupDashboard.php": 2,
         "app/Domains/Builds/Builder.php": 3,

@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { type ApplicationType, type EnvProfileKind, type ProcessValues } from '@/types';
+import { type ApplicationType, type ProcessValues } from '@/types';
 
 /** The defaults of one preset, from the server. */
 export type Preset = {
@@ -10,7 +10,6 @@ export type Preset = {
     deploy_commands: string[];
     processes: ProcessValues[];
     database: 'mysql' | 'postgres' | 'none';
-    env_profile: EnvProfileKind;
 };
 
 export const presetText: Record<ApplicationType, { hint: string; buildCommand: string }> = {
@@ -39,11 +38,6 @@ export const presetText: Record<ApplicationType, { hint: string; buildCommand: s
         buildCommand: 'Not used. The Dockerfile builds the image.',
     },
 };
-
-export const envProfiles: { value: EnvProfileKind; label: string; hint: string }[] = [
-    { value: 'laravel', label: 'Laravel names', hint: 'DB_HOST, REDIS_HOST, AWS_BUCKET' },
-    { value: 'generic', label: 'URLs', hint: 'DATABASE_URL, REDIS_URL, AWS_BUCKET' },
-];
 
 export function Chip({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: React.ReactNode }) {
     return (

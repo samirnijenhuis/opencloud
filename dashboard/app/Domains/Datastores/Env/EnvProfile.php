@@ -12,7 +12,7 @@ use App\Domains\Datastores\SqlConnection;
  * engines, sources, clusters, or rows. Each method is pure.
  *
  * One method per connection family, so a new family or a new profile cannot load until every pair has names.
- * AttachmentEnv picks the profile of an environment.
+ * ApplicationType::envProfiles() gives the profiles of a preset, and AttachmentEnv merges them.
  */
 interface EnvProfile
 {
