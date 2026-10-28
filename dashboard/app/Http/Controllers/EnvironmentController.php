@@ -20,6 +20,7 @@ use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
+use App\Domains\Environments\DotenvText;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
@@ -129,7 +130,7 @@ class EnvironmentController extends Controller
         ]);
     }
 
-    public function settings(Request $request, Environment $environment): Response
+    public function settings(Request $request, Environment $environment, DotenvText $dotenv): Response
     {
         Gate::authorize('view', $environment);
 
@@ -141,6 +142,9 @@ class EnvironmentController extends Controller
                 'build_command' => $environment->build_command,
                 'deploy_commands' => $environment->deploy_commands,
             ],
+            'envText' => $dotenv->format(
+                $environment->envVars()->where('source', EnvVarSource::USER)->where('is_secret', false)->orderBy('key')->pluck('value', 'key')->all(),
+            ),
             // Only a plain user value goes to the browser. A secret and a datastore value never do.
             'envVars' => $environment->envVars()->with('datastoreAttachment.datastore')->orderBy('key')->get()->map(fn (EnvVar $envVar) => [
                 'id' => $envVar->id,

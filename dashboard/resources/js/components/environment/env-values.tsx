@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { type Availability } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useEffect, useState } from 'react';
+import { EnvTextEditor } from './env-text-editor';
 
 export type EnvVar = {
     id: number;
@@ -25,7 +26,69 @@ const availabilityLabels: Record<Availability, string> = {
     both: 'Build and runtime',
 };
 
-export function EnvValues({ environmentId, envVars, canUpdate }: { environmentId: number; envVars: EnvVar[]; canUpdate: boolean }) {
+type Mode = 'table' | 'text';
+
+const MODE_KEY = 'opencloud.env-mode';
+
+function savedMode(): Mode {
+    try {
+        return localStorage.getItem(MODE_KEY) === 'text' ? 'text' : 'table';
+    } catch {
+        return 'table';
+    }
+}
+
+export function EnvValues({
+    environmentId,
+    envVars,
+    envText,
+    canUpdate,
+}: {
+    environmentId: number;
+    envVars: EnvVar[];
+    envText: string;
+    canUpdate: boolean;
+}) {
+    const [mode, setMode] = useState<Mode>('table');
+
+    // The saved mode loads after the first render, so the server and the browser render the same page.
+    useEffect(() => setMode(savedMode()), []);
+
+    const choose = (next: Mode) => {
+        setMode(next);
+        try {
+            localStorage.setItem(MODE_KEY, next);
+        } catch {
+            // The mode is a convenience. The page works without it.
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex gap-1" role="group" aria-label="Edit mode">
+                {(['table', 'text'] as const).map((value) => (
+                    <Button
+                        key={value}
+                        type="button"
+                        size="sm"
+                        variant={mode === value ? 'secondary' : 'ghost'}
+                        aria-pressed={mode === value}
+                        onClick={() => choose(value)}
+                    >
+                        {value === 'table' ? 'Table' : 'Text'}
+                    </Button>
+                ))}
+            </div>
+            {mode === 'table' ? (
+                <EnvTable environmentId={environmentId} envVars={envVars} canUpdate={canUpdate} />
+            ) : (
+                <EnvTextEditor environmentId={environmentId} envVars={envVars} envText={envText} canUpdate={canUpdate} />
+            )}
+        </div>
+    );
+}
+
+function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number; envVars: EnvVar[]; canUpdate: boolean }) {
     const form = useForm<{ key: string; value: string; is_secret: boolean; available_at: Availability }>({
         key: '',
         value: '',

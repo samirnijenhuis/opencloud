@@ -13,6 +13,7 @@ use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EnvironmentColorController;
 use App\Http\Controllers\EnvironmentController;
 use App\Http\Controllers\EnvironmentLogController;
+use App\Http\Controllers\EnvTextController;
 use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\InviteAcceptController;
 use App\Http\Controllers\LiveStatusController;
@@ -61,6 +62,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/env', [EnvVarController::class, 'index'])->name('environments.env');
     Route::post('environments/{environment}/env', [EnvVarController::class, 'store'])->name('env-vars.store');
+    Route::put('environments/{environment}/env', [EnvTextController::class, 'update'])->name('env-text.update');
     Route::delete('env-vars/{envVar}', [EnvVarController::class, 'destroy'])->name('env-vars.destroy');
 
     Route::get('environments/{environment}/domains', [DomainController::class, 'index'])->name('environments.domains');

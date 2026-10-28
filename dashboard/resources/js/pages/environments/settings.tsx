@@ -20,7 +20,7 @@ type Settings = {
     deploy_commands: string[];
 };
 
-type Props = EnvironmentPageProps & { settings: Settings; envVars: EnvVar[] };
+type Props = EnvironmentPageProps & { settings: Settings; envVars: EnvVar[]; envText: string };
 
 const sections = [
     { id: 'general', title: 'General' },
@@ -207,7 +207,7 @@ function DeploymentsForm({ environmentId, settings, locked }: { environmentId: n
 }
 
 export default function EnvironmentSettings(props: Props) {
-    const { environment, settings, envVars, can } = props;
+    const { environment, settings, envVars, envText, can } = props;
     const locked = !can.update;
     const active = useActiveSection();
     useScrollToHash();
@@ -251,7 +251,7 @@ export default function EnvironmentSettings(props: Props) {
                         title="Environment values"
                         description="The env values of the app. Changes apply on the next deploy."
                     >
-                        <EnvValues environmentId={environment.id} envVars={envVars} canUpdate={can.update} />
+                        <EnvValues environmentId={environment.id} envVars={envVars} envText={envText} canUpdate={can.update} />
                     </Section>
                 </div>
             </div>
