@@ -5,6 +5,7 @@ namespace App\Domains\Deployments\Jobs;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Builds\Builder;
 use App\Domains\Clusters\ImageCopy;
+use App\Domains\Datastores\AttachmentEnv;
 use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\DeploymentLog;
@@ -19,6 +20,7 @@ use App\Support\Kube\Kubectl;
 use App\Support\Kube\Labels;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +60,7 @@ class RunDeployment implements ShouldQueue
         return now()->addHours(6);
     }
 
-    public function handle(Builder $builder): void
+    public function handle(Builder $builder, ConnectionInterface $db): void
     {
         $deployment = $this->deployment;
         $log = DeploymentLog::for($deployment);
@@ -71,7 +73,7 @@ class RunDeployment implements ShouldQueue
         }
 
         try {
-            $this->deploy($deployment, $log, $builder);
+            $this->deploy($deployment, $log, $builder, $db);
         } catch (Throwable $e) {
             $this->markFailed($deployment, $log, $e->getMessage());
 
@@ -86,7 +88,7 @@ class RunDeployment implements ShouldQueue
         $this->markFailed($this->deployment, DeploymentLog::for($this->deployment), $e?->getMessage() ?? 'The deployment job failed.');
     }
 
-    private function deploy(Deployment $deployment, DeploymentLog $log, Builder $builder): void
+    private function deploy(Deployment $deployment, DeploymentLog $log, Builder $builder, ConnectionInterface $db): void
     {
         $environment = $deployment->environment;
         $application = $environment->application;
@@ -99,6 +101,10 @@ class RunDeployment implements ShouldQueue
 
         $log->step(DeploymentStep::PREPARING_DEPLOY);
         $this->waitForDatastores($environment, $log);
+
+        // The stored rows can hold names that an older rule gave, so each deploy sends the names that the rule gives now.
+        // One transaction, so a default that moves during the deploy cannot leave the rows of the old default.
+        $db->transaction(fn () => $environment->datastoreAttachments()->with('datastore')->get()->each(AttachmentEnv::write(...)));
 
         $kubectl = Kubectl::for($application->cluster);
         $manifests = new EnvironmentManifests($environment);

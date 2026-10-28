@@ -6,12 +6,15 @@ use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreStatus;
+use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\DeploymentSteps;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
@@ -342,6 +345,38 @@ class RunDeploymentTest extends TestCase
             "2026-10-23T12:00:15Z Running the deploy commands: php artisan migrate --force\n",
             $this->new->fresh()->log,
         );
+    }
+
+    public function test_a_deploy_replaces_the_stale_env_rows_of_each_attachment_before_it_applies_the_env_secret(): void
+    {
+        $datastore = Datastore::factory()->for($this->environment->application->cluster)->create(['kind' => DatastoreKind::MYSQL]);
+        $attachment = DatastoreAttachment::factory()->for($datastore)->for($this->environment)->create([
+            'status' => DatastoreStatus::READY, 'name' => 'main', 'is_default' => true, 'host' => 'mysql-1.oc-datastores.svc.cluster.local', 'port' => 3306,
+            'database_name' => 'env_1', 'username' => 'env_1', 'password' => 'p/ss',
+        ]);
+        $this->environment->envVars()->create([
+            'key' => 'DATABASE_URL', 'value' => 'mysql://env_1:p%2Fss@mysql-1.oc-datastores.svc.cluster.local:3306/env_1', 'is_secret' => true,
+            'source' => EnvVarSource::DATASTORE, 'datastore_attachment_id' => $attachment->id,
+        ]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
+        $this->assertSame(
+            ['DB_CONNECTION', 'DB_DATABASE', 'DB_HOST', 'DB_PASSWORD', 'DB_PORT', 'DB_USERNAME'],
+            $attachment->envVars()->orderBy('key')->pluck('key')->all(),
+        );
+        $this->assertSame([
+            'APP_DEBUG' => 'false',
+            'APP_ENV' => 'production',
+            'DB_CONNECTION' => 'mysql',
+            'DB_DATABASE' => 'env_1',
+            'DB_HOST' => 'mysql-1.oc-datastores.svc.cluster.local',
+            'DB_PASSWORD' => 'hunter22',
+            'DB_PORT' => '3306',
+            'DB_USERNAME' => 'env_1',
+            'LOG_CHANNEL' => 'stderr',
+        ], array_map(base64_decode(...), $this->kubectl->appliedManifests()[1]['data']));
     }
 
     public function test_a_failed_datastore_fails_the_deployment_with_its_error(): void

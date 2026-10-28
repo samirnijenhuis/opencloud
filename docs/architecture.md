@@ -144,7 +144,7 @@ The enum `App\Domains\Deployments\Enums\DeploymentStep` lists the steps in order
 | `preparing_build` | build | Clone the commit and write the Dockerfile. |
 | `running_build` | build | Run `buildctl`. |
 | `pushing_application` | build | Copy the image to the registry of the cluster. |
-| `preparing_deploy` | deploy | Wait for the datastores, apply the namespace and the env Secret. |
+| `preparing_deploy` | deploy | Wait for the datastores, write the env values of each attachment again, and apply the namespace and the env Secret. |
 | `running_deploy_commands` | deploy | Run the deploy command Job. |
 | `updating_stack` | deploy | Apply the workloads, wait for the rollout, and remove old processes. |
 | `routing_traffic` | deploy | Wait for the old pods, move to live, sync Caddy, and check the home page. |
@@ -272,7 +272,7 @@ An environment has at most one Valkey attachment. It can have more than one MySQ
 
 A Laravel app uses another database with one line in the `connections` of `config/database.php`, for example `'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],`. Then it calls `DB::connection('reports')`. The resource sheet shows this line with a copy button.
 
-The database `main` has the database and the user `env_<environment id>`, as each database had before names. Another database has the database `env_<environment id>_<name>`. Its user is `env_<environment id>_` and 8 characters of the SHA-1 of the name, because MySQL allows 32 characters in a user name. A later attach with the same name finds the data again. The attachment keeps its host and its port, so `AttachmentEnv::write()` can write the env values of any attachment again from its row. Attach, the managed apply, and `SetDefaultAttachment` write through it. The masker of an environment masks each attachment password, plain and URL-encoded, because a database that is not the default has its password only inside its URL.
+The database `main` has the database and the user `env_<environment id>`, as each database had before names. Another database has the database `env_<environment id>_<name>`. Its user is `env_<environment id>_` and 8 characters of the SHA-1 of the name, because MySQL allows 32 characters in a user name. A later attach with the same name finds the data again. The attachment keeps its host and its port, so `AttachmentEnv::write()` can write the env values of any attachment again from its row. Attach, the managed apply, and `SetDefaultAttachment` write through it. Each deploy also writes the env values of each attachment again, after the wait for the datastores and before the env Secret, in one transaction. So a deploy always sends the names that the current rule gives, and a stored value from an older rule goes away. The masker of an environment masks each attachment password, plain and URL-encoded, because a database that is not the default has its password only inside its URL.
 
 | Bucket | Env values |
 |---|---|
