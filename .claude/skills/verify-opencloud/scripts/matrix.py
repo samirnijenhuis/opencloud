@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Drives the opencloud verification matrix on the machine that machine.sh made.
 
-  matrix.py doctor                      read-only checks of the machine, the login, and the fixture branches
+  matrix.py doctor                      read-only checks of the deploy key, the machine, the login, and the fixture branches
   matrix.py fixtures sync|check         push the fixture apps to their branches, or compare them
+  matrix.py fixtures key                make the deploy key of the fixture repository and add it on GitHub, read-only
   matrix.py list [--set S] [--only P]   print the cells that a run would drive
   matrix.py run [--set S] [--only P]    drive the cells and write the evidence to .verify/runs/<run id>/
   matrix.py local [--set S] [--only P]  build and run the cells in Docker on this computer, with no machine
@@ -28,6 +29,11 @@ SKILL = Path(__file__).resolve().parent.parent
 ROOT = Path(subprocess.check_output(['git', '-C', str(SKILL), 'rev-parse', '--show-toplevel'], text=True).strip())
 STATE = ROOT / '.verify' / 'state'
 RUNS = ROOT / '.verify' / 'runs'
+# Outside STATE, so machine.sh down keeps the key, and a new machine reuses the key that GitHub already has.
+FIXTURES_KEY = ROOT / '.verify' / 'fixtures-deploy-key'
+FIXTURES_KEY_TITLE = 'opencloud verify matrix'
+# The fixture repository is private. git reads and pushes it with the gh login.
+GH_GIT = ['-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential']
 MATRIX = json.loads((SKILL / 'matrix.json').read_text())
 DRIVER = {'mysql': 'mysql', 'postgres': 'pgsql', 'mysqlpostgres': 'mysql', 'sqlite': 'sqlite'}
 # The most specific condition wins when a fixture gives a value for more than one.
@@ -266,13 +272,14 @@ class CellRun:
             'deploy_commands': [cell.fill(c) for c in cell.pick('deploy_commands') or []],
             'processes': [],
             'database': cell.create_database(),
+            'deploy_private_key': FIXTURES_KEY.read_text(),
             'env': [
                 *({'key': k, 'value': cell.fill(v), 'is_secret': False, 'available_at': 'runtime'} for k, v in env.items()),
                 {'key': 'VERIFY_SECRET', 'value': self.secret, 'is_secret': True, 'available_at': 'runtime'},
                 {'key': 'VERIFY_BUILD', 'value': cell.id, 'is_secret': False, 'available_at': 'build'},
             ],
         }
-        self.save('config.json', {**body, 'env': [{**e, 'value': '<secret>'} if e['is_secret'] else e for e in body['env']]})
+        self.save('config.json', {**body, 'deploy_private_key': '<key>', 'env': [{**e, 'value': '<secret>'} if e['is_secret'] else e for e in body['env']]})
 
         status, location, _ = self.dash.request('POST', '/applications', body)
         created = re.search(r'/environments/(\d+)$', location or '')
@@ -406,6 +413,8 @@ class CellRun:
 
 def run(args):
     env = machine_env()
+    if not FIXTURES_KEY.exists():
+        sys.exit(f'{FIXTURES_KEY} is missing, and each cell posts it. Run matrix.py fixtures key.')
     dashboard = Dashboard(env['BASE'])
     print(dashboard.login(env))
     cells = cells_for(args.set, args.only)
@@ -533,13 +542,21 @@ def local(args):
 
 
 def doctor(_args):
-    env = machine_env()
     ok = True
 
     def line(good, text):
         nonlocal ok
         ok = ok and good
         print(f"{'OK  ' if good else 'FAIL'} {text}")
+
+    repo = MATRIX['fixture_repository']
+    if not FIXTURES_KEY.exists():
+        line(False, f'the deploy key {FIXTURES_KEY} is missing. Run matrix.py fixtures key.')
+    else:
+        keys, error = github_deploy_keys()
+        known = keys is not None and fixtures_public_key() in keys
+        line(known, f'{repo} has the deploy key {FIXTURES_KEY}' + ('' if known else f" ({error or 'GitHub does not have it'}). Run matrix.py fixtures key."))
+    env = machine_env()
 
     machines = subprocess.run(['orb', 'list'], capture_output=True, text=True).stdout
     line(any(l.split()[:2] == [env['MACHINE'], 'running'] for l in machines.splitlines()), f"the machine {env['MACHINE']} runs")
@@ -573,16 +590,56 @@ def fixture_tree(name, spec, target):
     shutil.copytree(SKILL / 'fixtures' / name, target, dirs_exist_ok=True)
 
 
+def fixtures_public_key():
+    """The public key of FIXTURES_KEY as the GitHub API lists a deploy key: the type and the key, without the comment."""
+    derived = subprocess.run(['ssh-keygen', '-y', '-f', str(FIXTURES_KEY)], capture_output=True, text=True, check=True).stdout
+    return ' '.join(derived.split()[:2])
+
+
+def github_deploy_keys():
+    """Reads the deploy keys of the fixture repository. Returns (keys, None), or (None, the error of gh)."""
+    listed = subprocess.run(['gh', 'api', f"repos/{MATRIX['fixture_repository']}/keys?per_page=100"], capture_output=True, text=True)
+    if listed.returncode != 0:
+        return None, listed.stderr.strip()
+    return [' '.join(key['key'].split()[:2]) for key in json.loads(listed.stdout)], None
+
+
+def fixtures_key():
+    """Makes the key pair when it is missing, and adds the public key on GitHub when GitHub does not have it. A second run changes nothing."""
+    repo, public_file = MATRIX['fixture_repository'], FIXTURES_KEY.with_name(FIXTURES_KEY.name + '.pub')
+    if not FIXTURES_KEY.exists():
+        FIXTURES_KEY.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C', FIXTURES_KEY_TITLE, '-f', str(FIXTURES_KEY)], check=True)
+        print(f'Made the key pair {FIXTURES_KEY} and {public_file}')
+    FIXTURES_KEY.chmod(0o600)
+    public = fixtures_public_key()
+    public_file.write_text(f'{public} {FIXTURES_KEY_TITLE}\n')
+    keys, error = github_deploy_keys()
+    if keys is None:
+        sys.exit(f'gh cannot read the deploy keys of {repo}: {error}')
+    if public in keys:
+        print(f'{repo} already has the deploy key')
+        return 0
+    added = subprocess.run(['gh', 'api', '-X', 'POST', f'repos/{repo}/keys', '-f', f'title={FIXTURES_KEY_TITLE}', '-f', f'key={public}', '-F', 'read_only=true'],
+                           capture_output=True, text=True)
+    if added.returncode != 0:
+        sys.exit(f'gh cannot add the deploy key to {repo}: {added.stderr.strip()}')
+    print(f'Added the key to {repo} as a read-only deploy key with the title "{FIXTURES_KEY_TITLE}"')
+    return 0
+
+
 def fixtures(args):
     """Each fixture app lives on its own branch of the fixture repository, because opencloud deploys the root of a branch."""
+    if args.action == 'key':
+        return fixtures_key()
     different = 0
     for name, spec in MATRIX['fixtures'].items():
         with tempfile.TemporaryDirectory(prefix=f'oc-verify-{name}-') as work:
             repo = Path(work) / 'repo'
             remote = repository_url()
-            exists = subprocess.run(['git', 'ls-remote', '--exit-code', '--heads', remote, spec['branch']], capture_output=True).returncode == 0
+            exists = subprocess.run(['git', *GH_GIT, 'ls-remote', '--exit-code', '--heads', remote, spec['branch']], capture_output=True).returncode == 0
             if exists:
-                subprocess.run(['git', 'clone', '--quiet', '--depth', '1', '--branch', spec['branch'], remote, str(repo)], check=True)
+                subprocess.run(['git', *GH_GIT, 'clone', '--quiet', '--depth', '1', '--branch', spec['branch'], remote, str(repo)], check=True)
             else:
                 subprocess.run(['git', 'init', '--quiet', '--initial-branch', spec['branch'], str(repo)], check=True)
                 subprocess.run(['git', '-C', str(repo), 'remote', 'add', 'origin', remote], check=True)
@@ -600,8 +657,7 @@ def fixtures(args):
                 print(f'{name}: the branch {spec["branch"]} differs from fixtures/{name}. Run matrix.py fixtures sync.')
                 continue
             subprocess.run(['git', '-C', str(repo), 'commit', '--quiet', '-m', f'Sync the {name} fixture'], check=True)
-            subprocess.run(['git', '-C', str(repo), '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential',
-                            'push', '--quiet', 'origin', f'HEAD:refs/heads/{spec["branch"]}'], check=True)
+            subprocess.run(['git', '-C', str(repo), *GH_GIT, 'push', '--quiet', 'origin', f'HEAD:refs/heads/{spec["branch"]}'], check=True)
             print(f'{name}: pushed the branch {spec["branch"]}')
     return 1 if args.action == 'check' and different else 0
 
@@ -611,7 +667,7 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('doctor').set_defaults(func=doctor)
     fixture_parser = commands.add_parser('fixtures')
-    fixture_parser.add_argument('action', choices=['sync', 'check'])
+    fixture_parser.add_argument('action', choices=['sync', 'check', 'key'])
     fixture_parser.set_defaults(func=fixtures)
     for name, func in (('list', None), ('run', run), ('local', local)):
         sub = commands.add_parser(name)
