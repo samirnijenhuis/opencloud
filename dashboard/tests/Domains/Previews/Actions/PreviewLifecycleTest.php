@@ -94,7 +94,7 @@ class PreviewLifecycleTest extends TestCase
         );
         $this->assertSame(
             [
-                ['scheduler', 'scheduled', 'php artisan schedule:run', '* * * * *', 's', null, null, null],
+                ['scheduler', 'long_running', 'php artisan schedule:work', null, 's', 1, 1, 70],
                 ['horizon', 'long_running', 'php artisan horizon', null, 'm', 1, 3, 60],
             ],
             $preview->processes->map(fn (Process $p) => [

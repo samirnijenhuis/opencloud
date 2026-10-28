@@ -118,7 +118,7 @@ class ApplicationControllerTest extends TestCase
                         'deploy_commands' => ['php artisan migrate --force'],
                         'processes' => [
                             ['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'schedule' => null],
-                            ['name' => 'scheduler', 'kind' => 'scheduled', 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *'],
+                            ['name' => 'scheduler', 'kind' => 'long_running', 'command' => 'php artisan schedule:work', 'schedule' => null],
                         ],
                         'database' => 'mysql',
                     ],
@@ -294,7 +294,7 @@ class ApplicationControllerTest extends TestCase
     {
         $laravelProcesses = [
             ['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'schedule' => null],
-            ['name' => 'scheduler', 'kind' => 'scheduled', 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *'],
+            ['name' => 'scheduler', 'kind' => 'long_running', 'command' => 'php artisan schedule:work', 'schedule' => null],
         ];
 
         return [

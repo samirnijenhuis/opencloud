@@ -246,6 +246,27 @@ class RunDeploymentTest extends TestCase
         ], array_values(array_filter(array_column($this->kubectl->callsStartingWith('delete'), 'args'), fn (array $args) => $args[1] !== 'secret')));
     }
 
+    public function test_the_laravel_scheduler_that_moved_from_a_cronjob_to_schedule_work_runs_as_a_deployment_on_the_next_deploy(): void
+    {
+        $this->environment->processes()->where('name', 'scheduler')->sole()->update([
+            'kind' => ProcessKind::LONG_RUNNING, 'command' => 'php artisan schedule:work', 'schedule' => null, 'min_instances' => 1, 'max_instances' => 1, 'cpu_target' => 70,
+        ]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        $namespace = "oc-env-{$this->environment->id}";
+        $scheduler = collect($this->kubectl->appliedManifests())->firstWhere('metadata.name', 'scheduler');
+        $this->assertSame(
+            ['Deployment', 1, ['sh', '-c', 'exec php artisan schedule:work']],
+            [$scheduler['kind'], $scheduler['spec']['replicas'], $scheduler['spec']['template']['spec']['containers'][0]['command']],
+        );
+        $this->assertNotContains('CronJob', array_column($this->kubectl->appliedManifests(), 'kind'));
+        $this->assertSame([[
+            'delete', 'cronjob', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process",
+            "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
+        ]], array_column($this->kubectl->callsStartingWith('delete cronjob'), 'args'));
+    }
+
     public function test_a_failing_deploy_command_fails_the_deployment_and_keeps_the_old_one_live(): void
     {
         $this->kubectl->respond('wait --for=condition=complete', new KubectlResult(1, '', 'error: timed out waiting for the condition'));

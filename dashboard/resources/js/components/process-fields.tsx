@@ -45,7 +45,7 @@ export default function ProcessFields({ value, onChange, errors = {}, disabled =
                 <Input
                     aria-label="Command"
                     className="min-w-48 flex-1 font-mono text-sm"
-                    placeholder={scheduled ? 'php artisan schedule:run' : 'php artisan queue:work'}
+                    placeholder={scheduled ? 'php artisan app:cleanup' : 'php artisan queue:work'}
                     value={value.command}
                     disabled={disabled}
                     onChange={(e) => onChange({ command: e.target.value })}
