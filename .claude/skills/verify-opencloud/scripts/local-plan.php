@@ -11,7 +11,6 @@ use App\Domains\Datastores\SqlConnection;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\DatastoreManifests;
-use App\Domains\Applications\Enums\EnvProfileKind;
 use Illuminate\Contracts\Console\Kernel;
 
 $input = json_decode($argv[1], true, flags: JSON_THROW_ON_ERROR);
@@ -21,7 +20,6 @@ $app = require "{$input['dashboard']}/bootstrap/app.php";
 $app->make(Kernel::class)->bootstrap();
 
 $type = ApplicationType::from($input['type']);
-$profile = EnvProfileKind::from($input['env_profile'])->profile();
 $port = $type->choosesPort() ? ($input['port'] ?? $type->defaultPort()) : $type->defaultPort();
 $dockerfile = (new ReflectionMethod(Builder::class, 'prepare'))
     ->invoke(new Builder, $type, $input['dir'], array_keys($input['build_env']), $input['build_command']);
@@ -33,8 +31,10 @@ foreach ($input['attachments'] as $a) {
         ? new KeyValueConnection($a['host'], $a['port'], $a['password'], false)
         : new SqlConnection(DatastoreKind::from($a['kind']), $a['host'], $a['port'], $a['database'], $a['username'], $a['password'], $a['name'], $a['default']);
 
-    foreach ($connection->envFor($profile) as $key => $value) {
-        $env[$key] = $value->value;
+    foreach ($type->envProfiles() as $profile) {
+        foreach ($connection->envFor($profile) as $key => $value) {
+            $env[$key] = $value->value;
+        }
     }
 }
 

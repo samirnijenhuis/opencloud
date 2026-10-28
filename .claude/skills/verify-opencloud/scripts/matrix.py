@@ -34,7 +34,9 @@ DRIVER = {'mysql': 'mysql', 'postgres': 'pgsql', 'mysqlpostgres': 'mysql', 'sqli
 PRIORITY = ['valkey', 'sqlite', 'server-sql', 'sql', 'no-sql', 'always']
 # The checks of the verify endpoint. The "checks" of a fixture list the ones that it reports. The runner skips the others.
 CHECKS = {'marker', 'build', 'secret', 'db', 'extra', 'cache'}
-REPORTS_URL = {'laravel': 'REPORTS_DB_URL', 'generic': 'REPORTS_DATABASE_URL'}
+# The env key of the database reports that each preset gives and its fixture reads. A Dockerfile app gets both sets, and
+# the php fixture reads the Laravel name.
+REPORTS_URL = {'laravel': 'REPORTS_DB_URL', 'dockerfile': 'REPORTS_DB_URL', 'node': 'REPORTS_DATABASE_URL', 'python': 'REPORTS_DATABASE_URL', 'ruby': 'REPORTS_DATABASE_URL'}
 
 
 def repository_url():
@@ -255,7 +257,6 @@ class CellRun:
             'branch': fixture['branch'],
             'cluster_id': self.cluster_id,
             'type': fixture['type'],
-            'env_profile': fixture['env_profile'],
             'port': fixture.get('port'),
             'size': 'xs',
             'min_instances': 1,
@@ -393,7 +394,7 @@ class CellRun:
 
         if cell.db == 'mysqlpostgres' and step >= 2:
             reports = (report.get('extra') or {}).get('reports') or {}
-            self.check(f'step {step}: the pgsql database answers through {REPORTS_URL[fixture["env_profile"]]}', reports.get('ok') is True and reports.get('driver') == 'pgsql', json.dumps(report.get('extra')), needs='extra')
+            self.check(f'step {step}: the pgsql database answers through {REPORTS_URL[fixture["type"]]}', reports.get('ok') is True and reports.get('driver') == 'pgsql', json.dumps(report.get('extra')), needs='extra')
 
         expected = cell.expected_cache(step)
         cache = report.get('cache')
@@ -475,7 +476,7 @@ class LocalRun(CellRun):
             app = Path(work) / 'app'
             fixture_tree(cell.fixture_name, cell.fixture, app)
             planned = subprocess.run(['php', str(SKILL / 'scripts' / 'local-plan.php'), json.dumps({
-                'dashboard': str(ROOT / 'dashboard'), 'dir': str(app), 'type': cell.fixture['type'], 'env_profile': cell.fixture['env_profile'],
+                'dashboard': str(ROOT / 'dashboard'), 'dir': str(app), 'type': cell.fixture['type'],
                 'port': cell.fixture.get('port'), 'build_env': build_env, 'build_command': cell.fill(cell.pick('build_command')),
                 'attachments': attachments,
             })], capture_output=True, text=True)

@@ -5,7 +5,7 @@ A user creates an application from a GitHub repository and a branch, picks the a
 ## Sub-features
 
 - `create-laravel` creates a Laravel app, which opencloud builds with its own Dockerfile template.
-- `create-dockerfile` creates an app from the Dockerfile at the root of the branch, with a port.
+- `create-dockerfile` creates an app from the Dockerfile at the root of the branch, with a port. The app gets the Laravel env names and the generic env names.
 - `create-preset` creates a Node.js, static, Python, or Ruby app with no Dockerfile. Opencloud writes the Dockerfile from the preset, and the app gets the generic env names.
 - `create-first-deploy` starts the first deployment, which goes live without a click.
 - `create-free-address` gives the production environment the address `<app>-production.<ip>.sslip.io` with a certificate.
