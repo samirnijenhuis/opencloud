@@ -12,7 +12,7 @@ import {
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { applicationTypeLabels, type EnvironmentLink, type EnvironmentPageProps } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react';
 
 const tabs = [
@@ -92,7 +92,6 @@ export default function EnvironmentLayout({
     children: React.ReactNode;
 }) {
     const { application, environment, can } = page;
-    const errors = usePage().props.errors as Record<string, string>;
     const routeName = tabs.find((item) => item.key === tab)?.route ?? 'environments.show';
 
     return (
@@ -160,13 +159,11 @@ export default function EnvironmentLayout({
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-start gap-2">
                         {actions}
                         {can.deploy && environment.kind !== 'preview_template' && <DeployButton environmentId={environment.id} />}
                     </div>
                 </div>
-
-                {errors.deploy && <p className="text-sm text-red-600 dark:text-red-400">{errors.deploy}</p>}
 
                 <div className="space-y-6">{children}</div>
             </div>
