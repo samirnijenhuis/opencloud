@@ -144,7 +144,7 @@ class EnvironmentManifestsTest extends TestCase
         ], $this->manifests(['size' => Size::L])->process($reverb, $this->deployment()));
     }
 
-    public function test_a_scheduled_process_runs_as_a_cron_job_that_starts_each_run_without_a_wait(): void
+    public function test_a_scheduled_process_runs_as_a_cron_job_with_one_run_at_a_time_and_skips_a_late_start(): void
     {
         $labels = ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/process' => 'scheduler'];
         $pods = [...$labels, 'opencloud.dev/deployment' => '12'];
@@ -155,7 +155,8 @@ class EnvironmentManifestsTest extends TestCase
             'metadata' => ['name' => 'scheduler', 'namespace' => 'oc-env-7', 'labels' => $labels],
             'spec' => [
                 'schedule' => '* * * * *',
-                'concurrencyPolicy' => 'Allow',
+                'concurrencyPolicy' => 'Forbid',
+                'startingDeadlineSeconds' => 60,
                 'successfulJobsHistoryLimit' => 1,
                 'failedJobsHistoryLimit' => 1,
                 'jobTemplate' => [

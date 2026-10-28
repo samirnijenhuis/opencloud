@@ -194,8 +194,10 @@ final readonly class EnvironmentManifests
             'metadata' => $this->metadata($process->name, Labels::process($this->environment, $process->name)),
             'spec' => [
                 'schedule' => $process->schedule,
-                // schedule:run and a server cron start a new run each minute without a wait. A skipped minute loses its tasks.
-                'concurrencyPolicy' => 'Allow',
+                // With Allow, a pod that cannot start (a full node) does not stop the next run, so Pending pods pile up
+                // each minute and then all start at once. Forbid keeps one run, and the deadline skips a late start.
+                'concurrencyPolicy' => 'Forbid',
+                'startingDeadlineSeconds' => 60,
                 'successfulJobsHistoryLimit' => 1,
                 'failedJobsHistoryLimit' => 1,
                 'jobTemplate' => [
