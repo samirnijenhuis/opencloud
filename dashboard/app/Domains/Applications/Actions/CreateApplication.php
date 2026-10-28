@@ -59,9 +59,9 @@ class CreateApplication
         $processes = $data['processes'] ?? $type->processes();
 
         // A wrong repository or branch fails here, before any record exists.
-        $cloneUrl = (new Application(['repository' => $data['repository']]))->cloneUrl();
-        $branch = ($data['branch'] ?? null) ?: Git::defaultBranch($cloneUrl);
-        $commitSha = Git::head($cloneUrl, $branch);
+        $draft = new Application(['repository' => $data['repository']]);
+        $branch = ($data['branch'] ?? null) ?: Git::defaultBranch($draft);
+        $commitSha = Git::head($draft, $branch);
 
         [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database, $processes) {
             $application = Application::create([

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domains\Builds\Exceptions\DeployKeyRefused;
 use App\Domains\Deployments\Actions\StartDeployment;
 use App\Domains\Deployments\DeploymentSteps;
 use App\Domains\Deployments\Enums\DeploymentStatus;
@@ -84,6 +85,8 @@ class DeploymentController extends Controller
 
         try {
             $deployment = $startDeployment->execute($environment, $request->user());
+        } catch (DeployKeyRefused) {
+            return back()->withErrors(['deploy' => DeployKeyRefused::STEP]);
         } catch (InvalidArgumentException|RuntimeException) {
             return back()->withErrors(['deploy' => "We could not read the branch {$environment->branch}. Check the branch name in the settings."]);
         }

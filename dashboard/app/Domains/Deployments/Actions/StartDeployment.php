@@ -30,7 +30,7 @@ class StartDeployment
             throw new InvalidArgumentException("Environment {$environment->name} has no branch to deploy.");
         }
 
-        $commitSha ??= Git::head($environment->application->cloneUrl(), $environment->branch);
+        $commitSha ??= Git::head($environment->application, $environment->branch);
 
         $deployment = $environment->deployments()->create(['commit_sha' => $commitSha, 'triggered_by' => $by?->id]);
 

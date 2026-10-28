@@ -13,6 +13,7 @@ This document is the contract for the code. The design document `docs/superpower
 | `dashboard/app/` | The PHP code in five folders: `Console`, `Domains/<Domain>`, `Http`, `Providers`, and `Support`. `.claude/rules/architecture.md` lists the domains and says what goes in each folder. |
 | `dashboard/Dockerfile` | The image of the dashboard. CI publishes it. |
 | `dashboard/resources/docker/` | The Dockerfile templates of the Laravel, Node.js, and static presets. |
+| `dashboard/resources/ssh/github_known_hosts` | The pinned SSH host keys of github.com, for git over SSH with a deploy key. |
 | `tofu/` | OpenTofu modules for `created` clusters and managed services. |
 | `tests/e2e/` | The release test. It drives a fresh Ubuntu machine end to end. |
 
@@ -303,7 +304,9 @@ A database comes back from its newest dump file in the bucket from before the st
 
 `App\Domains\GitHub` is the boundary to GitHub. One `GithubApp` row holds the app of the install. The owner creates it on the page `/settings/github` with the manifest flow. `GitHubClient` signs an RS256 app token with `AppJwt`. It finds the installation of a repository and keeps the installation token encrypted in the cache until one minute before it expires. Tests swap every call with `Http::fake()`.
 
-`App\Domains\Builds\Git` is the only class that runs `git` against a remote. For a github.com repository with the app installed, it uses `https://x-access-token:<token>@github.com/<owner>/<repo>.git`. It fetches the URL directly, so `.git` never stores the token. It masks the token in the message of a failed command. Without a token it uses the plain URL, so public repositories work without the app.
+`App\Domains\Builds\Git` is the only class that runs `git` against a remote. Each call takes the application, and `Git::withRemote()` is the one place that picks the remote. For a github.com repository with the app installed, it uses `https://x-access-token:<token>@github.com/<owner>/<repo>.git`. It fetches the URL directly, so `.git` never stores the token. It masks the token in the message of a failed command. Without a token it uses the plain URL, so public repositories work without the app.
+
+An application can have a deploy key instead of the app. The private key is in the encrypted column `applications.deploy_private_key`, and the public key is in `applications.deploy_public_key`. For a github.com repository with a deploy key, `Git` uses `git@github.com:<owner>/<repo>.git` and sets `GIT_SSH_COMMAND` to `ssh -i <key file> -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=<pinned file>`. The deploy key wins over the app token. The key file is a temporary file with mode 0600, and `Git` deletes it after the call, also after a failed call. `dashboard/resources/ssh/github_known_hosts` pins the host keys that GitHub publishes, so ssh refuses a server with another key. When GitHub refuses the key, ssh prints `Permission denied (publickey)`, and `Git` throws `DeployKeyRefused`. Its message is the masked git error and the line "GitHub refused the deploy key. Add the public key to the repository under Settings, Deploy keys." The deployment log gets both, and the Deploy button shows the line. The dashboard image has `openssh-client` for `ssh` and `ssh-keygen`.
 
 `POST /webhooks/github` checks `X-Hub-Signature-256` with `hash_equals` first and answers 401 on a bad signature. It parses the payload into `PushEvent` or `PullRequestEvent`, queues one job, and answers 202. A repeated `X-GitHub-Delivery` id does nothing.
 

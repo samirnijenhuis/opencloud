@@ -8,6 +8,7 @@ use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\BuildsEnvironments;
@@ -147,5 +148,20 @@ class DeploymentControllerTest extends TestCase
             ->assertSessionHasErrors(['deploy' => 'We could not read the branch main. Check the branch name in the settings.']);
 
         $this->assertSame(0, Deployment::count());
+    }
+
+    public function test_a_deploy_key_that_github_refuses_comes_back_as_the_step_that_fixes_it(): void
+    {
+        Queue::fake();
+        Process::fake(['*' => Process::result(errorOutput: "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n", exitCode: 128)]);
+        $environment = $this->makeEnvironment(false);
+        $environment->application->update(['deploy_private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----\n"]);
+
+        $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")
+            ->assertRedirect('/back')
+            ->assertSessionHasErrors(['deploy' => 'GitHub refused the deploy key. Add the public key to the repository under Settings, Deploy keys.']);
+
+        $this->assertSame(0, Deployment::count());
+        Queue::assertNothingPushed();
     }
 }
