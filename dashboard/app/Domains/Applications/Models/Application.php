@@ -3,7 +3,6 @@
 namespace App\Domains\Applications\Models;
 
 use App\Domains\Applications\Enums\ApplicationType;
-use App\Domains\Applications\Enums\EnvProfileKind;
 use App\Domains\Applications\Policies\ApplicationPolicy;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Environments\Models\Environment;
@@ -23,7 +22,7 @@ class Application extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'env_profile', 'port', 'previews_enabled', 'allow_forks', 'preview_domain'];
+    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'allow_forks', 'preview_domain'];
 
     protected $attributes = [
         'port' => 8080,
@@ -35,7 +34,6 @@ class Application extends Model
     {
         return [
             'type' => ApplicationType::class,
-            'env_profile' => EnvProfileKind::class,
             'port' => 'integer',
             'previews_enabled' => 'boolean',
             'allow_forks' => 'boolean',

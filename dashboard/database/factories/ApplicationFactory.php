@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use App\Domains\Applications\Enums\ApplicationType;
-use App\Domains\Applications\Enums\EnvProfileKind;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Clusters\Models\Cluster;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -23,7 +22,6 @@ class ApplicationFactory extends Factory
             'repository' => fake()->userName().'/'.fake()->slug(2),
             'cluster_id' => Cluster::factory(),
             'type' => ApplicationType::LARAVEL,
-            'env_profile' => EnvProfileKind::LARAVEL,
         ];
     }
 }

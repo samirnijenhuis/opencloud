@@ -9,10 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { parseDotenv, sizeLabel, sizeText } from '@/lib/format';
-import { applicationTypeLabels, type ApplicationType, type EnvProfileKind, type ProcessValues, type Size, type SizeOption } from '@/types';
+import { applicationTypeLabels, type ApplicationType, type ProcessValues, type Size, type SizeOption } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-import { Chip, envProfiles, presetText, type Preset } from './presets';
+import { Chip, presetText, type Preset } from './presets';
 
 type Cluster = { id: number; name: string; kind: string; ingress_ip: string | null };
 type EnvRow = { key: string; value: string; is_secret: boolean };
@@ -23,7 +23,6 @@ type FormData = {
     branch: string;
     cluster_id: string;
     type: ApplicationType;
-    env_profile: EnvProfileKind;
     port: string;
     size: Size;
     min_instances: number;
@@ -66,7 +65,6 @@ export default function ApplicationCreate({
 }) {
     const defaults = (preset: Preset) => ({
         type: preset.value,
-        env_profile: preset.env_profile,
         port: String(preset.port),
         deploy_commands: preset.deploy_commands.join('\n'),
         processes: preset.processes,
@@ -407,22 +405,6 @@ export default function ApplicationCreate({
                     <Row label="Domain" hint="Optional. You can add it later.">
                         <Input placeholder="shop.example.com" value={data.domain} onChange={(e) => setData('domain', e.target.value)} />
                         <InputError message={errors.domain} />
-                    </Row>
-
-                    <Row label="Env names" hint="The names of the values that a database, Valkey, or a bucket sets.">
-                        <div className="flex flex-wrap gap-2">
-                            {envProfiles.map((profile) => (
-                                <Chip
-                                    key={profile.value}
-                                    selected={data.env_profile === profile.value}
-                                    onClick={() => setData('env_profile', profile.value)}
-                                >
-                                    <span className="font-medium">{profile.label}</span>
-                                    <span className="text-muted-foreground block font-mono text-xs">{profile.hint}</span>
-                                </Chip>
-                            ))}
-                        </div>
-                        <InputError message={errors.env_profile} />
                     </Row>
 
                     <Row label="Database" hint="opencloud creates it and sets its env values.">

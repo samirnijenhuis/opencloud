@@ -7,10 +7,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind, type EnvProfileKind } from '@/types';
+import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
-import { EnvProfileForm } from './env-profile-form';
 
 type EnvironmentRow = {
     id: number;
@@ -34,7 +33,7 @@ type PreviewSettings = {
 };
 
 type Props = {
-    application: { id: number; name: string; repository: string; type: ApplicationType; env_profile: EnvProfileKind; port: number };
+    application: { id: number; name: string; repository: string; type: ApplicationType; port: number };
     environments: EnvironmentRow[];
     previews: PreviewSettings;
     canUpdate: boolean;
@@ -160,9 +159,12 @@ export default function ApplicationShow({ application, environments, previews, c
                 <div className="space-y-4">
                     <HeadingSmall
                         title="Preset"
-                        description="The preset is fixed. The env names are the names that the databases, Valkey, and the buckets set."
+                        description="The preset is fixed. It also sets the env names that the databases, Valkey, and the buckets give the app."
                     />
-                    <EnvProfileForm application={application} canUpdate={canUpdate} />
+                    <div className="space-y-1 rounded-lg border p-4">
+                        <p className="font-medium">{applicationTypeLabels[application.type]}</p>
+                        <p className="text-muted-foreground text-sm">To use another preset, create a new application with the same repository.</p>
+                    </div>
                 </div>
 
                 <div className="space-y-4">

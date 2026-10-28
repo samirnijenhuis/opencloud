@@ -3,15 +3,16 @@
 namespace App\Domains\Datastores;
 
 use App\Domains\Datastores\Env\EnvProfile;
+use App\Domains\Datastores\Env\EnvValue;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Models\Environment;
 
 /**
- * The env of one attachment under the profile of its environment. It is the only code that turns a connection into
- * env rows, and the only code that picks a profile. Attach, the managed apply, and a new default database all write
- * through here, so the rows always match what the provisioner says about the attachment now.
+ * The env of one attachment under the profiles of its preset. It is the only code that turns a connection into env
+ * rows, and the only code that merges the profiles. Attach, the managed apply, a new default database, and each deploy
+ * all write through here, so the rows always match what the provisioner says about the attachment now.
  */
 final class AttachmentEnv
 {
@@ -22,7 +23,7 @@ final class AttachmentEnv
 
         $connection = Provisioners::of($attachment->datastore)->connection($attachment);
 
-        foreach ($connection?->envFor(self::profile($attachment->environment)) ?? [] as $key => $value) {
+        foreach ($connection === null ? [] : self::env($connection, $attachment->environment) as $key => $value) {
             $attachment->environment->envVars()->updateOrCreate(['key' => $key, 'source' => EnvVarSource::DATASTORE], [
                 'value' => $value->value,
                 'is_secret' => $value->secret,
@@ -36,12 +37,26 @@ final class AttachmentEnv
     public static function configLine(DatastoreAttachment $attachment): ?string
     {
         return $attachment->name !== null && ! $attachment->is_default
-            ? self::profile($attachment->environment)->configLine($attachment->datastore->kind, $attachment->name)
+            ? collect(self::profiles($attachment->environment))
+                ->map(fn (EnvProfile $profile) => $profile->configLine($attachment->datastore->kind, $attachment->name))
+                ->first(fn (?string $line) => $line !== null)
             : null;
     }
 
-    private static function profile(Environment $environment): EnvProfile
+    /**
+     * The profiles of one preset name the same resource, so a name that two of them give has the same value.
+     * AttachmentEnvTest holds that rule.
+     *
+     * @return array<string, EnvValue>
+     */
+    private static function env(Connection $connection, Environment $environment): array
     {
-        return $environment->application->env_profile->profile();
+        return array_merge(...array_map(fn (EnvProfile $profile) => $connection->envFor($profile), self::profiles($environment)));
+    }
+
+    /** @return list<EnvProfile> */
+    private static function profiles(Environment $environment): array
+    {
+        return $environment->application->type->envProfiles();
     }
 }

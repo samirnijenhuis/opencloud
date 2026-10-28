@@ -2,6 +2,9 @@
 
 namespace App\Domains\Applications\Enums;
 
+use App\Domains\Datastores\Env\EnvProfile;
+use App\Domains\Datastores\Env\GenericProfile;
+use App\Domains\Datastores\Env\LaravelProfile;
 use App\Domains\Environments\Enums\ProcessKind;
 
 /**
@@ -103,11 +106,19 @@ enum ApplicationType: string
         };
     }
 
-    public function envProfile(): EnvProfileKind
+    /**
+     * The env names of a database, Valkey, and a bucket, as on Laravel Cloud. The preset decides them, and the user has
+     * no choice. Opencloud cannot know the app in a Dockerfile image, so it gets both sets for the same resource. The
+     * first profile gives the config line of a database or a bucket that is not the default.
+     *
+     * @return list<EnvProfile>
+     */
+    public function envProfiles(): array
     {
         return match ($this) {
-            self::LARAVEL => EnvProfileKind::LARAVEL,
-            self::NODE, self::PYTHON, self::RUBY, self::STATIC, self::DOCKERFILE => EnvProfileKind::GENERIC,
+            self::LARAVEL => [new LaravelProfile],
+            self::NODE, self::PYTHON, self::RUBY, self::STATIC => [new GenericProfile],
+            self::DOCKERFILE => [new LaravelProfile, new GenericProfile],
         };
     }
 
