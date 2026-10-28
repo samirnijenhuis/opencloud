@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domains\Applications\Actions\CreateApplication;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
+use App\Domains\Builds\Exceptions\DeployKeyRefused;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Deployments\Models\Deployment;
@@ -96,6 +97,7 @@ class ApplicationController extends Controller
                 'port' => $data['port'] ?? null,
                 'branch' => $data['branch'] ?? null,
                 'deploy_key' => $request->boolean('deploy_key'),
+                'deploy_private_key' => $data['deploy_private_key'] ?? null,
                 'env' => array_map(fn (array $row) => [
                     'key' => $row['key'],
                     'value' => $row['value'] ?? '',
@@ -119,8 +121,10 @@ class ApplicationController extends Controller
                     'deploy_commands' => $data['deploy_commands'] ?? [],
                 ],
             ]);
+        } catch (DeployKeyRefused) {
+            return back()->withInput($request->except('deploy_private_key'))->withErrors(['deploy_private_key' => DeployKeyRefused::STEP]);
         } catch (RuntimeException) {
-            return back()->withInput()->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
+            return back()->withInput($request->except('deploy_private_key'))->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
         }
 
         // No deployment runs yet, so the user goes to the page that shows the key and the steps to add it on GitHub.

@@ -17,11 +17,13 @@ import { Chip, presetText, type Preset } from './presets';
 type Cluster = { id: number; name: string; kind: string; ingress_ip: string | null };
 type EnvRow = { key: string; value: string; is_secret: boolean };
 type Database = 'mysql' | 'postgres' | 'none';
+type DeployKeyChoice = 'none' | 'new' | 'own';
 
 type FormData = {
     repository: string;
     branch: string;
-    deploy_key: boolean;
+    deploy_key: DeployKeyChoice;
+    deploy_private_key: string;
     cluster_id: string;
     type: ApplicationType;
     port: string;
@@ -74,7 +76,8 @@ export default function ApplicationCreate({
     const form = useForm<FormData>({
         repository: '',
         branch: '',
-        deploy_key: false,
+        deploy_key: 'none',
+        deploy_private_key: '',
         cluster_id: defaultClusterId ? String(defaultClusterId) : '',
         size: 's',
         min_instances: 1,
@@ -127,6 +130,8 @@ export default function ApplicationCreate({
         form.transform((current) => ({
             ...current,
             port: preset.chooses_port ? current.port : null,
+            deploy_key: current.deploy_key === 'new',
+            deploy_private_key: current.deploy_key === 'own' ? current.deploy_private_key : null,
             deploy_commands: current.deploy_commands.split('\n'),
             env: current.env.filter((row) => row.key.trim() !== ''),
         }));
@@ -160,7 +165,7 @@ export default function ApplicationCreate({
                             <Input
                                 aria-label="Branch"
                                 className="w-32"
-                                placeholder={data.deploy_key ? 'main' : 'default branch'}
+                                placeholder={data.deploy_key === 'new' ? 'main' : 'default branch'}
                                 value={data.branch}
                                 onChange={(e) => setData('branch', e.target.value)}
                             />
@@ -168,15 +173,49 @@ export default function ApplicationCreate({
                         <InputError message={errors.repository} />
                         <InputError message={errors.branch} />
                         <Label className="flex items-center gap-2 font-normal">
-                            <Checkbox checked={data.deploy_key} onCheckedChange={(checked) => setData('deploy_key', checked === true)} />
+                            <Checkbox
+                                checked={data.deploy_key !== 'none'}
+                                onCheckedChange={(checked) => setData('deploy_key', checked === true ? 'new' : 'none')}
+                            />
                             Private repository: use a deploy key
                         </Label>
-                        {data.deploy_key && (
+                        {data.deploy_key !== 'none' && (
+                            <div className="flex flex-wrap gap-2">
+                                <Chip selected={data.deploy_key === 'new'} onClick={() => setData('deploy_key', 'new')}>
+                                    <span className="font-medium">Make a new key</span>
+                                    <span className="text-muted-foreground block text-xs">You add it on GitHub before the first deploy.</span>
+                                </Chip>
+                                <Chip selected={data.deploy_key === 'own'} onClick={() => setData('deploy_key', 'own')}>
+                                    <span className="font-medium">Use my own key</span>
+                                    <span className="text-muted-foreground block text-xs">GitHub already knows the key.</span>
+                                </Chip>
+                            </div>
+                        )}
+                        {data.deploy_key === 'new' && (
                             <p className="text-muted-foreground text-sm">
                                 Opencloud makes a deploy key and does not deploy yet. The application page then shows the key and the steps to add it
                                 on GitHub. Without a branch, opencloud uses main.
                             </p>
                         )}
+                        {data.deploy_key === 'own' && (
+                            <>
+                                <Textarea
+                                    aria-label="Private key"
+                                    className="font-mono text-xs"
+                                    rows={6}
+                                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    value={data.deploy_private_key}
+                                    onChange={(e) => setData('deploy_private_key', e.target.value)}
+                                />
+                                <p className="text-muted-foreground text-sm">
+                                    Paste the private key file, for example ~/.ssh/id_ed25519. The key must not have a passphrase. Opencloud reads the
+                                    repository with it and deploys. The page never shows the key again.
+                                </p>
+                            </>
+                        )}
+                        <InputError message={errors.deploy_private_key} />
                     </Row>
 
                     <Row label="Cluster">
@@ -435,8 +474,10 @@ export default function ApplicationCreate({
                 </div>
 
                 <div className="mt-6 flex items-center gap-3">
-                    <Button disabled={processing || data.repository.trim() === ''}>
-                        {processing ? 'Creating' : data.deploy_key ? 'Create' : 'Create and deploy'}
+                    <Button
+                        disabled={processing || data.repository.trim() === '' || (data.deploy_key === 'own' && data.deploy_private_key.trim() === '')}
+                    >
+                        {processing ? 'Creating' : data.deploy_key === 'new' ? 'Create' : 'Create and deploy'}
                     </Button>
                     <Button variant="ghost" asChild>
                         <Link href={route('applications.index')}>Cancel</Link>

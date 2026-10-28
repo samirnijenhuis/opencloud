@@ -10,6 +10,7 @@ A user creates an application from a GitHub repository and a branch, picks the a
 - `create-first-deploy` starts the first deployment, which goes live without a click.
 - `create-free-address` gives the production environment the address `<app>-production.<ip>.sslip.io` with a certificate.
 - `create-no-processes` creates the app with no worker and no scheduler when the form sends an empty process list.
+- `create-own-deploy-key` creates the app from the private fixture repository with the choice "Use my own key". The dashboard reads the branch over SSH with that key and starts the first deploy.
 
 ## How to get to it (user POV)
 
@@ -32,6 +33,7 @@ Preconditions:
 ## Gotchas
 
 - The create form needs a full `https://` repository URL or `owner/repo`. A `http://` URL fails validation.
+- The fixture repository is private. Without `.verify/fixtures-deploy-key`, `matrix.py run` stops. A key that GitHub does not have fails each cell at `the form creates the application`, because the form redirects back and not to the environment. `matrix.py doctor` names the cause. Run `matrix.py fixtures key`.
 - Without `processes`, a Laravel app gets a worker and a scheduler. The runner sends `processes: []` to keep each cell small.
 - The first build of a fixture on a new machine can take several minutes. The runner waits up to 40 minutes for it.
 - A second run on the same machine reuses the app names, so the free address gets the app id. Read the address from the page, never build it from the name.

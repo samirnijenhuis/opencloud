@@ -6,6 +6,7 @@ use App\Domains\Applications\Actions\CreateApplication;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Builds\Exceptions\DeployKeyRefused;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Enums\DatastoreKind;
@@ -25,6 +26,7 @@ use App\Domains\Members\Models\User;
 use App\Domains\Routing\Jobs\CheckDomain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Fakes\FakeProcesses;
@@ -333,6 +335,81 @@ class CreateApplicationTest extends TestCase
             ['application.created', 'application.deploy_key_added'],
             AuditEvent::query()->where('subject_id', $shop->id)->where('subject_type', 'application')->orderBy('id')->pluck('action')->all(),
         );
+    }
+
+    public function test_with_an_own_key_it_checks_the_key_reads_the_repository_over_ssh_before_the_records_and_starts_the_first_deployment(): void
+    {
+        Queue::fake();
+        $processes = FakeProcesses::install();
+        $processes->lsRemote = self::SHA."\trefs/heads/main\n";
+        $owner = User::factory()->create();
+
+        $application = app(CreateApplication::class)->execute($owner, [
+            'name' => 'shop',
+            'repository' => 'https://github.com/acme/shop.git',
+            'cluster_id' => Cluster::factory()->create()->id,
+            'database' => 'none',
+            'processes' => [],
+            'deploy_private_key' => trim(FakeProcesses::PRIVATE_KEY),
+        ]);
+
+        $this->assertSame([
+            ['ssh-keygen', '-y'],
+            ['git', 'ls-remote', '--symref', 'git@github.com:acme/shop.git', 'HEAD'],
+            ['git', 'ls-remote', 'git@github.com:acme/shop.git', 'refs/heads/main'],
+            ['ssh-keygen', '-y'],
+        ], array_map(fn (array $command) => $command[0] === 'git' ? $command : array_slice($command, 0, 2), $processes->commands()));
+        $this->assertSame([FakeProcesses::PRIVATE_KEY, FakeProcesses::PUBLIC_KEY.' me@example.com'], [$application->deploy_private_key, $application->deploy_public_key]);
+        $this->assertSame(['main', self::SHA], [$application->environments()->where('name', 'production')->sole()->branch, Deployment::sole()->commit_sha]);
+        Queue::assertPushedOn('builds', RunDeployment::class);
+        $this->assertSame(
+            ['application.created', 'application.deploy_key_added'],
+            AuditEvent::query()->where('subject_type', 'application')->orderBy('id')->pluck('action')->all(),
+        );
+        $this->assertSame(['source' => 'own'], AuditEvent::query()->where('action', 'application.deploy_key_added')->sole()->context);
+    }
+
+    public function test_an_own_key_that_ssh_keygen_cannot_read_stops_before_any_git_call_and_creates_nothing(): void
+    {
+        Queue::fake();
+        $processes = FakeProcesses::install();
+
+        try {
+            app(CreateApplication::class)->execute(User::factory()->create(), [
+                'name' => 'shop',
+                'repository' => 'https://github.com/acme/shop.git',
+                'cluster_id' => Cluster::factory()->create()->id,
+                'deploy_private_key' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakePublicKey',
+            ]);
+            $this->fail('No exception.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['deploy_private_key' => ['Paste an OpenSSH private key without a passphrase.']], $e->errors());
+        }
+
+        $this->assertSame(['ssh-keygen'], array_column($processes->commands(), 0));
+        $this->assertSame(0, Application::count());
+        Queue::assertNothingPushed();
+    }
+
+    public function test_an_own_key_that_github_refuses_creates_nothing(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemoteError = "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n";
+
+        try {
+            app(CreateApplication::class)->execute(User::factory()->create(), [
+                'name' => 'shop',
+                'repository' => 'https://github.com/acme/shop.git',
+                'cluster_id' => Cluster::factory()->create()->id,
+                'deploy_private_key' => FakeProcesses::PRIVATE_KEY,
+            ]);
+            $this->fail('No exception.');
+        } catch (DeployKeyRefused $e) {
+            $this->assertStringEndsWith("\n".DeployKeyRefused::STEP, $e->getMessage());
+        }
+
+        $this->assertSame([0, 0], [Application::count(), AuditEvent::count()]);
+        Queue::assertNothingPushed();
     }
 
     public function test_a_missing_branch_creates_nothing(): void

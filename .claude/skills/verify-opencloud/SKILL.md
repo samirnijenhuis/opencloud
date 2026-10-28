@@ -13,7 +13,7 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 
 `matrix.json` is the source of the cells. A cell id is `<fixture>-<database>-<cache>`, for example `laravel-postgres-valkey`.
 
-- **Fixtures.** Each one is an app on its own branch of `https://github.com/samirnijenhuis/opencloud-verify-fixtures`. The folders in `fixtures/` are the source. The preset of a fixture decides its env names. `laravel` gets the Laravel env names. `static` and `php` are Dockerfile apps, so they get the Laravel names and the generic names, and `php` reads the Laravel names. The other four get the generic env names: `DATABASE_URL`, `<NAME>_DATABASE_URL`, and `REDIS_URL`.
+- **Fixtures.** Each one is an app on its own branch of `https://github.com/samirnijenhuis/opencloud-verify-fixtures`. The repository is private, so each cell reads it with the deploy key of the matrix. The folders in `fixtures/` are the source. The preset of a fixture decides its env names. `laravel` gets the Laravel env names. `static` and `php` are Dockerfile apps, so they get the Laravel names and the generic names, and `php` reads the Laravel names. The other four get the generic env names: `DATABASE_URL`, `<NAME>_DATABASE_URL`, and `REDIS_URL`.
   - `static` is nginx with its own Dockerfile, so it proves the Dockerfile preset. Its build reads a build env value from a BuildKit secret, and its deploy command is an `echo`.
   - `php` is plain PHP on Apache with `pdo_mysql`, `pdo_pgsql`, and `redis`, with its own Dockerfile. Its deploy command is `php /var/www/deploy.php <cell>`.
   - `laravel` is laravel/laravel at the commit in `matrix.json`, plus a `/verify` route, the command `verify:mark-deploy`, and a migration. Its build command writes a marker file. Its deploy commands are `migrate` and `verify:mark-deploy`.
@@ -39,11 +39,23 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 
 Each cell does three deploys:
 
-1. **Create.** The cell posts the create form with its build command, deploy commands, env values, a secret, a build env value, and `processes: []`. The first deploy must go live. Then the page and the verify endpoint must report the runtime env value, the build marker, the hash of the secret, the database, and the cache, as far as the fixture reports them.
+1. **Create.** The cell posts the create form with its build command, deploy commands, env values, a secret, a build env value, and `processes: []`. It also posts the private key of the matrix in `deploy_private_key`, as the choice "Use my own key" does. The dashboard reads the branch over SSH with that key and starts the first deploy. The first deploy must go live. Then the page and the verify endpoint must report the runtime env value, the build marker, the hash of the secret, the database, and the cache, as far as the fixture reports them.
 2. **Change and redeploy.** The cell changes `VERIFY_MARKER` to `-v2`, adds the database `reports` and Valkey when the cell has them, and clicks Deploy. The new value must show. The MySQL and Postgres rows from step 1 must still be there.
 3. **Redeploy under traffic.** The cell polls the verify endpoint four times a second during a third deploy. No request may fail.
 
 Each deploy log must contain `deploy-marker-<cell>` in its step "Running deploy commands", which proves that the deploy commands ran. A live deployment must show each of the 7 steps as finished. The runner reads the steps from the deployment page and writes them as `deployment-N.log`. At the end, the settings page must not contain the secret value.
+
+## Deploy key
+
+```bash
+.claude/skills/verify-opencloud/scripts/matrix.py fixtures key
+```
+
+- The matrix keeps one key pair for the fixture repository in `.verify/fixtures-deploy-key` (mode 600) and `.verify/fixtures-deploy-key.pub`. Git ignores `.verify/`. Do not print the private key.
+- `fixtures key` makes the pair with `ssh-keygen -t ed25519` when it is missing. Then it reads the deploy keys of the repository with `gh api repos/<owner>/<repo>/keys`. When GitHub does not have the public key, it adds it as a read-only key with the title `opencloud verify matrix`. It never adds write access. A second run changes nothing.
+- The key file is outside `.verify/state`, so `machine.sh down` keeps it. A new machine reuses the key that GitHub already has.
+- `matrix.py run` stops before the first cell when the key file is missing.
+- Adding the key needs a `gh` login with admin rights on the repository.
 
 ## Launch
 
@@ -62,8 +74,9 @@ Each deploy log must contain `deploy-marker-<cell>` in its step "Running deploy 
 .claude/skills/verify-opencloud/scripts/matrix.py doctor
 ```
 
-Run it first, and again whenever something looks wrong. It changes nothing on the machine. It checks that:
+Run it first, and again whenever something looks wrong. It changes nothing on the machine or on GitHub. It checks that:
 
+- the deploy key file exists, and GitHub has the key as a deploy key of the fixture repository. If not, run `matrix.py fixtures key`;
 - the machine runs;
 - `BASE/up` answers 200;
 - `BUILT_FROM` is the current `HEAD`. If not, run `machine.sh up` again, or the run tests old code;
@@ -116,7 +129,7 @@ Each run writes to `.verify/runs/<YYYYMMDD-HHMMSS>/`, which git ignores:
 - `summary.md` holds one row per cell: the verdict, the seconds, the first deploy time, the number of skipped checks, and the failed checks.
 - `machine.json` holds the machine, `BASE`, `BUILT_FROM`, the `HEAD` at the run, and the cells.
 - `<cell>/` holds:
-  - `config.json`, the body of the create form, with the secret hidden;
+  - `config.json`, the body of the create form, with the secret value as `<secret>` and the deploy key as `<key>`;
   - `deployment-1.log` to `deployment-3.log`, the deploy logs;
   - `step-N-page.html` and `step-N-verify.json`, the live responses of each step;
   - `step-3-requests.json`, the request count and the failures during the third deploy;
@@ -150,7 +163,7 @@ Proof standards:
 - A static site has no server process. It cannot read a runtime env value, a secret, or a datastore, so `site` skips those checks. Its verify endpoint is the file `/verify.json`, because the static preset answers each other path with `index.html`.
 - The `python` and `ruby` cells need the Python and Ruby presets. The Ruby preset must have a C compiler and the MySQL client headers, because `puma`, `nio4r`, and `mysql2` compile. `pg` installs as a binary gem.
 - The first build of each fixture on a new machine downloads every package and can take several minutes. Later builds use the BuildKit cache and take seconds.
-- `matrix.py fixtures sync` pushes to `samirnijenhuis/opencloud-verify-fixtures` with the `gh` login. Someone without push rights can still run the matrix, because the repository is public.
+- `matrix.py fixtures sync` pushes to `samirnijenhuis/opencloud-verify-fixtures` with the `gh` login. The repository is private, so `fixtures sync`, `fixtures check`, and `doctor` also read it with the `gh` login. The cells read it with the deploy key. Someone without access to the repository cannot run the matrix.
 
 ## Feature map
 

@@ -24,6 +24,6 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // A refused connect form must not leave the kubeconfig or the registry password in the session table.
-        $exceptions->dontFlash(['kubeconfig', 'registry_password']);
+        // A refused form must not leave the kubeconfig, the registry password, or a deploy key in the session table.
+        $exceptions->dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key']);
     })->create();
