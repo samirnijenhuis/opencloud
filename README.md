@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/opencloud-hero.jpg" alt="A tiny hand-built cloud of servers and containers on a workbench, connected to a database, a bucket, and a padlock" width="100%">
+  <img src="docs/images/opencloud-hero-dark.jpg" alt="A small glowing cloud of containers above one small server at night, with lines to a database, a bucket, and a padlock" width="100%">
 </p>
 
 <h1 align="center">opencloud</h1>
