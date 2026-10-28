@@ -478,4 +478,18 @@ class ApplicationControllerTest extends TestCase
                 ->where('environments.2.name', 'pr-7')
                 ->where('environments.2.pr_number', 7));
     }
+
+    public function test_the_application_page_shows_the_public_key_of_the_deploy_key_to_a_developer_and_never_the_private_key(): void
+    {
+        $application = $this->makeEnvironment()->application;
+        $application->update(['deploy_private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nsecret-key-text\n-----END OPENSSH PRIVATE KEY-----\n", 'deploy_public_key' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKey opencloud shop']);
+
+        $this->actingAs(User::factory()->create())->get("/applications/{$application->id}")
+            ->assertOk()
+            ->assertDontSee('secret-key-text')
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('applications/show')
+                ->where('deployPublicKey', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKey opencloud shop')
+                ->where('canUpdate', false));
+    }
 }

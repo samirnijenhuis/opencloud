@@ -159,6 +159,7 @@ class ApplicationController extends Controller
                 'max_previews' => config('opencloud.max_previews'),
                 'template_id' => $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->value('id'),
             ],
+            'deployPublicKey' => $application->deploy_public_key,
             'canUpdate' => $request->user()->can('update', $application),
             'environments' => $environments
                 ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::PERMANENT ? 1 : 2), $environment->name])

@@ -7,6 +7,7 @@ use App\Http\Controllers\CommandRunController;
 use App\Http\Controllers\CreatedClusterController;
 use App\Http\Controllers\DatastoreController;
 use App\Http\Controllers\DeployHookController;
+use App\Http\Controllers\DeployKeyController;
 use App\Http\Controllers\DeploymentController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\EnvironmentColorController;
@@ -40,6 +41,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
     Route::get('applications/{application}', [ApplicationController::class, 'show'])->name('applications.show');
     Route::patch('applications/{application}/previews', [PreviewSettingsController::class, 'update'])->name('applications.previews.update');
+    Route::post('applications/{application}/deploy-key', [DeployKeyController::class, 'store'])->name('applications.deploy-key.store');
+    Route::delete('applications/{application}/deploy-key', [DeployKeyController::class, 'destroy'])->name('applications.deploy-key.destroy');
 
     Route::get('environments/{environment}', [EnvironmentController::class, 'show'])->name('environments.show');
     Route::get('environments/{environment}/deployments', [DeploymentController::class, 'index'])->name('environments.deployments');
