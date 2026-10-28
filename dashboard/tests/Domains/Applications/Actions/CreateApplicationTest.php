@@ -73,7 +73,7 @@ class CreateApplicationTest extends TestCase
         $production = $application->environments()->where('name', 'production')->sole();
         $defaults = [
             ['worker', 'long_running', 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', null, 's', 1, 1, 70],
-            ['scheduler', 'scheduled', 'php artisan schedule:run', '* * * * *', 's', null, null, null],
+            ['scheduler', 'long_running', 'php artisan schedule:work', null, 's', 1, 1, 70],
         ];
         $this->assertSame([$defaults, $defaults], $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => self::processes($e))->all());
 

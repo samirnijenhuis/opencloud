@@ -29,8 +29,16 @@ const AUTOSCALING_FIELDS: (keyof ProcessForm)[] = ['min_instances', 'max_instanc
 const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
 
 const kindOptions: { value: ProcessKind; label: string; text: string }[] = [
-    { value: 'long_running', label: 'Long-running', text: 'Runs all the time, for example a queue worker.' },
-    { value: 'scheduled', label: 'Scheduled', text: 'Runs on a schedule, for example the Laravel scheduler.' },
+    {
+        value: 'long_running',
+        label: 'Long-running',
+        text: 'Runs all the time, for example a queue worker. The Laravel scheduler runs here with php artisan schedule:work.',
+    },
+    {
+        value: 'scheduled',
+        label: 'Scheduled',
+        text: 'Starts a new pod for each run, so the command must end. A task that it starts in the background ends with the pod.',
+    },
 ];
 
 const descriptions: Record<ProcessKind, string> = {
@@ -189,13 +197,13 @@ export function ProcessSheet({
                                     <Label htmlFor="process-command">Command</Label>
                                     <p className="text-muted-foreground text-sm">
                                         {scheduled
-                                            ? 'Each run starts a new pod, so the command must end. For the Laravel scheduler, use php artisan schedule:run.'
+                                            ? 'Each run starts a new pod, so the command must end, for example php artisan app:cleanup.'
                                             : 'The command runs in a shell, for example php artisan queue:work.'}
                                     </p>
                                     <Input
                                         id="process-command"
                                         className="font-mono"
-                                        placeholder={scheduled ? 'php artisan schedule:run' : 'php artisan queue:work'}
+                                        placeholder={scheduled ? 'php artisan app:cleanup' : 'php artisan queue:work'}
                                         value={data.command}
                                         onChange={(e) => setData('command', e.target.value)}
                                     />

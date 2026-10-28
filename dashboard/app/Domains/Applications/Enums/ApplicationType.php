@@ -49,7 +49,7 @@ enum ApplicationType: string
     }
 
     /**
-     * The scheduler runs schedule:run each minute, as the server cron of the Laravel docs does.
+     * The scheduler runs schedule:work in one long-running process, as Laravel Cloud runs it in its app instances.
      *
      * @return list<array{name: string, kind: ProcessKind, command: string, schedule: ?string}>
      */
@@ -58,7 +58,7 @@ enum ApplicationType: string
         return match ($this) {
             self::LARAVEL => [
                 ['name' => 'worker', 'kind' => ProcessKind::LONG_RUNNING, 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'schedule' => null],
-                ['name' => 'scheduler', 'kind' => ProcessKind::SCHEDULED, 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *'],
+                ['name' => 'scheduler', 'kind' => ProcessKind::LONG_RUNNING, 'command' => 'php artisan schedule:work', 'schedule' => null],
             ],
             self::NODE, self::PYTHON, self::RUBY, self::STATIC, self::DOCKERFILE => [],
         };
