@@ -145,7 +145,7 @@ export default function ApplicationCreate({
                 <p className="text-muted-foreground mt-1 text-sm">A repository is enough. Every other field has a default that works.</p>
 
                 <div className="mt-4">
-                    <Row label="Repository" hint="owner/repo, or a full https address">
+                    <Row label="Repository" hint="owner/repo, git@github.com:owner/repo.git, or a full https address">
                         <div className="flex gap-2">
                             <Input
                                 aria-label="Repository"

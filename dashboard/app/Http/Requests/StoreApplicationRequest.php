@@ -42,13 +42,13 @@ class StoreApplicationRequest extends FormRequest
         $this->merge($merge);
     }
 
-    /** "owner/repo" becomes a GitHub clone URL. A full https URL stays as it is. */
+    /** "owner/repo" and the SSH address "git@github.com:owner/repo.git" become a GitHub clone URL. A full https URL stays as it is. */
     public static function normalizeRepository(string $repository): string
     {
         $repository = trim($repository);
 
-        if (preg_match('#^[\w.-]+/[\w.-]+$#', $repository) === 1) {
-            return 'https://github.com/'.preg_replace('/\.git$/', '', $repository).'.git';
+        if (preg_match('#^(?:git@github\.com:)?([\w.-]+/[\w.-]+?)(?:\.git)?$#', $repository, $match) === 1) {
+            return "https://github.com/{$match[1]}.git";
         }
 
         return $repository;
@@ -112,7 +112,7 @@ class StoreApplicationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'repository.regex' => 'Use owner/repo, or a full https address.',
+            'repository.regex' => 'Use owner/repo, git@github.com:owner/repo.git, or a full https address.',
             'env.*.key.regex' => 'Use letters, digits, and underscores. Do not start with a digit.',
             'domain.regex' => 'Enter a host name like shop.example.com.',
             'domain.unique' => 'This domain is already in use.',

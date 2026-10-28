@@ -404,7 +404,7 @@ class ApplicationControllerTest extends TestCase
 
         $cases = [
             'repository' => [['repository' => ''], 'repository'],
-            'a repository that is not owner/repo or https' => [['repository' => 'git@github.com:acme/shop.git'], 'repository'],
+            'a repository that is not owner/repo, a github.com SSH address, or https' => [['repository' => 'git@gitlab.com:acme/shop.git'], 'repository'],
             'an unknown cluster' => [['cluster_id' => 999], 'cluster_id'],
             'an unknown preset' => [['type' => 'rails'], 'type'],
             'a port above 65535' => [['type' => 'dockerfile', 'port' => 65536], 'port'],
