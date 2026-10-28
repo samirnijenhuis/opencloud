@@ -13,6 +13,7 @@ use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Jobs\ProvisionDatastoreAttachment;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Jobs\RunDeployment;
+use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
@@ -297,6 +298,40 @@ class CreateApplicationTest extends TestCase
         $this->assertSame(
             [['shop', 8080], ['api', 3000], ['worker', 4000], ['docs', 8080], ['site', 8080], ['php', 9000]],
             array_map(fn (Application $application) => [$application->name, $application->port], $applications),
+        );
+    }
+
+    public function test_with_a_deploy_key_it_makes_the_key_takes_main_without_a_branch_and_makes_no_remote_call_and_no_deployment(): void
+    {
+        Queue::fake();
+        $processes = FakeProcesses::install();
+        $owner = User::factory()->create();
+        $cluster = Cluster::factory()->create();
+        $create = fn (string $name, array $extra) => app(CreateApplication::class)->execute($owner, [
+            'name' => $name,
+            'repository' => "https://github.com/acme/{$name}.git",
+            'cluster_id' => $cluster->id,
+            'database' => 'none',
+            'deploy_key' => true,
+            ...$extra,
+        ]);
+
+        $shop = $create('shop', []);
+        $api = $create('api', ['branch' => 'develop']);
+
+        $this->assertSame(['ssh-keygen', 'ssh-keygen'], array_column($processes->commands(), 0));
+        $this->assertSame(
+            [['shop', FakeProcesses::PRIVATE_KEY, FakeProcesses::PUBLIC_KEY.' opencloud shop', 'main'], ['api', FakeProcesses::PRIVATE_KEY, FakeProcesses::PUBLIC_KEY.' opencloud api', 'develop']],
+            array_map(fn (Application $application) => [
+                $application->name, $application->deploy_private_key, $application->deploy_public_key,
+                $application->environments()->where('name', 'production')->sole()->branch,
+            ], [$shop->fresh(), $api->fresh()]),
+        );
+        $this->assertSame(0, Deployment::query()->count());
+        Queue::assertNotPushed(RunDeployment::class);
+        $this->assertSame(
+            ['application.created', 'application.deploy_key_added'],
+            AuditEvent::query()->where('subject_id', $shop->id)->where('subject_type', 'application')->orderBy('id')->pluck('action')->all(),
         );
     }
 

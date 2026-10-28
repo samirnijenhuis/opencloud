@@ -85,6 +85,7 @@ class StoreApplicationRequest extends FormRequest
             'repository' => ['required', 'string', 'max:500', 'regex:#^https://[^\s/]+/\S+$#'],
             'name' => ['nullable', 'string', 'max:100'],
             'branch' => ['nullable', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
+            'deploy_key' => ['boolean'],
             'cluster_id' => ['required', 'integer', 'exists:clusters,id'],
             'type' => ['required', Rule::enum(ApplicationType::class)],
             'port' => ['nullable', 'integer', 'between:1,65535'],

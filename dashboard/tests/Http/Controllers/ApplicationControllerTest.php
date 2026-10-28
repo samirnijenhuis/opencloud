@@ -195,6 +195,7 @@ class ApplicationControllerTest extends TestCase
                 'type' => ApplicationType::LARAVEL,
                 'port' => null,
                 'branch' => 'main',
+                'deploy_key' => false,
                 'env' => [
                     ['key' => 'APP_ENV', 'value' => 'production', 'is_secret' => false, 'available_at' => 'runtime'],
                     ['key' => 'STRIPE_SECRET', 'value' => 'sk_live_1', 'is_secret' => true, 'available_at' => 'runtime'],
@@ -221,6 +222,21 @@ class ApplicationControllerTest extends TestCase
             'domain' => 'Shop.Example.com',
             'database' => 'postgres',
         ]))->assertRedirect("/environments/{$production->id}");
+    }
+
+    public function test_the_deploy_key_choice_reaches_create_application_and_opens_the_application_page(): void
+    {
+        $created = Application::factory()->for($this->makeCluster())->create();
+
+        $this->mock(CreateApplication::class)
+            ->shouldReceive('execute')
+            ->once()
+            ->withArgs(fn (User $by, array $data) => [$data['deploy_key'], $data['branch']] === [true, null])
+            ->andReturn($created);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post('/applications', $this->validForm(['branch' => '', 'deploy_key' => true]))
+            ->assertRedirect("/applications/{$created->id}");
     }
 
     public function test_the_create_form_keeps_a_build_command_with_several_lines_and_drops_comment_and_empty_lines(): void
