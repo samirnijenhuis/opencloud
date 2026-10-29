@@ -33,6 +33,7 @@ Use these names everywhere: in PHP, in the UI, in Kubernetes labels, and in docs
 | Default database | The one MySQL or Postgres attachment of an environment that sets the `DB_*` values. | |
 | Bucket name | The name of one bucket attachment, for example `main` or `uploads`. A Laravel app uses it as the name of a disk. | |
 | Default bucket | The one bucket attachment of an environment that sets the `AWS_*` values without a prefix. | |
+| Primary domain | The one domain of an environment that sets `APP_URL` and the Host header of the readiness probe. | |
 | `Cluster` | A Kubernetes cluster that runs environments and datastores. | |
 | `ProviderCredential` | An API key for a cloud provider or Cloudflare. | |
 
@@ -113,7 +114,7 @@ The user chooses the preset when the application is created. It cannot change af
 - The `dockerfile` preset builds the `Dockerfile` of the repository.
 - The Node.js, Python, and Ruby images run `tini` as PID 1, so the app gets SIGTERM when a pod stops.
 
-A Laravel app gets the system env values `APP_ENV`, `APP_DEBUG`, `LOG_CHANNEL`, and `APP_URL`. Every other preset gets `PORT` with the application port, and `APP_URL`. A Node.js app also gets `NODE_ENV=production`. A Python app also gets `PYTHONUNBUFFERED=1`, `DEBUG=false`, `ALLOWED_HOSTS` with the domains of the environment, and a generated `SECRET_KEY`. A Ruby app also gets `RACK_ENV`, `RAILS_ENV`, `RAILS_LOG_TO_STDOUT`, `RAILS_SERVE_STATIC_FILES`, and a generated `SECRET_KEY_BASE`. The preset does not know the framework, so every Python app gets the Django values and every Ruby app gets the Rails values. The deploy command of a Python app runs `python manage.py migrate --noinput` when `manage.py` exists, and the deploy command of a Ruby app runs `bin/rails db:prepare` when `bin/rails` exists. The preset also decides the env names of a database, Valkey, and a bucket, and the user has no choice. The section Datastores lists them.
+A Laravel app gets the system env values `APP_ENV`, `APP_DEBUG`, `LOG_CHANNEL`, and `APP_URL`. Every other preset gets `PORT` with the application port, and `APP_URL`. `APP_URL` is `https://<primary domain>`. A Node.js app also gets `NODE_ENV=production`. A Python app also gets `PYTHONUNBUFFERED=1`, `DEBUG=false`, `ALLOWED_HOSTS` with the domains of the environment, and a generated `SECRET_KEY`. A Ruby app also gets `RACK_ENV`, `RAILS_ENV`, `RAILS_LOG_TO_STDOUT`, `RAILS_SERVE_STATIC_FILES`, and a generated `SECRET_KEY_BASE`. The preset does not know the framework, so every Python app gets the Django values and every Ruby app gets the Rails values. The deploy command of a Python app runs `python manage.py migrate --noinput` when `manage.py` exists, and the deploy command of a Ruby app runs `bin/rails db:prepare` when `bin/rails` exists. The preset also decides the env names of a database, Valkey, and a bucket, and the user has no choice. The section Datastores lists them.
 
 An app pod has no volume. A file that the app writes is gone after the next deploy, and each pod has its own copy. Data that must persist goes into a database or a bucket. Opencloud has no volumes on purpose: a volume allows only one instance and makes each deploy stop the old pod first. A SQLite file in the pod holds only data that may disappear.
 
@@ -154,7 +155,7 @@ The log holds the steps. `DeploymentLog::step()` appends one marker line, `<ISO 
 
 ## Processes
 
-Each environment runs `web` and a list of other processes. Web is special, because it serves HTTP. The environment holds its settings: size, minimum and maximum instances, CPU target, and health path. The readiness probe of web sends the first domain of the environment as the Host header, because an app that checks the host, for example Django with `ALLOWED_HOSTS`, refuses the pod address that the kubelet sends. Each other process is one row in the table `processes`.
+Each environment runs `web` and a list of other processes. Web is special, because it serves HTTP. The environment holds its settings: size, minimum and maximum instances, CPU target, and health path. The readiness probe of web sends the primary domain of the environment as the Host header, because an app that checks the host, for example Django with `ALLOWED_HOSTS`, refuses the pod address that the kubelet sends. Each other process is one row in the table `processes`.
 
 | Column | Meaning |
 |---|---|
@@ -196,7 +197,8 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 | `DeleteEnvVar` | `execute(EnvVar $envVar, User $by): void` | Deletes one user value. |
 | `SaveEnvText` | `execute(Environment $environment, User $by, string $text): void` | Makes the plain user values equal to dotenv text from the Text mode of the settings page. `DotenvText::parse()` reads the text. An empty line and a line that starts with `#` are not values, `export KEY=value` is the same as `KEY=value`, and a quoted value loses its quotes. A line without `=`, a key that is not valid, a key that appears twice, an unclosed quote, and a key that a resource or a secret owns are errors with the line number. The line numbers continue after the locked rows that the page shows above the text. With any error, nothing changes. Else the action calls `SetEnvVar` for each new or changed value and `DeleteEnvVar` for each plain key that the text no longer has, in one transaction. A new key is a runtime value, and an existing key keeps its "available at" setting. The action stores no comment. |
 | `AddDomain` | `execute(Environment $environment, User $by, string $hostname, bool $manageDns = false, bool $proxied = false): Domain` | Stores the domain and dispatches `CheckDomain`. With `$manageDns`, it first creates or updates the Cloudflare A record. |
-| `RemoveDomain` | `execute(Domain $domain, User $by): void` | Deletes the Cloudflare record that opencloud created, deletes the domain, and syncs Caddy. |
+| `RemoveDomain` | `execute(Domain $domain, User $by): void` | Deletes the Cloudflare record that opencloud created, deletes the domain, and syncs Caddy. When the domain was the primary domain, the audit event has `primary: true`. |
+| `SetPrimaryDomain` | `execute(Domain $domain, User $by): void` | Makes the domain the primary domain of its environment, and the old primary domain lets go. It records `domain.primary_changed`. The app gets the new `APP_URL` on the next deploy. |
 | `AttachDatastore` | `execute(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = Standard, ?string $name = null, ?Connection $connection = null): DatastoreAttachment` | Gets the provisioner of the kind and source from `Provisioners::for()` and stops when it refuses the cluster. The provisioner creates the datastore and the attachment and dispatches the provisioning. Then the action writes the env values. `$connection` is for the external source later and is always null today. A database or a bucket gets the name `$name`. The first one of its family in an environment is the default and gets the name `main` without `$name`. A later one needs a name. It refuses a name that is not valid or that another attachment of the family in the environment has. A failed attachment with the same kind and name is provisioned again. |
 | `SetDefaultAttachment` | `execute(DatastoreAttachment $attachment, User $by): void` | Makes a database or a bucket the default of its family in its environment. It writes the default env values for the new default and the env values of a named attachment for the old default in one transaction, for example `DB_*` and `<NAME>_DB_URL`. The app reads them on the next deploy. |
 | `DetachDatastore` | `execute(DatastoreAttachment $attachment, User $by): void` | Removes the attachment and its `datastore` env values. For a managed attachment, it removes the env values, the name, and the default, and dispatches `TearDownManagedDatabase`. It refuses the default database or bucket while the environment has another one of the same family. |
@@ -350,6 +352,17 @@ A deploy hook is a secret URL, `POST /hooks/deploy/<token>`, that starts a deplo
 `App\Domains\Routing\DefaultDomain` gives each permanent environment a free address, `<application>-<environment>.<ingress ip>.sslip.io`. sslip.io resolves the IP in the name, so the address needs no DNS step. `CreateApplication` adds it to production when the cluster has an IPv4 ingress address. The command `opencloud:default-domains` adds it to each permanent environment that has no default domain. The domain has `generated` set. Otherwise it is a normal domain. `CheckDomain` checks it, Caddy serves it, and the user can remove it.
 
 Each name is lowercase letters, digits, and dashes. The first label holds at most 63 characters, so a long application name is cut. When another domain already has the name, the application id goes into it, for example `shop-7-production`. The bootstrap command does not run `opencloud:default-domains`, because then a removed default domain comes back after each restart.
+
+## Primary domains
+
+Each environment has one primary domain. It sets `APP_URL` and the Host header of the readiness probe of web. `App\Domains\Routing\PrimaryDomain::of()` holds the rule:
+
+1. The domain that a user made primary wins, also when it is not live.
+2. Else the oldest custom domain that is live wins. A live domain has a routable DNS status and an issued certificate.
+3. Else the free domain wins.
+4. Else the oldest domain wins.
+
+The column `domains.is_primary` stores the choice of a user, and the partial unique index `domains_one_primary` allows one choice for each environment. `SetPrimaryDomain` stores the choice. When a user removes the primary domain, its row and the choice go away, and the rule picks the next primary domain. Without a choice, the primary domain moves when a custom domain becomes live. A change of the primary domain reaches `APP_URL` and the readiness probe on the next deploy. A user value `APP_URL` still wins over the value of opencloud.
 
 ## Roles
 

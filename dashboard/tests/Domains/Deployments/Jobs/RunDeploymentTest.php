@@ -19,6 +19,10 @@ use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Members\Models\User;
+use App\Domains\Routing\Actions\SetPrimaryDomain;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Models\Domain;
 use App\Support\Kube\FakeKubectl;
 use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -163,6 +167,24 @@ class RunDeploymentTest extends TestCase
             array_column(DeploymentSteps::of($new), 'key'),
         );
         $this->assertSame(array_fill(0, 7, 'finished'), array_column(DeploymentSteps::of($new), 'status'));
+    }
+
+    public function test_a_deploy_after_a_change_of_the_primary_domain_gives_the_app_its_url_and_the_probe_its_host(): void
+    {
+        Domain::factory()->for($this->environment)->create([
+            'hostname' => 'shop-production.203.0.113.10.sslip.io', 'generated' => true, 'dns_status' => DnsStatus::OK, 'certificate_status' => 'issued',
+        ]);
+        $domain = Domain::factory()->for($this->environment)->create(['hostname' => 'shop.example.com']);
+        app(SetPrimaryDomain::class)->execute($domain, User::factory()->admin()->create());
+
+        RunDeployment::dispatchSync($this->new);
+
+        $applied = $this->kubectl->appliedManifests();
+        $this->assertSame('https://shop.example.com', base64_decode($applied[1]['data']['APP_URL']));
+        $this->assertSame(
+            [['name' => 'Host', 'value' => 'shop.example.com']],
+            $applied[3]['spec']['template']['spec']['containers'][0]['readinessProbe']['httpGet']['httpHeaders'],
+        );
     }
 
     public function test_the_deployment_goes_live_only_after_the_old_pods_stopped(): void
