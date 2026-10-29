@@ -31,12 +31,13 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - Fluent Bit reads only `/var/log/containers/*_oc-env-*_*.log`. A pod in another namespace, for example a datastore in `oc-datastores`, sends no lines to Loki.
 - Loki deletes each line after 7 days (`retention_period: 168h`). The compactor runs every 10 minutes and deletes a marked chunk 2 hours later.
 - `platform/logs.yaml` holds the log store of `local`, and `ClusterPartsManifests::logStore()` holds it for the other clusters. `ClusterPartsManifestsTest` fails when they differ in more than the Loki data volume, so change both.
-- The dashboard reaches Loki only through `kubectl exec` in the `query` container of the Loki pod. The NetworkPolicy `loki-from-fluent-bit` refuses every other pod, also the dashboard.
+- The dashboard reaches Loki only through `kubectl exec` in the `query` container of the Loki pod (`ReadLogs`). The NetworkPolicy `loki-from-fluent-bit` refuses every other pod, also the dashboard.
+- Loki stores the unmasked lines. `ReadLogs` masks each line when it reads it, with the secret values of now. A line from before a change of a secret value can show the old value. `ReadLogs` also drops each masked line that no longer holds the search text, so a search cannot confirm a secret.
 
 ## Secrets and the audit log
 
 - `AuditEvent::record()` throws an `InvalidArgumentException` when the context has the key `value`, `secret`, or `password`, in any case and at any depth (`app/Domains/Audit/Models/AuditEvent.php:21`, `:37-61`).
-- Masking is not global. Each writer masks its own text: `DeploymentLog::write()` (`app/Domains/Deployments/DeploymentLog.php:36`), `TofuLog` (`app/Support/Tofu/TofuLog.php:21`), `RunCommand` for the audit context (`app/Domains/Environments/Actions/RunCommand.php:39`), and `ExecuteCommandRun` for the output (`app/Domains/Environments/Jobs/ExecuteCommandRun.php:157`). New text that can hold a secret needs its own masker.
+- Masking is not global. Each writer masks its own text: `DeploymentLog::write()` (`app/Domains/Deployments/DeploymentLog.php:36`), `TofuLog` (`app/Support/Tofu/TofuLog.php:21`), `RunCommand` for the audit context (`app/Domains/Environments/Actions/RunCommand.php:39`), and `ExecuteCommandRun` for the output (`app/Domains/Environments/Jobs/ExecuteCommandRun.php:157`). `ReadLogs` masks the app logs when it reads them from Loki. New text that can hold a secret needs its own masker.
 - `SecretMasker` never masks a value shorter than 4 characters (`app/Support/SecretMasker.php:13`).
 - `SecretMasker::forEnvironment()` reads the secret env values and the attachment passwords when you build it (`app/Support/SecretMasker.php:41-50`). A secret that the code adds later is not in that masker.
 

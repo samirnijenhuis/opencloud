@@ -25,9 +25,11 @@ use App\Domains\Routing\Jobs\SyncCaddy;
 use App\Domains\Routing\Models\Domain;
 use App\Support\Kube\FakeKubectl;
 use App\Support\Kube\KubectlResult;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use InvalidArgumentException;
+use PHPUnit\Framework\Assert as PHPUnit;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
 
@@ -168,26 +170,77 @@ class EnvironmentActionsTest extends TestCase
         $this->assertSame(['domain.removed', ['hostname' => 'old.example.com']], [AuditEvent::sole()->action, AuditEvent::sole()->context]);
     }
 
-    public function test_read_logs_reads_one_process_and_masks_secrets(): void
+    public function test_read_logs_asks_loki_for_one_process_of_the_environment_in_the_range_and_masks_secrets(): void
     {
         Process::factory()->for($this->environment)->create();
-        $kubectl = FakeKubectl::install();
-        $kubectl->respond('logs', new KubectlResult(0, "[pod/web-1/web] connecting with hunter22\n"));
         EnvVar::factory()->for($this->environment)->create(['key' => 'DB_PASSWORD', 'value' => 'hunter22', 'is_secret' => true]);
+        $kubectl = FakeKubectl::install();
+        $kubectl->respond('exec', self::loki([
+            'worker-new' => [['1793300002000000000', 'the new pod connects with hunter22']],
+            'worker-old' => [['1793300001500000000', 'the old pod stops'], ['1793300000000000000', 'the old pod starts']],
+        ]));
 
-        $logs = app(ReadLogs::class)->execute($this->environment, 'worker', 50);
+        $logs = app(ReadLogs::class)->execute($this->environment, 'worker', CarbonImmutable::parse('2026-10-28T10:00:00Z'), CarbonImmutable::parse('2026-10-29T10:00:00Z'));
 
-        $this->assertSame("[pod/web-1/web] connecting with ********\n", $logs);
+        $this->assertSame(['lines' => [
+            ['time' => '2026-10-29T18:53:20.000Z', 'pod' => 'worker-old', 'line' => 'the old pod starts'],
+            ['time' => '2026-10-29T18:53:21.500Z', 'pod' => 'worker-old', 'line' => 'the old pod stops'],
+            ['time' => '2026-10-29T18:53:22.000Z', 'pod' => 'worker-new', 'line' => 'the new pod connects with ********'],
+        ], 'truncated' => false], $logs);
+        $this->assertSame(['exec', 'deploy/loki', '--namespace=opencloud', '--container=query', '--', 'wget', '-q', '-O-'], array_slice($kubectl->calls[0]['args'], 0, 8));
         $this->assertSame([
-            'logs',
-            "--namespace=oc-env-{$this->environment->id}",
-            "--selector=opencloud.dev/application={$this->environment->application_id},opencloud.dev/environment={$this->environment->id},opencloud.dev/process=worker",
-            '--tail=50',
-            '--prefix',
-            '--max-log-requests=20',
-        ], $kubectl->calls[0]['args']);
+            'query' => "{namespace=\"oc-env-{$this->environment->id}\", process=\"worker\"}",
+            'start' => '2026-10-28T10:00:00+00:00',
+            'end' => '2026-10-29T10:00:00+00:00',
+            'limit' => '1000',
+            'direction' => 'backward',
+        ], self::lokiQuery($kubectl));
 
         $this->expectExceptionObject(new InvalidArgumentException('deploy is not a process of this environment. Use one of: web, worker.'));
-        app(ReadLogs::class)->execute($this->environment, 'deploy');
+        app(ReadLogs::class)->execute($this->environment, 'deploy', CarbonImmutable::now()->subHour(), CarbonImmutable::now());
+    }
+
+    public function test_a_search_stays_inside_the_environment_and_finds_no_line_by_a_secret(): void
+    {
+        EnvVar::factory()->for($this->environment)->create(['key' => 'API_TOKEN', 'value' => 'hunter22', 'is_secret' => true]);
+        $kubectl = FakeKubectl::install();
+        $kubectl->respond('exec', self::loki(['web-1' => [['1793300001000000000', 'hunter} logs in'], ['1793300000000000000', 'token hunter22 sent']]]));
+
+        $logs = app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::now()->subHour(), CarbonImmutable::now(), 'HUNTER"}');
+
+        $this->assertSame([], $logs['lines']);
+        $this->assertSame("{namespace=\"oc-env-{$this->environment->id}\", process=\"web\"} |~ \"(?i)HUNTER\\\"\\\\}\"", self::lokiQuery($kubectl)['query']);
+
+        $logs = app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::now()->subHour(), CarbonImmutable::now(), 'hunter');
+
+        $this->assertSame(['hunter} logs in'], array_column($logs['lines'], 'line'));
+    }
+
+    public function test_read_logs_says_when_loki_gave_the_limit_of_lines(): void
+    {
+        FakeKubectl::install()->respond('exec', self::loki(['web-1' => array_map(fn (int $i) => [(string) (1793300000000000000 + $i), "line {$i}"], range(1, ReadLogs::LIMIT))]));
+
+        $logs = app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::now()->subHour(), CarbonImmutable::now());
+
+        $this->assertTrue($logs['truncated']);
+        $this->assertSame(['line 1', 'line 1000'], [$logs['lines'][0]['line'], $logs['lines'][999]['line']]);
+    }
+
+    /** @param  array<string, list<array{0: string, 1: string}>>  $pods  the values of one stream for each pod, as Loki gives them */
+    private static function loki(array $pods): KubectlResult
+    {
+        $streams = collect($pods)->map(fn (array $values, string $pod) => ['stream' => ['namespace' => 'oc-env-1', 'pod' => $pod, 'process' => 'web'], 'values' => $values])->values()->all();
+
+        return new KubectlResult(0, json_encode(['status' => 'success', 'data' => ['resultType' => 'streams', 'result' => $streams]]));
+    }
+
+    /** @return array<string, string> */
+    private static function lokiQuery(FakeKubectl $kubectl): array
+    {
+        $url = end($kubectl->calls)['args'][8];
+        parse_str(parse_url($url, PHP_URL_QUERY), $query);
+        PHPUnit::assertStringStartsWith('http://127.0.0.1:3100/loki/api/v1/query_range?', $url);
+
+        return $query;
     }
 }
