@@ -24,16 +24,20 @@ class DashboardDomainCaddyTest extends TestCase
         return json_encode((new CaddyConfig('internal', null))->forCluster($cluster), JSON_UNESCAPED_SLASHES);
     }
 
-    private const WITHOUT = '{"apps":{"http":{"servers":{'.
+    private const WITHOUT = '{"apps":{"http":{"metrics":{"per_host":true},"servers":{'.
         '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]},'.
-        '"apps":{"listen":[":443"],"routes":[]}}},'.
+        '"apps":{"listen":[":443"],"routes":[],'.
+        '"errors":{"routes":[{"match":[{"expression":"{http.error.status_code} == 502"}],"handle":[{"handler":"rewrite","uri":"/_opencloud/wake/{http.request.host}"},{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]}'.
+        '}}},'.
         '"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}';
 
-    private const WITH = '{"apps":{"http":{"servers":{'.
+    private const WITH = '{"apps":{"http":{"metrics":{"per_host":true},"servers":{'.
         '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]},'.
         '"apps":{"listen":[":443"],"routes":['.
         '{"match":[{"host":["admin.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}'.
-        ']}}},"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}';
+        '],'.
+        '"errors":{"routes":[{"match":[{"expression":"{http.error.status_code} == 502"}],"handle":[{"handler":"rewrite","uri":"/_opencloud/wake/{http.request.host}"},{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]}'.
+        '}}},"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}';
 
     public function test_a_verified_domain_gets_a_route_to_the_dashboard_on_the_local_cluster(): void
     {
@@ -66,6 +70,24 @@ class DashboardDomainCaddyTest extends TestCase
         DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
 
         $this->assertStringNotContainsString('admin.example.com', $this->configJson($connected));
+    }
+
+    public function test_another_cluster_reaches_the_wake_route_on_port_8000_of_the_server(): void
+    {
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'ingress_ip' => '203.0.113.10']);
+        $connected = Cluster::factory()->create(['kind' => ClusterKind::CONNECTED]);
+
+        $errors = (new CaddyConfig('internal', null))->forCluster($connected)['apps']['http']['servers']['apps']['errors'];
+
+        $this->assertSame([['dial' => '203.0.113.10:8000']], $errors['routes'][0]['handle'][1]['upstreams']);
+    }
+
+    public function test_another_cluster_has_no_wake_route_while_the_server_has_no_address(): void
+    {
+        Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'ingress_ip' => null]);
+        $connected = Cluster::factory()->create(['kind' => ClusterKind::CONNECTED]);
+
+        $this->assertArrayNotHasKey('errors', (new CaddyConfig('internal', null))->forCluster($connected)['apps']['http']['servers']['apps']);
     }
 
     public function test_a_removed_domain_leaves_the_route_and_syncs_caddy(): void

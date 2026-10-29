@@ -43,11 +43,13 @@ This file lists behavior that you cannot see at the call site. Check it before y
   - `sync-caddy` dispatches `SyncCaddy` for each ready cluster every five minutes. A change to the Caddy config reaches each ready cluster within five minutes, also without a dispatch.
   - `FailStuckDeployments` runs every minute. It fails a deployment in `building` or `deploying` that had no update for 70 minutes (`app/Domains/Deployments/Jobs/FailStuckDeployments.php:19`, `:24-25`).
   - `CheckCertificates` runs every minute.
+  - `SleepIdleEnvironments` runs every minute. It reads the Caddy request counters of each cluster with an environment that can sleep, writes `last_request_at`, and puts each idle environment to sleep (`app/Domains/Environments/Jobs/SleepIdleEnvironments.php`).
   - `CheckLatestRelease` runs once a day.
   - `nightly-backups` runs at 03:00. It dispatches `BackupDatastore` and `CopyBuckets` for each datastore that has the capability, and `BackupDashboard`.
 
 ## Requests and pages
 
+- Caddy sends each 502 of an app to the dashboard route `wake`, `/_opencloud/wake/<hostname>` (`app/Domains/Routing/CaddyConfig.php`, `routes/webhooks.php`). So the dashboard answers a visitor of an app that does not answer: with the Starting page while the environment wakes, and else with a plain 502.
 - `routes/webhooks.php` loads as the `api` group with an empty prefix (`bootstrap/app.php:13-14`). Its routes have no session, no cookies, and no CSRF check. A webhook route in `routes/web.php` gets a 419.
 - `trustProxies(at: '*')` trusts the forwarded scheme, host, and client address from each sender (`bootstrap/app.php:20`). `$request->ip()` returns the forwarded address.
 - `dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`). A hand-written `back()->withInput()` flashes every field, so `ApplicationController::store()` leaves out `deploy_private_key` itself.
@@ -58,6 +60,7 @@ This file lists behavior that you cannot see at the call site. Check it before y
 
 - `LiveStatus` keeps each answer for 10 seconds, for each environment and each cluster (`app/Domains/Environments/LiveStatus.php:21`, `:39`, `:57`).
 - `GitHubClient` keeps the installation token, encrypted, until one minute before it expires (`app/Domains/GitHub/GitHubClient.php:88`).
+- `SleepIdleEnvironments` keeps the last Caddy request counts of each cluster in `caddy-request-counts-<cluster id>` without an end. A lost entry counts each hostname with requests as active once.
 - `CheckLatestRelease` keeps the tag of the latest release for three days (`app/Domains/Upgrades/Jobs/CheckLatestRelease.php:33`).
 
 ## The SQLite database
