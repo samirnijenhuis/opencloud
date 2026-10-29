@@ -57,8 +57,8 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
-const attach = (environmentId: number, kind: DatastoreKind, source: DatastoreSource = 'standard', name: string | null = null) => {
-    router.post(route('datastores.store', environmentId), { kind, source, name }, { preserveScroll: true });
+const attach = (environmentId: number, kind: DatastoreKind, source: DatastoreSource = 'standard', name: string | null = null, isPublic = false) => {
+    router.post(route('datastores.store', environmentId), { kind, source, name, public: isPublic }, { preserveScroll: true });
 };
 
 /** What the sheet says about each source. The backend gives the names, so no provider name appears here. */
@@ -428,7 +428,9 @@ export function ResourceSheet({
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => attach(environmentId, attachment.kind, attachment.source, attachment.name)}
+                                onClick={() =>
+                                    attach(environmentId, attachment.kind, attachment.source, attachment.name, attachment.visibility?.public)
+                                }
                             >
                                 Try again
                             </Button>
@@ -506,7 +508,9 @@ export function ResourceSheet({
                                     </p>
                                 </>
                             ) : (
-                                <p className="text-muted-foreground text-sm">This bucket has no public address yet.</p>
+                                <p className="text-muted-foreground text-sm">
+                                    The bucket has no public address, because the cluster has no public IPv4 address.
+                                </p>
                             )
                         ) : (
                             <p className="text-muted-foreground text-sm">{privateHelp}</p>

@@ -147,10 +147,7 @@ export function AddResourceForm({ environmentId, offer, onClose }: { environment
                             <p className="text-muted-foreground text-xs">{isPublic ? publicHelp : privateHelp}</p>
                         </>
                     ) : (
-                        <>
-                            <p className="text-sm">Private</p>
-                            <p className="text-muted-foreground text-xs">{visibility.refusal}</p>
-                        </>
+                        <p className="text-muted-foreground text-xs">{visibility.refusal}</p>
                     )}
                     <InputError message={errors.public} />
                 </div>
