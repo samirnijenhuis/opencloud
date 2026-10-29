@@ -284,20 +284,59 @@ class PreviewLifecycleTest extends TestCase
         $this->assertNotNull($preview->fresh());
     }
 
+    public function test_a_placeholder_in_a_template_value_gives_each_preview_its_own_value(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $template = $this->environment('preview-template');
+        app(SetEnvVar::class)->execute($template, $owner, 'APP_NAME', 'Shop PR {pr_number}', false, EnvVarAvailability::RUNTIME);
+        app(SetEnvVar::class)->execute($template, $owner, 'PREVIEW_LINK', '{url}/?branch={branch}', true, EnvVarAvailability::BUILD);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+        $this->postWebhook('pull_request', $this->pullRequest('reopened', self::OPENED_SHA, number: 13, branch: 'fix/cart'), delivery: 'd-2')->assertStatus(202);
+
+        $values = fn (string $environment) => $this->environment($environment)->envVars()->whereIn('key', ['APP_NAME', 'PREVIEW_LINK'])->orderBy('key')->get()
+            ->map(fn (EnvVar $var) => [$var->key, $var->value, $var->is_secret, $var->available_at->value])->all();
+        $this->assertSame([
+            ['APP_NAME', 'Shop PR 12', false, 'runtime'],
+            ['PREVIEW_LINK', 'https://pr-12-shop.203.0.113.10.sslip.io/?branch=feature/login', true, 'build'],
+        ], $values('pr-12'));
+        $this->assertSame([
+            ['APP_NAME', 'Shop PR 13', false, 'runtime'],
+            ['PREVIEW_LINK', 'https://pr-13-shop.203.0.113.10.sslip.io/?branch=fix/cart', true, 'build'],
+        ], $values('pr-13'));
+        $this->assertSame([
+            ['APP_NAME', 'Shop PR {pr_number}', false, 'runtime'],
+            ['PREVIEW_LINK', '{url}/?branch={branch}', true, 'build'],
+        ], $values('preview-template'));
+    }
+
+    public function test_a_change_to_the_env_of_one_preview_survives_a_push(): void
+    {
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1');
+        $preview = $this->environment('pr-12');
+        app(SetEnvVar::class)->execute($preview, User::factory()->owner()->create(), 'MAIL_MAILER', 'smtp', false, EnvVarAvailability::RUNTIME);
+
+        $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-2')->assertStatus(202);
+
+        $this->assertSame([self::OPENED_SHA, self::PUSHED_SHA], $preview->deployments()->orderBy('id')->pluck('commit_sha')->all());
+        $this->assertSame('smtp', $preview->envVars()->where('key', 'MAIL_MAILER')->sole()->value);
+        $this->assertSame('log', $this->environment('preview-template')->envVars()->where('key', 'MAIL_MAILER')->sole()->value);
+    }
+
     private function environment(string $name): Environment
     {
         return $this->application->environments()->where('name', $name)->sole();
     }
 
     /** @return array<string, mixed> */
-    private function pullRequest(string $action, string $sha, int $number = 12, string $headRepository = 'acme/shop'): array
+    private function pullRequest(string $action, string $sha, int $number = 12, string $headRepository = 'acme/shop', string $branch = 'feature/login'): array
     {
         return [
             'action' => $action,
             'number' => $number,
             'pull_request' => [
                 'number' => $number,
-                'head' => ['ref' => 'feature/login', 'sha' => $sha, 'repo' => ['full_name' => $headRepository]],
+                'head' => ['ref' => $branch, 'sha' => $sha, 'repo' => ['full_name' => $headRepository]],
                 'base' => ['ref' => 'main', 'repo' => ['full_name' => 'acme/shop']],
             ],
             'repository' => ['full_name' => 'acme/shop'],
