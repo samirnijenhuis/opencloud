@@ -109,7 +109,8 @@ class OpenPreview
 
             foreach ($attachments as $attachment) {
                 // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
-                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name);
+                // A public bucket stays public, so a file URL of the app works in the preview too.
+                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name, public: $attachment->is_public);
             }
 
             $hostname = $this->hostname($application, $pullRequest->number);
