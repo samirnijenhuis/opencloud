@@ -361,6 +361,8 @@ Each name is lowercase letters, digits, and dashes. The first label holds at mos
 
 `App\Domains\Members\Enums\Role` holds the matrix of rights in one place. Policies ask `Role::allows(Ability)` and never compare role names directly. A developer has no write rights on a protected environment.
 
+Sessions live in the `sessions` table, and the payload is encrypted (`SESSION_ENCRYPT` is on by default). The `dontFlash` list holds `env` and `value`, and `ApplicationController::store()` leaves `env` out of the old input. So a refused form never writes an env value into a session. The middleware `AuthenticateSession` stores a hash of the password in the session. It logs out each session whose hash differs from the password of the user. A password change then logs out every other session, and the session that made the change stays signed in.
+
 ## Tests
 
 - Each test sits in the folder under `dashboard/tests/` that mirrors its class under `dashboard/app/`, for example `tests/Domains/Deployments/Jobs/RunDeploymentTest.php`.

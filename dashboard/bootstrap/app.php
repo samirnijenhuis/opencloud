@@ -5,6 +5,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Session\Middleware\AuthenticateSession;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -21,9 +22,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            // A password change logs out every other session of the user.
+            AuthenticateSession::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // A refused form must not leave the kubeconfig, the registry password, or a deploy key in the session table.
-        $exceptions->dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key']);
+        // A refused form must not leave the kubeconfig, the registry password, a deploy key, or an env value in the session table.
+        $exceptions->dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key', 'env', 'value']);
     })->create();
