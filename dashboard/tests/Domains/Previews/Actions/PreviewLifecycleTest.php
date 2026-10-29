@@ -217,6 +217,16 @@ class PreviewLifecycleTest extends TestCase
         $this->assertSame("https://env-{$preview->id}.files.203.0.113.10.sslip.io", $preview->envVars()->where('key', 'AWS_URL')->sole()->value);
     }
 
+    public function test_a_preview_opens_with_a_private_bucket_when_the_cluster_lost_its_ipv4_address(): void
+    {
+        app(AttachDatastore::class)->execute($this->environment('production'), User::factory()->owner()->create(), DatastoreKind::RUSTFS, public: true);
+        $this->application->cluster->update(['ingress_ip' => null]);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+
+        $this->assertFalse($this->environment('pr-12')->datastoreAttachments()->where('family', 'bucket')->sole()->is_public);
+    }
+
     public function test_a_preview_gets_a_local_database_for_a_managed_database_of_production(): void
     {
         $production = $this->environment('production');

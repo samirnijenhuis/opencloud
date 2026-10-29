@@ -19,11 +19,13 @@ use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Members\Models\User;
+use App\Domains\Routing\Jobs\SyncCaddy;
 use App\Support\Kube\FakeKubectl;
 use App\Support\Kube\KubectlResult;
 use App\Support\SecretMasker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\ConfigurationUrlParser;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -163,6 +165,7 @@ class DatastoreAttachmentTest extends TestCase
 
     public function test_a_public_rustfs_bucket_lets_anyone_read_a_file_and_sets_its_url(): void
     {
+        Queue::fake([SyncCaddy::class]);
         $this->environment->application->cluster->update(['ingress_ip' => '203.0.113.5']);
         $attachment = app(AttachDatastore::class)->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, public: true);
         $name = "env-{$this->environment->id}";
@@ -175,6 +178,32 @@ class DatastoreAttachmentTest extends TestCase
         ], array_slice($script, -2));
         $this->assertSame(["https://{$name}.files.203.0.113.5.sslip.io", false], $this->datastoreEnv($attachment)['AWS_URL']);
         $this->assertSame(['environment_id' => $this->environment->id, 'kind' => 'rustfs', 'name' => 'main', 'public' => true], AuditEvent::query()->sole()->context);
+        Queue::assertPushed(SyncCaddy::class, fn (SyncCaddy $job) => $job->cluster->is($this->environment->application->cluster));
+
+        $this->attach(DatastoreKind::RUSTFS, 'exports');
+        Queue::assertPushed(SyncCaddy::class, 1);
+    }
+
+    public function test_a_failed_bucket_added_again_keeps_its_visibility_and_refuses_another(): void
+    {
+        Queue::fake([SyncCaddy::class]);
+        $this->environment->application->cluster->update(['ingress_ip' => '203.0.113.5']);
+        $this->kubectl->respond('exec', new KubectlResult(1, '', 'The server is not ready.'));
+        $attachment = app(AttachDatastore::class)->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, public: true);
+        $this->kubectl->respond('exec', new KubectlResult(0));
+
+        try {
+            $this->attach(DatastoreKind::RUSTFS, 'main');
+            $this->fail('A private attach retried the public bucket.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertSame('The bucket main is public. Change its visibility on its sheet.', $e->getMessage());
+        }
+        $this->assertSame(DatastoreStatus::FAILED, $attachment->fresh()->status);
+
+        $again = app(AttachDatastore::class)->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, name: 'main', public: true);
+
+        $this->assertTrue($again->is($attachment));
+        $this->assertSame(DatastoreStatus::READY, $attachment->fresh()->status);
     }
 
     public function test_only_a_bucket_on_a_cluster_with_an_ipv4_address_can_be_public(): void

@@ -6,6 +6,7 @@ use App\Domains\Backups\Models\BackupTarget;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Actions\DetachDatastore;
 use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
@@ -388,6 +389,18 @@ class DatastoreControllerTest extends TestCase
                 'url' => null,
                 'refusal' => 'The cluster has no public IPv4 address, so a bucket on it cannot be public.',
             ]));
+    }
+
+    public function test_an_external_bucket_shows_no_visibility_because_its_owner_sets_it(): void
+    {
+        $environment = $this->makeEnvironment();
+        $external = Datastore::factory()->create(['cluster_id' => null, 'kind' => DatastoreKind::RUSTFS, 'source' => DatastoreSource::EXTERNAL]);
+        DatastoreAttachment::factory()->create(['datastore_id' => $external->id, 'environment_id' => $environment->id, 'name' => 'main', 'is_default' => true, 'host' => 'https://s3.example.com']);
+        $this->attach($environment, DatastoreKind::RUSTFS, attributes: ['name' => 'exports']);
+
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")->assertInertia(fn (Assert $page) => $page
+            ->where('datastores.attachments.0.visibility', null)
+            ->where('datastores.attachments.1.visibility.public', false));
     }
 
     public function test_a_developer_cannot_change_the_visibility_on_a_protected_environment(): void

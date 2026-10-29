@@ -13,6 +13,7 @@ use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
+use App\Domains\Routing\Jobs\SyncCaddy;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -54,7 +55,7 @@ class AttachDatastore
             $existing = $named ? $attachments->firstWhere('name', $name) : $attachments->first();
 
             if ($existing !== null) {
-                return $this->retry($existing, $kind, typed: $connection !== null);
+                return $this->retry($existing, $kind, typed: $connection !== null, public: $public);
             }
 
             $attachment = $provisioner->attach($environment, $name, $named && ! $attachments->contains('is_default', true), $connection, $public);
@@ -67,6 +68,11 @@ class AttachDatastore
                 'source' => $source === DatastoreSource::STANDARD ? null : $source->value,
                 'public' => $public,
             ]));
+
+            // The public address gets its route now, not at the next scheduled sync.
+            if ($public) {
+                SyncCaddy::dispatch($environment->application->cluster)->afterCommit();
+            }
 
             return $attachment;
         });
@@ -90,9 +96,9 @@ class AttachDatastore
      * Only a failed attachment of the same kind can be attached again. For a database or a bucket, that means the
      * same name too. Another kind of the same family is refused, so a second key-value engine gets an error and not
      * the first one. A typed address is refused too, because a retry would provision the old attachment and drop the
-     * new address.
+     * new address. Another visibility is refused, because a retry would provision the old visibility.
      */
-    private function retry(DatastoreAttachment $existing, DatastoreKind $kind, bool $typed): DatastoreAttachment
+    private function retry(DatastoreAttachment $existing, DatastoreKind $kind, bool $typed, bool $public): DatastoreAttachment
     {
         $family = $kind->family();
         $named = $family->isNamed();
@@ -101,6 +107,10 @@ class AttachDatastore
             throw new InvalidArgumentException($named
                 ? "This environment already has a {$family->value} with the name {$existing->name}."
                 : "This environment already has a {$existing->datastore->kind->value} datastore.");
+        }
+
+        if ($existing->is_public !== $public) {
+            throw new InvalidArgumentException("The bucket {$existing->name} is ".($existing->is_public ? 'public' : 'private').'. Change its visibility on its sheet.');
         }
 
         if ($existing->status === DatastoreStatus::FAILED) {

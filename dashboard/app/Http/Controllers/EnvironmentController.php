@@ -294,7 +294,8 @@ class EnvironmentController extends Controller
             'detach_refusal' => $datastore->source === DatastoreSource::MANAGED && ! $role->allows(Ability::MANAGE_CREDENTIALS)
                 ? 'Only an owner can destroy a managed resource.'
                 : null,
-            'visibility' => $attachment->family === ResourceFamily::BUCKET ? [
+            // An external bucket keeps the settings of its owner, and opencloud does not know them.
+            'visibility' => $attachment->family === ResourceFamily::BUCKET && $datastore->source !== DatastoreSource::EXTERNAL ? [
                 'public' => $attachment->is_public,
                 'url' => $provisioner->connection($attachment)?->url,
                 'refusal' => $provisioner->publicRefusal($cluster),

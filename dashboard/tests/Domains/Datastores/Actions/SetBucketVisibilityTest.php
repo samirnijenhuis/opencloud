@@ -106,6 +106,12 @@ class SetBucketVisibilityTest extends TestCase
 
         $this->assertSame(0, AuditEvent::count());
         Queue::assertNothingPushed();
+
+        app(SetBucketVisibility::class)->execute($this->bucket, $this->owner, true);
+        app(SetBucketVisibility::class)->execute($this->bucket, $this->owner, true);
+
+        $this->assertSame(['datastore.visibility_changed'], AuditEvent::query()->pluck('action')->all());
+        Queue::assertPushed(ProvisionDatastoreAttachment::class, 1);
     }
 
     /** Runs the provision job that the action queued, like the worker does. */
