@@ -13,6 +13,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 /**
  * Opens, redeploys, or closes the preview of one pull request in each application of the repository.
+ * With a label filter, a pull request without one of the labels loses its preview.
  */
 class SyncPreview implements ShouldQueue
 {
@@ -36,18 +37,36 @@ class SyncPreview implements ShouldQueue
 
     public function handle(OpenPreview $open, ClosePreview $close): void
     {
-        foreach (Application::forGitHubRepository($this->pullRequest->repository) as $application) {
-            if (! $this->pullRequest->action->closes()) {
-                $open->execute($application, $this->pullRequest);
+        $action = $this->pullRequest->action;
 
-                continue;
-            }
+        // Only a label of the filter decides a preview. Without a filter, a label change does nothing, as before the filter existed.
+        $applications = Application::forGitHubRepository($this->pullRequest->repository)
+            ->reject(fn (Application $application) => $action->changesLabels() && ! $this->hasFilterLabel($application, [$this->pullRequest->changedLabel]));
 
+        [$opens, $closes] = $applications->partition(fn (Application $application) => ! $action->closes()
+            && ($application->preview_labels === [] || $this->hasFilterLabel($application, $this->pullRequest->labels)));
+
+        // A close that waits releases the job, so the closes go first. A retry then never deploys an opened preview again.
+        foreach ($closes as $application) {
             if (! $close->execute($application, $this->pullRequest->number)) {
                 $this->release(self::RETRY_SECONDS);
 
                 return;
             }
         }
+
+        foreach ($opens as $application) {
+            $open->execute($application, $this->pullRequest);
+        }
+    }
+
+    /**
+     * GitHub compares label names without case, so this does too.
+     *
+     * @param  list<string>  $labels
+     */
+    private function hasFilterLabel(Application $application, array $labels): bool
+    {
+        return array_intersect(array_map(mb_strtolower(...), $application->preview_labels), array_map(mb_strtolower(...), $labels)) !== [];
     }
 }
