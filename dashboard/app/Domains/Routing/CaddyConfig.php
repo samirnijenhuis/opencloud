@@ -81,16 +81,22 @@ final readonly class CaddyConfig
                     array_keys($routes),
                     array_values($routes),
                 ),
-                // The S3 server takes the bucket in the path. The bucket policy decides what an anonymous request may do,
-                // so the route lets each method through and a write gets the refusal of the server.
-                ...array_map(
-                    fn (string $hostname, array $bucket) => ['match' => [['host' => [$hostname]]], 'handle' => [
-                        ['handler' => 'rewrite', 'uri' => "/{$bucket['bucket']}{http.request.uri.path}"],
-                        self::proxy($bucket['upstream']),
-                    ]],
+                // The S3 server takes the bucket in the path, and the bucket policy decides which reads work. Only a read
+                // reaches the server, so a key from outside the cluster cannot write through this address. Each other
+                // method gets 405, because a request that no route handles gets an empty 200.
+                ...array_merge(...array_map(
+                    fn (string $hostname, array $bucket) => [
+                        ['match' => [['host' => [$hostname], 'method' => ['GET', 'HEAD']]], 'handle' => [
+                            ['handler' => 'rewrite', 'uri' => "/{$bucket['bucket']}{http.request.uri.path}"],
+                            self::proxy($bucket['upstream']),
+                        ]],
+                        ['match' => [['host' => [$hostname]]], 'handle' => [
+                            ['handler' => 'static_response', 'status_code' => 405, 'headers' => ['Allow' => ['GET, HEAD']]],
+                        ]],
+                    ],
                     array_keys($buckets),
                     array_values($buckets),
-                ),
+                )),
             ],
         ];
 
