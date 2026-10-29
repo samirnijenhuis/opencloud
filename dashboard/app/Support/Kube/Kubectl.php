@@ -96,18 +96,6 @@ class Kubectl
         return $this->run([...$args, '--', ...$command], $stdin, $timeout, $output);
     }
 
-    /** @param  array<string, string>  $selector */
-    public function logs(string $namespace, array $selector, int $lines = 200, ?string $container = null): string
-    {
-        $args = ['logs', '--namespace='.$namespace, '--selector='.self::selector($selector), '--tail='.$lines, '--prefix', '--max-log-requests=20'];
-
-        if ($container !== null) {
-            $args[] = '--container='.$container;
-        }
-
-        return $this->run($args)->output;
-    }
-
     public function rolloutStatus(string $namespace, string $kind, string $name, int $timeout = 300): KubectlResult
     {
         return $this->run(['rollout', 'status', "{$kind}/{$name}", '--namespace='.$namespace, '--timeout='.$timeout.'s'], timeout: $timeout + 30);

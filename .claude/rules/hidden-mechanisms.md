@@ -25,10 +25,20 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - `RunDeployment` deletes each Deployment, CronJob, and HorizontalPodAutoscaler in the environment namespace with an `opencloud.dev/process` label that no process of the environment uses as that kind (`EnvironmentManifests::strays()`). A Deployment, a CronJob, or an autoscaler that you add by hand with that label goes away on the next deploy.
 - After a deployment goes live, `RunDeployment::pruneEnvSecrets()` keeps the live env Secret and the two newest, and deletes the others (`app/Domains/Deployments/Jobs/RunDeployment.php:272-289`).
 
+## Application logs
+
+- Fluent Bit takes the `process` label from the container name in the log file name (`ClusterPartsManifests::FLUENT_BIT_PARSERS`). `EnvironmentManifests::container()` and `CommandManifests` give each container the name of its process. A container with another name gets its lines under that name, and the Logs tab does not find them.
+- Fluent Bit reads only `/var/log/containers/*_oc-env-*_*.log`. A pod in another namespace, for example a datastore in `oc-datastores`, sends no lines to Loki.
+- Loki deletes each line after 7 days (`retention_period: 168h`). The compactor runs every 10 minutes and deletes a marked chunk 2 hours later.
+- `platform/logs.yaml` holds the log store of `local`, and `ClusterPartsManifests::logStore()` holds it for the other clusters. `ClusterPartsManifestsTest` fails when they differ in more than the Loki data volume, so change both.
+- The dashboard reaches Loki only through `kubectl exec` in the `query` container of the Loki pod (`ReadLogs`). The NetworkPolicy `loki-from-fluent-bit` refuses every other pod, also the dashboard. On a connected cluster whose network plugin does not enforce NetworkPolicy, each pod can reach Loki.
+- Loki and Fluent Bit read their config file only when they start. A change of `LOKI_CONFIG` or `FLUENT_BIT_CONFIG` changes only the ConfigMap, so restart the pods, or change the pod template in the same change.
+- Loki stores the unmasked lines. `ReadLogs` masks each line when it reads it, with the secret values of now. A line from before a change of a secret value can show the old value. `ReadLogs` also drops each masked line that no longer holds the search text, and it counts `truncated` after that filter, so a search cannot confirm a secret.
+
 ## Secrets and the audit log
 
 - `AuditEvent::record()` throws an `InvalidArgumentException` when the context has the key `value`, `secret`, or `password`, in any case and at any depth (`app/Domains/Audit/Models/AuditEvent.php:21`, `:37-61`).
-- Masking is not global. Each writer masks its own text: `DeploymentLog::write()` (`app/Domains/Deployments/DeploymentLog.php:36`), `TofuLog` (`app/Support/Tofu/TofuLog.php:21`), `RunCommand` for the audit context (`app/Domains/Environments/Actions/RunCommand.php:39`), and `ExecuteCommandRun` for the output (`app/Domains/Environments/Jobs/ExecuteCommandRun.php:157`). New text that can hold a secret needs its own masker.
+- Masking is not global. Each writer masks its own text: `DeploymentLog::write()` (`app/Domains/Deployments/DeploymentLog.php:36`), `TofuLog` (`app/Support/Tofu/TofuLog.php:21`), `RunCommand` for the audit context (`app/Domains/Environments/Actions/RunCommand.php:39`), and `ExecuteCommandRun` for the output (`app/Domains/Environments/Jobs/ExecuteCommandRun.php:157`). `ReadLogs` masks the app logs when it reads them from Loki. New text that can hold a secret needs its own masker.
 - `SecretMasker` never masks a value shorter than 4 characters (`app/Support/SecretMasker.php:13`).
 - `SecretMasker::forEnvironment()` reads the secret env values and the attachment passwords when you build it (`app/Support/SecretMasker.php:41-50`). A secret that the code adds later is not in that masker.
 
