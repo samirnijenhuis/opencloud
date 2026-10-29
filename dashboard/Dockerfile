@@ -11,7 +11,7 @@ FROM moby/buildkit:v0.25.1 AS buildkit
 
 FROM gcr.io/go-containerregistry/crane:v0.22.1 AS crane
 
-FROM dunglas/frankenphp:1-php8.4
+FROM dunglas/frankenphp:1.13.2-php8.5.12
 
 ARG TARGETARCH
 ARG KUBECTL_VERSION=v1.36.5

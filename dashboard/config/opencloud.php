@@ -51,9 +51,10 @@ return [
     'php_base_image' => env('OPENCLOUD_PHP_BASE_IMAGE', 'dunglas/frankenphp:1-php{php}'),
 
     /*
-     * The PHP minor versions that have a base image. The build picks the highest one that composer.json allows.
+     * The PHP minor versions that have a base image. The build picks LaravelDockerfile::DEFAULT_PHP when composer.json
+     * allows it, and else the highest one that composer.json allows.
      */
-    'php_versions' => ['8.2', '8.3', '8.4'],
+    'php_versions' => ['8.2', '8.3', '8.4', '8.5'],
 
     'data_path' => env('OPENCLOUD_DATA_PATH', storage_path('opencloud')),
 
