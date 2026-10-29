@@ -5,6 +5,7 @@ namespace App\Domains\Routing;
 use App\Domains\CloudProviders\Models\ProviderCredential;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\LocalRustfs;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\EnvironmentManifests;
 use App\Domains\Routing\Enums\DnsMode;
@@ -52,17 +53,20 @@ final readonly class CaddyConfig
         $cloudflareToken = ProviderCredential::query()->where('provider', 'cloudflare')->first()?->token;
         $cloudflareHosts = $domains->where('dns_mode', DnsMode::CLOUDFLARE)->pluck('hostname')->all();
 
-        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts);
+        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts, LocalRustfs::publicRoutes($cluster));
     }
 
     /**
      * @param  array<string, string>  $routes  hostname => upstream address
      * @param  list<string>  $cloudflareHosts  hostnames that get their certificate with the Cloudflare DNS challenge
+     * @param  array<string, array{upstream: string, bucket: string}>  $buckets  hostname => the S3 server and the public
+     *                                                                           bucket that the path goes into
      * @return array<string, mixed>
      */
-    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = []): array
+    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = [], array $buckets = []): array
     {
         ksort($routes, SORT_STRING);
+        ksort($buckets, SORT_STRING);
         $servers = [];
 
         if ($withDashboard) {
@@ -71,11 +75,23 @@ final readonly class CaddyConfig
 
         $servers['apps'] = [
             'listen' => [':443'],
-            'routes' => array_map(
-                fn (string $hostname, string $upstream) => ['match' => [['host' => [$hostname]]], 'handle' => [self::proxy($upstream)]],
-                array_keys($routes),
-                array_values($routes),
-            ),
+            'routes' => [
+                ...array_map(
+                    fn (string $hostname, string $upstream) => ['match' => [['host' => [$hostname]]], 'handle' => [self::proxy($upstream)]],
+                    array_keys($routes),
+                    array_values($routes),
+                ),
+                // The S3 server takes the bucket in the path. The bucket policy decides what an anonymous request may do,
+                // so the route lets each method through and a write gets the refusal of the server.
+                ...array_map(
+                    fn (string $hostname, array $bucket) => ['match' => [['host' => [$hostname]]], 'handle' => [
+                        ['handler' => 'rewrite', 'uri' => "/{$bucket['bucket']}{http.request.uri.path}"],
+                        self::proxy($bucket['upstream']),
+                    ]],
+                    array_keys($buckets),
+                    array_values($buckets),
+                ),
+            ],
         ];
 
         return [

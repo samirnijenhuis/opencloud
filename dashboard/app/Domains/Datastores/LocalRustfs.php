@@ -4,11 +4,13 @@ namespace App\Domains\Datastores;
 
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Enums\ResourceFamily;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Models\Environment;
 use App\Support\Kube\Kubectl;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * One RustFS server per cluster, with one bucket and one IAM user per bucket of an environment. A canned policy with
@@ -16,7 +18,7 @@ use App\Support\Kube\Kubectl;
  * nightly job copies its buckets.
  *
  * A public bucket also has an anonymous bucket policy that allows s3:GetObject only, so anyone can read a file but
- * nobody can list, upload, or delete without the key.
+ * nobody can list, upload, or delete without the key. Caddy serves it at its own free sslip.io address.
  */
 final class LocalRustfs extends LocalProvisioner
 {
@@ -39,6 +41,30 @@ final class LocalRustfs extends LocalProvisioner
     public function publicRefusal(Cluster $cluster): ?string
     {
         return self::publicIp($cluster) === null ? 'The cluster has no public IPv4 address, so a bucket on it cannot be public.' : null;
+    }
+
+    /**
+     * The address of each public bucket on the cluster, and where Caddy sends it: the server and the bucket in the
+     * path.
+     *
+     * @return array<string, array{upstream: string, bucket: string}>
+     */
+    public static function publicRoutes(Cluster $cluster): array
+    {
+        return DatastoreAttachment::query()
+            ->with('datastore.cluster')
+            ->where('is_public', true)
+            ->whereHas('datastore', fn (Builder $datastore) => $datastore
+                ->where('cluster_id', $cluster->id)
+                ->where('kind', DatastoreKind::RUSTFS)
+                ->where('source', DatastoreSource::STANDARD))
+            ->get()
+            ->filter(fn (DatastoreAttachment $attachment) => self::publicHost($attachment) !== null)
+            ->mapWithKeys(fn (DatastoreAttachment $attachment) => [self::publicHost($attachment) => [
+                'upstream' => DatastoreManifests::host(DatastoreManifests::serverName($attachment->datastore)).':9000',
+                'bucket' => $attachment->database_name,
+            ]])
+            ->all();
     }
 
     protected function server(Datastore $datastore): array

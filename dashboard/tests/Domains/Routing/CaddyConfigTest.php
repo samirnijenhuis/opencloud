@@ -25,6 +25,23 @@ class CaddyConfigTest extends TestCase
         );
     }
 
+    public function test_a_public_bucket_address_puts_the_bucket_in_the_path_and_comes_after_the_app_routes(): void
+    {
+        $config = (new CaddyConfig('acme', null))->build(false, ['z.example.com' => 'web.oc-env-7.svc.cluster.local:8080'], buckets: [
+            'env-7-fb611de4.files.203.0.113.5.sslip.io' => ['upstream' => 'rustfs-6.oc-datastores.svc.cluster.local:9000', 'bucket' => 'env-7-fb611de4'],
+            'env-7.files.203.0.113.5.sslip.io' => ['upstream' => 'rustfs-6.oc-datastores.svc.cluster.local:9000', 'bucket' => 'env-7'],
+        ]);
+
+        $this->assertSame(
+            '['.
+            '{"match":[{"host":["z.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"web.oc-env-7.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]},'.
+            '{"match":[{"host":["env-7-fb611de4.files.203.0.113.5.sslip.io"]}],"handle":[{"handler":"rewrite","uri":"/env-7-fb611de4{http.request.uri.path}"},{"handler":"reverse_proxy","upstreams":[{"dial":"rustfs-6.oc-datastores.svc.cluster.local:9000"}],"load_balancing":{"try_duration":"5s"}}]},'.
+            '{"match":[{"host":["env-7.files.203.0.113.5.sslip.io"]}],"handle":[{"handler":"rewrite","uri":"/env-7{http.request.uri.path}"},{"handler":"reverse_proxy","upstreams":[{"dial":"rustfs-6.oc-datastores.svc.cluster.local:9000"}],"load_balancing":{"try_duration":"5s"}}]}'.
+            ']',
+            json_encode($config['apps']['http']['servers']['apps']['routes'], JSON_UNESCAPED_SLASHES),
+        );
+    }
+
     public function test_another_cluster_has_no_dashboard_and_uses_lets_encrypt_with_the_email(): void
     {
         $this->assertSame([
