@@ -105,14 +105,18 @@ class OpenPreview
                 'processes' => $template->processes->pluck('name')->all(),
             ]);
 
-            $this->copyEnv($application, $template, $preview);
+            $hostname = $this->hostname($application, $pullRequest->number);
+
+            $this->copyEnv($application, $template, $preview, [
+                '{pr_number}' => (string) $pullRequest->number,
+                '{branch}' => $pullRequest->headRef,
+                '{url}' => $hostname === null ? '' : "https://{$hostname}",
+            ]);
 
             foreach ($attachments as $attachment) {
                 // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
                 $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name);
             }
-
-            $hostname = $this->hostname($application, $pullRequest->number);
 
             if ($hostname !== null) {
                 $domain = $preview->domains()->create(['hostname' => $hostname]);
@@ -124,11 +128,19 @@ class OpenPreview
         });
     }
 
-    /** Copies each user value of the template, secrets too, as values of the preview. The preset generates each secret that the template lacks. */
-    private function copyEnv(Application $application, Environment $template, Environment $preview): void
+    /**
+     * Copies each user value of the template, secrets too, as values of the preview, and fills in each placeholder.
+     * The preset generates each secret that the template lacks.
+     *
+     * @param  array<string, string>  $placeholders
+     */
+    private function copyEnv(Application $application, Environment $template, Environment $preview, array $placeholders): void
     {
         $copied = $template->envVars()->where('source', EnvVarSource::USER)->orderBy('key')->get()
-            ->map(fn (EnvVar $var) => $preview->envVars()->create($var->only(['key', 'value', 'is_secret', 'available_at', 'source']))->key);
+            ->map(fn (EnvVar $var) => $preview->envVars()->create([
+                ...$var->only(['key', 'is_secret', 'available_at', 'source']),
+                'value' => strtr($var->value, $placeholders),
+            ])->key);
         $generated = [];
 
         foreach ($application->type->generatedSecrets() as $key => $value) {
