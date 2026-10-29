@@ -187,6 +187,26 @@ class RunDeploymentTest extends TestCase
         );
     }
 
+    public function test_a_primary_domain_that_changes_during_the_deploy_commands_waits_for_the_next_deploy(): void
+    {
+        Domain::factory()->for($this->environment)->create(['hostname' => 'shop.example.com', 'dns_status' => DnsStatus::OK, 'certificate_status' => 'issued']);
+        $this->kubectl->respond("logs job/deploy-{$this->new->id}", function () {
+            $domain = Domain::factory()->for($this->environment)->create(['hostname' => 'www.shop.example.com']);
+            app(SetPrimaryDomain::class)->execute($domain, User::factory()->admin()->create());
+
+            return new KubectlResult(0, "Migrating: create_users_table\n");
+        });
+
+        RunDeployment::dispatchSync($this->new);
+
+        $applied = $this->kubectl->appliedManifests();
+        $this->assertSame('https://shop.example.com', base64_decode($applied[1]['data']['APP_URL']));
+        $this->assertSame(
+            [['name' => 'Host', 'value' => 'shop.example.com']],
+            $applied[3]['spec']['template']['spec']['containers'][0]['readinessProbe']['httpGet']['httpHeaders'],
+        );
+    }
+
     public function test_the_deployment_goes_live_only_after_the_old_pods_stopped(): void
     {
         Sleep::fake(syncWithCarbon: true);

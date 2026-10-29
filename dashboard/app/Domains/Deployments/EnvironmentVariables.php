@@ -48,8 +48,9 @@ final class EnvironmentVariables
     private static function systemDefaults(Environment $environment): array
     {
         $application = $environment->application;
-        $domains = $environment->domains()->orderBy('id')->get();
+        // The manifests of the deploy read the same loaded relation, so APP_URL and the Host header of the probe agree.
+        $domains = $environment->domains->sortBy('id');
 
-        return $application->type->systemEnv($application->port, PrimaryDomain::of($domains)?->hostname, $domains->pluck('hostname')->all());
+        return $application->type->systemEnv($application->port, PrimaryDomain::of($domains)?->hostname, $domains->pluck('hostname')->values()->all());
     }
 }

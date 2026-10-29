@@ -362,7 +362,7 @@ Each environment has one primary domain. It sets `APP_URL`, the Host header of t
 3. Else the free domain wins.
 4. Else the oldest domain wins.
 
-The column `domains.is_primary` stores the choice of a user, and the partial unique index `domains_one_primary` allows one choice for each environment. The Domains sheet shows the Primary badge. A user who can manage domains sees a Make primary button on each other domain, and `SetPrimaryDomain` stores the choice. When a user removes the primary domain, its row and the choice go away, and the rule picks the next primary domain. Without a choice, the primary domain moves when a custom domain becomes live. A change of the primary domain reaches `APP_URL` and the readiness probe on the next deploy. A user value `APP_URL` still wins over the value of opencloud.
+The column `domains.is_primary` stores the choice of a user, and the partial unique index `domains_one_primary` allows one choice for each environment. The Domains sheet shows the Primary badge. A user who can manage domains sees a Make primary button on each other domain, and `SetPrimaryDomain` stores the choice. When a user removes the primary domain, its row and the choice go away, and the rule picks the next primary domain. Without a choice, the primary domain moves when a custom domain becomes live. A change of the primary domain reaches `APP_URL` and the readiness probe on the next deploy. A deploy reads the domains once, so a change during a deploy waits for the next deploy. A user value `APP_URL` still wins over the value of opencloud.
 
 ## Roles
 
