@@ -15,6 +15,7 @@ use App\Domains\Environments\Actions\SetEnvVar;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\ProcessKind;
+use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Actions\AddDomain;
 use App\Domains\Routing\DefaultDomain;
@@ -103,6 +104,7 @@ class CreateApplication
                 'kind' => EnvironmentKind::PREVIEW_TEMPLATE,
                 'is_protected' => false,
                 'auto_deploy' => false,
+                'sleep_after_minutes' => Environment::PREVIEW_SLEEP_AFTER_MINUTES,
                 ...Arr::except($settings, ['size', 'min_instances', 'max_instances', 'cpu_target']),
             ]);
 

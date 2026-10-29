@@ -14,6 +14,7 @@ use App\Domains\Environments\Actions\SetEnvVar;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Jobs\ScaleEnvironment;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -65,6 +66,18 @@ class EnvironmentActionsTest extends TestCase
             ['deployment.started', ['environment_id' => $this->environment->id, 'commit_sha' => 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']],
             [AuditEvent::sole()->action, AuditEvent::sole()->context],
         );
+    }
+
+    public function test_start_deployment_wakes_a_sleeping_environment(): void
+    {
+        $this->environment->forceFill(['sleep_after_minutes' => 15, 'slept_at' => now()])->save();
+
+        $deployment = app(StartDeployment::class)->execute($this->environment, $this->user, 'cccccccccccccccccccccccccccccccccccccccc');
+
+        $this->assertNull($this->environment->fresh()->slept_at);
+        $this->assertSame([['environment.woke', $this->user->id], ['deployment.started', $this->user->id]], AuditEvent::query()->orderBy('id')->get()->map(fn (AuditEvent $event) => [$event->action, $event->user_id])->all());
+        Queue::assertPushed(ScaleEnvironment::class, fn (ScaleEnvironment $job) => $job->environment->is($this->environment));
+        Queue::assertPushedOn('builds', RunDeployment::class, fn (RunDeployment $job) => $job->deployment->is($deployment));
     }
 
     public function test_start_deployment_with_a_sha_runs_no_git_and_refuses_the_preview_template(): void

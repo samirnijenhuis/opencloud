@@ -23,6 +23,8 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - `Kubectl::for()` gets `KubectlFactory` from the container (`app/Support/Kube/Kubectl.php:13-16`). `FakeKubectl::install()` binds itself in its place (`app/Support/Kube/FakeKubectl.php:21-27`), so each later `Kubectl::for()` in the test returns the fake.
 - `Kubectl` runs `kubectl` with Symfony Process (`app/Support/Kube/Kubectl.php:136-138`). `Process::fake()` does not catch a `kubectl` call.
 - `RunDeployment` deletes each Deployment, CronJob, and HorizontalPodAutoscaler in the environment namespace with an `opencloud.dev/process` label that no process of the environment uses as that kind (`EnvironmentManifests::strays()`). A Deployment, a CronJob, or an autoscaler that you add by hand with that label goes away on the next deploy.
+- `StartDeployment` calls `WakeEnvironment` (`app/Domains/Deployments/Actions/StartDeployment.php`). A deploy of a sleeping environment wakes it at the start.
+- `ScaleEnvironment` deletes the autoscalers, scales each Deployment of the environment to 0, and suspends its CronJobs while the environment sleeps (`app/Domains/Environments/Jobs/ScaleEnvironment.php`). It scales a standard Valkey of the environment in `oc-datastores` too. A Deployment that you scale by hand goes back to its minimum on the next wake.
 - After a deployment goes live, `RunDeployment::pruneEnvSecrets()` keeps the live env Secret and the two newest, and deletes the others (`app/Domains/Deployments/Jobs/RunDeployment.php:272-289`).
 
 ## Secrets and the audit log

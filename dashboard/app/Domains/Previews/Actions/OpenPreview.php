@@ -28,7 +28,7 @@ use Throwable;
 class OpenPreview
 {
     /** The settings that a preview takes from the preview template, next to its processes. Web always runs one instance. */
-    private const TEMPLATE_SETTINGS = ['size', 'cpu_target', 'build_command', 'deploy_commands', 'health_path'];
+    private const TEMPLATE_SETTINGS = ['size', 'cpu_target', 'build_command', 'deploy_commands', 'health_path', 'sleep_after_minutes'];
 
     public function __construct(
         private AttachDatastore $attachDatastore,

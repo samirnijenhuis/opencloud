@@ -55,6 +55,12 @@ interface Provisioner
      */
     public function release(Datastore $datastore, array $attachment, bool $destroyData): void;
 
+    /**
+     * Stops a server that runs for this attachment alone while its environment sleeps, and starts it again on the wake.
+     * A shared server and a resource outside the cluster keep running.
+     */
+    public function scale(DatastoreAttachment $attachment, bool $awake): void;
+
     /** How the app reaches it, or null while that is not known yet (a managed database before its apply). */
     public function connection(DatastoreAttachment $attachment): ?Connection;
 

@@ -52,6 +52,14 @@ final class LocalValkey extends LocalProvisioner
         }
     }
 
+    /** Each attachment has its own server, so the server sleeps with its environment. The volume keeps the data. */
+    public function scale(DatastoreAttachment $attachment, bool $awake): void
+    {
+        Kubectl::for($attachment->datastore->cluster)->run([
+            'scale', 'deployment/'.DatastoreManifests::valkeyName($attachment), '--replicas='.($awake ? 1 : 0), '--namespace='.DatastoreManifests::NAMESPACE,
+        ])->throw();
+    }
+
     public function connection(DatastoreAttachment $attachment): ?Connection
     {
         return new KeyValueConnection(DatastoreManifests::host(DatastoreManifests::valkeyName($attachment)), 6379, $attachment->password, tls: false);

@@ -159,6 +159,9 @@ final class ManagedResource implements Provisioner
         });
     }
 
+    /** The provider runs the resource outside the cluster, so it keeps running. */
+    public function scale(DatastoreAttachment $attachment, bool $awake): void {}
+
     public function connection(DatastoreAttachment $attachment): ?Connection
     {
         return $this->stack->connection($attachment);
