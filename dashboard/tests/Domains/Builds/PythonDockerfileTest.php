@@ -43,9 +43,11 @@ class PythonDockerfileTest extends TestCase
             ENV VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH UV_PROJECT_ENVIRONMENT=/opt/venv UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
             # Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
             ARG OPENCLOUD_BUILD_ENV
+            # Opencloud sets this to a key of the application, so the cache mounts of one application never reach another.
+            ARG OPENCLOUD_CACHE_ID
             WORKDIR /app
             COPY . .
-            RUN --mount=type=cache,target=/root/.cache --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL uv sync --locked --no-dev
+            RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.cache,target=/root/.cache --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL uv sync --locked --no-dev
             RUN --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL <<'OPENCLOUD_BUILD'
             set -e
             python manage.py collectstatic --noinput
@@ -60,7 +62,7 @@ class PythonDockerfileTest extends TestCase
     public static function dependencyFiles(): array
     {
         $procfile = ['Procfile' => "web: gunicorn app:app\n"];
-        $install = 'RUN --mount=type=cache,target=/root/.cache ';
+        $install = 'RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.cache,target=/root/.cache ';
 
         return [
             'poetry.lock beats Pipfile.lock and requirements.txt' => [

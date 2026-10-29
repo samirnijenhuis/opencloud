@@ -32,6 +32,13 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - `SecretMasker` never masks a value shorter than 4 characters (`app/Support/SecretMasker.php:13`).
 - `SecretMasker::forEnvironment()` reads the secret env values and the attachment passwords when you build it (`app/Support/SecretMasker.php:41-50`). A secret that the code adds later is not in that masker.
 
+## Builds
+
+- `Builder::build()` clones into `repository/` of a temporary folder and writes the Dockerfile into `dockerfile/` (`app/Domains/Builds/Builder.php:58-62`). Never write a file into the clone. A symbolic link of the repository sends the write to a file of the builder container.
+- `RepositoryFiles::in()` throws when a symbolic link puts a path outside the clone (`app/Domains/Builds/RepositoryFiles.php:27`). Read each file of the clone through it, not with `file_get_contents()`.
+- `buildctl` gets no build value in its env. Each value is a file in `secrets/`, passed with `--secret id=<key>,src=<file>` (`app/Domains/Builds/Builder.php:75-81`). Do not add `->env()` to that process. `buildctl` starts `kubectl`, so a user value such as `PATH` or `LD_PRELOAD` runs code from the repository.
+- Each cache mount of a preset template has the id `${OPENCLOUD_CACHE_ID}<target>` (`resources/docker/*.Dockerfile`). A new cache mount without that id shares its cache with every application on the BuildKit server.
+
 ## Queues and the scheduler
 
 - The workers run with `--tries=1` (`docker/entrypoint.sh:31`, `:35`). A job that throws fails at once, unless it sets `$tries` or `retryUntil()`.

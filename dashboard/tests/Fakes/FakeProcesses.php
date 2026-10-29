@@ -7,7 +7,7 @@ use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
 
 /**
- * Stands in for git, buildctl, crane, and ssh-keygen. A fake checkout writes $repository into the build folder.
+ * Stands in for git, buildctl, crane, and ssh-keygen. A fake checkout writes $repository and $links into the build folder.
  * A fake ssh-keygen writes PRIVATE_KEY and PUBLIC_KEY with the comment of the call. A fake ssh-keygen -y reads
  * PUBLIC_KEY with the comment OWN_COMMENT from PRIVATE_KEY, and it refuses each other key as ssh-keygen does.
  */
@@ -24,6 +24,9 @@ final class FakeProcesses
 
     /** @var array<string, string> path => contents */
     public array $repository = [];
+
+    /** @var array<string, string> path => target of a symbolic link that the checkout makes */
+    public array $links = [];
 
     /** @var list<string> */
     public array $buildOutput = [];
@@ -42,6 +45,9 @@ final class FakeProcesses
 
     /** @var list<string|null> the "<dockerfile>.dockerignore" that each build saw, or null */
     public array $dockerignores = [];
+
+    /** @var list<array<string, string>> the build secrets that each build read from its files, by id */
+    public array $secrets = [];
 
     /** @var list<string> the config.json that crane found in DOCKER_CONFIG for each copy */
     public array $craneConfigs = [];
@@ -82,6 +88,11 @@ final class FakeProcesses
                 is_dir(dirname("{$process->path}/{$path}")) || mkdir(dirname("{$process->path}/{$path}"), 0777, true);
                 file_put_contents("{$process->path}/{$path}", $contents);
             }
+
+            foreach ($this->links as $path => $target) {
+                is_dir(dirname("{$process->path}/{$path}")) || mkdir(dirname("{$process->path}/{$path}"), 0777, true);
+                symlink($target, "{$process->path}/{$path}");
+            }
         }
 
         if ($command[0] === 'git' && $command[1] === 'ls-remote' && $this->lsRemoteError !== null) {
@@ -97,9 +108,18 @@ final class FakeProcesses
         }
 
         if ($command[0] === 'buildctl') {
-            $filename = substr(collect($command)->first(fn (string $arg) => str_starts_with($arg, 'filename=')), strlen('filename='));
-            $this->dockerfiles[] = file_get_contents("{$process->path}/{$filename}");
-            $this->dockerignores[] = is_file("{$process->path}/{$filename}.dockerignore") ? file_get_contents("{$process->path}/{$filename}.dockerignore") : null;
+            $option = fn (string $name) => substr(collect($command)->first(fn (string $arg) => str_starts_with($arg, "{$name}=")), strlen($name) + 1);
+            $dockerfile = $option('dockerfile').'/'.$option('filename');
+            $this->dockerfiles[] = file_get_contents($dockerfile);
+            $this->dockerignores[] = is_file("{$dockerfile}.dockerignore") ? file_get_contents("{$dockerfile}.dockerignore") : null;
+            $this->secrets[] = collect($command)
+                ->filter(fn (string $arg, int $i) => $i > 0 && $command[$i - 1] === '--secret')
+                ->mapWithKeys(function (string $arg) {
+                    parse_str(str_replace(',', '&', $arg), $secret);
+
+                    return [$secret['id'] => file_get_contents($secret['src'])];
+                })
+                ->all();
 
             return (new FakeProcessDescription)->output($this->buildOutput)->exitCode($this->buildExitCode);
         }

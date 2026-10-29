@@ -31,9 +31,11 @@ class RubyDockerfileTest extends TestCase
             ENV BUNDLE_WITHOUT=development:test RACK_ENV=production RAILS_ENV=production
             # Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
             ARG OPENCLOUD_BUILD_ENV
+            # Opencloud sets this to a key of the application, so the cache mounts of one application never reach another.
+            ARG OPENCLOUD_CACHE_ID
             WORKDIR /app
             COPY . .
-            RUN --mount=type=cache,target=/usr/local/bundle/cache --mount=type=secret,id=BUNDLE_GEMS__CONTRIBSYS__COM,env=BUNDLE_GEMS__CONTRIBSYS__COM bundle install
+            RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/usr/local/bundle/cache,target=/usr/local/bundle/cache --mount=type=secret,id=BUNDLE_GEMS__CONTRIBSYS__COM,env=BUNDLE_GEMS__CONTRIBSYS__COM bundle install
             RUN --mount=type=secret,id=BUNDLE_GEMS__CONTRIBSYS__COM,env=BUNDLE_GEMS__CONTRIBSYS__COM SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile
             RUN --mount=type=secret,id=BUNDLE_GEMS__CONTRIBSYS__COM,env=BUNDLE_GEMS__CONTRIBSYS__COM <<'OPENCLOUD_BUILD'
             set -e

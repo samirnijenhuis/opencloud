@@ -1,7 +1,7 @@
 <?php
 
 // matrix.py local runs this. It asks the dashboard code of this checkout what a deploy of one cell gets: the Dockerfile
-// that Builder::prepare() writes into the app folder, the key of the build values, the port, the env values of the
+// that Builder::prepare() writes into a folder next to the app folder, the key of the build values, the port, the env values of the
 // preset and of each attachment, and the datastore versions. So a local run builds and starts the app the way the
 // cluster does. A fixed key would let BuildKit reuse a layer that read the build values of another cell.
 
@@ -21,8 +21,10 @@ $app->make(Kernel::class)->bootstrap();
 
 $type = ApplicationType::from($input['type']);
 $port = $type->choosesPort() ? ($input['port'] ?? $type->defaultPort()) : $type->defaultPort();
-$dockerfile = (new ReflectionMethod(Builder::class, 'prepare'))
-    ->invoke(new Builder, $type, $input['dir'], array_keys($input['build_env']), $input['build_command']);
+$dockerfileDir = "{$input['dir']}.dockerfile";
+is_dir($dockerfileDir) || mkdir($dockerfileDir);
+$dockerfile = $dockerfileDir.'/'.(new ReflectionMethod(Builder::class, 'prepare'))
+    ->invoke(new Builder, $type, $input['dir'], $dockerfileDir, array_keys($input['build_env']), $input['build_command']);
 
 $env = $type->systemEnv($port, []);
 
