@@ -1,0 +1,258 @@
+# The log store of the local cluster. Fluent Bit on the node sends the lines of each environment namespace to Loki.
+# Loki keeps them on the host for 7 days. ClusterPartsManifests builds the same objects for the other clusters, with
+# a volume instead of the host path, and ClusterPartsManifestsTest fails when the two differ.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/part-of: opencloud
+data:
+  loki.yaml: |
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+      log_level: warn
+    common:
+      instance_addr: 127.0.0.1
+      path_prefix: /loki
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+      storage:
+        filesystem:
+          chunks_directory: /loki/chunks
+          rules_directory: /loki/rules
+    schema_config:
+      configs:
+        - from: "2026-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+    limits_config:
+      retention_period: 168h
+      discover_service_name: []
+      discover_log_levels: false
+    compactor:
+      working_directory: /loki/compactor
+      retention_enabled: true
+      delete_request_store: filesystem
+    analytics:
+      reporting_enabled: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/part-of: opencloud
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loki
+        app.kubernetes.io/part-of: opencloud
+    spec:
+      initContainers:
+        - name: data-owner
+          image: busybox:1.37.0
+          imagePullPolicy: IfNotPresent
+          command: [chown, "10001:10001", /loki]
+          volumeMounts:
+            - name: data
+              mountPath: /loki
+      containers:
+        - name: loki
+          image: grafana/loki:3.7.9
+          imagePullPolicy: IfNotPresent
+          args: [-config.file=/etc/loki/loki.yaml]
+          ports:
+            - name: http
+              containerPort: 3100
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki
+            - name: data
+              mountPath: /loki
+        # The Loki image has no shell, so the dashboard runs wget against Loki in this container.
+        - name: query
+          image: busybox:1.37.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c, 'trap "exit 0" TERM; while true; do sleep 3600 & wait; done']
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              memory: 32Mi
+      volumes:
+        - name: config
+          configMap:
+            name: loki
+        - name: data
+          hostPath:
+            path: /var/lib/opencloud/loki
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/part-of: opencloud
+spec:
+  selector:
+    app.kubernetes.io/name: loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: http
+---
+# Loki has no login and holds the unmasked lines of every environment, so only Fluent Bit may reach it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loki-from-fluent-bit
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/part-of: opencloud
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: fluent-bit
+      ports:
+        - protocol: TCP
+          port: 3100
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: fluent-bit
+    app.kubernetes.io/part-of: opencloud
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush            1
+        Log_Level        warn
+        Parsers_File     parsers.conf
+
+    [INPUT]
+        Name             tail
+        Path             /var/log/containers/*_oc-env-*_*.log
+        Path_Key         file
+        Tag              pods.*
+        multiline.parser cri
+        DB               /var/lib/opencloud/fluent-bit/tail.db
+        Read_from_Head   On
+        Mem_Buf_Limit    16MB
+        Skip_Long_Lines  On
+        Refresh_Interval 5
+
+    [FILTER]
+        Name             parser
+        Match            pods.*
+        Key_Name         file
+        Parser           pod_file
+        Reserve_Data     On
+
+    [OUTPUT]
+        Name             loki
+        Match            pods.*
+        Host             loki
+        Port             3100
+        Labels           namespace=$namespace, pod=$pod, process=$process
+        Remove_Keys      namespace, pod, process, stream, _p, time
+        Drop_Single_Key  raw
+        Line_Format      key_value
+        Retry_Limit      no_limits
+  parsers.conf: |
+    [PARSER]
+        Name   pod_file
+        Format regex
+        Regex  ^/var/log/containers/(?<pod>[^_]+)_(?<namespace>[^_]+)_(?<process>.+)-[0-9a-f]{64}\.log$
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: opencloud
+  labels:
+    app.kubernetes.io/name: fluent-bit
+    app.kubernetes.io/part-of: opencloud
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fluent-bit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fluent-bit
+        app.kubernetes.io/part-of: opencloud
+    spec:
+      containers:
+        - name: fluent-bit
+          image: fluent/fluent-bit:5.1.5
+          imagePullPolicy: IfNotPresent
+          command: [/fluent-bit/bin/fluent-bit, -c, /fluent-bit/etc/opencloud/fluent-bit.conf]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /fluent-bit/etc/opencloud
+            - name: pod-logs
+              mountPath: /var/log
+              readOnly: true
+            - name: positions
+              mountPath: /var/lib/opencloud/fluent-bit
+      volumes:
+        - name: config
+          configMap:
+            name: fluent-bit
+        - name: pod-logs
+          hostPath:
+            path: /var/log
+        - name: positions
+          hostPath:
+            path: /var/lib/opencloud/fluent-bit
+            type: DirectoryOrCreate

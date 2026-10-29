@@ -46,6 +46,8 @@ The installer creates this layout on the dashboard VPS. All opencloud parts live
 | Caddy | Deployment `caddy` with a rolling update, Service `caddy` of type `LoadBalancer` with ports 80, 443, and 8000. k3s ServiceLB binds these ports on the host. Certificates and the last config live on the host paths `/var/lib/opencloud/caddy/data` and `/var/lib/opencloud/caddy/config`, so they survive a pod restart. | Admin API on `127.0.0.1:2019` inside the pod only |
 | Registry | Deployment `registry` with the image `registry:3`, data on the host path `/var/lib/opencloud/registry`. | Service `registry` with the fixed ClusterIP `10.43.200.200`, port 5000 |
 | BuildKit | Deployment `buildkitd`, privileged, state on the host path `/var/lib/opencloud/buildkit`. | No Service. BuildKit listens only on the Unix socket `/run/buildkit/buildkitd.sock` in its pod, and the dashboard runs `buildctl` there through `kubectl exec`. |
+| Loki | Deployment `loki` with the image `grafana/loki:3.7.9` and a `query` container with `busybox:1.37.0`. It keeps the app logs on the host path `/var/lib/opencloud/loki`. The section Application logs describes it. | Service `loki` port 3100. The NetworkPolicy `loki-from-fluent-bit` lets only Fluent Bit reach it. |
+| Fluent Bit | DaemonSet `fluent-bit` with the image `fluent/fluent-bit:5.1.5`. It reads `/var/log/containers` on the node and keeps its read positions in `/var/lib/opencloud/fluent-bit`. | No Service. |
 
 Images have names like `registry.opencloud.svc.cluster.local:5000/<application-id>/<environment-id>:<short-sha>-<deployment-id>`. BuildKit pushes to that name over plain HTTP, because it resolves cluster DNS. The node cannot resolve cluster DNS, so the installer writes `/etc/rancher/k3s/registries.yaml` with a mirror from that name to `http://10.43.200.200:5000`. The registry is never reachable from outside the cluster.
 
@@ -226,6 +228,8 @@ Controllers never touch Kubernetes, Caddy, or BuildKit. They validate the reques
 
 The owner connects a cluster with its kubeconfig and the address and credentials of a registry near that cluster. `InstallClusterParts` puts Caddy in the namespace `opencloud` with a Service of type `LoadBalancer` and its state on a PVC, and creates the namespace `oc-datastores`. It stores the load balancer address as the ingress IP. Opencloud changes nothing outside its own namespaces, so a cluster that runs other software also works.
 
+`InstallClusterParts` also puts the log store in the namespace `opencloud`: Loki with its data on a PVC of 10 GiB, and Fluent Bit on each node. Fluent Bit reads the host path `/var/log` and keeps its read positions in the host path `/var/lib/opencloud/fluent-bit` of each node, so the namespace must allow host paths. That folder stays on the nodes after a disconnect. The section Application logs describes the log store.
+
 For an application on a connected cluster, `RunDeployment` copies the built image from the local registry to the cluster's registry with crane. The environment namespace gets the pull secret `opencloud-registry`, and the pods use the copied image. So a connected cluster can start new pods while the dashboard server is down. The scheduler syncs Caddy only on clusters with the status `ready`.
 
 ## Upgrades
@@ -332,6 +336,18 @@ A `pull_request` queues `SyncPreview`. The actions `opened`, `reopened`, and `sy
 A user runs a one-off command, for example `php artisan migrate:status`, on an environment. `RunCommand` stores a `CommandRun` with the live deployment. `App\Domains\Environments\Enums\CommandRunStatus` is its state machine. A run moves from `queued` to `running` or `failed`, and from `running` to `succeeded`, `failed`, or `timed_out`.
 
 `ExecuteCommandRun` applies the Job `cmd-<run id>` from `App\Domains\Environments\CommandManifests` in the environment namespace. The Job runs `sh -c <command>` with the image and the env Secret of that deployment, the label `opencloud.dev/process=command`, `backoffLimit` 0, and `activeDeadlineSeconds` 900. Each check reads the Job and copies the pod logs into `output`, with terminal colors removed and secrets masked. So the UI can show the output while the command runs. `Complete` gives `succeeded` with exit code 0. `Failed` gives `failed` with the exit code of the container, or `timed_out` when the reason is `DeadlineExceeded`. When the Job has no end condition 960 seconds after the start, `ExecuteCommandRun` deletes it, and the run becomes `timed_out`. Running a command needs `EnvironmentPolicy::update`. Reading the runs needs the right to read logs.
+
+## Application logs
+
+An app writes its logs to stdout and stderr. The kubelet keeps them in a file for each container under `/var/log/pods`, but it deletes the file with the pod. So each cluster keeps the lines in its own log store, and a deploy, a moved pod, or a scaled-down pod keeps its lines.
+
+- Fluent Bit runs as the DaemonSet `fluent-bit` on each node. It reads only the files `/var/log/containers/*_oc-env-*_*.log`, so it sends the lines of the environment namespaces and of nothing else. The file name gives the namespace, the pod, and the container. Each container of an environment has the name of its process, so the container gives the process. Fluent Bit therefore needs no access to the Kubernetes API. Each line goes to Loki with the labels `namespace`, `pod`, and `process`, at the time that the kubelet wrote it.
+- Loki runs as the Deployment `loki`, one binary with the filesystem store. The compactor deletes each line that is older than 7 days (`retention_period: 168h`). It runs every 10 minutes and deletes a marked chunk 2 hours later, so a line goes from the disk within about 7 days and 2 hours. The retention is fixed. Loki keeps its data on the host path `/var/lib/opencloud/loki` on `local` and on a PVC of 10 GiB on another cluster.
+- Loki has no login and holds the unmasked lines of every environment. The NetworkPolicy `loki-from-fluent-bit` lets only the Fluent Bit pods reach port 3100. The dashboard reaches Loki through `kubectl exec` in the `query` container of the Loki pod, which runs `wget` against `127.0.0.1:3100`. The Loki image has no shell, and a call through the API server proxy can meet the NetworkPolicy on a managed cluster.
+
+The disk use depends on the apps. On a local Docker test, 44 MiB of kubelet log files with 300,000 similar lines took 2 MiB of Loki chunks. Real lines compress less. The same test measured the memory: Loki used 60 MiB idle and 225 MiB after a count over all lines, and Fluent Bit used 4 MiB idle and 25 MiB while it read the burst. Loki has a limit of 512 MiB, and Fluent Bit has a limit of 128 MiB with a buffer of 16 MB. When the buffer is full, Fluent Bit pauses the files and reads on later, so a slow Loki loses no line of a running pod.
+
+A restore on a new server does not bring the old lines back, because the backups do not copy Loki. The deployment logs, the command output, and the audit log stay in the dashboard database.
 
 ## Live status
 

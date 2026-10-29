@@ -4,6 +4,7 @@ namespace Tests\Domains\Clusters;
 
 use App\Domains\Clusters\ClusterPartsManifests;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Yaml\Yaml;
 
 class ClusterPartsManifestsTest extends TestCase
 {
@@ -64,6 +65,20 @@ class ClusterPartsManifestsTest extends TestCase
                     ],
                 ],
             ],
-        ], (new ClusterPartsManifests('caddy:9.9.9'))->all());
+        ], array_slice((new ClusterPartsManifests('caddy:9.9.9'))->all(), 0, 5));
+    }
+
+    public function test_the_log_store_is_the_one_of_the_local_cluster_with_a_volume_in_place_of_the_host_path(): void
+    {
+        $local = array_map(fn (string $document) => Yaml::parse($document), preg_split('/^---$/m', file_get_contents(dirname(__DIR__, 4).'/platform/logs.yaml')));
+        $local[1]['spec']['template']['spec']['volumes'][1] = ['name' => 'data', 'persistentVolumeClaim' => ['claimName' => 'loki']];
+        $volume = [
+            'apiVersion' => 'v1',
+            'kind' => 'PersistentVolumeClaim',
+            'metadata' => ['name' => 'loki', 'namespace' => 'opencloud', 'labels' => ['app.kubernetes.io/name' => 'loki', 'app.kubernetes.io/part-of' => 'opencloud']],
+            'spec' => ['accessModes' => ['ReadWriteOnce'], 'resources' => ['requests' => ['storage' => '10Gi']]],
+        ];
+
+        $this->assertSame([$local[0], $volume, ...array_slice($local, 1)], array_slice((new ClusterPartsManifests('caddy:9.9.9'))->all(), 5));
     }
 }

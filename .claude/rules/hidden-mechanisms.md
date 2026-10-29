@@ -25,6 +25,14 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - `RunDeployment` deletes each Deployment, CronJob, and HorizontalPodAutoscaler in the environment namespace with an `opencloud.dev/process` label that no process of the environment uses as that kind (`EnvironmentManifests::strays()`). A Deployment, a CronJob, or an autoscaler that you add by hand with that label goes away on the next deploy.
 - After a deployment goes live, `RunDeployment::pruneEnvSecrets()` keeps the live env Secret and the two newest, and deletes the others (`app/Domains/Deployments/Jobs/RunDeployment.php:272-289`).
 
+## Application logs
+
+- Fluent Bit takes the `process` label from the container name in the log file name (`ClusterPartsManifests::FLUENT_BIT_PARSERS`). `EnvironmentManifests::container()` and `CommandManifests` give each container the name of its process. A container with another name gets its lines under that name, and the Logs tab does not find them.
+- Fluent Bit reads only `/var/log/containers/*_oc-env-*_*.log`. A pod in another namespace, for example a datastore in `oc-datastores`, sends no lines to Loki.
+- Loki deletes each line after 7 days (`retention_period: 168h`). The compactor runs every 10 minutes and deletes a marked chunk 2 hours later.
+- `platform/logs.yaml` holds the log store of `local`, and `ClusterPartsManifests::logStore()` holds it for the other clusters. `ClusterPartsManifestsTest` fails when they differ in more than the Loki data volume, so change both.
+- The dashboard reaches Loki only through `kubectl exec` in the `query` container of the Loki pod. The NetworkPolicy `loki-from-fluent-bit` refuses every other pod, also the dashboard.
+
 ## Secrets and the audit log
 
 - `AuditEvent::record()` throws an `InvalidArgumentException` when the context has the key `value`, `secret`, or `password`, in any case and at any depth (`app/Domains/Audit/Models/AuditEvent.php:21`, `:37-61`).

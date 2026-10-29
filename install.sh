@@ -266,7 +266,7 @@ load_images() {
 
 apply_platform() {
     say "Applying the opencloud manifests"
-    logged kc apply -f "$PLATFORM_DIR/rbac.yaml" -f "$PLATFORM_DIR/registry.yaml" -f "$PLATFORM_DIR/buildkitd.yaml" -f "$PLATFORM_DIR/networkpolicies.yaml" ||
+    logged kc apply -f "$PLATFORM_DIR/rbac.yaml" -f "$PLATFORM_DIR/registry.yaml" -f "$PLATFORM_DIR/buildkitd.yaml" -f "$PLATFORM_DIR/networkpolicies.yaml" -f "$PLATFORM_DIR/logs.yaml" ||
         fail "Cannot apply the opencloud manifests. The details are in $LOG."
     sed -e "s|__CADDY_IMAGE__|$OPENCLOUD_CADDY_IMAGE|g" "$PLATFORM_DIR/caddy.yaml" | logged kc apply -f - ||
         fail "Cannot apply the Caddy manifest. The details are in $LOG."
