@@ -7,6 +7,7 @@ use App\Domains\Datastores\DatastoreManifests;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
+use stdClass;
 use Tests\TestCase;
 
 class DatastoreManifestsTest extends TestCase
@@ -15,6 +16,26 @@ class DatastoreManifestsTest extends TestCase
         'metadata' => ['name' => 'data'],
         'spec' => ['accessModes' => ['ReadWriteOnce'], 'resources' => ['requests' => ['storage' => '10Gi']]],
     ]];
+
+    public function test_the_datastores_take_traffic_only_from_their_namespace_and_the_environment_namespaces(): void
+    {
+        $policy = DatastoreManifests::networkPolicy();
+
+        $this->assertEquals([
+            'apiVersion' => 'networking.k8s.io/v1',
+            'kind' => 'NetworkPolicy',
+            'metadata' => ['name' => 'ingress-from-environments', 'namespace' => 'oc-datastores'],
+            'spec' => [
+                'podSelector' => new stdClass,
+                'policyTypes' => ['Ingress'],
+                'ingress' => [['from' => [
+                    ['podSelector' => new stdClass],
+                    ['namespaceSelector' => ['matchExpressions' => [['key' => 'opencloud.dev/environment', 'operator' => 'Exists']]]],
+                ]]],
+            ],
+        ], $policy);
+        $this->assertStringContainsString('"podSelector":{},"policyTypes":["Ingress"]', json_encode($policy), 'An empty selector must be a JSON object.');
+    }
 
     public function test_mysql_is_a_secret_a_service_and_a_statefulset_with_a_volume(): void
     {

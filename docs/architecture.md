@@ -51,7 +51,7 @@ Images have names like `registry.opencloud.svc.cluster.local:5000/<application-i
 
 The dashboard runs `kubectl` with its in-cluster service account for `local`. The service account has `cluster-admin` on `local`.
 
-The NetworkPolicies in `platform/networkpolicies.yaml` let only the dashboard reach BuildKit, and only the dashboard and BuildKit reach the registry. The node still pulls through the registry ClusterIP, because kube-router lets traffic from the node itself reach local pods. `tests/e2e/network-policy.sh` proves both.
+The NetworkPolicies in `platform/networkpolicies.yaml` let only the dashboard and BuildKit reach the registry. They also let only Caddy reach the dashboard, on port 8080. BuildKit has no network port, so it needs no rule. The node still pulls through the registry ClusterIP, because kube-router lets traffic from the node itself reach local pods. The kubelet probes of the dashboard come from the node, so they need no rule. A forwarded header can come only from Caddy, so `trustProxies(at: '*')` is safe. `tests/e2e/network-policy.sh` proves these rules.
 
 A release is a tag `v*`. `.github/workflows/release.yml` publishes the dashboard image and the Caddy image (`opencloud-caddy`) for amd64 and arm64 and a release archive with `install.sh`, `platform/`, and `bin/`. `tests/e2e/build-release-archive.sh` builds the archive for the workflow and for the tests. When `install.sh` runs from `curl | bash`, it downloads that archive, checks its SHA-256 sum, extracts it to `/opt/opencloud/<version>`, and runs from there. Without `OPENCLOUD_VERSION`, it asks the GitHub API for the tag of the latest release and installs that tag, so the dashboard always knows its real version. The dashboard image builds on the exact tag `dunglas/frankenphp:1.13.2-php8.5.12`, so a local build cannot reuse an older cached image with a moving tag. PHP 8.5.12 is the first 8.5 release that fixes PHP2Shell (CVE-2026-109618 and CVE-2026-109619). A new PHP patch needs a change of this tag.
 
@@ -68,6 +68,12 @@ After that DNS check passes, port 8000 serves only three routes without a sessio
 Manifests are plain PHP arrays that pure classes build from models. Each domain keeps its manifest class, for example `App\Domains\Deployments\EnvironmentManifests`, and `App\Support\Kube\Labels` holds the shared labels. `Kubectl::apply()` sends them with `kubectl apply --server-side --force-conflicts --field-manager=opencloud`. The same apply gives the same result when it runs again, so each sync sends the full desired state.
 
 Each environment gets its own namespace, `oc-env-<environment-id>`. Datastores live in the namespace `oc-datastores`.
+
+`RunDeployment` applies two NetworkPolicies to the namespace of the environment with each deployment. The ingress policy lets the pods take traffic only from their own namespace and from the Caddy pods. The egress policy lets the pods send traffic to every pod and to every IPv4 address except the endpoints of the Kubernetes API. The ingress policy of the target decides which pod takes the traffic. The Kubernetes API runs on the host network, where no ingress policy can guard it. So `RunDeployment` reads the endpoints of the Service `kubernetes` in the namespace `default` and puts their addresses in the `except` list. An environment gets its policies at its next deployment.
+
+The namespace `oc-datastores` has one ingress NetworkPolicy. It lets in the pods of its own namespace, where the bucket copy Job runs, and the pods of each namespace with the label `opencloud.dev/environment`. The dashboard needs no rule, because it reaches a datastore with `kubectl exec` and never over the pod network. `LocalProvisioner` and `ClusterPartsManifests` apply the policy with the namespace. A new route from Caddy or the dashboard to a datastore needs a new rule.
+
+A cluster whose network plugin does not enforce NetworkPolicies ignores all of these policies. The local cluster enforces them with kube-router.
 
 ## How the dashboard talks to Caddy
 
@@ -155,7 +161,7 @@ The enum `App\Domains\Deployments\Enums\DeploymentStep` lists the steps in order
 | `preparing_build` | build | Clone the commit and write the Dockerfile. |
 | `running_build` | build | Run `buildctl`. |
 | `pushing_application` | build | Copy the image to the registry of the cluster. |
-| `preparing_deploy` | deploy | Wait for the datastores, write the env values of each attachment again, and apply the namespace and the env Secret. |
+| `preparing_deploy` | deploy | Wait for the datastores, write the env values of each attachment again, and apply the namespace, the NetworkPolicies, and the env Secret. |
 | `running_deploy_commands` | deploy | Run the deploy command Job. |
 | `updating_stack` | deploy | Apply the workloads, wait for the rollout, and remove old processes. |
 | `routing_traffic` | deploy | Wait for the old pods, move to live, sync Caddy, and check the home page. |

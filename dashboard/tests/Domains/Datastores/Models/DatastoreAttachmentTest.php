@@ -84,7 +84,7 @@ class DatastoreAttachmentTest extends TestCase
             ['rollout', 'status', "statefulset/mysql-{$id}", '--namespace=oc-datastores', '--timeout=600s'],
             ['exec', '-i', "mysql-{$id}-0", '--namespace=oc-datastores', '--container=mysql', '--', 'bash', '-c', 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --user=root'],
         ], array_column($this->kubectl->calls, 'args'));
-        $this->assertSame(['Namespace/oc-datastores', "Secret/mysql-{$id}", "Service/mysql-{$id}", "StatefulSet/mysql-{$id}"], $this->appliedNames());
+        $this->assertSame(['Namespace/oc-datastores', 'NetworkPolicy/ingress-from-environments', "Secret/mysql-{$id}", "Service/mysql-{$id}", "StatefulSet/mysql-{$id}"], $this->appliedNames());
         $this->assertSame(
             "CREATE DATABASE IF NOT EXISTS `env_{$env}`;\n".
             "CREATE USER IF NOT EXISTS 'env_{$env}'@'%' IDENTIFIED BY 'pass0';\n".
@@ -137,7 +137,7 @@ class DatastoreAttachmentTest extends TestCase
         $id = $attachment->datastore_id;
         $name = "env-{$this->environment->id}";
 
-        $this->assertSame(['Namespace/oc-datastores', "Secret/rustfs-{$id}", "Service/rustfs-{$id}", "StatefulSet/rustfs-{$id}"], $this->appliedNames());
+        $this->assertSame(['Namespace/oc-datastores', 'NetworkPolicy/ingress-from-environments', "Secret/rustfs-{$id}", "Service/rustfs-{$id}", "StatefulSet/rustfs-{$id}"], $this->appliedNames());
         $this->assertSame(['exec', '-i', "rustfs-{$id}-0", '--namespace=oc-datastores', '--container=rc', '--', 'sh', '-c', implode("\n", [
             'set -e',
             'read -r secret',
@@ -172,7 +172,7 @@ class DatastoreAttachmentTest extends TestCase
             self::APPLY,
             ['rollout', 'status', "deployment/{$name}", '--namespace=oc-datastores', '--timeout=300s'],
         ], array_column($this->kubectl->calls, 'args'));
-        $this->assertSame(['Namespace/oc-datastores', "Secret/{$name}", "PersistentVolumeClaim/{$name}", "Service/{$name}", "Deployment/{$name}"], $this->appliedNames());
+        $this->assertSame(['Namespace/oc-datastores', 'NetworkPolicy/ingress-from-environments', "Secret/{$name}", "PersistentVolumeClaim/{$name}", "Service/{$name}", "Deployment/{$name}"], $this->appliedNames());
         $this->assertSame([
             'CACHE_STORE' => ['redis', false],
             'REDIS_CLIENT' => ['phpredis', false],

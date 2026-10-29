@@ -2,6 +2,7 @@
 
 namespace App\Domains\Deployments;
 
+use App\Domains\Clusters\ClusterPartsManifests;
 use App\Domains\Clusters\ClusterRegistry;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\ProcessKind;
@@ -110,6 +111,50 @@ final readonly class EnvironmentManifests
             'metadata' => [
                 'name' => $this->environment->kubeNamespace(),
                 'labels' => Labels::environment($this->environment),
+            ],
+        ];
+    }
+
+    /**
+     * The pods of an environment take traffic only from their own namespace and from Caddy. They send traffic to every
+     * pod, because the ingress policy of the target decides, and to every address except the Kubernetes API. The API
+     * runs on the host network, where no ingress policy can guard it. An IPv6 address stays out of the list, because
+     * it is not inside 0.0.0.0/0 and Kubernetes then rejects the policy.
+     *
+     * @param  list<string>  $apiServerIps  the IPv4 addresses of the endpoints of the Service kubernetes
+     * @return list<array<string, mixed>>
+     */
+    public function networkPolicies(array $apiServerIps): array
+    {
+        $any = new stdClass;
+        $internet = ['cidr' => '0.0.0.0/0', ...($apiServerIps === [] ? [] : ['except' => array_map(fn (string $ip) => "{$ip}/32", $apiServerIps)])];
+
+        return [
+            [
+                'apiVersion' => 'networking.k8s.io/v1',
+                'kind' => 'NetworkPolicy',
+                'metadata' => $this->metadata('ingress-from-namespace-and-caddy', Labels::environment($this->environment)),
+                'spec' => [
+                    'podSelector' => $any,
+                    'policyTypes' => ['Ingress'],
+                    'ingress' => [['from' => [
+                        ['podSelector' => $any],
+                        [
+                            'namespaceSelector' => ['matchLabels' => ['kubernetes.io/metadata.name' => ClusterPartsManifests::NAMESPACE]],
+                            'podSelector' => ['matchLabels' => ['app.kubernetes.io/name' => 'caddy']],
+                        ],
+                    ]]],
+                ],
+            ],
+            [
+                'apiVersion' => 'networking.k8s.io/v1',
+                'kind' => 'NetworkPolicy',
+                'metadata' => $this->metadata('egress-to-pods-and-internet', Labels::environment($this->environment)),
+                'spec' => [
+                    'podSelector' => $any,
+                    'policyTypes' => ['Egress'],
+                    'egress' => [['to' => [['namespaceSelector' => $any], ['ipBlock' => $internet]]]],
+                ],
             ],
         ];
     }

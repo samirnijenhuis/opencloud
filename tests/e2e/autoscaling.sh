@@ -37,18 +37,13 @@ MIN=$(kc -n "$NAMESPACE" get hpa web -o jsonpath='{.spec.minReplicas}')
 echo "== The HPA reads CPU metrics"
 wait_until 300 "cpu=[0-9]+%"
 
-echo "== Load with $WORKERS workers from namespace oc-load"
+echo "== Load with $WORKERS workers from namespace $NAMESPACE"
 kc apply -f - >/dev/null <<EOF
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: oc-load
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: load
-  namespace: oc-load
+  namespace: $NAMESPACE
 spec:
   replicas: $WORKERS
   selector:
@@ -67,5 +62,5 @@ EOF
 wait_until 600 "ready=$MAX "
 
 echo "== Stop the load"
-kc delete namespace oc-load --wait=false >/dev/null
+kc -n "$NAMESPACE" delete deployment load --wait=false >/dev/null
 wait_until 900 "ready=$MIN desired=$MIN "

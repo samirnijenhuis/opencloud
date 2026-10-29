@@ -61,6 +61,54 @@ class EnvironmentManifestsTest extends TestCase
         ], $this->manifests()->namespace());
     }
 
+    public function test_the_pods_take_traffic_only_from_their_namespace_and_caddy_and_send_it_everywhere_except_to_the_api(): void
+    {
+        $labels = ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7'];
+
+        $policies = $this->manifests()->networkPolicies(['192.0.2.10', '192.0.2.11']);
+
+        $this->assertEquals([
+            [
+                'apiVersion' => 'networking.k8s.io/v1',
+                'kind' => 'NetworkPolicy',
+                'metadata' => ['name' => 'ingress-from-namespace-and-caddy', 'namespace' => 'oc-env-7', 'labels' => $labels],
+                'spec' => [
+                    'podSelector' => new stdClass,
+                    'policyTypes' => ['Ingress'],
+                    'ingress' => [['from' => [
+                        ['podSelector' => new stdClass],
+                        [
+                            'namespaceSelector' => ['matchLabels' => ['kubernetes.io/metadata.name' => 'opencloud']],
+                            'podSelector' => ['matchLabels' => ['app.kubernetes.io/name' => 'caddy']],
+                        ],
+                    ]]],
+                ],
+            ],
+            [
+                'apiVersion' => 'networking.k8s.io/v1',
+                'kind' => 'NetworkPolicy',
+                'metadata' => ['name' => 'egress-to-pods-and-internet', 'namespace' => 'oc-env-7', 'labels' => $labels],
+                'spec' => [
+                    'podSelector' => new stdClass,
+                    'policyTypes' => ['Egress'],
+                    'egress' => [['to' => [
+                        ['namespaceSelector' => new stdClass],
+                        ['ipBlock' => ['cidr' => '0.0.0.0/0', 'except' => ['192.0.2.10/32', '192.0.2.11/32']]],
+                    ]]],
+                ],
+            ],
+        ], $policies);
+        $this->assertStringContainsString('"podSelector":{},"policyTypes":["Ingress"]', json_encode($policies), 'An empty selector must be a JSON object.');
+        $this->assertStringContainsString('"to":[{"namespaceSelector":{}}', json_encode($policies));
+    }
+
+    public function test_the_egress_policy_has_no_except_list_when_the_api_has_no_ipv4_address(): void
+    {
+        $egress = $this->manifests()->networkPolicies([])[1]['spec']['egress'][0]['to'][1];
+
+        $this->assertSame(['ipBlock' => ['cidr' => '0.0.0.0/0']], $egress);
+    }
+
     public function test_the_secret_of_a_deployment_holds_the_env_base64_encoded(): void
     {
         $this->assertSame([

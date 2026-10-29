@@ -104,7 +104,7 @@ class ConnectClusterTest extends TestCase
         $job->handle(app(DnsResolver::class));
 
         $this->assertSame(
-            [['Namespace', 'opencloud'], ['Namespace', 'oc-datastores'], ['PersistentVolumeClaim', 'caddy'], ['Deployment', 'caddy'], ['Service', 'caddy']],
+            [['Namespace', 'opencloud'], ['Namespace', 'oc-datastores'], ['NetworkPolicy', 'ingress-from-environments'], ['PersistentVolumeClaim', 'caddy'], ['Deployment', 'caddy'], ['Service', 'caddy']],
             array_map(fn (array $manifest) => [$manifest['kind'], $manifest['metadata']['name']], $this->kubectl->appliedManifests()),
         );
         $cluster->refresh();

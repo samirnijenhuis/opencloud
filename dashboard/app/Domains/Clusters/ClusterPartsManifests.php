@@ -30,6 +30,7 @@ final readonly class ClusterPartsManifests
         return [
             ['apiVersion' => 'v1', 'kind' => 'Namespace', 'metadata' => ['name' => self::NAMESPACE]],
             DatastoreManifests::namespace(),
+            DatastoreManifests::networkPolicy(),
             $this->caddyVolume(),
             $this->caddy(),
             $this->caddyService(),

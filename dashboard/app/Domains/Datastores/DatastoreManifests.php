@@ -6,6 +6,7 @@ use App\Domains\Backups\Models\BackupTarget;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Support\Kube\Labels;
+use stdClass;
 
 /**
  * Builds the Kubernetes objects of the standard datastores in the namespace oc-datastores. Each method is pure.
@@ -65,6 +66,29 @@ final class DatastoreManifests
     public static function namespace(): array
     {
         return ['apiVersion' => 'v1', 'kind' => 'Namespace', 'metadata' => ['name' => self::NAMESPACE]];
+    }
+
+    /**
+     * The datastores take traffic only from their own namespace, where the bucket copy Job runs, and from the namespaces
+     * of the environments. The dashboard needs no rule, because it reaches a datastore with `kubectl exec`.
+     *
+     * @return array<string, mixed>
+     */
+    public static function networkPolicy(): array
+    {
+        return [
+            'apiVersion' => 'networking.k8s.io/v1',
+            'kind' => 'NetworkPolicy',
+            'metadata' => self::metadata('ingress-from-environments', []),
+            'spec' => [
+                'podSelector' => new stdClass,
+                'policyTypes' => ['Ingress'],
+                'ingress' => [['from' => [
+                    ['podSelector' => new stdClass],
+                    ['namespaceSelector' => ['matchExpressions' => [['key' => Labels::ENVIRONMENT, 'operator' => 'Exists']]]],
+                ]]],
+            ],
+        ];
     }
 
     /** @return list<array<string, mixed>> */
