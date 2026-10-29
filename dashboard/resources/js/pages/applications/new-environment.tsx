@@ -11,7 +11,7 @@ const sources = [
     {
         value: 'production',
         title: 'Copy production',
-        description: 'The settings, the processes, and the env values of production, also its secrets.',
+        description: 'The settings, the processes, and the plain env values of production. The secrets stay in production.',
     },
     {
         value: 'preview_template',

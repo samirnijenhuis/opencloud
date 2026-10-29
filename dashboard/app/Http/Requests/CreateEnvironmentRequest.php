@@ -9,8 +9,8 @@ use Illuminate\Validation\Rule;
 
 class CreateEnvironmentRequest extends FormRequest
 {
-    /** The name goes into the free domain of the environment, so it is one DNS label. */
-    private const NAME = '/^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$/';
+    /** The free domain of the environment keeps 20 characters of the name, so two names never give one domain. */
+    private const NAME = '/^[a-z0-9]([a-z0-9-]{0,18}[a-z0-9])?$/';
 
     public function authorize(): bool
     {
@@ -33,7 +33,7 @@ class CreateEnvironmentRequest extends FormRequest
     {
         return [
             'name.required' => 'Give the environment a name.',
-            'name.regex' => 'Use 1 to 30 lowercase letters, digits, and dashes. Start and end with a letter or a digit.',
+            'name.regex' => 'Use 1 to 20 lowercase letters, digits, and dashes. Start and end with a letter or a digit.',
             'name.not_regex' => 'A name like pr-12 belongs to the preview of a pull request. Choose another name.',
             'name.unique' => 'This application already has an environment with this name.',
             'branch' => 'Enter a branch name, for example staging.',

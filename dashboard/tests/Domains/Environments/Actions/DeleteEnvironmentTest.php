@@ -9,7 +9,11 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
+use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Jobs\ProvisionDatastoreAttachment;
+use App\Domains\Datastores\Jobs\TearDownManagedDatabase;
+use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Jobs\RunDeployment;
@@ -47,7 +51,7 @@ class DeleteEnvironmentTest extends TestCase
     {
         parent::setUp();
 
-        Queue::fake([RunDeployment::class, ProvisionDatastoreAttachment::class, CheckDomain::class, SyncCaddy::class]);
+        Queue::fake([RunDeployment::class, ProvisionDatastoreAttachment::class, CheckDomain::class, SyncCaddy::class, TearDownManagedDatabase::class]);
         $this->kubectl = FakeKubectl::install();
         FakeProcesses::install()->lsRemote = str_repeat('a', 40)."\trefs/heads/main\n";
         $this->admin = User::factory()->admin()->create();
@@ -58,6 +62,7 @@ class DeleteEnvironmentTest extends TestCase
         app(AttachDatastore::class)->execute($production, $this->admin, DatastoreKind::VALKEY);
         $this->staging = app(CreateEnvironment::class)->execute($this->application, $this->admin, 'staging', 'staging', $production);
         Domain::factory()->for($this->staging)->create(['hostname' => 'staging.example.com']);
+        $this->staging->deployments()->sole()->update(['status' => DeploymentStatus::LIVE]);
 
         $this->kubectl->calls = [];
         AuditEvent::query()->delete();
@@ -104,20 +109,53 @@ class DeleteEnvironmentTest extends TestCase
         $this->assertSame([$this->admin->id], AuditEvent::query()->distinct()->pluck('user_id')->all());
     }
 
-    public function test_an_environment_with_a_deployment_that_builds_or_rolls_out_stays(): void
+    public function test_an_environment_with_a_deployment_that_waits_builds_or_rolls_out_stays(): void
     {
-        $this->staging->deployments()->sole()->update(['status' => DeploymentStatus::DEPLOYING]);
+        $deployment = $this->staging->deployments()->sole();
 
-        try {
-            app(DeleteEnvironment::class)->execute($this->staging, $this->admin);
-            $this->fail('The environment was deleted while it deployed.');
-        } catch (ValidationException $e) {
-            $this->assertSame(['environment' => ['A deployment of staging runs. Wait until it ends, then delete the environment.']], $e->errors());
+        foreach ([DeploymentStatus::QUEUED, DeploymentStatus::BUILDING, DeploymentStatus::DEPLOYING] as $status) {
+            $deployment->update(['status' => $status]);
+
+            try {
+                app(DeleteEnvironment::class)->execute($this->staging, $this->admin);
+                $this->fail("The environment was deleted while its deployment was {$status->value}.");
+            } catch (ValidationException $e) {
+                $this->assertSame(['environment' => ['A deployment of staging runs. Wait until it ends, then delete the environment.']], $e->errors());
+            }
         }
 
         $this->assertSame([], $this->kubectl->calls);
         $this->assertNotNull(Environment::find($this->staging->id));
         $this->assertSame(0, AuditEvent::count());
+    }
+
+    public function test_an_environment_with_a_managed_resource_stays_until_opentofu_destroys_the_resource(): void
+    {
+        $managed = Datastore::factory()->create(['cluster_id' => $this->application->cluster_id, 'kind' => DatastoreKind::POSTGRES, 'source' => DatastoreSource::MANAGED, 'status' => DatastoreStatus::READY]);
+        DatastoreAttachment::factory()->create(['datastore_id' => $managed->id, 'environment_id' => $this->staging->id, 'name' => 'reports', 'is_default' => false]);
+        $refusal = ['environment' => ['Opencloud now destroys the managed resources of staging. Delete the environment again when they are gone.']];
+
+        foreach ([1, 2] as $attempt) {
+            try {
+                app(DeleteEnvironment::class)->execute($this->staging, $this->admin);
+                $this->fail("Delete {$attempt} removed the environment before OpenTofu destroyed its resource.");
+            } catch (ValidationException $e) {
+                $this->assertSame($refusal, $e->errors());
+            }
+        }
+
+        // The second delete does not start a second destroy.
+        Queue::assertPushed(TearDownManagedDatabase::class, 1);
+        $this->assertSame([DatastoreStatus::DESTROYING], $this->staging->datastoreAttachments()->with('datastore')->get()->pluck('datastore.status')->all());
+        $this->assertSame(0, $this->staging->domains()->count());
+
+        // TearDownManagedDatabase removes the attachment and the datastore when the destroy succeeds.
+        $managed->attachments()->delete();
+        $managed->delete();
+        app(DeleteEnvironment::class)->execute($this->staging, $this->admin);
+
+        $this->assertNull(Environment::find($this->staging->id));
+        $this->assertCount(3, $this->kubectl->callsStartingWith('delete namespace'));
     }
 
     public function test_a_namespace_that_kubectl_cannot_delete_keeps_the_environment_and_its_data(): void

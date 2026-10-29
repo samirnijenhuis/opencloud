@@ -23,6 +23,7 @@ use RuntimeException;
 /**
  * Adds a permanent environment for a branch. It copies the settings, the processes, and the user env values of production
  * or of the preview template, and it gets standard resources, a free domain, and a first deployment of its own.
+ * A copy of production gets only its plain user values.
  */
 class CreateEnvironment
 {
@@ -69,26 +70,18 @@ class CreateEnvironment
                 $environment->processes()->create($process->only(['name', 'kind', 'command', 'schedule', 'size', 'min_instances', 'max_instances', 'cpu_target']));
             }
 
-            $copied = $from->envVars()->where('source', EnvVarSource::USER)->orderBy('key')->get()
-                ->map(fn (EnvVar $var) => $environment->envVars()->create($var->only(['key', 'value', 'is_secret', 'available_at', 'source']))->key);
-            $generated = array_diff_key($application->type->generatedSecrets(), array_flip($copied->all()));
-
-            foreach ($generated as $key => $value) {
-                $environment->envVars()->create(['key' => $key, 'value' => $value, 'is_secret' => true, 'available_at' => EnvVarAvailability::RUNTIME]);
-            }
-
             AuditEvent::record($by, 'environment.created', $environment, [
                 'branch' => $branch,
                 'copied_from' => $from->name,
                 'processes' => $from->processes->pluck('name')->all(),
-                'env_keys' => $copied->all(),
-                'generated' => array_keys($generated),
             ]);
 
             // Each resource is a new standard one, so the environment never shares the data of production and never creates a paid cloud resource.
             foreach ($attachments as $attachment) {
                 $this->attachDatastore->execute($environment, $by, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name);
             }
+
+            $this->copyEnv($application, $by, $from, $environment);
 
             $this->defaultDomain->add($environment, $by);
 
@@ -98,5 +91,34 @@ class CreateEnvironment
         $this->startDeployment->execute($environment, $by, $commitSha);
 
         return $environment;
+    }
+
+    /**
+     * Copies the user values of $from after the resources exist. A protected environment keeps its secrets, because a
+     * developer can read each value of an environment that is not protected through a command. A user value wins over a
+     * resource value, so a copied DB_HOST of production would point the new environment at the data of production.
+     * The preset generates each secret that the copy lacks.
+     */
+    private function copyEnv(Application $application, User $by, Environment $from, Environment $environment): void
+    {
+        $resourceKeys = $environment->envVars()->where('source', EnvVarSource::DATASTORE)->pluck('key')->all();
+        [$copied, $leftOut] = $from->envVars()->where('source', EnvVarSource::USER)->orderBy('key')->get()
+            ->partition(fn (EnvVar $var) => ! ($from->is_protected && $var->is_secret) && ! in_array($var->key, $resourceKeys, true));
+
+        foreach ($copied as $var) {
+            $environment->envVars()->create($var->only(['key', 'value', 'is_secret', 'available_at', 'source']));
+        }
+
+        $generated = array_diff_key($application->type->generatedSecrets(), $copied->keyBy('key')->all());
+
+        foreach ($generated as $key => $value) {
+            $environment->envVars()->create(['key' => $key, 'value' => $value, 'is_secret' => true, 'available_at' => EnvVarAvailability::RUNTIME]);
+        }
+
+        AuditEvent::record($by, 'environment.env_copied', $environment, [
+            'keys' => $copied->pluck('key')->values()->all(),
+            'left_out' => $leftOut->pluck('key')->values()->all(),
+            'generated' => array_keys($generated),
+        ]);
     }
 }

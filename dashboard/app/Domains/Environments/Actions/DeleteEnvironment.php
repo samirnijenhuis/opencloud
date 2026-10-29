@@ -3,6 +3,7 @@
 namespace App\Domains\Environments\Actions;
 
 use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Environments\Models\Environment;
@@ -21,12 +22,13 @@ class DeleteEnvironment
     public function __construct(private RemoveDomain $removeDomain) {}
 
     /**
-     * @throws ValidationException while a deployment builds or rolls out, or when the cluster or Cloudflare refuses a delete
+     * @throws ValidationException while a deployment runs, while OpenTofu destroys a managed resource, or when the cluster or
+     *                             Cloudflare refuses a delete
      */
     public function execute(Environment $environment, User $by): void
     {
         // A running deployment would apply its manifests into the namespace again after the delete.
-        if ($environment->deployments()->whereIn('status', [DeploymentStatus::BUILDING, DeploymentStatus::DEPLOYING])->exists()) {
+        if ($environment->deployments()->whereIn('status', [DeploymentStatus::QUEUED, DeploymentStatus::BUILDING, DeploymentStatus::DEPLOYING])->exists()) {
             throw ValidationException::withMessages(['environment' => "A deployment of {$environment->name} runs. Wait until it ends, then delete the environment."]);
         }
 
@@ -44,7 +46,15 @@ class DeleteEnvironment
         }
 
         foreach ($environment->datastoreAttachments()->with('datastore')->orderBy('id')->get() as $attachment) {
-            Provisioners::of($attachment->datastore)->detach($attachment, $by, destroyData: true);
+            // A managed resource keeps its attachment while OpenTofu destroys it, so a second delete does not start a second destroy.
+            if ($attachment->datastore->status !== DatastoreStatus::DESTROYING) {
+                Provisioners::of($attachment->datastore)->detach($attachment, $by, destroyData: true);
+            }
+        }
+
+        // The environment stays until each destroy ends, so a failed destroy keeps its error on the canvas.
+        if ($environment->datastoreAttachments()->exists()) {
+            throw ValidationException::withMessages(['environment' => "Opencloud now destroys the managed resources of {$environment->name}. Delete the environment again when they are gone."]);
         }
 
         // The env values, the processes, the deployments, and the command runs go with the environment through the foreign keys.

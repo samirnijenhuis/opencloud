@@ -61,7 +61,11 @@ class CreateEnvironmentTest extends TestCase
             'name' => 'Shop',
             'repository' => 'acme/shop',
             'cluster_id' => $cluster->id,
-            'env' => [['key' => 'STRIPE_SECRET', 'value' => 'sk_live_production', 'is_secret' => true]],
+            'env' => [
+                ['key' => 'STRIPE_SECRET', 'value' => 'sk_live_production', 'is_secret' => true],
+                ['key' => 'MAIL_MAILER', 'value' => 'smtp'],
+                ['key' => 'DB_HOST', 'value' => 'production-db.internal'],
+            ],
             'settings' => ['size' => Size::L, 'min_instances' => 2, 'max_instances' => 4, 'cpu_target' => 60, 'deploy_commands' => ['php artisan migrate --force']],
         ]);
         $production = $this->environment('production');
@@ -80,7 +84,7 @@ class CreateEnvironmentTest extends TestCase
         AuditEvent::query()->delete();
     }
 
-    public function test_a_copy_of_production_takes_its_settings_processes_and_env_values_with_new_resources_of_its_own(): void
+    public function test_a_copy_of_production_takes_its_settings_processes_and_plain_env_values_with_new_resources_of_its_own(): void
     {
         $production = $this->environment('production');
         $productionAttachments = $this->attachmentRows($production);
@@ -95,7 +99,16 @@ class CreateEnvironmentTest extends TestCase
             [['worker', 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600'], ['scheduler', 'php artisan schedule:work']],
             $staging->processes->map(fn (Process $p) => [$p->name, $p->command])->all(),
         );
-        $this->assertSame($this->userEnv($production), $this->userEnv($staging));
+
+        // A developer can read the values of staging, so the secrets of production stay there. APP_KEY is new.
+        $env = $this->userEnv($staging);
+        $this->assertSame(['APP_KEY', 'MAIL_MAILER'], array_column($env, 0));
+        $this->assertSame(['MAIL_MAILER', 'smtp', false, 'runtime'], $env[1]);
+        $this->assertMatchesRegularExpression('/^base64:[A-Za-z0-9+\/]{43}=$/', $env[0][1]);
+        $this->assertNotSame($production->envVars()->where('key', 'APP_KEY')->sole()->value, $env[0][1]);
+        $this->assertSame(0, EnvVar::query()->where('environment_id', $staging->id)->where('value', 'sk_live_production')->count());
+        // A user value wins over a resource value, so the DB_HOST of production would point staging at the data of production.
+        $this->assertSame(EnvVarSource::DATASTORE, $staging->envVars()->where('key', 'DB_HOST')->sole()->source);
 
         // Each resource is a new standard one with its own database and user, so production keeps its data.
         $this->assertSame(
@@ -115,12 +128,16 @@ class CreateEnvironmentTest extends TestCase
         $this->assertContains(['git', 'ls-remote', 'https://github.com/acme/shop.git', 'refs/heads/staging'], $this->processes->commands());
 
         $this->assertSame(
-            ['environment.created', 'datastore.attached', 'datastore.attached', 'datastore.attached', 'domain.added', 'deployment.started'],
+            ['environment.created', 'datastore.attached', 'datastore.attached', 'datastore.attached', 'environment.env_copied', 'domain.added', 'deployment.started'],
             AuditEvent::query()->orderBy('id')->pluck('action')->all(),
         );
         $this->assertSame(
-            ['branch' => 'staging', 'copied_from' => 'production', 'processes' => ['worker', 'scheduler'], 'env_keys' => ['APP_KEY', 'STRIPE_SECRET'], 'generated' => []],
+            ['branch' => 'staging', 'copied_from' => 'production', 'processes' => ['worker', 'scheduler']],
             AuditEvent::where('action', 'environment.created')->sole()->context,
+        );
+        $this->assertSame(
+            ['keys' => ['MAIL_MAILER'], 'left_out' => ['APP_KEY', 'DB_HOST', 'STRIPE_SECRET'], 'generated' => ['APP_KEY']],
+            AuditEvent::where('action', 'environment.env_copied')->sole()->context,
         );
         $this->assertSame([$this->admin->id], AuditEvent::query()->distinct()->pluck('user_id')->all());
         $this->assertStringNotContainsString('sk_live_production', AuditEvent::all()->toJson());
@@ -144,8 +161,8 @@ class CreateEnvironmentTest extends TestCase
         $this->assertSame(['mysql', 'valkey', 'postgres'], $staging->datastoreAttachments()->with('datastore')->orderBy('id')->get()->pluck('datastore.kind.value')->all());
         $this->assertSame(['shop-qa.203.0.113.10.sslip.io'], $staging->domains()->pluck('hostname')->all());
         $this->assertSame(
-            ['branch' => 'release/2.0', 'copied_from' => 'preview-template', 'processes' => ['scheduler', 'horizon'], 'env_keys' => ['MAIL_MAILER', 'STRIPE_SECRET'], 'generated' => ['APP_KEY']],
-            AuditEvent::where('action', 'environment.created')->sole()->context,
+            ['keys' => ['MAIL_MAILER', 'STRIPE_SECRET'], 'left_out' => [], 'generated' => ['APP_KEY']],
+            AuditEvent::where('action', 'environment.env_copied')->sole()->context,
         );
     }
 
