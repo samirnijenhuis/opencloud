@@ -21,6 +21,24 @@ final readonly class EnvironmentManifests
 
     public const PULL_SECRET = 'opencloud-registry';
 
+    /** The pod settings of every pod of an environment: the deployment pods, the CronJobs, the deploy Job, and the command Job. */
+    public const POD_SECURITY = [
+        'automountServiceAccountToken' => false,
+        'securityContext' => ['seccompProfile' => ['type' => 'RuntimeDefault']],
+    ];
+
+    /**
+     * The images run as root, and nginx and Apache start as root and then switch to their own user, so the container
+     * keeps the default set of capabilities without NET_RAW, MKNOD, AUDIT_WRITE, SETFCAP, SETPCAP, and SYS_CHROOT.
+     */
+    public const CONTAINER_SECURITY = [
+        'allowPrivilegeEscalation' => false,
+        'capabilities' => [
+            'drop' => ['ALL'],
+            'add' => ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'FSETID', 'KILL', 'SETGID', 'SETUID', 'NET_BIND_SERVICE'],
+        ],
+    ];
+
     private const ROLLING = ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]];
 
     public function __construct(private Environment $environment) {}
@@ -209,6 +227,7 @@ final readonly class EnvironmentManifests
                             'spec' => [
                                 'restartPolicy' => 'Never',
                                 ...$this->imagePullSecrets(),
+                                ...self::POD_SECURITY,
                                 'containers' => [$this->container($process->name, $deployment, $process->size, $this->commandOf($process))],
                             ],
                         ],
@@ -314,6 +333,7 @@ final readonly class EnvironmentManifests
                     'spec' => [
                         'restartPolicy' => 'Never',
                         ...$this->imagePullSecrets(),
+                        ...self::POD_SECURITY,
                         'containers' => [$this->container(Process::DEPLOY, $deployment, $this->environment->size, [
                             'command' => ['sh', '-c', implode(' && ', $this->environment->deploy_commands)],
                         ])],
@@ -349,7 +369,7 @@ final readonly class EnvironmentManifests
                 'strategy' => self::ROLLING,
                 'template' => [
                     'metadata' => ['labels' => Labels::deployment($this->environment, $process, $deployment)],
-                    'spec' => [...$this->imagePullSecrets(), 'containers' => [$this->container($process, $deployment, $size, $container)]],
+                    'spec' => [...$this->imagePullSecrets(), ...self::POD_SECURITY, 'containers' => [$this->container($process, $deployment, $size, $container)]],
                 ],
             ],
         ];
@@ -375,6 +395,7 @@ final readonly class EnvironmentManifests
             ...$extra,
             'envFrom' => [['secretRef' => ['name' => self::secretName($deployment)]]],
             'resources' => ['requests' => $resources, 'limits' => $resources],
+            'securityContext' => self::CONTAINER_SECURITY,
         ];
     }
 

@@ -31,6 +31,19 @@ class EnvironmentManifestsTest extends TestCase
         'limits' => ['cpu' => '500m', 'memory' => '512Mi'],
     ];
 
+    private const POD_SECURITY = [
+        'automountServiceAccountToken' => false,
+        'securityContext' => ['seccompProfile' => ['type' => 'RuntimeDefault']],
+    ];
+
+    private const CONTAINER_SECURITY = [
+        'allowPrivilegeEscalation' => false,
+        'capabilities' => [
+            'drop' => ['ALL'],
+            'add' => ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'FSETID', 'KILL', 'SETGID', 'SETUID', 'NET_BIND_SERVICE'],
+        ],
+    ];
+
     private const XS_RESOURCES = [
         'requests' => ['cpu' => '250m', 'memory' => '256Mi'],
         'limits' => ['cpu' => '250m', 'memory' => '256Mi'],
@@ -83,7 +96,7 @@ class EnvironmentManifestsTest extends TestCase
                 'strategy' => ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]],
                 'template' => [
                     'metadata' => ['labels' => [...self::WEB_LABELS, 'opencloud.dev/deployment' => '12']],
-                    'spec' => ['containers' => [[
+                    'spec' => [...self::POD_SECURITY, 'containers' => [[
                         'name' => 'web',
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                         'ports' => [['name' => 'http', 'containerPort' => 8080]],
@@ -91,6 +104,7 @@ class EnvironmentManifestsTest extends TestCase
                         'lifecycle' => ['preStop' => ['sleep' => ['seconds' => 10]]],
                         'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                         'resources' => self::RESOURCES,
+                        'securityContext' => self::CONTAINER_SECURITY,
                     ]]],
                 ],
             ],
@@ -114,6 +128,7 @@ class EnvironmentManifestsTest extends TestCase
                 'requests' => ['cpu' => '1000m', 'memory' => '1024Mi'],
                 'limits' => ['cpu' => '1000m', 'memory' => '1024Mi'],
             ],
+            'securityContext' => self::CONTAINER_SECURITY,
         ], $web['spec']['template']['spec']['containers'][0]);
     }
 
@@ -132,12 +147,13 @@ class EnvironmentManifestsTest extends TestCase
                 'strategy' => ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]],
                 'template' => [
                     'metadata' => ['labels' => [...$labels, 'opencloud.dev/deployment' => '12']],
-                    'spec' => ['containers' => [[
+                    'spec' => [...self::POD_SECURITY, 'containers' => [[
                         'name' => 'reverb',
                         'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                         'command' => ['sh', '-c', 'exec php artisan reverb:start --host=0.0.0.0 --port=8080'],
                         'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                         'resources' => self::XS_RESOURCES,
+                        'securityContext' => self::CONTAINER_SECURITY,
                     ]]],
                 ],
             ],
@@ -167,12 +183,14 @@ class EnvironmentManifestsTest extends TestCase
                             'metadata' => ['labels' => $pods],
                             'spec' => [
                                 'restartPolicy' => 'Never',
+                                ...self::POD_SECURITY,
                                 'containers' => [[
                                     'name' => 'scheduler',
                                     'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                                     'command' => ['sh', '-c', 'exec php artisan schedule:run'],
                                     'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                                     'resources' => self::XS_RESOURCES,
+                                    'securityContext' => self::CONTAINER_SECURITY,
                                 ]],
                             ],
                         ],
@@ -257,12 +275,14 @@ class EnvironmentManifestsTest extends TestCase
                     'metadata' => ['labels' => $labels],
                     'spec' => [
                         'restartPolicy' => 'Never',
+                        ...self::POD_SECURITY,
                         'containers' => [[
                             'name' => 'deploy',
                             'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
                             'command' => ['sh', '-c', 'php artisan migrate --force && php artisan db:seed --force'],
                             'envFrom' => [['secretRef' => ['name' => 'env-12']]],
                             'resources' => self::RESOURCES,
+                            'securityContext' => self::CONTAINER_SECURITY,
                         ]],
                     ],
                 ],
@@ -304,7 +324,7 @@ class EnvironmentManifestsTest extends TestCase
         $this->assertSame([['name' => 'opencloud-registry']], $job['imagePullSecrets']);
         $this->assertSame([['name' => 'opencloud-registry']], $manifests->process(self::process(), $deployment)['spec']['template']['spec']['imagePullSecrets']);
         $this->assertSame([['name' => 'opencloud-registry']], $manifests->cronJob(self::scheduler(), $deployment)['spec']['jobTemplate']['spec']['template']['spec']['imagePullSecrets']);
-        $this->assertSame(['containers'], array_keys($this->manifests()->web($deployment)['spec']['template']['spec']), 'The local cluster pulls without a secret.');
+        $this->assertSame(['automountServiceAccountToken', 'securityContext', 'containers'], array_keys($this->manifests()->web($deployment)['spec']['template']['spec']), 'The local cluster pulls without a secret.');
     }
 
     public function test_each_kind_of_process_gets_its_own_object_and_the_selectors_find_each_object_that_no_process_uses(): void

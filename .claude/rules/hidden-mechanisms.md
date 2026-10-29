@@ -24,6 +24,7 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - `Kubectl` runs `kubectl` with Symfony Process (`app/Support/Kube/Kubectl.php:136-138`). `Process::fake()` does not catch a `kubectl` call.
 - `RunDeployment` deletes each Deployment, CronJob, and HorizontalPodAutoscaler in the environment namespace with an `opencloud.dev/process` label that no process of the environment uses as that kind (`EnvironmentManifests::strays()`). A Deployment, a CronJob, or an autoscaler that you add by hand with that label goes away on the next deploy.
 - After a deployment goes live, `RunDeployment::pruneEnvSecrets()` keeps the live env Secret and the two newest, and deletes the others (`app/Domains/Deployments/Jobs/RunDeployment.php:272-289`).
+- Every pod of an environment has `automountServiceAccountToken: false` and the seccomp profile `RuntimeDefault` (`EnvironmentManifests::POD_SECURITY`, `app/Domains/Deployments/EnvironmentManifests.php:26`). Every container has `allowPrivilegeEscalation: false`, drops all capabilities, and adds back `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `FSETID`, `KILL`, `SETGID`, `SETUID`, and `NET_BIND_SERVICE` (`CONTAINER_SECURITY`, `:35`). `CommandManifests` uses the same constants. A new pod spec for an environment needs both, and an app cannot call the Kubernetes API. An image that needs another capability fails to start, and the log of the pod shows the denied call.
 
 ## Secrets and the audit log
 
