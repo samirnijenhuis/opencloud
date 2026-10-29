@@ -64,7 +64,8 @@ class DashboardDomain extends Model
     }
 
     /**
-     * Makes every generated link use the verified domain.
+     * Makes every generated link use the verified domain, and makes the session cookie Secure.
+     * Without a verified domain the dashboard runs on plain HTTP, and a Secure cookie would break the login.
      * Before the migrations ran, the table does not exist and the APP_URL stays.
      */
     public static function applyRootUrl(): void
@@ -80,7 +81,7 @@ class DashboardDomain extends Model
         }
 
         $url = "https://{$verified->hostname}";
-        config(['app.url' => $url]);
+        config(['app.url' => $url, 'session.secure' => true]);
         URL::forceRootUrl($url);
         URL::forceScheme('https');
     }

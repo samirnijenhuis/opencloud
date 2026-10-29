@@ -30,7 +30,10 @@ class DashboardDomainCaddyTest extends TestCase
         '"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}';
 
     private const WITH = '{"apps":{"http":{"servers":{'.
-        '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]},'.
+        '"dashboard":{"listen":[":8000"],"routes":['.
+        '{"match":[{"path":["/up","/webhooks/github","/hooks/deploy/*"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]},'.
+        '{"handle":[{"handler":"static_response","status_code":308,"headers":{"Location":["https://admin.example.com{http.request.uri}"]}}]}'.
+        ']},'.
         '"apps":{"listen":[":443"],"routes":['.
         '{"match":[{"host":["admin.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}'.
         ']}}},"tls":{"automation":{"policies":[{"issuers":[{"module":"internal"}]}]}}}}';
@@ -41,6 +44,14 @@ class DashboardDomainCaddyTest extends TestCase
         DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
 
         $this->assertSame(self::WITH, $this->configJson($local));
+    }
+
+    public function test_the_plain_http_paths_on_port_8000_are_the_health_route_and_the_webhook_routes(): void
+    {
+        $this->assertSame(
+            ['/up', route('webhooks.github', absolute: false), str_replace('token', '*', route('hooks.deploy', 'token', false))],
+            CaddyConfig::PLAIN_HTTP_PATHS,
+        );
     }
 
     public function test_a_proxied_domain_gets_the_route_too(): void

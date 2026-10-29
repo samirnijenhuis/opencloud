@@ -59,6 +59,8 @@ The installer keeps its state in `/var/lib/opencloud`. The files `APP_KEY` and `
 
 The dashboard is at `http://<server-ip>:8000`. Caddy forwards port 8000 to the dashboard Service. The owner can also give the dashboard a domain in Settings. After its DNS check passes, Caddy serves the dashboard on that domain over HTTPS, and the dashboard uses the domain as its root URL. The queue workers restart then, because they read the root URL when they boot.
 
+After that DNS check passes, port 8000 serves only three routes without a session: the health route `/up`, `/webhooks/github`, and `/hooks/deploy/*`. Caddy proxies these routes to the dashboard over plain HTTP. The webhook routes stay on plain HTTP, because GitHub and a CI job with plain curl do not follow a redirect. The health route stays, because `install.sh` and `bin/opencloud` wait for it with `curl -f`, which counts a redirect as a success. Caddy answers every other request on port 8000 with a 308 redirect to the same path on `https://<dashboard hostname>`. The session cookie is Secure from then on. Without a verified domain, port 8000 serves the whole dashboard, and the cookie is not Secure.
+
 ## How the dashboard talks to a cluster
 
 `App\Support\Kube\Kubectl` is the only class that runs `kubectl`. It runs the binary with Symfony Process. For `local` it uses the in-cluster config. For other clusters it writes the decrypted kubeconfig to a temporary file for the duration of one call. Tests bind `App\Support\Kube\FakeKubectl`, which records each call and returns scripted output.

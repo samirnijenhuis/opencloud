@@ -25,6 +25,19 @@ class CaddyConfigTest extends TestCase
         );
     }
 
+    public function test_with_a_dashboard_domain_port_8000_proxies_only_the_webhook_routes_and_redirects_the_rest_to_https(): void
+    {
+        $config = (new CaddyConfig('internal', null))->build(true, ['admin.example.com' => CaddyConfig::DASHBOARD_UPSTREAM], dashboardHostname: 'admin.example.com');
+
+        $this->assertSame(
+            '{"listen":[":8000"],"routes":['.
+            '{"match":[{"path":["/up","/webhooks/github","/hooks/deploy/*"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]},'.
+            '{"handle":[{"handler":"static_response","status_code":308,"headers":{"Location":["https://admin.example.com{http.request.uri}"]}}]}'.
+            ']}',
+            json_encode($config['apps']['http']['servers']['dashboard'], JSON_UNESCAPED_SLASHES),
+        );
+    }
+
     public function test_another_cluster_has_no_dashboard_and_uses_lets_encrypt_with_the_email(): void
     {
         $this->assertSame([

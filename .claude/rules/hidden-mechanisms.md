@@ -4,8 +4,8 @@ This file lists behavior that you cannot see at the call site. Check it before y
 
 ## On each boot and each start
 
-- `AppServiceProvider::boot()` calls `DashboardDomain::applyRootUrl()` (`app/Providers/AppServiceProvider.php:42`). With a verified dashboard domain, it sets `app.url`, forces the root URL, and forces `https` (`app/Domains/Routing/Models/DashboardDomain.php:70-86`).
-- `applyRootUrl()` reads the `dashboard_domains` table on each boot. It ignores a `QueryException`, so the app boots before the first migration.
+- `AppServiceProvider::boot()` calls `DashboardDomain::applyRootUrl()` (`app/Providers/AppServiceProvider.php:42`). With a verified dashboard domain, it sets `app.url`, sets `session.secure` to true, forces the root URL, and forces `https` (`app/Domains/Routing/Models/DashboardDomain.php:70-86`).
+- `applyRootUrl()` reads the `dashboard_domains` table on each boot. It ignores a `QueryException`, so the app boots before the first migration. Without a verified domain, `session.secure` stays empty, because the dashboard runs on plain HTTP at port 8000 and a Secure cookie would break the login.
 - A queue worker reads the root URL once, when it boots. So each change of the dashboard domain runs `queue:restart` (`app/Domains/Routing/Jobs/CheckDashboardDomain.php:41`, `app/Domains/Routing/Actions/RemoveDashboardDomain.php:25`, `app/Domains/Restore/RestoreInstall.php:304`).
 - At each start, the `web` container runs `php artisan migrate --force`, then `opencloud:bootstrap` when that command exists, then `config:cache`, `route:cache`, and `view:cache` (`docker/entrypoint.sh:17-27`).
 - The `worker`, `builder`, and `scheduler` containers wait until no migration is pending (`docker/entrypoint.sh:4-10`).
@@ -54,6 +54,7 @@ This file lists behavior that you cannot see at the call site. Check it before y
 ## Requests and pages
 
 - `routes/webhooks.php` loads as the `api` group with an empty prefix (`bootstrap/app.php:13-14`). Its routes have no session, no cookies, and no CSRF check. A webhook route in `routes/web.php` gets a 419.
+- With a verified dashboard domain, port 8000 proxies only `CaddyConfig::PLAIN_HTTP_PATHS` and redirects each other request to HTTPS (`app/Domains/Routing/CaddyConfig.php`). A new route in `routes/webhooks.php` needs its path in that list, or a caller of `http://<ip>:8000` gets a 308.
 - `trustProxies(at: '*')` trusts the forwarded scheme, host, and client address from each sender (`bootstrap/app.php:20`). `$request->ip()` returns the forwarded address.
 - `dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key', 'env', 'value'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`). `env` is the env rows of `StoreApplicationRequest`, and `value` is the field of `EnvVarRequest`. A hand-written `back()->withInput()` flashes every field, so `ApplicationController::store()` leaves out `deploy_private_key` and `env` itself.
 - `AuthenticateSession` is in the web group (`bootstrap/app.php`). It stores a hash of the password in the session and logs out a session whose hash no longer matches the password of the user. After the request, it stores the current hash, so the session that changes the password stays signed in. A session without a hash gets one at its next request. A new web login flow works without a change, because the hash is stored after the login request.

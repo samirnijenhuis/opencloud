@@ -20,6 +20,9 @@ final readonly class CaddyConfig
 {
     public const DASHBOARD_UPSTREAM = 'dashboard.opencloud.svc.cluster.local:8080';
 
+    /** The health route, which install.sh and bin/opencloud wait for on port 8000, and the routes in routes/webhooks.php. */
+    public const PLAIN_HTTP_PATHS = ['/up', '/webhooks/github', '/hooks/deploy/*'];
+
     public function __construct(private string $tlsIssuer, private ?string $acmeEmail) {}
 
     public static function fromConfig(): self
@@ -45,28 +48,31 @@ final readonly class CaddyConfig
             ->all();
 
         // The dashboard host is a route like an app host. Caddy then gets its certificate and redirects HTTP to HTTPS.
+        $dashboardHostname = null;
         if ($cluster->kind === ClusterKind::LOCAL && ($dashboard = DashboardDomain::verified()) !== null) {
             $routes[$dashboard->hostname] = self::DASHBOARD_UPSTREAM;
+            $dashboardHostname = $dashboard->hostname;
         }
 
         $cloudflareToken = ProviderCredential::query()->where('provider', 'cloudflare')->first()?->token;
         $cloudflareHosts = $domains->where('dns_mode', DnsMode::CLOUDFLARE)->pluck('hostname')->all();
 
-        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts);
+        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts, $dashboardHostname);
     }
 
     /**
      * @param  array<string, string>  $routes  hostname => upstream address
      * @param  list<string>  $cloudflareHosts  hostnames that get their certificate with the Cloudflare DNS challenge
+     * @param  ?string  $dashboardHostname  the verified dashboard domain. Port 8000 then serves only PLAIN_HTTP_PATHS and redirects the rest to it.
      * @return array<string, mixed>
      */
-    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = []): array
+    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = [], ?string $dashboardHostname = null): array
     {
         ksort($routes, SORT_STRING);
         $servers = [];
 
         if ($withDashboard) {
-            $servers['dashboard'] = ['listen' => [':8000'], 'routes' => [['handle' => [self::proxy(self::DASHBOARD_UPSTREAM)]]]];
+            $servers['dashboard'] = ['listen' => [':8000'], 'routes' => self::dashboardRoutes($dashboardHostname)];
         }
 
         $servers['apps'] = [
@@ -116,6 +122,27 @@ final readonly class CaddyConfig
         }
 
         return ['module' => 'acme', ...($this->acmeEmail ? ['email' => $this->acmeEmail] : [])];
+    }
+
+    /**
+     * With a verified domain, port 8000 serves only the paths that use no session, and redirects the rest to HTTPS. A GitHub App from before
+     * the domain has the webhook URL http://<ip>:8000/webhooks/github, and a CI job calls a deploy hook with plain curl. Neither follows a redirect.
+     * curl -f also counts a redirect as a success, so the health check of the installer would pass without the dashboard.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function dashboardRoutes(?string $hostname): array
+    {
+        $dashboard = ['handle' => [self::proxy(self::DASHBOARD_UPSTREAM)]];
+
+        if ($hostname === null) {
+            return [$dashboard];
+        }
+
+        return [
+            ['match' => [['path' => self::PLAIN_HTTP_PATHS]], ...$dashboard],
+            ['handle' => [['handler' => 'static_response', 'status_code' => 308, 'headers' => ['Location' => ['https://'.$hostname.'{http.request.uri}']]]]],
+        ];
     }
 
     /** @return array<string, mixed> */
