@@ -27,7 +27,8 @@ interface EnvProfile
 
     /**
      * The line that the app adds to its own config to read a database or a bucket that is not the default, or null
-     * when the env values are enough. It needs only the kind and the name, so a managed one shows it before its apply.
+     * when the env values are enough. It needs only the kind, the name, and the visibility, so a managed one shows it
+     * before its apply.
      */
-    public function configLine(DatastoreKind $kind, string $name): ?string;
+    public function configLine(DatastoreKind $kind, string $name, bool $public): ?string;
 }

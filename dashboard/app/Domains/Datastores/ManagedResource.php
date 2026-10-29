@@ -51,8 +51,14 @@ final class ManagedResource implements Provisioner
         return $credential !== null && ! in_array($this->right, $credential->missing_rights ?? [], true) ? null : $this->refusal;
     }
 
+    /** A Spaces bucket stays private. A public-read ACL would also let anyone list its files. */
+    public function publicRefusal(Cluster $cluster): ?string
+    {
+        return 'Opencloud makes a managed resource private.';
+    }
+
     /** DigitalOcean generates the address and the secrets, so the attachment has none until the apply. */
-    public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null): DatastoreAttachment
+    public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null, bool $isPublic = false): DatastoreAttachment
     {
         if ($given !== null) {
             throw new LogicException('The managed source makes its own connection.');
@@ -69,6 +75,7 @@ final class ManagedResource implements Provisioner
             'family' => $this->kind->family(),
             'name' => $name,
             'is_default' => $isDefault,
+            'is_public' => $isPublic,
             ...$this->stack->names($environment, $name),
             'datastore_id' => $datastore->id,
         ]);

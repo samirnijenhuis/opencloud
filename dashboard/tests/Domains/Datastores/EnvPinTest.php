@@ -85,6 +85,8 @@ class EnvPinTest extends TestCase
             42 => new SqlConnection(DatastoreKind::MYSQL, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_9_reports', 'env_9_0b7ec688', 'swap-reports-pass', 'reports', true),
             51 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-10', 'env-10', 'files-main-secret', true, 'main', isDefault: false),
             52 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-10-fb611de4', 'env-10-fb611de4', 'files-uploads-secret', true, 'uploads', isDefault: true),
+            61 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-11', 'env-11', 'media-main-secret', true, 'main', isDefault: true, url: 'https://env-11.files.203.0.113.5.sslip.io'),
+            62 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-11-fb611de4', 'env-11-fb611de4', 'media-uploads-secret', true, 'uploads', isDefault: false, url: 'https://env-11-fb611de4.files.203.0.113.5.sslip.io'),
         ], DatastoreAttachment::query()->with('datastore')->orderBy('id')->get()
             ->mapWithKeys(fn (DatastoreAttachment $attachment) => [$attachment->id => Provisioners::of($attachment->datastore)->connection($attachment)])
             ->all());
@@ -94,7 +96,8 @@ class EnvPinTest extends TestCase
      * Four environments of one app of the preset. "shop" has every local shape, "blog" has managed Postgres before and
      * after the apply, and "swap" moves the default from one database to another. "files" came later, with the
      * named buckets: a second bucket, then the default moves to it. Its entries come after the others, so the
-     * entries from before named buckets stay the same.
+     * entries from before named buckets stay the same. "media" came with public buckets, after "files", for the
+     * same reason.
      *
      * @return array<string, mixed>
      */
@@ -171,6 +174,18 @@ class EnvPinTest extends TestCase
         $snapshot['files after the default moves'] = $this->rows($files);
         $snapshot['runtime files'] = EnvironmentVariables::runtime($files->fresh());
 
+        // media: a public default bucket and a public second bucket on a cluster with a public IPv4 address.
+        $cluster->update(['ingress_ip' => '203.0.113.5']);
+        $media = Environment::factory()->for($application)->create(['id' => 11, 'name' => 'media']);
+        $publicBuckets = [
+            $this->attachment(61, $rustfs, $media, 'main', true, null, null, 'env-11', 'env-11', 'media-main-secret', public: true),
+            $this->attachment(62, $rustfs, $media, 'uploads', false, null, null, 'env-11-fb611de4', 'env-11-fb611de4', 'media-uploads-secret', public: true),
+        ];
+        $this->write($publicBuckets);
+        $snapshot['media'] = $this->rows($media);
+        $snapshot['media config lines'] = [61 => AttachmentEnv::configLine($publicBuckets[0]->fresh()), 62 => AttachmentEnv::configLine($publicBuckets[1]->fresh())];
+        $snapshot['runtime media'] = EnvironmentVariables::runtime($media->fresh());
+
         return $snapshot;
     }
 
@@ -179,7 +194,7 @@ class EnvPinTest extends TestCase
         return Datastore::factory()->for($cluster)->create(['id' => $id, 'kind' => $kind, 'source' => $source]);
     }
 
-    private function attachment(int $id, Datastore $datastore, Environment $environment, ?string $name, bool $isDefault, ?string $host, ?int $port, ?string $database, ?string $username, ?string $password): DatastoreAttachment
+    private function attachment(int $id, Datastore $datastore, Environment $environment, ?string $name, bool $isDefault, ?string $host, ?int $port, ?string $database, ?string $username, ?string $password, bool $public = false): DatastoreAttachment
     {
         return DatastoreAttachment::factory()->create([
             'id' => $id,
@@ -192,6 +207,7 @@ class EnvPinTest extends TestCase
             'database_name' => $database,
             'username' => $username,
             'password' => $password,
+            'is_public' => $public,
         ]);
     }
 

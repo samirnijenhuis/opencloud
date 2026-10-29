@@ -30,19 +30,21 @@ class AttachDatastore
      *
      * @param  Connection|null  $connection  what the user typed for the external source, null for the sources that
      *                                       make their own
+     * @param  bool  $public  anyone can read the files of the bucket
      *
      * @throws InvalidArgumentException when the name is not valid or taken, or the source cannot serve the kind here
      */
-    public function execute(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = DatastoreSource::STANDARD, ?string $name = null, ?Connection $connection = null): DatastoreAttachment
+    public function execute(Environment $environment, ?User $by, DatastoreKind $kind, DatastoreSource $source = DatastoreSource::STANDARD, ?string $name = null, ?Connection $connection = null, bool $public = false): DatastoreAttachment
     {
         $provisioner = Provisioners::for($kind, $source);
-        $refusal = $provisioner->refusalOn($environment->application->cluster);
+        $cluster = $environment->application->cluster;
+        $refusal = $provisioner->refusalOn($cluster) ?? ($public ? $provisioner->publicRefusal($cluster) : null);
 
         if ($refusal !== null) {
             throw new InvalidArgumentException($refusal);
         }
 
-        return DB::transaction(function () use ($environment, $by, $kind, $source, $name, $connection, $provisioner) {
+        return DB::transaction(function () use ($environment, $by, $kind, $source, $name, $connection, $public, $provisioner) {
             $family = $kind->family();
             // An attachment whose datastore is being destroyed no longer holds its name or its family.
             $attachments = $environment->datastoreAttachments()->where('family', $family)->with('datastore')->get()
@@ -55,7 +57,7 @@ class AttachDatastore
                 return $this->retry($existing, $kind, typed: $connection !== null);
             }
 
-            $attachment = $provisioner->attach($environment, $name, $named && ! $attachments->contains('is_default', true), $connection);
+            $attachment = $provisioner->attach($environment, $name, $named && ! $attachments->contains('is_default', true), $connection, $public);
             AttachmentEnv::write($attachment);
 
             AuditEvent::record($by, 'datastore.attached', $attachment, array_filter([
@@ -63,6 +65,7 @@ class AttachDatastore
                 'kind' => $kind->value,
                 'name' => $name,
                 'source' => $source === DatastoreSource::STANDARD ? null : $source->value,
+                'public' => $public,
             ]));
 
             return $attachment;

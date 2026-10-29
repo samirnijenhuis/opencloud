@@ -90,9 +90,17 @@ class GenericProfileTest extends TestCase
         ], $connection->envFor(new GenericProfile));
     }
 
+    public function test_a_public_bucket_also_sets_its_url(): void
+    {
+        $url = 'https://env-7-fb611de4.files.203.0.113.5.sslip.io';
+        $connection = new BucketConnection('http://rustfs.internal:9000', 'us-east-1', 'env-7-fb611de4', 'env-7-fb611de4', 'upw', true, 'uploads', isDefault: false, url: $url);
+
+        $this->assertEquals(EnvValue::plain($url), $connection->envFor(new GenericProfile)['UPLOADS_AWS_URL']);
+    }
+
     public function test_a_database_needs_no_config_line(): void
     {
-        $this->assertNull((new GenericProfile)->configLine(DatastoreKind::POSTGRES, 'reports'));
-        $this->assertNull((new GenericProfile)->configLine(DatastoreKind::RUSTFS, 'uploads'));
+        $this->assertNull((new GenericProfile)->configLine(DatastoreKind::POSTGRES, 'reports', false));
+        $this->assertNull((new GenericProfile)->configLine(DatastoreKind::RUSTFS, 'uploads', true));
     }
 }

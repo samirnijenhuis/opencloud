@@ -147,6 +147,7 @@ class DatastoreAttachmentTest extends TestCase
             "rc admin policy create local {$name} /tmp/{$name}.json >/dev/null",
             "rc admin user add local {$name} \"\$secret\" >/dev/null",
             "rc admin policy attach local {$name} --user {$name} >/dev/null",
+            "rc bucket anonymous set private local/{$name} >/dev/null",
         ])], $this->kubectl->calls[2]['args']);
         $this->assertSame("pass0\n", $this->kubectl->calls[2]['stdin']);
         $this->assertSame([
@@ -158,6 +159,45 @@ class DatastoreAttachmentTest extends TestCase
             'AWS_USE_PATH_STYLE_ENDPOINT' => ['true', false],
             'FILESYSTEM_DISK' => ['s3', false],
         ], $this->datastoreEnv($attachment));
+    }
+
+    public function test_a_public_rustfs_bucket_lets_anyone_read_a_file_and_sets_its_url(): void
+    {
+        $this->environment->application->cluster->update(['ingress_ip' => '203.0.113.5']);
+        $attachment = app(AttachDatastore::class)->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, public: true);
+        $name = "env-{$this->environment->id}";
+        $script = explode("\n", $this->kubectl->calls[2]['args'][array_key_last($this->kubectl->calls[2]['args'])]);
+
+        $this->assertTrue($attachment->is_public);
+        $this->assertSame([
+            "printf '%s' '{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"*\"]},\"Action\":[\"s3:GetObject\"],\"Resource\":[\"arn:aws:s3:::{$name}/*\"]}]}' > /tmp/{$name}-read.json",
+            "rc bucket anonymous set-json /tmp/{$name}-read.json local/{$name} >/dev/null",
+        ], array_slice($script, -2));
+        $this->assertSame(["https://{$name}.files.203.0.113.5.sslip.io", false], $this->datastoreEnv($attachment)['AWS_URL']);
+        $this->assertSame(['environment_id' => $this->environment->id, 'kind' => 'rustfs', 'name' => 'main', 'public' => true], AuditEvent::query()->sole()->context);
+    }
+
+    public function test_only_a_bucket_on_a_cluster_with_an_ipv4_address_can_be_public(): void
+    {
+        $refusals = [];
+
+        foreach ([[DatastoreKind::RUSTFS, null], [DatastoreKind::RUSTFS, 'fd00::1'], [DatastoreKind::POSTGRES, '203.0.113.5']] as [$kind, $ip]) {
+            $this->environment->application->cluster->update(['ingress_ip' => $ip]);
+
+            try {
+                app(AttachDatastore::class)->execute($this->environment, $this->owner, $kind, public: true);
+                $this->fail("A public {$kind->value} on the address {$ip} was attached.");
+            } catch (InvalidArgumentException $e) {
+                $refusals[] = $e->getMessage();
+            }
+        }
+
+        $this->assertSame([
+            'The cluster has no public IPv4 address, so a bucket on it cannot be public.',
+            'The cluster has no public IPv4 address, so a bucket on it cannot be public.',
+            'Only a bucket can be public.',
+        ], $refusals);
+        $this->assertSame(0, DatastoreAttachment::count());
     }
 
     public function test_valkey_runs_one_server_per_attachment(): void
@@ -472,6 +512,7 @@ class DatastoreAttachmentTest extends TestCase
             self::RUSTFS_LOGIN,
             "rc admin user rm local {$name} >/dev/null || [ $? -eq 5 ]",
             "rc admin policy rm local {$name} >/dev/null",
+            "rc bucket anonymous set private local/{$name} >/dev/null",
         ]), $detach);
         $this->assertSame(implode("\n", [
             'set -e',
@@ -528,6 +569,7 @@ class DatastoreAttachmentTest extends TestCase
             "rc admin policy create local {$name} /tmp/{$name}.json >/dev/null",
             "rc admin user add local {$name} \"\$secret\" >/dev/null",
             "rc admin policy attach local {$name} --user {$name} >/dev/null",
+            "rc bucket anonymous set private local/{$name} >/dev/null",
         ])], $this->kubectl->calls[5]['args']);
         $this->assertSame("pass3\n", $this->kubectl->calls[5]['stdin']);
         $this->assertSame([
@@ -648,6 +690,7 @@ class DatastoreAttachmentTest extends TestCase
             self::RUSTFS_LOGIN,
             "rc admin user rm local {$name} >/dev/null || [ $? -eq 5 ]",
             "rc admin policy rm local {$name} >/dev/null",
+            "rc bucket anonymous set private local/{$name} >/dev/null",
         ]), $detach);
         $this->assertSame(implode("\n", [
             'set -e',

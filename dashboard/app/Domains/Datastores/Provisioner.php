@@ -22,6 +22,9 @@ interface Provisioner
     /** Why an environment on this cluster cannot get it, or null. */
     public function refusalOn(Cluster $cluster): ?string;
 
+    /** Why an attachment on this cluster cannot be public, or null. Anyone can read the files of a public bucket. */
+    public function publicRefusal(Cluster $cluster): ?string;
+
     /**
      * Finds or creates the datastore row in the storage shape of this source, creates the attachment row, and queues
      * provision() after the commit. The action writes the env and the audit event afterwards.
@@ -29,10 +32,11 @@ interface Provisioner
      * @param  string|null  $name  the name of a database or a bucket, null for a key-value store
      * @param  Connection|null  $given  the connection that the user typed, for a source that provisions nothing (the
      *                                  external source, later). The local and managed sources make their own.
+     * @param  bool  $isPublic  true only when publicRefusal() gives null
      */
-    public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null): DatastoreAttachment;
+    public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null, bool $isPublic = false): DatastoreAttachment;
 
-    /** Queues provision() again for a failed attachment. */
+    /** Queues provision() again for a failed attachment, or for an attachment whose visibility changed. */
     public function retry(DatastoreAttachment $attachment): void;
 
     /**

@@ -19,12 +19,13 @@ class DatastoreAttachment extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['datastore_id', 'environment_id', 'family', 'name', 'is_default', 'host', 'port', 'database_name', 'username', 'password', 'tls', 'region', 'path_style', 'status', 'error'];
+    protected $fillable = ['datastore_id', 'environment_id', 'family', 'name', 'is_default', 'is_public', 'host', 'port', 'database_name', 'username', 'password', 'tls', 'region', 'path_style', 'status', 'error'];
 
     protected $hidden = ['password'];
 
     protected $attributes = [
         'status' => DatastoreStatus::PENDING->value,
+        'is_public' => false,
     ];
 
     protected function casts(): array
@@ -32,6 +33,7 @@ class DatastoreAttachment extends Model
         return [
             'family' => ResourceFamily::class,
             'is_default' => 'boolean',
+            'is_public' => 'boolean',
             'tls' => 'boolean',
             'path_style' => 'boolean',
             'port' => 'integer',

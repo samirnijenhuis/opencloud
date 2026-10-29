@@ -100,12 +100,22 @@ class LaravelProfileTest extends TestCase
         ], $connection->envFor(new LaravelProfile));
     }
 
+    public function test_a_public_bucket_also_sets_its_url_for_storage_url(): void
+    {
+        $url = 'https://env-7.files.203.0.113.5.sslip.io';
+        $main = new BucketConnection('http://rustfs.internal:9000', 'us-east-1', 'env-7', 'env-7', 'bpw', true, 'main', isDefault: true, url: $url);
+        $uploads = new BucketConnection('http://rustfs.internal:9000', 'us-east-1', 'env-7-fb611de4', 'env-7-fb611de4', 'upw', true, 'uploads', isDefault: false, url: $url);
+
+        $this->assertEquals(EnvValue::plain($url), $main->envFor(new LaravelProfile)['AWS_URL']);
+        $this->assertEquals(EnvValue::plain($url), $uploads->envFor(new LaravelProfile)['UPLOADS_AWS_URL']);
+    }
+
     public function test_the_config_line_names_the_driver_and_the_url_value(): void
     {
         $profile = new LaravelProfile;
 
-        $this->assertSame("'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],", $profile->configLine(DatastoreKind::POSTGRES, 'reports'));
-        $this->assertSame("'cache' => ['driver' => 'mysql', 'url' => env('CACHE_DB_URL')],", $profile->configLine(DatastoreKind::MYSQL, 'cache'));
+        $this->assertSame("'reports' => ['driver' => 'pgsql', 'url' => env('REPORTS_DB_URL')],", $profile->configLine(DatastoreKind::POSTGRES, 'reports', false));
+        $this->assertSame("'cache' => ['driver' => 'mysql', 'url' => env('CACHE_DB_URL')],", $profile->configLine(DatastoreKind::MYSQL, 'cache', false));
     }
 
     public function test_the_config_line_of_a_bucket_is_an_s3_disk_that_reads_the_prefixed_values(): void
@@ -114,7 +124,17 @@ class LaravelProfileTest extends TestCase
             "'uploads' => ['driver' => 's3', 'key' => env('UPLOADS_AWS_ACCESS_KEY_ID'), 'secret' => env('UPLOADS_AWS_SECRET_ACCESS_KEY'), "
             ."'region' => env('UPLOADS_AWS_DEFAULT_REGION'), 'bucket' => env('UPLOADS_AWS_BUCKET'), 'endpoint' => env('UPLOADS_AWS_ENDPOINT'), "
             ."'use_path_style_endpoint' => env('UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT', false)],",
-            (new LaravelProfile)->configLine(DatastoreKind::RUSTFS, 'uploads'),
+            (new LaravelProfile)->configLine(DatastoreKind::RUSTFS, 'uploads', false),
+        );
+    }
+
+    public function test_the_disk_of_a_public_bucket_also_reads_its_url(): void
+    {
+        $this->assertSame(
+            "'uploads' => ['driver' => 's3', 'key' => env('UPLOADS_AWS_ACCESS_KEY_ID'), 'secret' => env('UPLOADS_AWS_SECRET_ACCESS_KEY'), "
+            ."'region' => env('UPLOADS_AWS_DEFAULT_REGION'), 'bucket' => env('UPLOADS_AWS_BUCKET'), 'endpoint' => env('UPLOADS_AWS_ENDPOINT'), "
+            ."'use_path_style_endpoint' => env('UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT', false), 'url' => env('UPLOADS_AWS_URL')],",
+            (new LaravelProfile)->configLine(DatastoreKind::RUSTFS, 'uploads', true),
         );
     }
 }

@@ -38,7 +38,7 @@ final class AttachmentEnv
     {
         return $attachment->name !== null && ! $attachment->is_default
             ? collect(self::profiles($attachment->environment))
-                ->map(fn (EnvProfile $profile) => $profile->configLine($attachment->datastore->kind, $attachment->name))
+                ->map(fn (EnvProfile $profile) => $profile->configLine($attachment->datastore->kind, $attachment->name, $attachment->is_public))
                 ->first(fn (?string $line) => $line !== null)
             : null;
     }

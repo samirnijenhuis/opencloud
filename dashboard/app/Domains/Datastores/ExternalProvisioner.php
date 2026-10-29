@@ -35,8 +35,13 @@ final class ExternalProvisioner implements Provisioner
         return null;
     }
 
+    public function publicRefusal(Cluster $cluster): ?string
+    {
+        return 'An external resource keeps the settings that its owner gave it.';
+    }
+
     /** Only the address of $given counts. The action decides the name and the default of a database or a bucket. */
-    public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null): DatastoreAttachment
+    public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null, bool $isPublic = false): DatastoreAttachment
     {
         $address = $this->address($given);
 
@@ -52,6 +57,7 @@ final class ExternalProvisioner implements Provisioner
             'family' => $this->kind->family(),
             'name' => $name,
             'is_default' => $isDefault,
+            'is_public' => $isPublic,
             ...$address,
             'datastore_id' => $datastore->id,
             'status' => DatastoreStatus::READY,
