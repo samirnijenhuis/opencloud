@@ -383,6 +383,8 @@ Each name is lowercase letters, digits, and dashes. The first label holds at mos
 
 `App\Domains\Members\Enums\Role` holds the matrix of rights in one place. Policies ask `Role::allows(Ability)` and never compare role names directly. A developer has no write rights on a protected environment.
 
+The setup page creates the owner once, with the token from the installer. `CreateOwner` checks for a user and creates the owner in one transaction. SQLite takes the write lock at the start of each transaction, so two setup requests at the same time cannot both create an owner.
+
 Sessions live in the `sessions` table, and the payload is encrypted (`SESSION_ENCRYPT` is on by default). The `dontFlash` list holds `env` and `value`, and `ApplicationController::store()` leaves `env` out of the old input. So a refused form never writes an env value into a session. The middleware `AuthenticateSession` stores a hash of the password in the session. It logs out each session whose hash differs from the password of the user. A password change then logs out every other session, and the session that made the change stays signed in.
 
 ## Tests
