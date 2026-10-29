@@ -73,6 +73,12 @@ final readonly class LaravelDockerfile
         $versions = $this->phpVersions;
         usort($versions, version_compare(...));
 
+        // A new minor in the list must not move an app whose range already allows the default, because its lock file
+        // can hold a package that does not support the new minor yet. An app opts in with a range such as ^8.5.
+        if (in_array(self::DEFAULT_PHP, $versions, true) && $constraint->matches($parser->parseConstraints(self::DEFAULT_PHP.'.*'))) {
+            return self::DEFAULT_PHP;
+        }
+
         foreach (array_reverse($versions) as $minor) {
             if ($constraint->matches($parser->parseConstraints("{$minor}.*"))) {
                 return $minor;

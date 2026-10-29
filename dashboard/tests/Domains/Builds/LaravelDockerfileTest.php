@@ -118,7 +118,11 @@ class LaravelDockerfileTest extends TestCase
         return [
             'no php requirement' => [['require' => []], ['8.2', '8.3', '8.4'], '8.4'],
             'no require block' => [[], ['8.2', '8.3'], '8.4'],
-            'caret takes the highest' => [['require' => ['php' => '^8.2']], ['8.2', '8.3', '8.4'], '8.4'],
+            'caret takes the default when it allows the default' => [['require' => ['php' => '^8.2']], ['8.2', '8.3', '8.4', '8.5'], '8.4'],
+            'a newer minor does not move a range that allows the default' => [['require' => ['php' => '>=8.2']], ['8.2', '8.3', '8.4', '8.5'], '8.4'],
+            'caret on the new minor takes it' => [['require' => ['php' => '^8.5']], ['8.2', '8.3', '8.4', '8.5'], '8.5'],
+            'tilde on the new minor takes it' => [['require' => ['php' => '~8.5.0']], ['8.2', '8.3', '8.4', '8.5'], '8.5'],
+            'a wildcard on the new minor takes it' => [['require' => ['php' => '8.5.*']], ['8.2', '8.3', '8.4', '8.5'], '8.5'],
             'tilde pins the minor' => [['require' => ['php' => '~8.3.0']], ['8.2', '8.3', '8.4'], '8.3'],
             'a patch floor still allows that minor' => [['require' => ['php' => '>=8.2.10 <8.3']], ['8.2', '8.3', '8.4'], '8.2'],
             'an upper bound' => [['require' => ['php' => '>=8.1 <8.4']], ['8.2', '8.3', '8.4'], '8.3'],
@@ -132,7 +136,7 @@ class LaravelDockerfileTest extends TestCase
      * @param  list<string>  $versions
      */
     #[DataProvider('phpChoices')]
-    public function test_it_picks_the_highest_listed_php_minor_that_composer_allows(array $composer, array $versions, string $expected): void
+    public function test_it_picks_the_default_php_minor_when_composer_allows_it_and_else_the_highest_listed_one(array $composer, array $versions, string $expected): void
     {
         $this->assertSame($expected, (new LaravelDockerfile($versions, 'php:{php}'))->phpVersion($composer));
     }
