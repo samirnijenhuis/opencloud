@@ -22,6 +22,7 @@ class UpdateEnvironmentSettings
         'health_path',
         'build_command',
         'deploy_commands',
+        'sleep_after_minutes',
     ];
 
     /**

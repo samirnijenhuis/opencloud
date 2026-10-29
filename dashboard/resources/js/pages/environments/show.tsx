@@ -404,6 +404,18 @@ export default function EnvironmentShow(props: CanvasProps) {
                                 <code className="font-mono text-xs">{compute.health_path}</code>
                             </Row>
                             <LiveRows status={status} name="web" />
+                            {environment.sleep_after_minutes !== null && (
+                                <>
+                                    <Row label="Sleep">
+                                        {environment.slept_at ? (
+                                            <Status tone="off">Sleeping</Status>
+                                        ) : (
+                                            `After ${environment.sleep_after_minutes} min idle`
+                                        )}
+                                    </Row>
+                                    <Row label="Last request">{environment.last_request_at ? timeAgo(environment.last_request_at) : 'None yet'}</Row>
+                                </>
+                            )}
                             {statusUnknown && (
                                 <p className="text-muted-foreground px-3 py-1.5 text-xs">
                                     The live status is unknown right now. The dashboard cannot read it from the cluster.

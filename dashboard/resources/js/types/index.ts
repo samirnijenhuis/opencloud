@@ -123,6 +123,9 @@ export interface EnvironmentPageProps {
         branch: string | null;
         auto_deploy: boolean;
         status: DeploymentStatus | null;
+        sleep_after_minutes: number | null;
+        slept_at: string | null;
+        last_request_at: string | null;
     };
     can: { update: boolean; deploy: boolean; manage_domains: boolean };
     [key: string]: unknown;

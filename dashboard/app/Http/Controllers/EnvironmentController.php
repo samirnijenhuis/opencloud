@@ -141,6 +141,7 @@ class EnvironmentController extends Controller
                 'auto_deploy' => $environment->auto_deploy,
                 'build_command' => $environment->build_command,
                 'deploy_commands' => $environment->deploy_commands,
+                'sleep_after_minutes' => $environment->sleep_after_minutes,
             ],
             'envText' => $dotenv->format(
                 $environment->envVars()->where('source', EnvVarSource::USER)->where('is_secret', false)->orderBy('key')->pluck('value', 'key')->all(),
