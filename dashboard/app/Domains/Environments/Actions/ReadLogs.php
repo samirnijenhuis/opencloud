@@ -21,7 +21,7 @@ class ReadLogs
      * Asks the Loki of the cluster for the lines of one process in one range. The stream selector always names the
      * namespace of the environment, and the search only filters lines inside that selector.
      *
-     * @return array{lines: list<array{time: string, pod: string, line: string}>, truncated: bool} the lines from old to new
+     * @return array{lines: list<array{time: string, pod: string, line: string}>, truncated: bool} the lines from old to new, and whether the range holds older lines
      *
      * @throws InvalidArgumentException when $process is not web or a process of the environment
      * @throws KubectlException when Loki does not answer
@@ -49,21 +49,19 @@ class ReadLogs
         ]);
 
         $streams = Kubectl::for($environment->application->cluster)
-            ->exec(ClusterPartsManifests::NAMESPACE, 'deploy/'.ClusterPartsManifests::LOKI, ['wget', '-q', '-O-', $url], container: ClusterPartsManifests::LOKI_QUERY_CONTAINER, timeout: 30)
+            ->exec(ClusterPartsManifests::NAMESPACE, 'deploy/'.ClusterPartsManifests::LOKI, ['wget', '-q', '-T', '20', '-O-', $url], container: ClusterPartsManifests::LOKI_QUERY_CONTAINER, timeout: 30)
             ->throw()
             ->json()['data']['result'];
 
         $masker = SecretMasker::forEnvironment($environment);
-        $entries = collect($streams)
+        $lines = collect($streams)
             ->flatMap(fn (array $stream) => collect($stream['values'])->map(fn (array $value) => [
                 'nanoseconds' => (int) $value[0],
                 'pod' => $stream['stream']['pod'],
                 'line' => $masker->mask($value[1]),
             ]))
-            ->sortBy('nanoseconds');
-
-        // Loki searches the unmasked lines. A line that matches only inside a secret would confirm a guessed secret.
-        $lines = $entries
+            ->sortBy('nanoseconds')
+            // Loki searches the unmasked lines. A line that matches only inside a secret would confirm a guessed secret.
             ->when($search !== null, fn ($entries) => $entries->filter(fn (array $entry) => Str::contains($entry['line'], $search, ignoreCase: true)))
             ->map(fn (array $entry) => [
                 'time' => CarbonImmutable::createFromTimestampMsUTC(intdiv($entry['nanoseconds'], 1_000_000))->format('Y-m-d\TH:i:s.v\Z'),
@@ -73,7 +71,8 @@ class ReadLogs
             ->values()
             ->all();
 
-        return ['lines' => $lines, 'truncated' => $entries->count() >= self::LIMIT];
+        // Counted after the filter, so a search that matches only inside secrets also gives no sign.
+        return ['lines' => $lines, 'truncated' => count($lines) === self::LIMIT];
     }
 
     /** A LogQL string uses the escapes of a Go string, which JSON also uses. */

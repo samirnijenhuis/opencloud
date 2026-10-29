@@ -29,7 +29,7 @@ Before you write a mechanism, look for it in this order: this codebase, Laravel,
 
 Use these pieces before you write a new one.
 
-- **Kubernetes.** `Kubectl::for($cluster)` with `apply()`, `get()`, `delete()`, `exec()`, `logs()`, and `rolloutStatus()`. `Labels` gives the shared labels. Build each manifest as a PHP array in the manifest class of its domain: `EnvironmentManifests`, `CommandManifests`, `DatastoreManifests`, or `ClusterPartsManifests`.
+- **Kubernetes.** `Kubectl::for($cluster)` with `apply()`, `get()`, `delete()`, `exec()`, and `rolloutStatus()`. `Labels` gives the shared labels. Build each manifest as a PHP array in the manifest class of its domain: `EnvironmentManifests`, `CommandManifests`, `DatastoreManifests`, or `ClusterPartsManifests`.
 - **OpenTofu.** `Runner::apply()` and `Runner::destroy()` with a `Stack`. `TofuLog` writes the masked output to `tofu_log`.
 - **Caddy.** `CaddyConfig::forCluster()` builds the config, and the `SyncCaddy` job sends it. Do not post to the Caddy admin API yourself.
 - **Git and GitHub.** `Git::head()`, `Git::defaultBranch()`, and `Git::checkout()`. `GitHubClient` calls the GitHub API with the installation token.

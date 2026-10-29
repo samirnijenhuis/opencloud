@@ -38,6 +38,11 @@ class EnvironmentPolicy
             : Ability::DEPLOY);
     }
 
+    public function readLogs(User $user, Environment $environment): bool
+    {
+        return $user->role->allows(Ability::READ_LOGS);
+    }
+
     public function delete(User $user, Environment $environment): bool
     {
         return $user->role->allows(Ability::MANAGE_APPLICATIONS);

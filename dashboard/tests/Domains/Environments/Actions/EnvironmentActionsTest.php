@@ -187,7 +187,7 @@ class EnvironmentActionsTest extends TestCase
             ['time' => '2026-10-29T18:53:21.500Z', 'pod' => 'worker-old', 'line' => 'the old pod stops'],
             ['time' => '2026-10-29T18:53:22.000Z', 'pod' => 'worker-new', 'line' => 'the new pod connects with ********'],
         ], 'truncated' => false], $logs);
-        $this->assertSame(['exec', 'deploy/loki', '--namespace=opencloud', '--container=query', '--', 'wget', '-q', '-O-'], array_slice($kubectl->calls[0]['args'], 0, 8));
+        $this->assertSame(['exec', 'deploy/loki', '--namespace=opencloud', '--container=query', '--', 'wget', '-q', '-T', '20', '-O-'], array_slice($kubectl->calls[0]['args'], 0, 10));
         $this->assertSame([
             'query' => "{namespace=\"oc-env-{$this->environment->id}\", process=\"worker\"}",
             'start' => '2026-10-28T10:00:00+00:00',
@@ -216,14 +216,17 @@ class EnvironmentActionsTest extends TestCase
         $this->assertSame(['hunter} logs in'], array_column($logs['lines'], 'line'));
     }
 
-    public function test_read_logs_says_when_loki_gave_the_limit_of_lines(): void
+    public function test_read_logs_says_when_it_shows_the_limit_of_lines_but_not_for_lines_that_match_inside_a_secret(): void
     {
-        FakeKubectl::install()->respond('exec', self::loki(['web-1' => array_map(fn (int $i) => [(string) (1793300000000000000 + $i), "line {$i}"], range(1, ReadLogs::LIMIT))]));
+        EnvVar::factory()->for($this->environment)->create(['key' => 'API_TOKEN', 'value' => 'hunter22', 'is_secret' => true]);
+        FakeKubectl::install()->respond('exec', self::loki(['web-1' => array_map(fn (int $i) => [(string) (1793300000000000000 + $i), "line {$i} token hunter22"], range(1, ReadLogs::LIMIT))]));
 
         $logs = app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::now()->subHour(), CarbonImmutable::now());
 
         $this->assertTrue($logs['truncated']);
-        $this->assertSame(['line 1', 'line 1000'], [$logs['lines'][0]['line'], $logs['lines'][999]['line']]);
+        $this->assertSame(['line 1 token ********', 'line 1000 token ********'], [$logs['lines'][0]['line'], $logs['lines'][999]['line']]);
+
+        $this->assertSame(['lines' => [], 'truncated' => false], app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::now()->subHour(), CarbonImmutable::now(), 'hunter2'));
     }
 
     /** @param  array<string, list<array{0: string, 1: string}>>  $pods  the values of one stream for each pod, as Loki gives them */
@@ -237,7 +240,8 @@ class EnvironmentActionsTest extends TestCase
     /** @return array<string, string> */
     private static function lokiQuery(FakeKubectl $kubectl): array
     {
-        $url = end($kubectl->calls)['args'][8];
+        $args = end($kubectl->calls)['args'];
+        $url = end($args);
         parse_str(parse_url($url, PHP_URL_QUERY), $query);
         PHPUnit::assertStringStartsWith('http://127.0.0.1:3100/loki/api/v1/query_range?', $url);
 

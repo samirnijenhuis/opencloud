@@ -45,7 +45,7 @@ class EnvironmentLogControllerTest extends TestCase
                 'error' => null,
             ]);
 
-        $this->assertStringContainsString('process%3D%22reverb%22%7D+%7C%7E+%22%28%3Fi%29password%22&start=2026-10-29T18%3A00%3A00%2B00%3A00&end=2026-10-29T19%3A00%3A00%2B00%3A00', $kubectl->calls[0]['args'][8]);
+        $this->assertStringContainsString('process%3D%22reverb%22%7D+%7C%7E+%22%28%3Fi%29password%22&start=2026-10-29T18%3A00%3A00%2B00%3A00&end=2026-10-29T19%3A00%3A00%2B00%3A00', end($kubectl->calls[0]['args']));
     }
 
     public function test_an_unknown_process_or_a_bad_range_is_refused(): void
@@ -53,7 +53,7 @@ class EnvironmentLogControllerTest extends TestCase
         $environment = $this->makeEnvironment();
         $range = 'from=2026-10-29T18:00:00Z&to=2026-10-29T19:00:00Z';
         $user = User::factory()->create();
-        $kubectl = FakeKubectl::install();
+        $kubectl = FakeKubectl::install()->respond('exec', new KubectlResult(0, '{"data":{"result":[]}}'));
 
         $this->actingAs($user)->getJson("/environments/{$environment->id}/logs/read?process=deploy&{$range}")->assertUnprocessable()->assertJsonValidationErrors('process');
         $this->actingAs($user)->getJson("/environments/{$environment->id}/logs/read?process=worker&{$range}")->assertUnprocessable()->assertJsonValidationErrors('process');
@@ -62,10 +62,14 @@ class EnvironmentLogControllerTest extends TestCase
         $this->actingAs($user)->getJson("/environments/{$environment->id}/logs/read?process=web&from=2026-10-29T19:00:00Z&to=2026-10-29T18:00:00Z")
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['to' => 'The end of the range must be after its start.']);
+        $this->actingAs($user)->getJson("/environments/{$environment->id}/logs/read?process=web&from=2026-10-21T18:00:00Z&to=2026-10-28T18:00:01Z")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['to' => 'Pick a range of 7 days or less. The log store keeps the lines for 7 days.']);
+        $this->actingAs($user)->getJson("/environments/{$environment->id}/logs/read?process=web&from=2026-10-21T18:00:00Z&to=2026-10-28T18:00:00Z")->assertOk();
         $this->actingAs($user)->getJson("/environments/{$environment->id}/logs/read?process=web&{$range}&search=".str_repeat('a', 201))
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['search' => 'Use 200 characters or fewer in the search.']);
-        $this->assertSame([], $kubectl->calls);
+        $this->assertCount(1, $kubectl->calls);
     }
 
     public function test_a_log_store_that_does_not_answer_gives_a_plain_message(): void

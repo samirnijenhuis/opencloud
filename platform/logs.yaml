@@ -35,6 +35,9 @@ data:
           index:
             prefix: index_
             period: 24h
+    ingester:
+      wal:
+        replay_memory_ceiling: 384MB
     limits_config:
       retention_period: 168h
       discover_service_name: []

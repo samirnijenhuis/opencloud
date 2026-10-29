@@ -29,7 +29,10 @@ final readonly class ClusterPartsManifests
 
     private const BUSYBOX_IMAGE = 'busybox:1.37.0';
 
-    /** The compactor deletes the chunks of each line that is older than retention_period. */
+    /**
+     * The compactor deletes the chunks of each line that is older than retention_period. The WAL replay stays below the
+     * memory limit of the container, because the default of 4 GB lets Loki run out of memory again after each restart.
+     */
     private const LOKI_CONFIG = <<<'YAML'
         auth_enabled: false
         server:
@@ -55,6 +58,9 @@ final readonly class ClusterPartsManifests
               index:
                 prefix: index_
                 period: 24h
+        ingester:
+          wal:
+            replay_memory_ceiling: 384MB
         limits_config:
           retention_period: 168h
           discover_service_name: []

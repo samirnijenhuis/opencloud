@@ -31,8 +31,9 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - Fluent Bit reads only `/var/log/containers/*_oc-env-*_*.log`. A pod in another namespace, for example a datastore in `oc-datastores`, sends no lines to Loki.
 - Loki deletes each line after 7 days (`retention_period: 168h`). The compactor runs every 10 minutes and deletes a marked chunk 2 hours later.
 - `platform/logs.yaml` holds the log store of `local`, and `ClusterPartsManifests::logStore()` holds it for the other clusters. `ClusterPartsManifestsTest` fails when they differ in more than the Loki data volume, so change both.
-- The dashboard reaches Loki only through `kubectl exec` in the `query` container of the Loki pod (`ReadLogs`). The NetworkPolicy `loki-from-fluent-bit` refuses every other pod, also the dashboard.
-- Loki stores the unmasked lines. `ReadLogs` masks each line when it reads it, with the secret values of now. A line from before a change of a secret value can show the old value. `ReadLogs` also drops each masked line that no longer holds the search text, so a search cannot confirm a secret.
+- The dashboard reaches Loki only through `kubectl exec` in the `query` container of the Loki pod (`ReadLogs`). The NetworkPolicy `loki-from-fluent-bit` refuses every other pod, also the dashboard. On a connected cluster whose network plugin does not enforce NetworkPolicy, each pod can reach Loki.
+- Loki and Fluent Bit read their config file only when they start. A change of `LOKI_CONFIG` or `FLUENT_BIT_CONFIG` changes only the ConfigMap, so restart the pods, or change the pod template in the same change.
+- Loki stores the unmasked lines. `ReadLogs` masks each line when it reads it, with the secret values of now. A line from before a change of a secret value can show the old value. `ReadLogs` also drops each masked line that no longer holds the search text, and it counts `truncated` after that filter, so a search cannot confirm a secret.
 
 ## Secrets and the audit log
 

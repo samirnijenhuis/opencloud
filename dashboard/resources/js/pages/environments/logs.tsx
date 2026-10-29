@@ -50,12 +50,15 @@ export default function EnvironmentLogs(props: Props) {
 
     useEffect(() => {
         let active = true;
+        let timer: number | undefined;
+        const live = range !== 'custom';
         setResult(null);
         setProblem(null);
 
+        // The next read starts only after this one ends, so a slow log store never gets parallel reads.
         const load = async () => {
-            const to = range === 'custom' ? new Date(customTo) : new Date();
-            const from = range === 'custom' ? new Date(customFrom) : new Date(to.getTime() - Number(range) * 1000);
+            const to = live ? new Date() : new Date(customTo);
+            const from = live ? new Date(to.getTime() - Number(range) * 1000) : new Date(customFrom);
 
             if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
                 setProblem('Pick the start and the end of the range.');
@@ -93,17 +96,24 @@ export default function EnvironmentLogs(props: Props) {
                 }
             } catch {
                 if (active) {
-                    setProblem('We could not load the logs. We try again in a few seconds.');
+                    setProblem(
+                        live
+                            ? 'We could not load the logs. We try again in a few seconds.'
+                            : 'We could not load the logs. Pick the range again to try again.',
+                    );
                 }
+            }
+
+            if (active && live) {
+                timer = window.setTimeout(load, REFRESH_MS);
             }
         };
 
         load();
-        const timer = range === 'custom' ? undefined : window.setInterval(load, REFRESH_MS);
 
         return () => {
             active = false;
-            window.clearInterval(timer);
+            window.clearTimeout(timer);
         };
     }, [environment.id, process, range, customFrom, customTo, search]);
 
@@ -200,7 +210,7 @@ export default function EnvironmentLogs(props: Props) {
             {problem && <p className="text-sm text-red-600 dark:text-red-400">{problem}</p>}
             {result?.truncated && (
                 <p className="text-muted-foreground text-sm">
-                    This shows only the newest lines of the range. To see older lines, pick a shorter range.
+                    This shows only the newest lines of the range. To see older lines, pick a custom range that ends earlier.
                 </p>
             )}
 
