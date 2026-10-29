@@ -118,7 +118,7 @@ class AttachmentEnvTest extends TestCase
     }
 
     /** A Dockerfile app reads one of the two sets, so a name that both sets give must have one value. */
-    public function test_the_two_sets_of_a_dockerfile_app_share_only_the_aws_key_and_bucket_names_with_the_same_values(): void
+    public function test_the_two_sets_of_a_dockerfile_app_share_only_the_aws_key_bucket_and_url_names_with_the_same_values(): void
     {
         $endpoint = 'http://rustfs-6.oc-datastores.svc.cluster.local:9000';
         $shapes = [
@@ -128,6 +128,7 @@ class AttachmentEnvTest extends TestCase
             'valkey without a password' => new KeyValueConnection('redis.example.com', 6379, null, tls: false),
             'bucket main' => new BucketConnection($endpoint, 'us-east-1', 'env-7', 'env-7', 'rustfs-secret', true, 'main', isDefault: true),
             'bucket uploads' => new BucketConnection($endpoint, 'us-east-1', 'env-7-fb611de4', 'env-7-fb611de4', 'uploads-secret', true, 'uploads', isDefault: false),
+            'public bucket' => new BucketConnection($endpoint, 'us-east-1', 'env-7', 'env-7', 'rustfs-secret', true, 'main', isDefault: true, url: 'https://env-7.files.203.0.113.5.sslip.io'),
         ];
 
         $this->assertSame([
@@ -137,6 +138,7 @@ class AttachmentEnvTest extends TestCase
             'valkey without a password' => [],
             'bucket main' => ['AWS_ACCESS_KEY_ID', 'AWS_BUCKET', 'AWS_SECRET_ACCESS_KEY'],
             'bucket uploads' => ['UPLOADS_AWS_ACCESS_KEY_ID', 'UPLOADS_AWS_BUCKET', 'UPLOADS_AWS_SECRET_ACCESS_KEY'],
+            'public bucket' => ['AWS_ACCESS_KEY_ID', 'AWS_BUCKET', 'AWS_SECRET_ACCESS_KEY', 'AWS_URL'],
         ], array_map(fn (Connection $connection) => $this->sharedNames($connection), $shapes));
     }
 

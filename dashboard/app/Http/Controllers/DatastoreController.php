@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Actions\DetachDatastore;
+use App\Domains\Datastores\Actions\SetBucketVisibility;
 use App\Domains\Datastores\Actions\SetDefaultAttachment;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
@@ -11,6 +12,7 @@ use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Enums\Ability;
 use App\Http\Requests\AttachDatastoreRequest;
+use App\Http\Requests\SetBucketVisibilityRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -27,7 +29,7 @@ class DatastoreController extends Controller
     public function store(AttachDatastoreRequest $request, Environment $environment, AttachDatastore $attachDatastore): RedirectResponse
     {
         try {
-            $attachDatastore->execute($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source(), $request->validated('name'), $request->connection());
+            $attachDatastore->execute($environment, $request->user(), DatastoreKind::from($request->validated('kind')), $request->source(), $request->validated('name'), $request->connection(), $request->boolean('public'));
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['kind' => $e->getMessage()]);
         }
@@ -62,6 +64,13 @@ class DatastoreController extends Controller
         } catch (InvalidArgumentException $e) {
             return back()->withErrors(['default' => $e->getMessage()]);
         }
+
+        return back();
+    }
+
+    public function visibility(SetBucketVisibilityRequest $request, DatastoreAttachment $attachment, SetBucketVisibility $setBucketVisibility): RedirectResponse
+    {
+        $setBucketVisibility->execute($attachment, $request->user(), $request->boolean('public'));
 
         return back();
     }

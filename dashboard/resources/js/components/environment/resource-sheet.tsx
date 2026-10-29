@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { Link, router, usePage } from '@inertiajs/react';
 import { Check, Copy } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { AddResourceForm, needsDialog } from './add-resource';
+import { AddResourceForm, needsDialog, privateHelp } from './add-resource';
 import { Status, type Tone } from './block';
 import { EditorSheet, NextDeployFooter } from './editor-sheet';
 import {
@@ -57,8 +57,8 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
-const attach = (environmentId: number, kind: DatastoreKind, source: DatastoreSource = 'standard', name: string | null = null) => {
-    router.post(route('datastores.store', environmentId), { kind, source, name }, { preserveScroll: true });
+const attach = (environmentId: number, kind: DatastoreKind, source: DatastoreSource = 'standard', name: string | null = null, isPublic = false) => {
+    router.post(route('datastores.store', environmentId), { kind, source, name, public: isPublic }, { preserveScroll: true });
 };
 
 /** What the sheet says about each source. The backend gives the names, so no provider name appears here. */
@@ -329,6 +329,7 @@ export function ResourceSheet({
     const errors = usePage().props.errors as Record<string, string>;
     const [detaching, setDetaching] = useState(false);
     const [defaulting, setDefaulting] = useState(false);
+    const [changingVisibility, setChangingVisibility] = useState(false);
     const [restoring, setRestoring] = useState<BackupRow | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -343,6 +344,8 @@ export function ResourceSheet({
     const currentDefault = sameFamily.find((each) => each.is_default);
     const keepsTheDefault = named !== null && attachment.is_default && sameFamily.some((each) => each.id !== attachment.id && each.name !== null);
     const canDetach = canUpdate && !keepsTheDefault && attachment.server.status !== 'destroying' && attachment.detach_refusal === null;
+    const visibility = attachment.visibility;
+    const publishRefusal = visibility && !visibility.public ? visibility.refusal : null;
 
     const makeDefault = () => {
         router.post(
@@ -354,6 +357,21 @@ export function ResourceSheet({
                 onFinish: () => {
                     setBusy(false);
                     setDefaulting(false);
+                },
+            },
+        );
+    };
+
+    const changeVisibility = (makePublic: boolean) => {
+        router.put(
+            route('datastores.visibility', attachment.id),
+            { public: makePublic },
+            {
+                preserveScroll: true,
+                onStart: () => setBusy(true),
+                onFinish: () => {
+                    setBusy(false);
+                    setChangingVisibility(false);
                 },
             },
         );
@@ -410,7 +428,9 @@ export function ResourceSheet({
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => attach(environmentId, attachment.kind, attachment.source, attachment.name)}
+                                onClick={() =>
+                                    attach(environmentId, attachment.kind, attachment.source, attachment.name, attachment.visibility?.public)
+                                }
                             >
                                 Try again
                             </Button>
@@ -455,6 +475,48 @@ export function ResourceSheet({
                             <p className="text-muted-foreground text-sm">{named.noConfigLine}</p>
                         )}
                         <InputError message={errors.default} />
+                    </section>
+                )}
+
+                {visibility && (
+                    <section className="space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                                Visibility
+                                <Badge variant="outline">{visibility.public ? 'Public' : 'Private'}</Badge>
+                            </h3>
+                            {canUpdate && (
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled={busy || publishRefusal !== null}
+                                    onClick={() => setChangingVisibility(true)}
+                                >
+                                    {visibility.public ? 'Make private' : 'Make public'}
+                                </Button>
+                            )}
+                        </div>
+                        {visibility.public ? (
+                            visibility.url ? (
+                                <>
+                                    <p className="text-muted-foreground text-sm">
+                                        Anyone can read a file at this address. Nobody can list, upload, or delete files without the key.
+                                    </p>
+                                    <CopyLine text={visibility.url} />
+                                    <p className="text-muted-foreground text-xs break-words">
+                                        For a file at avatars/a.png, the URL is {visibility.url}/avatars/a.png.
+                                    </p>
+                                </>
+                            ) : (
+                                <p className="text-muted-foreground text-sm">
+                                    The bucket has no public address, because the cluster has no public IPv4 address.
+                                </p>
+                            )
+                        ) : (
+                            <p className="text-muted-foreground text-sm">{privateHelp}</p>
+                        )}
+                        {publishRefusal && <p className="text-muted-foreground text-sm">{publishRefusal}</p>}
+                        <InputError message={errors.public} />
                     </section>
                 )}
 
@@ -559,6 +621,31 @@ export function ResourceSheet({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {visibility && (
+                <Dialog open={changingVisibility} onOpenChange={setChangingVisibility}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>
+                                Make {attachment.name} {visibility.public ? 'private' : 'public'}?
+                            </DialogTitle>
+                            <DialogDescription>
+                                {visibility.public
+                                    ? 'The files stop opening at the public address, so links to them break. On the next deploy, the app loses the URL value.'
+                                    : 'Anyone with a URL can read each file in the bucket, also the files that are in it now. Nobody can list, upload, or delete files without the key. On the next deploy, the app gets the URL in its env values.'}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="secondary" onClick={() => setChangingVisibility(false)}>
+                                Cancel
+                            </Button>
+                            <Button disabled={busy} onClick={() => changeVisibility(!visibility.public)}>
+                                {visibility.public ? 'Make private' : 'Make public'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             <Dialog open={restoring !== null} onOpenChange={(next) => !next && setRestoring(null)}>
                 <DialogContent>

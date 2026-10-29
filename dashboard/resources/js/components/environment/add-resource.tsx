@@ -12,6 +12,9 @@ type Values = Record<string, string | boolean>;
 
 const inputTypes = { text: 'text', number: 'number', secret: 'password' } as const;
 
+export const privateHelp = 'Only the app can read and write the files, with its key.';
+const publicHelp = 'Anyone can read a file at its URL. Nobody can list, upload, or delete files without the key.';
+
 /** A database or a bucket asks for its name, a paid or outside resource explains itself, and an address needs its fields. */
 export const needsDialog = (offer: Offer) => offer.name_field !== null || offer.note !== null || offer.fields.length > 0;
 
@@ -71,7 +74,9 @@ function AddressField({
 /** The dialog content mounts on each open, so the form starts fresh: "main" for the first of a family, empty after. */
 export function AddResourceForm({ environmentId, offer, onClose }: { environmentId: number; offer: Offer; onClose: () => void }) {
     const nameField = offer.name_field;
+    const visibility = offer.visibility;
     const [name, setName] = useState(nameField?.value ?? '');
+    const [isPublic, setIsPublic] = useState(false);
     const [values, setValues] = useState<Values>(() => startValues(offer.fields));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [busy, setBusy] = useState(false);
@@ -80,7 +85,7 @@ export function AddResourceForm({ environmentId, offer, onClose }: { environment
         e.preventDefault();
         router.post(
             route('datastores.store', environmentId),
-            { kind: offer.kind, source: offer.source, name: nameField ? name : null, ...values },
+            { kind: offer.kind, source: offer.source, name: nameField ? name : null, public: isPublic, ...values },
             {
                 preserveScroll: true,
                 onStart: () => {
@@ -117,6 +122,34 @@ export function AddResourceForm({ environmentId, offer, onClose }: { environment
                     />
                     <p className="text-muted-foreground text-xs">Use 1 to 30 lowercase letters, digits, and underscores. Start with a letter.</p>
                     <InputError message={errors.name ?? errors.kind} />
+                </div>
+            )}
+
+            {visibility && (
+                <div className="grid gap-2">
+                    <Label id="resource-visibility">Visibility</Label>
+                    {visibility.refusal === null ? (
+                        <>
+                            <div className="flex gap-1" role="group" aria-labelledby="resource-visibility">
+                                {[false, true].map((value) => (
+                                    <Button
+                                        key={String(value)}
+                                        type="button"
+                                        size="sm"
+                                        variant={isPublic === value ? 'secondary' : 'ghost'}
+                                        aria-pressed={isPublic === value}
+                                        onClick={() => setIsPublic(value)}
+                                    >
+                                        {value ? 'Public' : 'Private'}
+                                    </Button>
+                                ))}
+                            </div>
+                            <p className="text-muted-foreground text-xs">{isPublic ? publicHelp : privateHelp}</p>
+                        </>
+                    ) : (
+                        <p className="text-muted-foreground text-xs">{visibility.refusal}</p>
+                    )}
+                    <InputError message={errors.public} />
                 </div>
             )}
 

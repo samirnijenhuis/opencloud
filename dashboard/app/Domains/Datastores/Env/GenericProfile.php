@@ -33,7 +33,8 @@ final class GenericProfile implements EnvProfile
 
     /**
      * The AWS SDKs have no common env name for path-style addressing, so the app sets it in code. Each bucket that is
-     * not the default sets the same names with the prefix <NAME>_.
+     * not the default sets the same names with the prefix <NAME>_. A public bucket also sets AWS_URL, the name that the
+     * Laravel profile uses, so a Dockerfile app gets one value.
      */
     public function bucket(BucketConnection $connection): array
     {
@@ -45,11 +46,12 @@ final class GenericProfile implements EnvProfile
             "{$prefix}AWS_REGION" => EnvValue::plain($connection->region),
             "{$prefix}AWS_ACCESS_KEY_ID" => EnvValue::plain($connection->accessKeyId),
             "{$prefix}AWS_SECRET_ACCESS_KEY" => EnvValue::secret($connection->secretAccessKey),
+            ...($connection->url === null ? [] : ["{$prefix}AWS_URL" => EnvValue::plain($connection->url)]),
         ];
     }
 
     /** The app reads <NAME>_DATABASE_URL and the <NAME>_AWS_* values itself, so it needs no config line. */
-    public function configLine(DatastoreKind $kind, string $name): ?string
+    public function configLine(DatastoreKind $kind, string $name, bool $public): ?string
     {
         return null;
     }

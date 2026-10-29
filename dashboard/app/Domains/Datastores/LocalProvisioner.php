@@ -67,7 +67,12 @@ abstract class LocalProvisioner implements Provisioner
         return null;
     }
 
-    public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null): DatastoreAttachment
+    public function publicRefusal(Cluster $cluster): ?string
+    {
+        return 'Only a bucket can be public.';
+    }
+
+    public function attach(Environment $environment, ?string $name, bool $isDefault, ?Connection $given = null, bool $isPublic = false): DatastoreAttachment
     {
         if ($given !== null) {
             throw new LogicException('The local source makes its own connection.');
@@ -82,6 +87,7 @@ abstract class LocalProvisioner implements Provisioner
             'family' => $this->kind()->family(),
             'name' => $name,
             'is_default' => $isDefault,
+            'is_public' => $isPublic,
             ...$this->names($environment, $name),
             ...($this->kind()->family() === ResourceFamily::DATABASE ? DatabaseNames::server($datastore) : []),
             'datastore_id' => $datastore->id,

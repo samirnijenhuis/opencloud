@@ -7,6 +7,7 @@ use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Actions\StartDeployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
@@ -109,7 +110,10 @@ class OpenPreview
 
             foreach ($attachments as $attachment) {
                 // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
-                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name);
+                // A public bucket stays public, so a file URL of the app works in the preview too. A cluster that lost
+                // its IPv4 address cannot serve one, and the preview still opens.
+                $public = $attachment->is_public && Provisioners::for($attachment->datastore->kind, DatastoreSource::STANDARD)->publicRefusal($application->cluster) === null;
+                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name, public: $public);
             }
 
             $hostname = $this->hostname($application, $pullRequest->number);

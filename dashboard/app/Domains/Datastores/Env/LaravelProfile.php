@@ -12,7 +12,8 @@ use App\Domains\Datastores\SqlConnection;
  * The names that a stock Laravel app reads without config. The default database sets the DB_* values, so a Laravel
  * app needs no config. Each other database sets one <NAME>_DB_URL value, and the app adds one line to
  * config/database.php for it. The default bucket sets the AWS_* values of the stock s3 disk. Each other bucket sets
- * the same values with the prefix <NAME>_, and the app adds one disk line to config/filesystems.php for it.
+ * the same values with the prefix <NAME>_, and the app adds one disk line to config/filesystems.php for it. A public
+ * bucket also sets AWS_URL, which Storage::url() reads.
  *
  * An attach also changes app behavior: Valkey sets CACHE_STORE=redis and the default bucket sets FILESYSTEM_DISK=s3,
  * like Laravel Cloud does for a PHP app. Those values belong to this profile, not to the resource.
@@ -65,19 +66,24 @@ final class LaravelProfile implements EnvProfile
             "{$prefix}AWS_BUCKET" => EnvValue::plain($connection->bucket),
             "{$prefix}AWS_ENDPOINT" => EnvValue::plain($connection->endpoint),
             "{$prefix}AWS_USE_PATH_STYLE_ENDPOINT" => EnvValue::plain($connection->pathStyle ? 'true' : 'false'),
+            ...($connection->url === null ? [] : ["{$prefix}AWS_URL" => EnvValue::plain($connection->url)]),
         ];
     }
 
-    /** A connection in config/database.php for a database, and a disk in config/filesystems.php for a bucket. */
-    public function configLine(DatastoreKind $kind, string $name): ?string
+    /**
+     * A connection in config/database.php for a database, and a disk in config/filesystems.php for a bucket. The disk of
+     * a public bucket also reads its URL.
+     */
+    public function configLine(DatastoreKind $kind, string $name, bool $public): ?string
     {
         $prefix = self::prefix($name);
+        $url = $public ? ", 'url' => env('{$prefix}AWS_URL')" : '';
 
         return match ($kind->family()) {
             ResourceFamily::DATABASE => "'{$name}' => ['driver' => '".self::DRIVERS[$kind->value]."', 'url' => env('".self::urlKey($name)."')],",
             ResourceFamily::BUCKET => "'{$name}' => ['driver' => 's3', 'key' => env('{$prefix}AWS_ACCESS_KEY_ID'), 'secret' => env('{$prefix}AWS_SECRET_ACCESS_KEY'), "
                 ."'region' => env('{$prefix}AWS_DEFAULT_REGION'), 'bucket' => env('{$prefix}AWS_BUCKET'), 'endpoint' => env('{$prefix}AWS_ENDPOINT'), "
-                ."'use_path_style_endpoint' => env('{$prefix}AWS_USE_PATH_STYLE_ENDPOINT', false)],",
+                ."'use_path_style_endpoint' => env('{$prefix}AWS_USE_PATH_STYLE_ENDPOINT', false){$url}],",
             ResourceFamily::KEY_VALUE => null,
         };
     }

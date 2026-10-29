@@ -1001,5 +1001,185 @@
         "MAIN_AWS_SECRET_ACCESS_KEY": "files-main-secret",
         "MAIN_AWS_USE_PATH_STYLE_ENDPOINT": "true",
         "PORT": "8080"
+    },
+    "media": [
+        [
+            "AWS_ACCESS_KEY_ID",
+            "env-11",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "AWS_BUCKET",
+            "env-11",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "AWS_DEFAULT_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "AWS_ENDPOINT",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "AWS_ENDPOINT_URL",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "AWS_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "AWS_SECRET_ACCESS_KEY",
+            "media-main-secret",
+            true,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "AWS_URL",
+            "https://env-11.files.203.0.113.5.sslip.io",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "AWS_USE_PATH_STYLE_ENDPOINT",
+            "true",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "FILESYSTEM_DISK",
+            "s3",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "UPLOADS_AWS_ACCESS_KEY_ID",
+            "env-11-fb611de4",
+            false,
+            "runtime",
+            "datastore",
+            62
+        ],
+        [
+            "UPLOADS_AWS_BUCKET",
+            "env-11-fb611de4",
+            false,
+            "runtime",
+            "datastore",
+            62
+        ],
+        [
+            "UPLOADS_AWS_DEFAULT_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            62
+        ],
+        [
+            "UPLOADS_AWS_ENDPOINT",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            62
+        ],
+        [
+            "UPLOADS_AWS_ENDPOINT_URL",
+            "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+            false,
+            "runtime",
+            "datastore",
+            62
+        ],
+        [
+            "UPLOADS_AWS_REGION",
+            "us-east-1",
+            false,
+            "runtime",
+            "datastore",
+            62
+        ],
+        [
+            "UPLOADS_AWS_SECRET_ACCESS_KEY",
+            "media-uploads-secret",
+            true,
+            "runtime",
+            "datastore",
+            62
+        ],
+        [
+            "UPLOADS_AWS_URL",
+            "https://env-11-fb611de4.files.203.0.113.5.sslip.io",
+            false,
+            "runtime",
+            "datastore",
+            62
+        ],
+        [
+            "UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT",
+            "true",
+            false,
+            "runtime",
+            "datastore",
+            62
+        ]
+    ],
+    "media config lines": {
+        "61": null,
+        "62": "'uploads' => ['driver' => 's3', 'key' => env('UPLOADS_AWS_ACCESS_KEY_ID'), 'secret' => env('UPLOADS_AWS_SECRET_ACCESS_KEY'), 'region' => env('UPLOADS_AWS_DEFAULT_REGION'), 'bucket' => env('UPLOADS_AWS_BUCKET'), 'endpoint' => env('UPLOADS_AWS_ENDPOINT'), 'use_path_style_endpoint' => env('UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT', false), 'url' => env('UPLOADS_AWS_URL')],"
+    },
+    "runtime media": {
+        "AWS_ACCESS_KEY_ID": "env-11",
+        "AWS_BUCKET": "env-11",
+        "AWS_DEFAULT_REGION": "us-east-1",
+        "AWS_ENDPOINT": "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+        "AWS_ENDPOINT_URL": "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+        "AWS_REGION": "us-east-1",
+        "AWS_SECRET_ACCESS_KEY": "media-main-secret",
+        "AWS_URL": "https://env-11.files.203.0.113.5.sslip.io",
+        "AWS_USE_PATH_STYLE_ENDPOINT": "true",
+        "FILESYSTEM_DISK": "s3",
+        "PORT": "8080",
+        "UPLOADS_AWS_ACCESS_KEY_ID": "env-11-fb611de4",
+        "UPLOADS_AWS_BUCKET": "env-11-fb611de4",
+        "UPLOADS_AWS_DEFAULT_REGION": "us-east-1",
+        "UPLOADS_AWS_ENDPOINT": "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+        "UPLOADS_AWS_ENDPOINT_URL": "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
+        "UPLOADS_AWS_REGION": "us-east-1",
+        "UPLOADS_AWS_SECRET_ACCESS_KEY": "media-uploads-secret",
+        "UPLOADS_AWS_URL": "https://env-11-fb611de4.files.203.0.113.5.sslip.io",
+        "UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT": "true"
     }
 }

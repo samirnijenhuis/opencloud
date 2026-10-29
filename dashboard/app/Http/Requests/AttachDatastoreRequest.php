@@ -49,6 +49,7 @@ class AttachDatastoreRequest extends FormRequest
             'source' => ['nullable', Rule::enum(DatastoreSource::class)],
             // AttachDatastore owns the name rules, because they depend on the other databases of the environment.
             'name' => ['nullable', 'string'],
+            'public' => ['boolean'],
             ...($external === null ? [] : ExternalConnectionForm::rules($external)),
         ];
     }

@@ -173,7 +173,7 @@ class EnvironmentController extends Controller
     private function datastores(Environment $environment, Role $role): array
     {
         $attachments = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get();
-        $rows = $attachments->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment, $role));
+        $rows = $attachments->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment, $role, $environment->application->cluster));
 
         return [
             'attachments' => $rows,
@@ -234,6 +234,7 @@ class EnvironmentController extends Controller
                 'fields' => $source === DatastoreSource::EXTERNAL
                     ? array_map(fn (ExternalField $field) => $field->toArray(), ExternalConnectionForm::fields($kind))
                     : [],
+                'visibility' => $family === ResourceFamily::BUCKET ? ['refusal' => $provisioner->publicRefusal($cluster)] : null,
             ];
         }
 
@@ -260,10 +261,11 @@ class EnvironmentController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function presentAttachment(DatastoreAttachment $attachment, Role $role): array
+    private function presentAttachment(DatastoreAttachment $attachment, Role $role, Cluster $cluster): array
     {
         $datastore = $attachment->datastore;
-        $capabilities = Provisioners::of($datastore)->capabilities();
+        $provisioner = Provisioners::of($datastore);
+        $capabilities = $provisioner->capabilities();
         $row = [
             'id' => $attachment->id,
             'kind' => $datastore->kind,
@@ -292,6 +294,12 @@ class EnvironmentController extends Controller
             'detach_refusal' => $datastore->source === DatastoreSource::MANAGED && ! $role->allows(Ability::MANAGE_CREDENTIALS)
                 ? 'Only an owner can destroy a managed resource.'
                 : null,
+            // An external bucket keeps the settings of its owner, and opencloud does not know them.
+            'visibility' => $attachment->family === ResourceFamily::BUCKET && $datastore->source !== DatastoreSource::EXTERNAL ? [
+                'public' => $attachment->is_public,
+                'url' => $provisioner->connection($attachment)?->url,
+                'refusal' => $provisioner->publicRefusal($cluster),
+            ] : null,
         ];
 
         // The provider backs up a managed resource itself, and the nightly dump cannot reach it.

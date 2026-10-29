@@ -6,6 +6,7 @@ use App\Domains\Backups\Models\BackupTarget;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Actions\DetachDatastore;
 use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
@@ -60,6 +61,7 @@ class DatastoreControllerTest extends TestCase
             ->where('datastores.attachments.0.server.cluster', 'local')
             ->where('datastores.attachments.0.env_keys', ['REDIS_HOST', 'REDIS_PASSWORD'])
             ->where('datastores.attachments.0.detach_refusal', null)
+            ->where('datastores.attachments.0.visibility', null)
             ->where('datastores.has_backup_target', false)
             ->where('datastores.polling', false)
             ->where('can.update', true));
@@ -321,6 +323,7 @@ class DatastoreControllerTest extends TestCase
             'note' => null,
             'refusal' => null,
             'fields' => [],
+            'visibility' => null,
         ], $offers->first(fn (array $offer) => $offer['source'] === 'standard' && $offer['kind'] === 'valkey'));
         $this->assertSame([
             'kind' => 'postgres',
@@ -344,7 +347,13 @@ class DatastoreControllerTest extends TestCase
                 ['key' => 'username', 'label' => 'User', 'type' => 'text', 'required' => true, 'value' => null, 'placeholder' => null, 'help' => null],
                 ['key' => 'password', 'label' => 'Password', 'type' => 'secret', 'required' => true, 'value' => null, 'placeholder' => null, 'help' => null],
             ],
+            'visibility' => null,
         ], $offers->first(fn (array $offer) => $offer['source'] === 'external' && $offer['kind'] === 'postgres'));
+        $this->assertSame([
+            'standard' => ['refusal' => null],
+            'managed' => ['refusal' => 'Opencloud makes a managed resource private.'],
+            'external' => ['refusal' => 'An external resource keeps the settings that its owner gave it.'],
+        ], $offers->where('family', 'bucket')->mapWithKeys(fn (array $offer) => [$offer['source'] => $offer['visibility']])->all());
         $this->assertSame(
             [
                 ['valkey', 'host', 'text'], ['valkey', 'port', 'number'], ['valkey', 'password', 'secret'], ['valkey', 'tls', 'toggle'],
@@ -353,6 +362,72 @@ class DatastoreControllerTest extends TestCase
             $offers->where('source', 'external')->whereIn('kind', ['valkey', 'rustfs'])
                 ->flatMap(fn (array $offer) => array_map(fn (array $field) => [$offer['kind'], $field['key'], $field['type']], $offer['fields']))->values()->all(),
         );
+    }
+
+    public function test_the_form_adds_a_public_bucket_and_the_page_shows_its_address(): void
+    {
+        Queue::fake();
+        $environment = $this->makeEnvironment();
+        $owner = User::factory()->owner()->create();
+
+        $this->actingAs($owner)->post("/environments/{$environment->id}/datastores", ['kind' => 'rustfs', 'name' => 'main', 'public' => true])
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $bucket = DatastoreAttachment::sole();
+        $this->assertTrue($bucket->is_public);
+        $this->actingAs($owner)->get("/environments/{$environment->id}")->assertInertia(fn (Assert $page) => $page
+            ->where('datastores.attachments.0.visibility', [
+                'public' => true,
+                'url' => "https://env-{$environment->id}.files.203.0.113.10.sslip.io",
+                'refusal' => null,
+            ]));
+
+        $this->makeCluster()->update(['ingress_ip' => null]);
+        $this->actingAs($owner)->get("/environments/{$environment->id}")->assertInertia(fn (Assert $page) => $page
+            ->where('datastores.attachments.0.visibility', [
+                'public' => true,
+                'url' => null,
+                'refusal' => 'The cluster has no public IPv4 address, so a bucket on it cannot be public.',
+            ]));
+    }
+
+    public function test_an_external_bucket_shows_no_visibility_because_its_owner_sets_it(): void
+    {
+        $environment = $this->makeEnvironment();
+        $external = Datastore::factory()->create(['cluster_id' => null, 'kind' => DatastoreKind::RUSTFS, 'source' => DatastoreSource::EXTERNAL]);
+        DatastoreAttachment::factory()->create(['datastore_id' => $external->id, 'environment_id' => $environment->id, 'name' => 'main', 'is_default' => true, 'host' => 'https://s3.example.com']);
+        $this->attach($environment, DatastoreKind::RUSTFS, attributes: ['name' => 'exports']);
+
+        $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}")->assertInertia(fn (Assert $page) => $page
+            ->where('datastores.attachments.0.visibility', null)
+            ->where('datastores.attachments.1.visibility.public', false));
+    }
+
+    public function test_a_developer_cannot_change_the_visibility_on_a_protected_environment(): void
+    {
+        Queue::fake();
+        $environment = $this->makeEnvironment();
+        $bucket = $this->attach($environment, DatastoreKind::RUSTFS, attributes: ['name' => 'main', 'is_default' => true]);
+
+        $this->actingAs(User::factory()->create())->put("/datastore-attachments/{$bucket->id}/visibility", ['public' => true])->assertForbidden();
+
+        $this->assertFalse($bucket->fresh()->is_public);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_an_admin_makes_a_bucket_public_and_sees_a_refusal_for_a_database(): void
+    {
+        Queue::fake();
+        $environment = $this->makeEnvironment();
+        $bucket = $this->attach($environment, DatastoreKind::RUSTFS, attributes: ['name' => 'main', 'is_default' => true]);
+        $database = $this->attach($environment, DatastoreKind::MYSQL, attributes: ['name' => 'main', 'is_default' => true]);
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)->put("/datastore-attachments/{$bucket->id}/visibility", ['public' => true])->assertRedirect()->assertSessionHasNoErrors();
+        $this->actingAs($admin)->put("/datastore-attachments/{$database->id}/visibility", ['public' => true])
+            ->assertSessionHasErrors(['public' => 'Only a bucket can be public.']);
+
+        $this->assertSame([true, false], [$bucket->fresh()->is_public, $database->fresh()->is_public]);
     }
 
     public function test_the_action_message_is_shown_on_a_refusal(): void
