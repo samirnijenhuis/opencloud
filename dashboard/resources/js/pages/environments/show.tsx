@@ -54,7 +54,7 @@ function VisitSite({ domains }: { domains: Domain[] }) {
             <span
                 title={
                     primary
-                        ? 'The primary domain is not live yet. Wait for its certificate, or make a live domain primary.'
+                        ? 'The primary domain is not live yet. Open Domains to see why.'
                         : 'No domain is live yet. Add a domain, or wait for its certificate.'
                 }
             >

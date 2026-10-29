@@ -27,13 +27,17 @@ class PrimaryDomainTest extends TestCase
                 [1 => ['shop-production.203.0.113.10.sslip.io', self::FREE], 2 => ['pending.example.com', []], 4 => ['www.example.com', self::LIVE], 3 => ['shop.example.com', self::LIVE]],
                 'shop.example.com',
             ],
-            'a proxied custom domain with a certificate is live' => [
-                [1 => ['shop-production.203.0.113.10.sslip.io', self::FREE], 2 => ['shop.example.com', ['dns_status' => DnsStatus::PROXIED, 'certificate_status' => 'issued']]],
+            'a proxied custom domain is live' => [
+                [1 => ['shop-production.203.0.113.10.sslip.io', self::FREE], 2 => ['shop.example.com', ['dns_status' => DnsStatus::PROXIED]]],
                 'shop.example.com',
             ],
-            'a custom domain without a certificate is not live, so the free domain wins' => [
-                [1 => ['shop.example.com', ['dns_status' => DnsStatus::OK]], 2 => ['shop-production.203.0.113.10.sslip.io', self::FREE]],
+            'a custom domain whose DNS does not point at the cluster is not live, so the free domain wins' => [
+                [1 => ['shop.example.com', ['dns_status' => DnsStatus::WRONG]], 2 => ['shop-production.203.0.113.10.sslip.io', self::FREE]],
                 'shop-production.203.0.113.10.sslip.io',
+            ],
+            'a live custom domain stays primary while one certificate check fails' => [
+                [1 => ['shop-production.203.0.113.10.sslip.io', self::FREE], 2 => ['shop.example.com', ['dns_status' => DnsStatus::OK, 'certificate_status' => 'pending']]],
+                'shop.example.com',
             ],
             'without a live custom domain and a free domain, the oldest domain wins' => [
                 [5 => ['www.example.com', []], 2 => ['pr-12.preview.example.com', ['dns_status' => DnsStatus::MISSING]]],
