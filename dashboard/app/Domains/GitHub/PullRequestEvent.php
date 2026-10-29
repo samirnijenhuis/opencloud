@@ -9,6 +9,10 @@ use App\Domains\GitHub\Enums\PullRequestAction;
  */
 final readonly class PullRequestEvent
 {
+    /**
+     * @param  list<string>  $labels  the label names of the pull request after the action
+     * @param  string|null  $changedLabel  the label that "labeled" or "unlabeled" adds or removes
+     */
     public function __construct(
         public PullRequestAction $action,
         public string $repository,
@@ -16,6 +20,8 @@ final readonly class PullRequestEvent
         public string $headRef,
         public string $headSha,
         public bool $fromFork,
+        public array $labels,
+        public ?string $changedLabel,
     ) {}
 
     /**
@@ -32,6 +38,11 @@ final readonly class PullRequestEvent
             return null;
         }
 
+        // GitHub also sends the label changes of a closed pull request, and a closed pull request has no preview.
+        if ($action->changesLabels() && ($pullRequest['state'] ?? '') !== 'open') {
+            return null;
+        }
+
         // GitHub sends no head repository when the fork is gone, so that counts as a fork too.
         $headRepository = RepositoryName::parse((string) ($pullRequest['head']['repo']['full_name'] ?? ''));
 
@@ -42,6 +53,8 @@ final readonly class PullRequestEvent
             (string) $pullRequest['head']['ref'],
             (string) $pullRequest['head']['sha'],
             $headRepository !== $repository,
+            array_column($pullRequest['labels'] ?? [], 'name'),
+            $payload['label']['name'] ?? null,
         );
     }
 }

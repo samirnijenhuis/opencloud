@@ -28,6 +28,7 @@ type PreviewSettings = {
     previews_enabled: boolean;
     allow_forks: boolean;
     preview_domain: string | null;
+    preview_labels: string[];
     ingress_ip: string | null;
     max_previews: number;
     template_id: number | null;
@@ -60,6 +61,7 @@ function PreviewsForm({ application, previews, canUpdate }: { application: Props
         previews_enabled: previews.previews_enabled,
         allow_forks: previews.allow_forks,
         preview_domain: previews.preview_domain ?? '',
+        preview_labels: previews.preview_labels.join(', '),
     });
     const { data, setData, errors, processing, recentlySuccessful } = form;
 
@@ -97,6 +99,22 @@ function PreviewsForm({ application, previews, canUpdate }: { application: Props
                     />
                     <p className="text-muted-foreground text-sm">{domainHelp}</p>
                     <InputError message={errors.preview_domain} />
+                </div>
+
+                <div className="grid gap-2">
+                    <Label htmlFor="preview_labels">Only pull requests with these labels</Label>
+                    <Input
+                        id="preview_labels"
+                        className="max-w-sm"
+                        value={data.preview_labels}
+                        onChange={(e) => setData('preview_labels', e.target.value)}
+                        placeholder="preview"
+                    />
+                    <p className="text-muted-foreground text-sm">
+                        Separate the labels with commas. A pull request gets a preview when it has one of the labels, and loses the preview when it
+                        loses the last one. Leave it empty to give each pull request a preview.
+                    </p>
+                    <InputError message={errors.preview_labels} />
                 </div>
             </fieldset>
 

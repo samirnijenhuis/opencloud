@@ -68,7 +68,7 @@ class OpenPreview
         if ($application->environments()->where('kind', EnvironmentKind::PREVIEW)->count() >= $limit) {
             AuditEvent::record(null, 'preview.limit_reached', $application, ['pr_number' => $pullRequest->number, 'limit' => $limit]);
 
-            // A push to the pull request tries again, so only a new or reopened pull request gets the comment.
+            // A push to the pull request tries again, so a push gets no comment.
             if ($pullRequest->action !== PullRequestAction::SYNCHRONIZE) {
                 $this->comment($pullRequest, "Opencloud did not create a preview for this pull request. {$application->name} already runs {$limit} previews, which is the limit. Close a pull request that has a preview, then push to this pull request to try again.");
             }
