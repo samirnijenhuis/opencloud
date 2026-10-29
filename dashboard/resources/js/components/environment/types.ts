@@ -46,6 +46,8 @@ export type Attachment = {
     is_default: boolean;
     /** The line for the database or disk config of the app, for one that is not the default, or null. */
     config_line: string | null;
+    /** A bucket only, or null. The URL is the public base URL, null for a private bucket or a public one without an address. The refusal says why it cannot become public. */
+    visibility: { public: boolean; url: string | null; refusal: string | null } | null;
     status: DatastoreStatus;
     error: string | null;
     /** The cluster, the cloud provider, or the host of a server that the user runs. */
@@ -80,6 +82,8 @@ export type Offer = {
     family: ResourceFamily;
     /** The name field of a database or a bucket, or null for a key-value store. The first one of a family starts as "main". */
     name_field: { label: string; placeholder: string; value: string; description: string } | null;
+    /** A bucket only, or null. A refusal means the bucket cannot be public here, and the dialog shows it in place of the choice. */
+    visibility: { refusal: string | null } | null;
     label: string;
     description: string;
     /** The heading of the source in the menu. */
