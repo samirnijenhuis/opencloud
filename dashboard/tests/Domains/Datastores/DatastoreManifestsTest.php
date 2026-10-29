@@ -52,6 +52,7 @@ class DatastoreManifestsTest extends TestCase
                                 'ports' => [['name' => 'mysql', 'containerPort' => 3306]],
                                 'readinessProbe' => ['tcpSocket' => ['port' => 'mysql'], 'periodSeconds' => 5],
                                 'volumeMounts' => [['name' => 'data', 'mountPath' => '/var/lib/mysql']],
+                                'resources' => ['requests' => ['memory' => '256Mi'], 'limits' => ['memory' => '2Gi']],
                             ]],
                         ],
                     ],
@@ -77,6 +78,7 @@ class DatastoreManifestsTest extends TestCase
                 'ports' => [['name' => 'postgres', 'containerPort' => 5432]],
                 'readinessProbe' => ['tcpSocket' => ['port' => 'postgres'], 'periodSeconds' => 5],
                 'volumeMounts' => [['name' => 'data', 'mountPath' => '/var/lib/postgresql/data']],
+                'resources' => ['requests' => ['memory' => '128Mi'], 'limits' => ['memory' => '2Gi']],
             ]],
         ], $statefulSet['spec']['template']['spec']);
         $this->assertSame(self::VOLUME_CLAIMS, $statefulSet['spec']['volumeClaimTemplates']);
@@ -104,12 +106,14 @@ class DatastoreManifestsTest extends TestCase
                     'ports' => [['name' => 's3', 'containerPort' => 9000]],
                     'readinessProbe' => ['tcpSocket' => ['port' => 's3'], 'periodSeconds' => 5],
                     'volumeMounts' => [['name' => 'data', 'mountPath' => '/data']],
+                    'resources' => ['requests' => ['memory' => '128Mi'], 'limits' => ['memory' => '1Gi']],
                 ],
                 [
                     'name' => 'rc',
                     'image' => 'rustfs/rc:v0.1.36',
                     'command' => ['sleep', '2147483647'],
                     'envFrom' => [['secretRef' => ['name' => 'rustfs-5']]],
+                    'resources' => ['requests' => ['memory' => '16Mi'], 'limits' => ['memory' => '128Mi']],
                 ],
             ],
         ], $statefulSet['spec']['template']['spec']);
@@ -152,11 +156,12 @@ class DatastoreManifestsTest extends TestCase
                             'containers' => [[
                                 'name' => 'valkey',
                                 'image' => 'valkey/valkey:9.1',
-                                'args' => ['valkey-server', '--requirepass', '$(VALKEY_PASSWORD)', '--appendonly', 'yes', '--dir', '/data'],
+                                'args' => ['valkey-server', '--requirepass', '$(VALKEY_PASSWORD)', '--appendonly', 'yes', '--dir', '/data', '--maxmemory', '256mb'],
                                 'env' => [['name' => 'VALKEY_PASSWORD', 'valueFrom' => ['secretKeyRef' => ['name' => 'valkey-9', 'key' => 'VALKEY_PASSWORD']]]],
                                 'ports' => [['name' => 'valkey', 'containerPort' => 6379]],
                                 'readinessProbe' => ['tcpSocket' => ['port' => 'valkey'], 'periodSeconds' => 5],
                                 'volumeMounts' => [['name' => 'data', 'mountPath' => '/data']],
+                                'resources' => ['requests' => ['memory' => '32Mi'], 'limits' => ['memory' => '512Mi']],
                             ]],
                             'volumes' => [['name' => 'data', 'persistentVolumeClaim' => ['claimName' => 'valkey-9']]],
                         ],
