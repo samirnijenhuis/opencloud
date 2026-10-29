@@ -3,6 +3,9 @@
 set -euo pipefail
 
 K3S_VERSION=v1.36.5+k3s1
+# The SHA-256 of the k3s install script at the tag K3S_VERSION. Change both together. To get the sum, run:
+# curl -fsSL "https://raw.githubusercontent.com/k3s-io/k3s/<K3S_VERSION with + as %2B>/install.sh" | sha256sum
+K3S_INSTALL_SHA256=46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad
 OPENCLOUD_REPO=${OPENCLOUD_REPO:-opencloud-dev/opencloud}
 OPENCLOUD_VERSION=${OPENCLOUD_VERSION:-latest}
 OPENCLOUD_IMAGE=${OPENCLOUD_IMAGE:-ghcr.io/${OPENCLOUD_REPO%%/*}/opencloud:$OPENCLOUD_VERSION}
@@ -126,7 +129,7 @@ preflight() {
     done
 
     local url
-    for url in https://get.k3s.io https://github.com https://registry-1.docker.io/v2/; do
+    for url in https://raw.githubusercontent.com https://github.com https://registry-1.docker.io/v2/; do
         # A new server can need a few seconds before DNS and routing work.
         curl -sS -o /dev/null --max-time 15 --retry 4 --retry-delay 5 --retry-all-errors "$url" 2>/dev/null ||
             fail "Cannot reach $url. Give the server outbound internet access on port 443."
@@ -163,8 +166,16 @@ install_k3s() {
 
     if [[ $(k3s --version 2>/dev/null) != *"$K3S_VERSION"* ]]; then
         say "Installing k3s $K3S_VERSION"
-        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=$K3S_VERSION sh - >>"$LOG" 2>&1 ||
+        # get.k3s.io serves the newest script, so the installer runs the script of the pinned release and checks it first.
+        local script
+        script=$(mktemp)
+        curl -fsSL -o "$script" "https://raw.githubusercontent.com/k3s-io/k3s/${K3S_VERSION/+/%2B}/install.sh" ||
+            fail "Cannot download the k3s install script of $K3S_VERSION."
+        echo "$K3S_INSTALL_SHA256  $script" | sha256sum -c - >/dev/null ||
+            fail "The k3s install script does not match its pinned checksum. Do not install it."
+        INSTALL_K3S_VERSION=$K3S_VERSION sh "$script" >>"$LOG" 2>&1 ||
             fail "k3s did not install. The details are in $LOG."
+        rm -f "$script"
     elif ((changed)); then
         say "Restarting k3s to apply the new k3s configuration"
         systemctl restart k3s
