@@ -14,11 +14,11 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 `matrix.json` is the source of the cells. A cell id is `<fixture>-<database>-<cache>`, for example `laravel-postgres-valkey`.
 
 - **Fixtures.** Each one is an app on its own branch of `https://github.com/samirnijenhuis/opencloud-verify-fixtures`. The repository is private, so each cell reads it with the deploy key of the matrix. The folders in `fixtures/` are the source. The preset of a fixture decides its env names. `laravel` gets the Laravel env names. `static` and `php` are Dockerfile apps, so they get the Laravel names and the generic names, and `php` reads the Laravel names. The other four get the generic env names: `DATABASE_URL`, `<NAME>_DATABASE_URL`, and `REDIS_URL`.
-  - `static` is nginx with its own Dockerfile, so it proves the Dockerfile preset. Its build reads a build env value from a BuildKit secret, and its deploy command is an `echo`.
+  - `static` is nginx with its own Dockerfile, so it proves the Dockerfile preset. Its build reads a build env value from a BuildKit secret, and its deploy command is `echo deploy-marker-'<cell>'`.
   - `php` is plain PHP on Apache with `pdo_mysql`, `pdo_pgsql`, and `redis`, with its own Dockerfile. Its deploy command is `php /var/www/deploy.php <cell>`.
   - `laravel` is laravel/laravel at the commit in `matrix.json`, plus a `/verify` route, the command `verify:mark-deploy`, and a migration. Its build command writes a marker file. Its deploy commands are `migrate` and `verify:mark-deploy`.
   - `node` is a `node:http` server with `pg`, `mysql2`, and `redis`, locked in `package-lock.json`. The Node.js preset builds it. Its build script writes the build env value into a file. Its deploy command is `node deploy.js <cell>`.
-  - `site` is a static site that the static preset builds. Its build script writes the build env value into `dist/index.html` and `dist/verify.json`, and nginx serves `dist`. Its deploy command is an `echo`.
+  - `site` is a static site that the static preset builds. Its build script writes the build env value into `dist/index.html` and `dist/verify.json`, and nginx serves `dist`. Its deploy command is `echo deploy-marker-'<cell>'`.
   - `python` is Flask on gunicorn with `psycopg`, `PyMySQL`, and `redis`, pinned in `requirements.txt`. The Python preset builds it. Its build command writes the build env value into a file. Its deploy command is `python deploy.py <cell>`.
   - `ruby` is Sinatra on puma with `pg`, `mysql2`, and `redis`, locked in `Gemfile.lock`. The Ruby preset builds it. Its build command writes the build env value into a file. Its deploy command is `bundle exec ruby deploy.rb <cell>`.
   - The `python` and `ruby` fixtures start with the `web:` line of their `Procfile`, which binds `0.0.0.0:$PORT`.
@@ -43,7 +43,7 @@ Each cell does three deploys:
 2. **Change and redeploy.** The cell changes `VERIFY_MARKER` to `-v2`, adds the database `reports` and Valkey when the cell has them, and clicks Deploy. The new value must show. The MySQL and Postgres rows from step 1 must still be there.
 3. **Redeploy under traffic.** The cell polls the verify endpoint four times a second during a third deploy. No request may fail.
 
-Each deploy log must contain `deploy-marker-<cell>` in its step "Running deploy commands", which proves that the deploy commands ran. A live deployment must show each of the 7 steps as finished. The runner reads the steps from the deployment page and writes them as `deployment-N.log`. At the end, the settings page must not contain the secret value.
+Each deploy log must contain `deploy-marker-<cell>` in its step "Running deploy commands", which proves that the deploy commands ran. That step also shows the command line, so a deploy command must not hold the marker as plain text. The `echo` commands of `static` and `site` put the cell id in quotes for this reason. A live deployment must show each of the 7 steps as finished. The runner reads the steps from the deployment page and writes them as `deployment-N.log`. At the end, the settings page must not contain the secret value.
 
 ## Deploy key
 

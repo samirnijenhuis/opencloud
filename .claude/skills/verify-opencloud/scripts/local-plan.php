@@ -24,7 +24,7 @@ $port = $type->choosesPort() ? ($input['port'] ?? $type->defaultPort()) : $type-
 $dockerfile = (new ReflectionMethod(Builder::class, 'prepare'))
     ->invoke(new Builder, $type, $input['dir'], array_keys($input['build_env']), $input['build_command']);
 
-$env = $type->systemEnv($port, []);
+$env = $type->systemEnv($port, null, []);
 
 foreach ($input['attachments'] as $a) {
     $connection = $a['kind'] === 'valkey'

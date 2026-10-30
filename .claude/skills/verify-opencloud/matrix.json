@@ -10,7 +10,7 @@
       "databases": ["none", "mysql", "postgres", "mysqlpostgres", "sqlite"],
       "caches": ["none", "valkey"],
       "build_command": {},
-      "deploy_commands": { "always": ["echo deploy-marker-{cell}"] },
+      "deploy_commands": { "always": ["echo deploy-marker-'{cell}'"] },
       "env": {}
     },
     "php": {
@@ -98,7 +98,7 @@
       "databases": ["none"],
       "caches": ["none"],
       "build_command": {},
-      "deploy_commands": { "always": ["echo deploy-marker-{cell}"] },
+      "deploy_commands": { "always": ["echo deploy-marker-'{cell}'"] },
       "env": {}
     }
   },
