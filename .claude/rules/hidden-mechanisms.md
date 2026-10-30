@@ -54,11 +54,13 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - `trustProxies(at: '*')` trusts the forwarded scheme, host, and client address from each sender (`bootstrap/app.php:20`). `$request->ip()` returns the forwarded address.
 - `dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`). A hand-written `back()->withInput()` flashes every field. `CreateApplication` refuses a refused key or an unreadable repository with a `ValidationException`, so `dontFlash` alone keeps the pasted key out of the session.
 - `HandleInertiaRequests::share()` sends each page `auth.user`, three `can` flags, and, for a signed-in user, the version and the newer release for the owner (`app/Http/Middleware/HandleInertiaRequests.php:40-62`). `auth.user` is the whole `User` model without its `$hidden` fields.
+- Inertia merges the page props over the shared props at the top level only (`array_merge` in `ResponseFactory::render()`). `PresentsEnvironment::environmentProps()` sends its own `can` key (`app/Http/Controllers/Concerns/PresentsEnvironment.php:49`). So on each environment page the page `can` replaces the shared `can`, and `can.manage_credentials` is missing unless the controller adds it. `EnvironmentController::show()` adds it back (`app/Http/Controllers/EnvironmentController.php:100`). The Repository sheet reads `can_manage_credentials` from `environments.repository-access` instead.
 - `GitHubWebhookController` stores each `X-GitHub-Delivery` id for one day with `Cache::add()` (`app/Http/Controllers/GitHubWebhookController.php:30-34`). A repeated id answers 200 and queues nothing.
 
 ## Caches
 
 - `LiveStatus` keeps each answer for 10 seconds, for each environment and each cluster (`app/Domains/Environments/LiveStatus.php:21`, `:39`, `:57`).
+- `RepositoryProbe` keeps each answer for 10 seconds (`app/Domains/Applications/RepositoryProbe.php:23`). The key holds the repository, a hash of the deploy key, and the branch, so a new key or a new branch reads again at once. A key that the user adds on GitHub shows as accepted within 10 seconds.
 - `GitHubClient` keeps the installation token, encrypted, until one minute before it expires (`app/Domains/GitHub/GitHubClient.php:88`).
 - `SleepIdleEnvironments` keeps the last Caddy request counts of each cluster in `caddy-request-counts-<cluster id>` without an end. A lost entry counts each hostname with requests as active once.
 - `CheckLatestRelease` keeps the tag of the latest release for three days (`app/Domains/Upgrades/Jobs/CheckLatestRelease.php:33`).
