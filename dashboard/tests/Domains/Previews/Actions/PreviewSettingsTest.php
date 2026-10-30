@@ -37,9 +37,10 @@ class PreviewSettingsTest extends TestCase
         $this->actingAs(User::factory()->create())->get("/applications/{$this->application->id}")
             ->assertInertia(fn (Assert $page) => $page
                 ->component('applications/show')
-                ->has('environments', 2)
-                ->where('environments.1.name', 'pr-12')
-                ->where('environments.1.pr_url', 'https://github.com/acme/shop/pull/12')
+                ->has('environments', 3)
+                ->where('environments.1.name', 'preview-template')
+                ->where('environments.2.name', 'pr-12')
+                ->where('environments.2.pr_url', 'https://github.com/acme/shop/pull/12')
                 ->where('environments.0.pr_url', null)
                 ->where('previews', [
                     'previews_enabled' => true,

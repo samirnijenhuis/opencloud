@@ -135,9 +135,15 @@ export default function ApplicationShow({ application, environments, previews, d
             <div className="mx-auto w-full max-w-5xl space-y-6 p-4">
                 <div className="space-y-1">
                     <h1 className="text-2xl font-semibold tracking-tight">{application.name}</h1>
-                    <p className="text-muted-foreground text-sm">
-                        {application.repository} - {applicationTypeLabels[application.type]}
-                    </p>
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+                        <span>{application.repository}</span>
+                        <Badge
+                            variant="secondary"
+                            title="The preset is fixed. It also sets the env names that the databases, Valkey, and the buckets give the app."
+                        >
+                            {applicationTypeLabels[application.type]}
+                        </Badge>
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap items-end justify-between gap-4">
@@ -158,9 +164,16 @@ export default function ApplicationShow({ application, environments, previews, d
                                     </Link>
                                     {environment.is_protected && <Badge variant="outline">Protected</Badge>}
                                     {environment.kind === 'preview' && <Badge variant="outline">Preview</Badge>}
+                                    {environment.kind === 'preview_template' && <Badge variant="outline">Preview template</Badge>}
                                 </div>
                                 <p className="text-muted-foreground text-sm">
-                                    {environment.kind === 'preview' ? <PullRequest environment={environment} /> : `Branch ${environment.branch}`}
+                                    {environment.kind === 'preview' ? (
+                                        <PullRequest environment={environment} />
+                                    ) : environment.kind === 'preview_template' ? (
+                                        'Each new preview copies its settings, processes, and env values.'
+                                    ) : (
+                                        `Branch ${environment.branch}`
+                                    )}
                                 </p>
                                 {environment.url && (
                                     <a
@@ -173,29 +186,10 @@ export default function ApplicationShow({ application, environments, previews, d
                                     </a>
                                 )}
                             </div>
-                            <DeploymentBadge status={environment.status} />
+                            {environment.kind !== 'preview_template' && <DeploymentBadge status={environment.status} />}
                         </li>
                     ))}
                 </ul>
-
-                {/* The controller sorts production first. */}
-                <DeployKey
-                    applicationId={application.id}
-                    publicKey={deployPublicKey}
-                    settingsUrl={`${route('environments.settings', environments[0].id)}#deployments`}
-                    canUpdate={canUpdate}
-                />
-
-                <div className="space-y-4">
-                    <HeadingSmall
-                        title="Preset"
-                        description="The preset is fixed. It also sets the env names that the databases, Valkey, and the buckets give the app."
-                    />
-                    <div className="space-y-1 rounded-lg border p-4">
-                        <p className="font-medium">{applicationTypeLabels[application.type]}</p>
-                        <p className="text-muted-foreground text-sm">To use another preset, create a new application with the same repository.</p>
-                    </div>
-                </div>
 
                 <div className="space-y-4">
                     <HeadingSmall
@@ -218,6 +212,15 @@ export default function ApplicationShow({ application, environments, previews, d
 
                     <PreviewsForm application={application} previews={previews} canUpdate={canUpdate} />
                 </div>
+
+                {/* The controller sorts production first. The steps matter until production deploys once. */}
+                <DeployKey
+                    applicationId={application.id}
+                    publicKey={deployPublicKey}
+                    settingsUrl={`${route('environments.settings', environments[0].id)}#deployments`}
+                    canUpdate={canUpdate}
+                    defaultOpen={deployPublicKey !== null && environments[0].status === null}
+                />
             </div>
         </AppLayout>
     );

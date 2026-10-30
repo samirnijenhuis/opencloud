@@ -65,8 +65,8 @@ class PreviewLifecycleTest extends TestCase
             'name' => 'Shop',
             'repository' => 'acme/shop',
             'cluster_id' => $cluster->id,
-            'env' => [['key' => 'STRIPE_SECRET', 'value' => 'sk_live_production', 'is_secret' => true]],
         ]);
+        app(SetEnvVar::class)->execute($this->environment('production'), $owner, 'STRIPE_SECRET', 'sk_live_production', true, EnvVarAvailability::RUNTIME);
         app(AttachDatastore::class)->execute($this->environment('production'), $owner, DatastoreKind::VALKEY);
 
         $template = $this->environment('preview-template');
@@ -139,7 +139,7 @@ class PreviewLifecycleTest extends TestCase
             [[self::OPENED_SHA, DeploymentStatus::QUEUED, null], [self::PUSHED_SHA, DeploymentStatus::QUEUED, null]],
             $preview->deployments()->orderBy('id')->get()->map(fn (Deployment $d) => [$d->commit_sha, $d->status, $d->triggered_by])->all(),
         );
-        Queue::assertPushed(RunDeployment::class, 3);
+        Queue::assertPushed(RunDeployment::class, 2);
         $this->assertSame(1, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
 
         $this->postWebhook('pull_request', $this->pullRequest('closed', self::PUSHED_SHA), delivery: 'd-3')->assertStatus(202);

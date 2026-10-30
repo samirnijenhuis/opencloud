@@ -35,30 +35,3 @@ export const memoryText = (mib: number) => (mib >= 1024 ? `${Math.round((mib / 1
 export const sizeText = (size: SizeOption) => `${vcpu(size.cpu_millicores)} vCPU, ${memoryText(size.memory_mib)}`;
 
 export const sizeLabel = (value: Size) => value.toUpperCase();
-
-/** Reads KEY=VALUE lines. It skips comments and blank lines and removes one pair of quotes. */
-export function parseDotenv(text: string): { key: string; value: string }[] {
-    const rows: { key: string; value: string }[] = [];
-
-    for (const raw of text.split(/\r?\n/)) {
-        const line = raw.trim().replace(/^export\s+/, '');
-        const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
-
-        if (!match) {
-            continue;
-        }
-
-        let value = match[2].trim();
-        const quote = value[0];
-
-        if ((quote === '"' || quote === "'") && value.length > 1 && value.endsWith(quote)) {
-            value = value.slice(1, -1);
-        } else {
-            value = value.replace(/\s+#.*$/, '');
-        }
-
-        rows.push({ key: match[1], value });
-    }
-
-    return rows;
-}

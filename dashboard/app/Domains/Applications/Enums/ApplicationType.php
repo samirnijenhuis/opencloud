@@ -79,15 +79,6 @@ enum ApplicationType: string
         };
     }
 
-    /** The Laravel, Node, Python, and Ruby images run the build command after the build. A static site builds with its build script. */
-    public function usesBuildCommand(): bool
-    {
-        return match ($this) {
-            self::LARAVEL, self::NODE, self::PYTHON, self::RUBY => true,
-            self::STATIC, self::DOCKERFILE => false,
-        };
-    }
-
     /** The image runs tini as its entrypoint, so a process passes only its arguments. */
     public function imageRunsTini(): bool
     {

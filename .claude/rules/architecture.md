@@ -87,7 +87,7 @@ A gateway in `app/Support` keeps its exception next to the gateway class, for ex
 Opencloud has no domain events and no listeners. A domain uses another domain in four ways:
 
 1. It reads the models and enums of the other domain. Relations and simple queries across domains are fine.
-2. It calls an Action of the other domain to change its records. `CreateApplication` calls `AttachDatastore`, `AddDomain`, `AddProcess`, `SetEnvVar`, and `StartDeployment`.
+2. It calls an Action of the other domain to change its records. `CreateApplication` calls `AttachDatastore`, `AddProcess`, and `SetEnvVar`.
 3. It dispatches a Job of the other domain. `RunDeployment` dispatches `SyncCaddy`.
 4. It calls a stateless class of the other domain: a service, a manifest class, or a registry. `RunDeployment` uses `Builder`, and `Backups` uses `Provisioners`.
 

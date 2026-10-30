@@ -7,9 +7,9 @@ use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
-use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Models\Domain;
@@ -38,14 +38,6 @@ class ApplicationControllerTest extends TestCase
             'branch' => 'main',
             'cluster_id' => $this->makeCluster()->id,
             'type' => 'laravel',
-            'size' => 's',
-            'min_instances' => 1,
-            'max_instances' => 3,
-            'cpu_target' => 70,
-            'deploy_commands' => ['php artisan migrate --force'],
-            'processes' => [['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work', 'schedule' => null]],
-            'env' => [],
-            'database' => 'mysql',
             ...$overrides,
         ];
     }
@@ -97,7 +89,7 @@ class ApplicationControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('canCreate', false)->where('can.create_application', false)->where('can.view_audit_log', false));
     }
 
-    public function test_the_create_form_offers_the_clusters_and_the_sizes(): void
+    public function test_the_create_form_offers_only_the_clusters(): void
     {
         $this->makeCluster();
 
@@ -107,67 +99,8 @@ class ApplicationControllerTest extends TestCase
                 ->component('applications/create')
                 ->where('defaultClusterId', $this->cluster->id)
                 ->where('clusters.0.ingress_ip', '203.0.113.10')
-                ->where('sizes.1', ['value' => 's', 'cpu_millicores' => 500, 'memory_mib' => 512])
-                ->has('sizes', 4)
-                ->where('presets', [
-                    [
-                        'value' => 'laravel',
-                        'port' => 8080,
-                        'chooses_port' => false,
-                        'uses_build_command' => true,
-                        'deploy_commands' => ['php artisan migrate --force'],
-                        'processes' => [
-                            ['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'schedule' => null],
-                            ['name' => 'scheduler', 'kind' => 'long_running', 'command' => 'php artisan schedule:work', 'schedule' => null],
-                        ],
-                        'database' => 'mysql',
-                    ],
-                    [
-                        'value' => 'node',
-                        'port' => 3000,
-                        'chooses_port' => true,
-                        'uses_build_command' => true,
-                        'deploy_commands' => [],
-                        'processes' => [],
-                        'database' => 'none',
-                    ],
-                    [
-                        'value' => 'python',
-                        'port' => 8000,
-                        'chooses_port' => true,
-                        'uses_build_command' => true,
-                        'deploy_commands' => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'],
-                        'processes' => [],
-                        'database' => 'none',
-                    ],
-                    [
-                        'value' => 'ruby',
-                        'port' => 3000,
-                        'chooses_port' => true,
-                        'uses_build_command' => true,
-                        'deploy_commands' => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'],
-                        'processes' => [],
-                        'database' => 'none',
-                    ],
-                    [
-                        'value' => 'static',
-                        'port' => 8080,
-                        'chooses_port' => false,
-                        'uses_build_command' => false,
-                        'deploy_commands' => [],
-                        'processes' => [],
-                        'database' => 'none',
-                    ],
-                    [
-                        'value' => 'dockerfile',
-                        'port' => 8080,
-                        'chooses_port' => true,
-                        'uses_build_command' => false,
-                        'deploy_commands' => [],
-                        'processes' => [],
-                        'database' => 'none',
-                    ],
-                ]));
+                ->missing('sizes')
+                ->missing('presets'));
     }
 
     public function test_a_developer_cannot_open_or_submit_the_create_form(): void
@@ -179,7 +112,7 @@ class ApplicationControllerTest extends TestCase
         $this->assertSame(0, Application::count());
     }
 
-    public function test_it_calls_create_application_with_a_normalized_repository_and_the_form_values(): void
+    public function test_it_calls_create_application_with_a_normalized_repository_and_the_five_form_values(): void
     {
         $admin = User::factory()->admin()->create();
         $created = Application::factory()->for($this->makeCluster())->create();
@@ -197,32 +130,10 @@ class ApplicationControllerTest extends TestCase
                 'branch' => 'main',
                 'deploy_key' => false,
                 'deploy_private_key' => null,
-                'env' => [
-                    ['key' => 'APP_ENV', 'value' => 'production', 'is_secret' => false, 'available_at' => 'runtime'],
-                    ['key' => 'STRIPE_SECRET', 'value' => 'sk_live_1', 'is_secret' => true, 'available_at' => 'runtime'],
-                ],
-                'domains' => ['shop.example.com'],
-                'database' => 'postgres',
-                'processes' => [['name' => 'worker', 'kind' => ProcessKind::LONG_RUNNING, 'command' => 'php artisan queue:work', 'schedule' => null]],
-                'settings' => [
-                    'size' => 's',
-                    'min_instances' => 1,
-                    'max_instances' => 3,
-                    'cpu_target' => 70,
-                    'build_command' => null,
-                    'deploy_commands' => ['php artisan migrate --force'],
-                ],
             ])
             ->andReturn($created);
 
-        $this->actingAs($admin)->post('/applications', $this->validForm([
-            'env' => [
-                ['key' => 'APP_ENV', 'value' => 'production', 'is_secret' => false],
-                ['key' => 'STRIPE_SECRET', 'value' => 'sk_live_1', 'is_secret' => true],
-            ],
-            'domain' => 'Shop.Example.com',
-            'database' => 'postgres',
-        ]))->assertRedirect("/environments/{$production->id}");
+        $this->actingAs($admin)->post('/applications', $this->validForm())->assertRedirect("/environments/{$production->id}");
     }
 
     public function test_the_deploy_key_choice_reaches_create_application_and_opens_the_application_page(): void
@@ -240,7 +151,7 @@ class ApplicationControllerTest extends TestCase
             ->assertRedirect("/applications/{$created->id}");
     }
 
-    public function test_an_own_key_reaches_create_application_and_opens_the_environment_page_of_the_first_deployment(): void
+    public function test_an_own_key_reaches_create_application_and_opens_the_environment_page(): void
     {
         $production = $this->makeEnvironment();
 
@@ -286,25 +197,7 @@ class ApplicationControllerTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_the_create_form_keeps_a_build_command_with_several_lines_and_drops_comment_and_empty_lines(): void
-    {
-        $admin = User::factory()->admin()->create();
-        $production = $this->makeEnvironment();
-
-        $this->mock(CreateApplication::class)
-            ->shouldReceive('execute')
-            ->once()
-            ->withArgs(fn (User $by, array $data) => $data['settings']['build_command'] === "npm run lint\nnpm run build"
-                && $data['settings']['deploy_commands'] === ['php artisan migrate --force'])
-            ->andReturn($production->application);
-
-        $this->actingAs($admin)->post('/applications', $this->validForm([
-            'build_command' => "npm run lint\n\n# build last\nnpm run build\n",
-            'deploy_commands' => ['# migrate', 'php artisan migrate --force', ''],
-        ]))->assertSessionHasNoErrors();
-    }
-
-    public function test_it_creates_an_application_end_to_end_from_a_repository_alone(): void
+    public function test_it_creates_an_application_end_to_end_from_a_repository_alone_and_starts_no_deployment(): void
     {
         Queue::fake();
         $processes = FakeProcesses::install();
@@ -316,62 +209,49 @@ class ApplicationControllerTest extends TestCase
             'cluster_id' => $this->makeCluster()->id,
             'type' => 'dockerfile',
             'port' => 3000,
-            'size' => 'm',
-            'min_instances' => 2,
-            'max_instances' => 4,
-            'cpu_target' => 60,
-            'database' => 'none',
         ]);
 
         $application = Application::sole();
         $production = $application->environments()->where('name', 'production')->sole();
         $response->assertRedirect("/environments/{$production->id}");
         $this->assertSame(['shop', ApplicationType::DOCKERFILE, 3000, EnvironmentKind::PERMANENT], [$application->name, $application->type, $application->port, $production->kind]);
-        $this->assertSame(['m', 2, 4, 60, []], [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->processes->all()]);
-        $this->assertSame(0, AuditEvent::where('action', 'environment.updated')->count());
+        $this->assertSame(['s', 1, 1, 70, []], [$production->size->value, $production->min_instances, $production->max_instances, $production->cpu_target, $production->processes->all()]);
+        $this->assertSame(0, Deployment::query()->count());
+        Queue::assertNotPushed(RunDeployment::class);
     }
 
     /**
      * What the form posts after a click on each preset, and what opencloud stores: the type, the port, the deploy
-     * commands, the health path, the processes, the user env keys, and the databases.
+     * commands, the health path, the processes, the user env keys, and the databases. The preset decides all but the type and the port.
      *
      * @return array<string, array{array<string, mixed>, list<mixed>}>
      */
     public static function presetForms(): array
     {
-        $laravelProcesses = [
-            ['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600', 'schedule' => null],
-            ['name' => 'scheduler', 'kind' => 'long_running', 'command' => 'php artisan schedule:work', 'schedule' => null],
-        ];
-
         return [
             'laravel' => [
-                ['type' => 'laravel', 'port' => null, 'deploy_commands' => ['php artisan migrate --force'], 'processes' => $laravelProcesses, 'database' => 'mysql'],
+                ['type' => 'laravel', 'port' => null],
                 ['laravel', 8080, ['php artisan migrate --force'], '/up', ['worker', 'scheduler'], ['APP_KEY'], ['mysql']],
             ],
-            'node with postgres' => [
-                ['type' => 'node', 'port' => 3000, 'deploy_commands' => ['npx prisma migrate deploy'], 'processes' => [], 'database' => 'postgres'],
-                ['node', 3000, ['npx prisma migrate deploy'], '/', [], [], ['postgres']],
+            'node with its own port' => [
+                ['type' => 'node', 'port' => 4000],
+                ['node', 4000, [], '/', [], [], []],
             ],
-            'python with postgres' => [
-                ['type' => 'python', 'port' => 8000, 'deploy_commands' => ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], 'processes' => [], 'database' => 'postgres'],
-                ['python', 8000, ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], '/', [], ['SECRET_KEY'], ['postgres']],
+            'python' => [
+                ['type' => 'python', 'port' => 8000],
+                ['python', 8000, ['if [ -f manage.py ]; then python manage.py migrate --noinput; fi'], '/', [], ['SECRET_KEY'], []],
             ],
-            'ruby with mysql and its own port' => [
-                ['type' => 'ruby', 'port' => 9292, 'deploy_commands' => ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], 'processes' => [], 'database' => 'mysql'],
-                ['ruby', 9292, ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], '/', [], ['SECRET_KEY_BASE'], ['mysql']],
+            'ruby' => [
+                ['type' => 'ruby', 'port' => 9292],
+                ['ruby', 9292, ['if [ -f bin/rails ]; then bin/rails db:prepare; fi'], '/', [], ['SECRET_KEY_BASE'], []],
             ],
             'static' => [
-                ['type' => 'static', 'port' => null, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
+                ['type' => 'static', 'port' => null],
                 ['static', 8080, [], '/', [], [], []],
             ],
             'dockerfile' => [
-                ['type' => 'dockerfile', 'port' => 3000, 'deploy_commands' => [''], 'processes' => [], 'database' => 'none'],
+                ['type' => 'dockerfile', 'port' => 3000],
                 ['dockerfile', 3000, [], '/', [], [], []],
-            ],
-            'dockerfile with postgres and a deploy command' => [
-                ['type' => 'dockerfile', 'port' => 8080, 'deploy_commands' => ['php /var/www/deploy.php'], 'processes' => [], 'database' => 'postgres'],
-                ['dockerfile', 8080, ['php /var/www/deploy.php'], '/', [], [], ['postgres']],
             ],
         ];
     }
@@ -387,7 +267,7 @@ class ApplicationControllerTest extends TestCase
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
 
         $this->actingAs(User::factory()->owner()->create())
-            ->post('/applications', $this->validForm(['env' => [], ...$form]))
+            ->post('/applications', $this->validForm($form))
             ->assertRedirect();
 
         $application = Application::sole();
@@ -471,14 +351,6 @@ class ApplicationControllerTest extends TestCase
             'an unknown cluster' => [['cluster_id' => 999], 'cluster_id'],
             'an unknown preset' => [['type' => 'rails'], 'type'],
             'a port above 65535' => [['type' => 'dockerfile', 'port' => 65536], 'port'],
-            'a maximum below the minimum' => [['min_instances' => 3, 'max_instances' => 2], 'max_instances'],
-            'an unknown size' => [['size' => 'xl'], 'size'],
-            'a cpu target of zero' => [['cpu_target' => 0], 'cpu_target'],
-            'an env key with a dash' => [['env' => [['key' => 'MY-KEY', 'value' => 'x']]], 'env.0.key'],
-            'a duplicate env key' => [['env' => [['key' => 'A', 'value' => '1'], ['key' => 'A', 'value' => '2']]], 'env.0.key'],
-            'a domain that is not a host name' => [['domain' => 'not a domain'], 'domain'],
-            'an unknown database' => [['database' => 'oracle'], 'database'],
-            'a process list that is not a list' => [['processes' => 'worker'], 'processes'],
         ];
 
         foreach ($cases as [$overrides, $field]) {
@@ -486,39 +358,7 @@ class ApplicationControllerTest extends TestCase
         }
     }
 
-    public function test_each_process_row_is_validated_with_a_plain_message(): void
-    {
-        $owner = User::factory()->owner()->create();
-        $this->mock(CreateApplication::class)->shouldNotReceive('execute');
-        $row = fn (array $values) => ['name' => 'worker', 'kind' => 'long_running', 'command' => 'php artisan queue:work', 'schedule' => null, ...$values];
-
-        $cases = [
-            [[$row(['name' => 'web'])], ['processes.0.name' => 'Opencloud uses the names web, deploy, and command. Use a different name.']],
-            [[$row(['name' => 'Queue Worker'])], ['processes.0.name' => 'Use 1 to 30 lowercase letters, digits, and dashes. Start and end with a letter or a digit.']],
-            [[$row([]), $row(['command' => 'php artisan horizon'])], ['processes.1.name' => 'Two processes have this name. Give each process its own name.']],
-            [[$row(['command' => ''])], ['processes.0.command' => 'Enter the command that starts the process.']],
-            [[$row(['kind' => 'cron'])], ['processes.0.kind' => 'Choose long-running or scheduled.']],
-            [[$row([]), $row(['name' => 'scheduler', 'kind' => 'scheduled', 'command' => 'php artisan schedule:run'])], ['processes.1.schedule' => 'Enter a schedule, for example * * * * * for each minute.']],
-            [[$row(['name' => 'scheduler', 'kind' => 'scheduled', 'schedule' => '0 0 L * *'])], [
-                'processes.0.schedule' => 'Enter a cron schedule with five fields, for example */5 * * * * for each five minutes. Kubernetes does not accept L, W, or #.',
-            ]],
-        ];
-
-        foreach ($cases as [$processes, $errors]) {
-            $this->actingAs($owner)->post('/applications', $this->validForm(['processes' => $processes]))->assertSessionHasErrors($errors);
-        }
-    }
-
-    public function test_a_domain_that_exists_is_refused(): void
-    {
-        Domain::factory()->for($this->makeEnvironment())->create(['hostname' => 'taken.example.com']);
-
-        $this->actingAs(User::factory()->owner()->create())
-            ->post('/applications', $this->validForm(['domain' => 'taken.example.com']))
-            ->assertSessionHasErrors(['domain' => 'This domain is already in use.']);
-    }
-
-    public function test_the_application_page_lists_production_first_then_permanent_then_previews(): void
+    public function test_the_application_page_lists_production_first_then_permanent_then_the_template_then_previews(): void
     {
         $production = $this->makeEnvironment(name: 'production');
         $application = $production->application;
@@ -533,13 +373,20 @@ class ApplicationControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('applications/show')
                 ->where('application.name', 'shop')
-                ->has('environments', 3)
+                ->has('environments', 4)
                 ->where('environments.0.name', 'production')
                 ->where('environments.0.status', 'live')
                 ->where('environments.0.url', 'https://shop.example.com')
                 ->where('environments.1.name', 'staging')
-                ->where('environments.2.name', 'pr-7')
-                ->where('environments.2.pr_number', 7));
+                ->where('environments.2.name', 'preview-template')
+                ->where('environments.2.kind', 'preview_template')
+                ->where('environments.3.name', 'pr-7')
+                ->where('environments.3.pr_number', 7)
+                ->has('previews', fn (Assert $previews) => $previews
+                    ->where('previews_enabled', true)
+                    ->where('preview_domain', null)
+                    ->missing('allow_forks')
+                    ->etc()));
     }
 
     public function test_the_application_page_shows_the_public_key_of_the_deploy_key_to_a_developer_and_never_the_private_key(): void

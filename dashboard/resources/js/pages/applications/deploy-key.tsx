@@ -1,10 +1,10 @@
-import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Link, router, useForm } from '@inertiajs/react';
-import { Copy } from 'lucide-react';
+import { ChevronDown, Copy } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
 type Change = 'replace' | 'remove';
@@ -29,12 +29,15 @@ export function DeployKey({
     publicKey,
     settingsUrl,
     canUpdate,
+    defaultOpen,
 }: {
     applicationId: number;
     publicKey: string | null;
     settingsUrl: string;
     canUpdate: boolean;
+    defaultOpen: boolean;
 }) {
+    const [open, setOpen] = useState(defaultOpen);
     const [copied, setCopied] = useState(false);
     const [confirming, setConfirming] = useState<Change | null>(null);
     const [busy, setBusy] = useState(false);
@@ -76,22 +79,35 @@ export function DeployKey({
     };
 
     return (
-        <div className="space-y-4">
-            <HeadingSmall title="Deploy key" description="A deploy key lets opencloud read a private repository on GitHub. The key can only read." />
+        <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border">
+            <div className="flex items-center justify-between gap-3 p-4">
+                <div className="min-w-0">
+                    <p className="text-sm font-medium">Deploy key</p>
+                    <p className="text-muted-foreground text-sm">
+                        {publicKey === null
+                            ? 'None. A public repository or the GitHub App needs no key.'
+                            : 'Set. Opencloud reads the repository with it.'}
+                    </p>
+                </div>
+                <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="group">
+                        {open ? 'Close' : 'Open'}
+                        <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" />
+                    </Button>
+                </CollapsibleTrigger>
+            </div>
 
-            <div className="space-y-3 rounded-lg border p-4">
-                {publicKey === null && (
-                    <>
-                        <p className="text-sm">A public repository needs no key. A private repository can use a deploy key or the GitHub App.</p>
-                        {canUpdate && (
-                            <div className="flex flex-wrap gap-2">
-                                <Button size="sm" disabled={busy} onClick={() => send('add')}>
-                                    Add deploy key
-                                </Button>
-                                {ownKeyButton}
-                            </div>
-                        )}
-                    </>
+            <CollapsibleContent className="space-y-3 border-t p-4">
+                <p className="text-muted-foreground text-sm">
+                    A deploy key lets opencloud read a private repository on GitHub. The key can only read.
+                </p>
+                {publicKey === null && canUpdate && (
+                    <div className="flex flex-wrap gap-2">
+                        <Button size="sm" disabled={busy} onClick={() => send('add')}>
+                            Add deploy key
+                        </Button>
+                        {ownKeyButton}
+                    </div>
                 )}
 
                 {publicKey !== null && (
@@ -163,7 +179,7 @@ export function DeployKey({
                         </div>
                     </form>
                 )}
-            </div>
+            </CollapsibleContent>
 
             <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
                 {confirming && (
@@ -183,6 +199,6 @@ export function DeployKey({
                     </DialogContent>
                 )}
             </Dialog>
-        </div>
+        </Collapsible>
     );
 }

@@ -13,7 +13,6 @@ use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Jobs\ProvisionDatastoreAttachment;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
-use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Actions\CreateEnvironment;
@@ -61,14 +60,13 @@ class CreateEnvironmentTest extends TestCase
             'name' => 'Shop',
             'repository' => 'acme/shop',
             'cluster_id' => $cluster->id,
-            'env' => [
-                ['key' => 'STRIPE_SECRET', 'value' => 'sk_live_production', 'is_secret' => true],
-                ['key' => 'MAIL_MAILER', 'value' => 'smtp'],
-                ['key' => 'DB_HOST', 'value' => 'production-db.internal'],
-            ],
-            'settings' => ['size' => Size::L, 'min_instances' => 2, 'max_instances' => 4, 'cpu_target' => 60, 'deploy_commands' => ['php artisan migrate --force']],
         ]);
         $production = $this->environment('production');
+        $production->update(['size' => Size::L, 'min_instances' => 2, 'max_instances' => 4, 'cpu_target' => 60]);
+        $setEnvVar = app(SetEnvVar::class);
+        $setEnvVar->execute($production, $this->admin, 'STRIPE_SECRET', 'sk_live_production', true, EnvVarAvailability::RUNTIME);
+        $setEnvVar->execute($production, $this->admin, 'MAIL_MAILER', 'smtp', false, EnvVarAvailability::RUNTIME);
+        $setEnvVar->execute($production, $this->admin, 'DB_HOST', 'production-db.internal', false, EnvVarAvailability::RUNTIME);
         app(AttachDatastore::class)->execute($production, $this->admin, DatastoreKind::VALKEY);
         $managed = Datastore::factory()->create(['cluster_id' => $cluster->id, 'kind' => DatastoreKind::POSTGRES, 'source' => DatastoreSource::MANAGED]);
         DatastoreAttachment::factory()->create(['datastore_id' => $managed->id, 'environment_id' => $production->id, 'name' => 'reports', 'is_default' => false]);
@@ -77,7 +75,6 @@ class CreateEnvironmentTest extends TestCase
         $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate:fresh --seed --force'], 'min_instances' => 2, 'max_instances' => 3]);
         $template->processes()->where('name', 'worker')->delete();
         Process::factory()->for($template)->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'size' => Size::M, 'min_instances' => 1, 'max_instances' => 3, 'cpu_target' => 60]);
-        $setEnvVar = app(SetEnvVar::class);
         $setEnvVar->execute($template, $this->admin, 'MAIL_MAILER', 'log', false, EnvVarAvailability::RUNTIME);
         $setEnvVar->execute($template, $this->admin, 'STRIPE_SECRET', 'sk_test_preview', true, EnvVarAvailability::RUNTIME);
 
@@ -121,14 +118,12 @@ class CreateEnvironmentTest extends TestCase
         $this->assertSame($productionAttachments, $this->attachmentRows($production));
 
         $this->assertSame([['shop-staging.203.0.113.10.sslip.io', true]], $staging->domains()->get(['hostname', 'generated'])->map(fn ($d) => [$d->hostname, $d->generated])->all());
-        $this->assertSame(
-            [[self::STAGING_SHA, DeploymentStatus::QUEUED, $this->admin->id]],
-            $staging->deployments()->get()->map(fn (Deployment $d) => [$d->commit_sha, $d->status, $d->triggered_by])->all(),
-        );
+        $this->assertSame(0, Deployment::query()->count());
+        Queue::assertNotPushed(RunDeployment::class);
         $this->assertContains(['git', 'ls-remote', 'https://github.com/acme/shop.git', 'refs/heads/staging'], $this->processes->commands());
 
         $this->assertSame(
-            ['environment.created', 'datastore.attached', 'datastore.attached', 'datastore.attached', 'environment.env_copied', 'domain.added', 'deployment.started'],
+            ['environment.created', 'datastore.attached', 'datastore.attached', 'datastore.attached', 'environment.env_copied', 'domain.added'],
             AuditEvent::query()->orderBy('id')->pluck('action')->all(),
         );
         $this->assertSame(
