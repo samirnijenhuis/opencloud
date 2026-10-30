@@ -6,6 +6,8 @@ export type Domain = {
     hostname: string;
     /** The free sslip.io address that opencloud adds by itself. */
     generated: boolean;
+    /** The one domain that sets APP_URL and the Visit site link. */
+    primary: boolean;
     dns_status: DnsStatus;
     dns_mode: 'manual' | 'cloudflare';
     dns_found: string[];

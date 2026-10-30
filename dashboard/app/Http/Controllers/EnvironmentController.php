@@ -33,6 +33,7 @@ use App\Domains\Members\Enums\Ability;
 use App\Domains\Members\Enums\Role;
 use App\Domains\Routing\CloudflareDns;
 use App\Domains\Routing\Models\Domain;
+use App\Domains\Routing\PrimaryDomain;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Http\Requests\AttachDatastoreRequest;
 use App\Http\Requests\CreateEnvironmentRequest;
@@ -86,6 +87,8 @@ class EnvironmentController extends Controller
         $props = $this->environmentProps($environment, $request->user());
         $role = $request->user()->role;
         $cluster = $environment->application->cluster;
+        $domains = $environment->domains()->orderBy('id')->get();
+        $primary = PrimaryDomain::of($domains);
 
         return Inertia::render('environments/show', [
             ...$props,
@@ -105,10 +108,11 @@ class EnvironmentController extends Controller
             'processes' => $environment->processes->map(fn (Process $process) => $process->only([
                 'id', 'name', 'kind', 'command', 'schedule', 'size', 'min_instances', 'max_instances', 'cpu_target',
             ])),
-            'domains' => $environment->domains()->orderBy('id')->get()->map(fn (Domain $domain) => [
+            'domains' => $domains->map(fn (Domain $domain) => [
                 'id' => $domain->id,
                 'hostname' => $domain->hostname,
                 'generated' => $domain->generated,
+                'primary' => $domain->is($primary),
                 'dns_status' => $domain->dns_status,
                 'dns_mode' => $domain->dns_mode,
                 'dns_found' => $domain->dns_found ?? [],
