@@ -320,6 +320,7 @@ class EnvironmentControllerTest extends TestCase
         $staging = $application->environments()->where('name', 'staging')->sole();
         $response->assertRedirect(route('environments.show', $staging));
         $this->assertSame([EnvironmentKind::PERMANENT, 'staging', true], [$staging->kind, $staging->branch, $staging->auto_deploy]);
+        $this->assertSame(0, Deployment::query()->count());
 
         $this->makeGitHubApp();
         $this->postWebhook('push', [
@@ -331,7 +332,7 @@ class EnvironmentControllerTest extends TestCase
         ])->assertStatus(202);
 
         $this->assertSame(
-            [['staging', str_repeat('a', 40)], ['staging', str_repeat('b', 40)]],
+            [['staging', str_repeat('b', 40)]],
             Deployment::query()->orderBy('id')->with('environment')->get()->map(fn (Deployment $d) => [$d->environment->name, $d->commit_sha])->all(),
         );
         Queue::assertPushedOn('builds', RunDeployment::class);

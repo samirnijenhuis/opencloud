@@ -27,7 +27,7 @@ paths:
 - Return the record that the Action made or changed, or nothing.
 - An Action that writes a record or dispatches a Job calls `AuditEvent::record($by, $action, $subject, $context)`. An Action that only reads records nothing, for example `ReadLogs`, which the UI polls.
 - Refuse a request that the user can fix with `ValidationException::withMessages(['field' => 'Message.'])`. Laravel shows the message on the form, so the controller needs no `try` or `catch`.
-- Dispatch each Job from an Action with `->afterCommit()`. A caller can run the Action inside a transaction, as `CreateApplication` runs `AttachDatastore` and `AddDomain` inside `DB::transaction()`.
+- Dispatch each Job from an Action with `->afterCommit()`. A caller can run the Action inside a transaction, as `CreateApplication` runs `AttachDatastore` inside `DB::transaction()`.
 - Keep `kubectl`, `tofu`, `git`, and HTTP calls out of a transaction. The SQLite connection uses `transaction_mode` `IMMEDIATE`, so a transaction holds the write lock from its start. The other dashboard containers wait for that lock. `CreateApplication` calls `Git::head()` before its transaction opens.
 
 ## Audit events

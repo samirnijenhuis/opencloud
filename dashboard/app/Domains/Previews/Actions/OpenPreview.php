@@ -16,10 +16,10 @@ use App\Domains\Environments\Models\EnvVar;
 use App\Domains\GitHub\Enums\PullRequestAction;
 use App\Domains\GitHub\GitHubClient;
 use App\Domains\GitHub\PullRequestEvent;
+use App\Domains\Previews\PreviewHostname;
 use App\Domains\Routing\Jobs\CheckDomain;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -34,6 +34,7 @@ class OpenPreview
         private AttachDatastore $attachDatastore,
         private StartDeployment $startDeployment,
         private GitHubClient $github,
+        private PreviewHostname $previewHostname,
     ) {}
 
     /** @return Environment|null null when the application gets no preview for this pull request */
@@ -41,7 +42,7 @@ class OpenPreview
     {
         $skipped = match (true) {
             ! $application->previews_enabled => 'previews_disabled',
-            $pullRequest->fromFork && ! $application->allow_forks => 'fork',
+            $pullRequest->fromFork => 'fork',
             default => null,
         };
 
@@ -68,7 +69,7 @@ class OpenPreview
         if ($application->environments()->where('kind', EnvironmentKind::PREVIEW)->count() >= $limit) {
             AuditEvent::record(null, 'preview.limit_reached', $application, ['pr_number' => $pullRequest->number, 'limit' => $limit]);
 
-            // A push to the pull request tries again, so only a new or reopened pull request gets the comment.
+            // A push to the pull request tries again, so a push gets no comment.
             if ($pullRequest->action !== PullRequestAction::SYNCHRONIZE) {
                 $this->comment($pullRequest, "Opencloud did not create a preview for this pull request. {$application->name} already runs {$limit} previews, which is the limit. Close a pull request that has a preview, then push to this pull request to try again.");
             }
@@ -101,18 +102,21 @@ class OpenPreview
             AuditEvent::record(null, 'preview.created', $preview, [
                 'pr_number' => $pullRequest->number,
                 'branch' => $pullRequest->headRef,
-                'from_fork' => $pullRequest->fromFork,
                 'processes' => $template->processes->pluck('name')->all(),
             ]);
 
-            $this->copyEnv($application, $template, $preview);
+            $hostname = $this->previewHostname->for($application, $pullRequest->number);
+
+            $this->copyEnv($application, $template, $preview, [
+                PreviewHostname::PR_NUMBER => (string) $pullRequest->number,
+                '{branch}' => $pullRequest->headRef,
+                '{url}' => $hostname === null ? '' : "https://{$hostname}",
+            ]);
 
             foreach ($attachments as $attachment) {
                 // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
                 $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name);
             }
-
-            $hostname = $this->hostname($application, $pullRequest->number);
 
             if ($hostname !== null) {
                 $domain = $preview->domains()->create(['hostname' => $hostname]);
@@ -124,11 +128,19 @@ class OpenPreview
         });
     }
 
-    /** Copies each user value of the template, secrets too, as values of the preview. The preset generates each secret that the template lacks. */
-    private function copyEnv(Application $application, Environment $template, Environment $preview): void
+    /**
+     * Copies each user value of the template, secrets too, as values of the preview, and fills in each placeholder.
+     * The preset generates each secret that the template lacks.
+     *
+     * @param  array<string, string>  $placeholders
+     */
+    private function copyEnv(Application $application, Environment $template, Environment $preview, array $placeholders): void
     {
         $copied = $template->envVars()->where('source', EnvVarSource::USER)->orderBy('key')->get()
-            ->map(fn (EnvVar $var) => $preview->envVars()->create($var->only(['key', 'value', 'is_secret', 'available_at', 'source']))->key);
+            ->map(fn (EnvVar $var) => $preview->envVars()->create([
+                ...$var->only(['key', 'is_secret', 'available_at', 'source']),
+                'value' => strtr($var->value, $placeholders),
+            ])->key);
         $generated = [];
 
         foreach ($application->type->generatedSecrets() as $key => $value) {
@@ -139,21 +151,6 @@ class OpenPreview
         }
 
         AuditEvent::record(null, 'preview.env_copied', $preview, ['keys' => $copied->all(), 'generated' => $generated]);
-    }
-
-    /** With a preview domain the owner points one wildcard record at the cluster. Without one, sslip.io resolves the IP in the name. */
-    private function hostname(Application $application, int $number): ?string
-    {
-        if ($application->preview_domain !== null) {
-            return "pr-{$number}.{$application->preview_domain}";
-        }
-
-        $ip = $application->cluster->ingress_ip;
-
-        // A DNS label holds at most 63 characters.
-        $slug = rtrim(substr(Str::slug($application->name), 0, 50), '-');
-
-        return $ip === null ? null : "pr-{$number}-{$slug}.{$ip}.sslip.io";
     }
 
     /** A comment is a courtesy, so a failure only goes to the log. */

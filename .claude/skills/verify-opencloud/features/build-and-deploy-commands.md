@@ -14,7 +14,7 @@ A user gives a build command that runs in the image build and deploy commands th
 
 ## How to get to it (user POV)
 
-- Fill in `Build command` and `Deploy commands` in the create form.
+- The create form has no commands. Save `Build command` and `Deploy commands` on the settings page with `PATCH /environments/<id>/settings` before the first Deploy.
 - Choose `Settings`, go to the `Deployments` section, change the commands, and choose `Save`. Then choose `Deploy`.
 - Open a deployment from the `Deployments` tab to read its log.
 

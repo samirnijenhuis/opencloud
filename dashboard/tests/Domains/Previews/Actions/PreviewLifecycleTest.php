@@ -65,8 +65,8 @@ class PreviewLifecycleTest extends TestCase
             'name' => 'Shop',
             'repository' => 'acme/shop',
             'cluster_id' => $cluster->id,
-            'env' => [['key' => 'STRIPE_SECRET', 'value' => 'sk_live_production', 'is_secret' => true]],
         ]);
+        app(SetEnvVar::class)->execute($this->environment('production'), $owner, 'STRIPE_SECRET', 'sk_live_production', true, EnvVarAvailability::RUNTIME);
         app(AttachDatastore::class)->execute($this->environment('production'), $owner, DatastoreKind::VALKEY);
 
         $template = $this->environment('preview-template');
@@ -102,7 +102,7 @@ class PreviewLifecycleTest extends TestCase
             ])->all(),
         );
         $this->assertSame(
-            ['pr_number' => 12, 'branch' => 'feature/login', 'from_fork' => false, 'processes' => ['scheduler', 'horizon']],
+            ['pr_number' => 12, 'branch' => 'feature/login', 'processes' => ['scheduler', 'horizon']],
             AuditEvent::where('action', 'preview.created')->sole()->context,
         );
 
@@ -139,7 +139,7 @@ class PreviewLifecycleTest extends TestCase
             [[self::OPENED_SHA, DeploymentStatus::QUEUED, null], [self::PUSHED_SHA, DeploymentStatus::QUEUED, null]],
             $preview->deployments()->orderBy('id')->get()->map(fn (Deployment $d) => [$d->commit_sha, $d->status, $d->triggered_by])->all(),
         );
-        Queue::assertPushed(RunDeployment::class, 3);
+        Queue::assertPushed(RunDeployment::class, 2);
         $this->assertSame(1, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
 
         $this->postWebhook('pull_request', $this->pullRequest('closed', self::PUSHED_SHA), delivery: 'd-3')->assertStatus(202);
@@ -217,16 +217,26 @@ class PreviewLifecycleTest extends TestCase
         $this->assertNotSame($managed->id, $preview->datastoreAttachments()->where('name', 'reports')->sole()->datastore_id);
     }
 
-    public function test_a_preview_domain_gives_each_preview_a_subdomain(): void
+    public function test_an_address_pattern_gives_each_preview_its_address_and_its_url_value(): void
     {
-        $this->application->update(['preview_domain' => 'preview.example.com']);
+        $this->application->update(['preview_domain' => 'pr-{pr_number}.previews.example.com']);
+        app(SetEnvVar::class)->execute($this->environment('preview-template'), User::factory()->owner()->create(), 'PREVIEW_LINK', '{url}/', false, EnvVarAvailability::RUNTIME);
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA))->assertStatus(202);
 
-        $this->assertSame(['pr-12.preview.example.com'], $this->environment('pr-12')->domains()->pluck('hostname')->all());
+        $preview = $this->environment('pr-12');
+        $this->assertSame(['pr-12.previews.example.com'], $preview->domains()->pluck('hostname')->all());
+        $this->assertSame('https://pr-12.previews.example.com/', $preview->envVars()->where('key', 'PREVIEW_LINK')->sole()->value);
     }
 
-    public function test_a_pull_request_from_a_fork_gets_no_preview_unless_the_application_allows_forks(): void
+    public function test_without_an_address_pattern_a_preview_keeps_the_free_address(): void
+    {
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA))->assertStatus(202);
+
+        $this->assertSame(['pr-12-shop.203.0.113.10.sslip.io'], $this->environment('pr-12')->domains()->pluck('hostname')->all());
+    }
+
+    public function test_a_pull_request_from_a_fork_gets_no_preview(): void
     {
         $fork = $this->pullRequest('opened', self::OPENED_SHA, headRepository: 'mallory/shop');
 
@@ -234,11 +244,6 @@ class PreviewLifecycleTest extends TestCase
 
         $this->assertSame(0, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
         $this->assertSame(['preview.skipped', ['pr_number' => 12, 'reason' => 'fork']], [AuditEvent::sole()->action, AuditEvent::sole()->context]);
-
-        $this->application->update(['allow_forks' => true]);
-        $this->postWebhook('pull_request', $fork, delivery: 'd-2')->assertStatus(202);
-
-        $this->assertSame(self::OPENED_SHA, $this->environment('pr-12')->deployments()->sole()->commit_sha);
     }
 
     public function test_switched_off_previews_create_nothing(): void
@@ -284,22 +289,151 @@ class PreviewLifecycleTest extends TestCase
         $this->assertNotNull($preview->fresh());
     }
 
+    public function test_a_placeholder_in_a_template_value_gives_each_preview_its_own_value(): void
+    {
+        $owner = User::factory()->owner()->create();
+        $template = $this->environment('preview-template');
+        app(SetEnvVar::class)->execute($template, $owner, 'APP_NAME', 'Shop PR {pr_number}', false, EnvVarAvailability::RUNTIME);
+        app(SetEnvVar::class)->execute($template, $owner, 'PREVIEW_LINK', '{url}/?branch={branch}', true, EnvVarAvailability::BUILD);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+        $this->postWebhook('pull_request', $this->pullRequest('reopened', self::OPENED_SHA, number: 13, branch: 'fix/cart'), delivery: 'd-2')->assertStatus(202);
+
+        $values = fn (string $environment) => $this->environment($environment)->envVars()->whereIn('key', ['APP_NAME', 'PREVIEW_LINK'])->orderBy('key')->get()
+            ->map(fn (EnvVar $var) => [$var->key, $var->value, $var->is_secret, $var->available_at->value])->all();
+        $this->assertSame([
+            ['APP_NAME', 'Shop PR 12', false, 'runtime'],
+            ['PREVIEW_LINK', 'https://pr-12-shop.203.0.113.10.sslip.io/?branch=feature/login', true, 'build'],
+        ], $values('pr-12'));
+        $this->assertSame([
+            ['APP_NAME', 'Shop PR 13', false, 'runtime'],
+            ['PREVIEW_LINK', 'https://pr-13-shop.203.0.113.10.sslip.io/?branch=fix/cart', true, 'build'],
+        ], $values('pr-13'));
+        $this->assertSame([
+            ['APP_NAME', 'Shop PR {pr_number}', false, 'runtime'],
+            ['PREVIEW_LINK', '{url}/?branch={branch}', true, 'build'],
+        ], $values('preview-template'));
+    }
+
+    public function test_a_change_to_the_env_of_one_preview_survives_a_push(): void
+    {
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1');
+        $preview = $this->environment('pr-12');
+        app(SetEnvVar::class)->execute($preview, User::factory()->owner()->create(), 'MAIL_MAILER', 'smtp', false, EnvVarAvailability::RUNTIME);
+
+        $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-2')->assertStatus(202);
+
+        $this->assertSame([self::OPENED_SHA, self::PUSHED_SHA], $preview->deployments()->orderBy('id')->pluck('commit_sha')->all());
+        $this->assertSame('smtp', $preview->envVars()->where('key', 'MAIL_MAILER')->sole()->value);
+        $this->assertSame('log', $this->environment('preview-template')->envVars()->where('key', 'MAIL_MAILER')->sole()->value);
+    }
+
+    public function test_with_a_label_filter_a_pull_request_has_a_preview_only_while_it_has_one_of_the_labels(): void
+    {
+        $this->application->update(['preview_labels' => ['Preview', 'deploy-me']]);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+        $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-2')->assertStatus(202);
+
+        $this->assertSame(0, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
+
+        $this->postWebhook('pull_request', $this->pullRequest('labeled', self::PUSHED_SHA, labels: ['preview'], label: 'preview'), delivery: 'd-3')->assertStatus(202);
+
+        $preview = $this->environment('pr-12');
+        $this->assertSame([self::PUSHED_SHA], $preview->deployments()->pluck('commit_sha')->all());
+
+        $this->postWebhook('pull_request', $this->pullRequest('labeled', self::PUSHED_SHA, labels: ['preview', 'bug'], label: 'bug'), delivery: 'd-4')->assertStatus(202);
+        $this->postWebhook('pull_request', $this->pullRequest('unlabeled', self::PUSHED_SHA, labels: ['preview'], label: 'bug'), delivery: 'd-5')->assertStatus(202);
+
+        $this->assertSame([self::PUSHED_SHA], $preview->deployments()->pluck('commit_sha')->all());
+        $this->assertSame([], $this->kubectl->calls);
+
+        $this->postWebhook('pull_request', $this->pullRequest('unlabeled', self::PUSHED_SHA, labels: [], label: 'preview'), delivery: 'd-6')->assertStatus(202);
+
+        $this->assertNull($preview->fresh());
+        $this->assertSame(['delete', 'namespace', "oc-env-{$preview->id}", '--ignore-not-found', '--wait=false'], $this->kubectl->calls[0]['args']);
+        $this->assertSame(
+            ['environment_id' => $preview->id, 'pr_number' => 12, 'namespace' => "oc-env-{$preview->id}"],
+            AuditEvent::query()->where('action', 'preview.destroyed')->sole()->context,
+        );
+    }
+
+    public function test_a_label_change_on_a_closed_pull_request_opens_no_preview(): void
+    {
+        $this->application->update(['preview_labels' => ['preview']]);
+        $this->postWebhook('pull_request', $this->pullRequest('labeled', self::OPENED_SHA, labels: ['preview'], label: 'preview'), delivery: 'd-1');
+        $this->postWebhook('pull_request', $this->pullRequest('closed', self::OPENED_SHA, labels: ['preview']), delivery: 'd-2');
+
+        $this->postWebhook('pull_request', $this->pullRequest('unlabeled', self::OPENED_SHA, labels: [], label: 'preview', closed: true), delivery: 'd-3')->assertStatus(202);
+        $this->postWebhook('pull_request', $this->pullRequest('labeled', self::OPENED_SHA, labels: ['preview'], label: 'preview', closed: true), delivery: 'd-4')->assertStatus(202);
+
+        $this->assertSame(0, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
+        $this->assertSame(1, AuditEvent::query()->where('action', 'preview.created')->count());
+    }
+
+    public function test_a_close_that_waits_holds_back_the_previews_that_the_same_event_opens(): void
+    {
+        $staging = app(CreateApplication::class)->execute(User::factory()->owner()->create(), [
+            'name' => 'Shop staging',
+            'repository' => 'acme/shop',
+            'cluster_id' => $this->application->cluster_id,
+        ]);
+        $staging->update(['preview_labels' => ['preview']]);
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA, labels: ['preview']), delivery: 'd-1');
+        $stagingPreview = $staging->environments()->where('name', 'pr-12')->sole();
+        $stagingPreview->deployments()->sole()->moveTo(DeploymentStatus::BUILDING);
+
+        $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-2')->assertStatus(202);
+
+        $this->assertSame([self::OPENED_SHA], $this->environment('pr-12')->deployments()->pluck('commit_sha')->all());
+        $this->assertNotNull($stagingPreview->fresh());
+
+        $stagingPreview->deployments()->sole()->moveTo(DeploymentStatus::FAILED);
+        $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-3')->assertStatus(202);
+
+        $this->assertSame([self::OPENED_SHA, self::PUSHED_SHA], $this->environment('pr-12')->deployments()->orderBy('id')->pluck('commit_sha')->all());
+        $this->assertNull($stagingPreview->fresh());
+    }
+
+    public function test_without_a_label_filter_a_label_change_leaves_the_previews_as_they_are(): void
+    {
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1');
+        $events = AuditEvent::query()->count();
+
+        $this->postWebhook('pull_request', $this->pullRequest('labeled', self::OPENED_SHA, labels: ['bug'], label: 'bug'), delivery: 'd-2')->assertStatus(202);
+        $this->postWebhook('pull_request', $this->pullRequest('unlabeled', self::OPENED_SHA, labels: [], label: 'bug'), delivery: 'd-3')->assertStatus(202);
+        $this->postWebhook('pull_request', $this->pullRequest('labeled', self::OPENED_SHA, number: 13, labels: ['bug'], label: 'bug'), delivery: 'd-4')->assertStatus(202);
+
+        $this->assertSame(['pr-12'], Environment::query()->where('kind', EnvironmentKind::PREVIEW)->pluck('name')->all());
+        $this->assertSame([self::OPENED_SHA], $this->environment('pr-12')->deployments()->pluck('commit_sha')->all());
+        $this->assertSame([], $this->kubectl->calls);
+        $this->assertSame($events, AuditEvent::query()->count());
+    }
+
     private function environment(string $name): Environment
     {
         return $this->application->environments()->where('name', $name)->sole();
     }
 
-    /** @return array<string, mixed> */
-    private function pullRequest(string $action, string $sha, int $number = 12, string $headRepository = 'acme/shop'): array
+    /**
+     * @param  list<string>  $labels  the labels of the pull request after the action
+     * @param  string|null  $label  the label that a "labeled" or "unlabeled" action adds or removes
+     * @param  bool  $closed  whether the pull request is closed, which a "closed" action always is
+     * @return array<string, mixed>
+     */
+    private function pullRequest(string $action, string $sha, int $number = 12, string $headRepository = 'acme/shop', string $branch = 'feature/login', array $labels = [], ?string $label = null, bool $closed = false): array
     {
         return [
             'action' => $action,
             'number' => $number,
             'pull_request' => [
                 'number' => $number,
-                'head' => ['ref' => 'feature/login', 'sha' => $sha, 'repo' => ['full_name' => $headRepository]],
+                'state' => $closed || $action === 'closed' ? 'closed' : 'open',
+                'head' => ['ref' => $branch, 'sha' => $sha, 'repo' => ['full_name' => $headRepository]],
                 'base' => ['ref' => 'main', 'repo' => ['full_name' => 'acme/shop']],
+                'labels' => array_map(fn (string $name) => ['name' => $name, 'color' => 'ededed'], $labels),
             ],
+            ...($label === null ? [] : ['label' => ['name' => $label, 'color' => 'ededed']]),
             'repository' => ['full_name' => 'acme/shop'],
             'installation' => ['id' => 77],
         ];

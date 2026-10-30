@@ -11,7 +11,7 @@ A user sets env values for an environment, marks some as secret, and picks when 
 
 ## How to get to it (user POV)
 
-- Add values in the `Environment values` part of the create form. The form has no field for the availability, so each value is a runtime value. The route `POST /applications` accepts `available_at` for each value, and the runner posts the build value `VERIFY_BUILD` there.
+- The create form has no env values. The runner adds each value after Create and before the first Deploy, with the same route as Settings. It posts the build value `VERIFY_BUILD` with `available_at` set to `build`.
 - Choose `Settings`, then `Environment values`, and add or replace a value. Then choose `Deploy`.
 - The settings form posts to `POST /environments/<id>/env` with `key`, `value`, `is_secret`, and `available_at` (`runtime`, `build`, or `both`).
 - The text mode of `Environment values` sends `PUT /environments/<id>/env`. It never changes a secret or a value that a datastore sets. The runner does not drive the text mode.

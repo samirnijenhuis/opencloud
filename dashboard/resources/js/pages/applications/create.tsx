@@ -1,22 +1,17 @@
+import { Chip } from '@/components/chip';
 import InputError from '@/components/input-error';
-import ProcessFields from '@/components/process-fields';
-import { ShellEditor } from '@/components/shell-editor';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
-import { parseDotenv, sizeLabel, sizeText } from '@/lib/format';
-import { applicationTypeLabels, type ApplicationType, type ProcessValues, type Size, type SizeOption } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
-import { Chip, presetText, type Preset } from './presets';
+import { ChevronRight } from 'lucide-react';
+import { FormEventHandler } from 'react';
 
 type Cluster = { id: number; name: string; kind: string; ingress_ip: string | null };
-type EnvRow = { key: string; value: string; is_secret: boolean };
-type Database = 'mysql' | 'postgres' | 'none';
 type DeployKeyChoice = 'none' | 'new' | 'own';
 
 type FormData = {
@@ -25,21 +20,7 @@ type FormData = {
     deploy_key: DeployKeyChoice;
     deploy_private_key: string;
     cluster_id: string;
-    type: ApplicationType;
-    port: string;
-    size: Size;
-    min_instances: number;
-    max_instances: number;
-    cpu_target: number;
-    build_command: string;
-    deploy_commands: string;
-    processes: ProcessValues[];
-    env: EnvRow[];
-    domain: string;
-    database: Database;
 };
-
-const looksSecret = (key: string) => /(SECRET|PASSWORD|TOKEN|KEY|AUTH)/i.test(key);
 
 function Row({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: React.ReactNode }) {
     return (
@@ -55,85 +36,25 @@ function Row({ label, hint, htmlFor, children }: { label: string; hint?: string;
     );
 }
 
-export default function ApplicationCreate({
-    clusters,
-    defaultClusterId,
-    sizes,
-    presets,
-}: {
-    clusters: Cluster[];
-    defaultClusterId: number | null;
-    sizes: SizeOption[];
-    presets: Preset[];
-}) {
-    const defaults = (preset: Preset) => ({
-        type: preset.value,
-        port: String(preset.port),
-        deploy_commands: preset.deploy_commands.join('\n'),
-        processes: preset.processes,
-        database: preset.database,
-    });
+export default function ApplicationCreate({ clusters, defaultClusterId }: { clusters: Cluster[]; defaultClusterId: number | null }) {
     const form = useForm<FormData>({
         repository: '',
         branch: '',
         deploy_key: 'none',
         deploy_private_key: '',
         cluster_id: defaultClusterId ? String(defaultClusterId) : '',
-        size: 's',
-        min_instances: 1,
-        max_instances: 1,
-        cpu_target: 70,
-        build_command: '',
-        env: [],
-        domain: '',
-        ...defaults(presets[0]),
     });
     const { data, setData, errors, processing } = form;
-    const [pasting, setPasting] = useState(false);
-    const [pasted, setPasted] = useState('');
-    const preset = presets.find((each) => each.value === data.type) ?? presets[0];
-
-    const changePreset = (next: Preset) => setData((current) => ({ ...current, ...defaults(next) }));
-
-    const setProcess = (index: number, change: Partial<ProcessValues>) => {
-        setData(
-            'processes',
-            data.processes.map((row, i) => (i === index ? { ...row, ...change } : row)),
-        );
-    };
-
-    const processErrors = (index: number) => ({
-        name: errors[`processes.${index}.name` as keyof typeof errors],
-        kind: errors[`processes.${index}.kind` as keyof typeof errors],
-        command: errors[`processes.${index}.command` as keyof typeof errors],
-        schedule: errors[`processes.${index}.schedule` as keyof typeof errors],
-    });
-
-    const setEnv = (index: number, change: Partial<EnvRow>) => {
-        setData(
-            'env',
-            data.env.map((row, i) => (i === index ? { ...row, ...change } : row)),
-        );
-    };
-
-    const addPasted = () => {
-        const parsed = parseDotenv(pasted).map((row) => ({ ...row, is_secret: looksSecret(row.key) }));
-        const keys = new Set(parsed.map((row) => row.key));
-
-        setData('env', [...data.env.filter((row) => !keys.has(row.key)), ...parsed]);
-        setPasted('');
-        setPasting(false);
-    };
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         form.transform((current) => ({
             ...current,
-            port: preset.chooses_port ? current.port : null,
+            // Only the Laravel preset is offered for now.
+            type: 'laravel',
+            port: null,
             deploy_key: current.deploy_key === 'new',
             deploy_private_key: current.deploy_key === 'own' ? current.deploy_private_key : null,
-            deploy_commands: current.deploy_commands.split('\n'),
-            env: current.env.filter((row) => row.key.trim() !== ''),
         }));
         form.post(route('applications.store'));
     };
@@ -149,7 +70,10 @@ export default function ApplicationCreate({
 
             <form onSubmit={submit} className="mx-auto w-full max-w-3xl p-4">
                 <h1 className="text-2xl font-semibold tracking-tight">New application</h1>
-                <p className="text-muted-foreground mt-1 text-sm">A repository is enough. Every other field has a default that works.</p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                    Choose the repository and the cluster. You set the size, the processes, the database, and the env values on the environment page.
+                    Nothing deploys until you select Deploy there.
+                </p>
 
                 <div className="mt-4">
                     <Row label="Repository" hint="owner/repo, git@github.com:owner/repo.git, or a full https address">
@@ -172,49 +96,48 @@ export default function ApplicationCreate({
                         </div>
                         <InputError message={errors.repository} />
                         <InputError message={errors.branch} />
-                        <Label className="flex items-center gap-2 font-normal">
-                            <Checkbox
-                                checked={data.deploy_key !== 'none'}
-                                onCheckedChange={(checked) => setData('deploy_key', checked === true ? 'new' : 'none')}
-                            />
-                            Private repository: use a deploy key
-                        </Label>
-                        {data.deploy_key !== 'none' && (
-                            <div className="flex flex-wrap gap-2">
-                                <Chip selected={data.deploy_key === 'new'} onClick={() => setData('deploy_key', 'new')}>
-                                    <span className="font-medium">Make a new key</span>
-                                    <span className="text-muted-foreground block text-xs">You add it on GitHub before the first deploy.</span>
-                                </Chip>
-                                <Chip selected={data.deploy_key === 'own'} onClick={() => setData('deploy_key', 'own')}>
-                                    <span className="font-medium">Use my own key</span>
-                                    <span className="text-muted-foreground block text-xs">GitHub already knows the key.</span>
-                                </Chip>
-                            </div>
-                        )}
-                        {data.deploy_key === 'new' && (
-                            <p className="text-muted-foreground text-sm">
-                                Opencloud makes a deploy key and does not deploy yet. The application page then shows the key and the steps to add it
-                                on GitHub. Without a branch, opencloud uses main.
-                            </p>
-                        )}
-                        {data.deploy_key === 'own' && (
-                            <>
-                                <Textarea
-                                    aria-label="Private key"
-                                    className="font-mono text-xs"
-                                    rows={6}
-                                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                                    autoComplete="off"
-                                    spellCheck={false}
-                                    value={data.deploy_private_key}
-                                    onChange={(e) => setData('deploy_private_key', e.target.value)}
-                                />
-                                <p className="text-muted-foreground text-sm">
-                                    Paste the private key file, for example ~/.ssh/id_ed25519. The key must not have a passphrase. Opencloud reads the
-                                    repository with it and deploys. The page never shows the key again.
-                                </p>
-                            </>
-                        )}
+                        <Collapsible open={data.deploy_key !== 'none'} onOpenChange={(open) => setData('deploy_key', open ? 'new' : 'none')}>
+                            <CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex items-center gap-1 text-xs">
+                                <ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />
+                                Private repository? Use a deploy key
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="mt-2 space-y-2">
+                                <div className="flex flex-wrap gap-2">
+                                    <Chip selected={data.deploy_key === 'new'} onClick={() => setData('deploy_key', 'new')}>
+                                        <span className="font-medium">Make a new key</span>
+                                        <span className="text-muted-foreground block text-xs">You add it on GitHub before the first deploy.</span>
+                                    </Chip>
+                                    <Chip selected={data.deploy_key === 'own'} onClick={() => setData('deploy_key', 'own')}>
+                                        <span className="font-medium">Use my own key</span>
+                                        <span className="text-muted-foreground block text-xs">GitHub already knows the key.</span>
+                                    </Chip>
+                                </div>
+                                {data.deploy_key === 'new' && (
+                                    <p className="text-muted-foreground text-sm">
+                                        Opencloud makes a deploy key. The application page then shows the key and the steps to add it on GitHub.
+                                        Without a branch, opencloud uses main.
+                                    </p>
+                                )}
+                                {data.deploy_key === 'own' && (
+                                    <>
+                                        <Textarea
+                                            aria-label="Private key"
+                                            className="font-mono text-xs"
+                                            rows={6}
+                                            placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                                            autoComplete="off"
+                                            spellCheck={false}
+                                            value={data.deploy_private_key}
+                                            onChange={(e) => setData('deploy_private_key', e.target.value)}
+                                        />
+                                        <p className="text-muted-foreground text-sm">
+                                            Paste the private key file, for example ~/.ssh/id_ed25519. The key must not have a passphrase. The page
+                                            never shows the key again.
+                                        </p>
+                                    </>
+                                )}
+                            </CollapsibleContent>
+                        </Collapsible>
                         <InputError message={errors.deploy_private_key} />
                     </Row>
 
@@ -234,250 +157,13 @@ export default function ApplicationCreate({
                         </Select>
                         <InputError message={errors.cluster_id} />
                     </Row>
-
-                    <Row
-                        label="Preset"
-                        hint="The defaults for the kind of app. You can change each default below. You cannot change the preset later."
-                    >
-                        <div className="flex flex-wrap gap-2">
-                            {presets.map((each) => (
-                                <Chip key={each.value} selected={data.type === each.value} onClick={() => changePreset(each)}>
-                                    <span className="font-medium">{applicationTypeLabels[each.value]}</span>
-                                    <span className="text-muted-foreground block text-xs">{presetText[each.value].hint}</span>
-                                </Chip>
-                            ))}
-                        </div>
-                        <InputError message={errors.type} />
-                        {preset.chooses_port && (
-                            <div className="flex items-center gap-2">
-                                <Label htmlFor="port">Port</Label>
-                                <Input id="port" type="number" className="w-28" value={data.port} onChange={(e) => setData('port', e.target.value)} />
-                            </div>
-                        )}
-                        <InputError message={errors.port} />
-                    </Row>
-
-                    <Row label="Size per instance">
-                        <div className="flex flex-wrap gap-2">
-                            {sizes.map((size) => (
-                                <Chip key={size.value} selected={data.size === size.value} onClick={() => setData('size', size.value)}>
-                                    <span className="font-medium">{sizeLabel(size.value)}</span>
-                                    <span className="text-muted-foreground block text-xs">{sizeText(size)}</span>
-                                </Chip>
-                            ))}
-                        </div>
-                        <InputError message={errors.size} />
-                    </Row>
-
-                    <Row label="Autoscale">
-                        <div className="flex flex-wrap items-center gap-2 text-sm">
-                            <Label htmlFor="min_instances">Min</Label>
-                            <Input
-                                id="min_instances"
-                                type="number"
-                                min={1}
-                                className="w-20"
-                                value={data.min_instances}
-                                onChange={(e) => setData('min_instances', Number(e.target.value))}
-                            />
-                            <Label htmlFor="max_instances">max</Label>
-                            <Input
-                                id="max_instances"
-                                type="number"
-                                min={1}
-                                className="w-20"
-                                value={data.max_instances}
-                                onChange={(e) => setData('max_instances', Number(e.target.value))}
-                            />
-                            <span>instances. Add one above</span>
-                            <Input
-                                aria-label="CPU target"
-                                type="number"
-                                min={10}
-                                max={95}
-                                className="w-20"
-                                value={data.cpu_target}
-                                onChange={(e) => setData('cpu_target', Number(e.target.value))}
-                            />
-                            <span>% CPU.</span>
-                        </div>
-                        <InputError message={errors.min_instances} />
-                        <InputError message={errors.max_instances} />
-                        <InputError message={errors.cpu_target} />
-                    </Row>
-
-                    <Row label="Build command" htmlFor="build_command" hint="Optional. One command per line. A # starts a comment.">
-                        <ShellEditor
-                            id="build_command"
-                            rows={2}
-                            placeholder={presetText[preset.value].buildCommand}
-                            disabled={!preset.uses_build_command}
-                            value={data.build_command}
-                            onChange={(value) => setData('build_command', value)}
-                        />
-                        <InputError message={errors.build_command} />
-                    </Row>
-
-                    <Row label="Deploy commands" htmlFor="deploy_commands" hint="One per line. They run before the new version takes traffic.">
-                        <ShellEditor
-                            id="deploy_commands"
-                            rows={2}
-                            value={data.deploy_commands}
-                            onChange={(value) => setData('deploy_commands', value)}
-                        />
-                        <InputError message={errors.deploy_commands} />
-                    </Row>
-
-                    <Row
-                        label="Processes"
-                        hint="Each runs next to web with the same image, env, and size. A long-running process runs all the time. A scheduled process runs on a cron schedule."
-                    >
-                        {data.processes.length > 0 && (
-                            <ul className="space-y-2">
-                                {data.processes.map((row, index) => (
-                                    <li key={index}>
-                                        <ProcessFields value={row} onChange={(change) => setProcess(index, change)} errors={processErrors(index)}>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                    setData(
-                                                        'processes',
-                                                        data.processes.filter((_, i) => i !== index),
-                                                    )
-                                                }
-                                            >
-                                                Remove
-                                            </Button>
-                                        </ProcessFields>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => setData('processes', [...data.processes, { name: '', kind: 'long_running', command: '', schedule: null }])}
-                        >
-                            Add a process
-                        </Button>
-                        <InputError message={errors.processes} />
-                    </Row>
-
-                    <Row label="Environment values" hint="A secret is hidden after you save it.">
-                        {data.env.length > 0 && (
-                            <ul className="space-y-2">
-                                {data.env.map((row, index) => (
-                                    <li key={index} className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                aria-label="Key"
-                                                className="w-44 font-mono text-sm"
-                                                placeholder="KEY"
-                                                value={row.key}
-                                                onChange={(e) => setEnv(index, { key: e.target.value })}
-                                            />
-                                            <Input
-                                                aria-label="Value"
-                                                className="flex-1 font-mono text-sm"
-                                                placeholder="value"
-                                                type={row.is_secret ? 'password' : 'text'}
-                                                autoComplete="off"
-                                                value={row.value}
-                                                onChange={(e) => setEnv(index, { value: e.target.value })}
-                                            />
-                                            <Label className="flex items-center gap-1.5 text-sm font-normal">
-                                                <Checkbox
-                                                    checked={row.is_secret}
-                                                    onCheckedChange={(checked) => setEnv(index, { is_secret: checked === true })}
-                                                />
-                                                Secret
-                                            </Label>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                    setData(
-                                                        'env',
-                                                        data.env.filter((_, i) => i !== index),
-                                                    )
-                                                }
-                                            >
-                                                Remove
-                                            </Button>
-                                        </div>
-                                        <InputError message={errors[`env.${index}.key` as keyof typeof errors]} />
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-
-                        {pasting && (
-                            <div className="space-y-2">
-                                <Textarea
-                                    aria-label="Contents of a .env file"
-                                    className="font-mono text-sm"
-                                    rows={6}
-                                    placeholder={'APP_ENV=production\nMAIL_MAILER=log'}
-                                    value={pasted}
-                                    onChange={(e) => setPasted(e.target.value)}
-                                />
-                                <div className="flex gap-2">
-                                    <Button type="button" size="sm" onClick={addPasted}>
-                                        Add these values
-                                    </Button>
-                                    <Button type="button" size="sm" variant="ghost" onClick={() => setPasting(false)}>
-                                        Cancel
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-
-                        {!pasting && (
-                            <div className="flex gap-2">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => setData('env', [...data.env, { key: '', value: '', is_secret: false }])}
-                                >
-                                    Add a value
-                                </Button>
-                                <Button type="button" size="sm" variant="secondary" onClick={() => setPasting(true)}>
-                                    Paste a .env file
-                                </Button>
-                            </div>
-                        )}
-                    </Row>
-
-                    <Row label="Domain" hint="Optional. You can add it later.">
-                        <Input placeholder="shop.example.com" value={data.domain} onChange={(e) => setData('domain', e.target.value)} />
-                        <InputError message={errors.domain} />
-                    </Row>
-
-                    <Row label="Database" hint="opencloud creates it and sets its env values.">
-                        <Select value={data.database} onValueChange={(value) => setData('database', value as Database)}>
-                            <SelectTrigger className="w-full sm:w-72" aria-label="Database">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="mysql">MySQL</SelectItem>
-                                <SelectItem value="postgres">Postgres</SelectItem>
-                                <SelectItem value="none">None</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <InputError message={errors.database} />
-                    </Row>
                 </div>
 
                 <div className="mt-6 flex items-center gap-3">
                     <Button
                         disabled={processing || data.repository.trim() === '' || (data.deploy_key === 'own' && data.deploy_private_key.trim() === '')}
                     >
-                        {processing ? 'Creating' : data.deploy_key === 'new' ? 'Create' : 'Create and deploy'}
+                        {processing ? 'Creating' : 'Create application'}
                     </Button>
                     <Button variant="ghost" asChild>
                         <Link href={route('applications.index')}>Cancel</Link>

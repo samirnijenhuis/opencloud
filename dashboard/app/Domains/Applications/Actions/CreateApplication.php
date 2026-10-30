@@ -9,25 +9,19 @@ use App\Domains\Builds\Git;
 use App\Domains\Builds\SshKeygen;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Enums\DatastoreKind;
-use App\Domains\Deployments\Actions\StartDeployment;
 use App\Domains\Environments\Actions\AddProcess;
 use App\Domains\Environments\Actions\SetEnvVar;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
-use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
-use App\Domains\Routing\Actions\AddDomain;
 use App\Domains\Routing\DefaultDomain;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class CreateApplication
 {
     public function __construct(
         private SetEnvVar $setEnvVar,
-        private AddDomain $addDomain,
-        private StartDeployment $startDeployment,
         private AttachDatastore $attachDatastore,
         private AddProcess $addProcess,
         private DefaultDomain $defaultDomain,
@@ -36,11 +30,11 @@ class CreateApplication
     ) {}
 
     /**
-     * Creates the application, its protected production environment, the preview template, the env values,
-     * the processes, the database, the domains, and the free sslip.io domain. Then it starts the first deployment of production.
-     * Each value that `$data` leaves out comes from the preset in `type`.
-     * With `deploy_key`, it makes the deploy key and starts no deployment, because GitHub does not know the new key yet.
-     * With `deploy_private_key`, it reads the repository with that key and deploys, because GitHub can already know the key.
+     * Creates the application, its protected production environment, the preview template, and the free sslip.io domain
+     * of production. The preset in `type` gives the settings, the processes, the database, and the generated secrets.
+     * It starts no deployment. The user sets size, scaling, env values, commands, and domains on the environment, then deploys.
+     * With `deploy_key`, it makes the deploy key, and the user adds that key on GitHub before the first deployment.
+     * With `deploy_private_key`, it reads the repository with that key.
      *
      * @param array{
      *     name: string,
@@ -48,23 +42,15 @@ class CreateApplication
      *     cluster_id: int,
      *     type?: ApplicationType|string,
      *     port?: int|null,
-     *     branch?: string,
+     *     branch?: string|null,
      *     deploy_key?: bool,
      *     deploy_private_key?: string|null,
-     *     env?: list<array{key: string, value: string, is_secret?: bool, available_at?: EnvVarAvailability|string}>,
-     *     domains?: list<string>,
-     *     database?: 'mysql'|'postgres'|'none',
-     *     processes?: list<array{name: string, kind: ProcessKind, command: string, schedule?: ?string}>,
-     *     settings?: array<string, mixed>,
      * } $data
      */
     public function execute(User $by, array $data): Application
     {
         $type = $data['type'] ?? ApplicationType::LARAVEL;
         $type = $type instanceof ApplicationType ? $type : ApplicationType::from($type);
-        $env = $data['env'] ?? [];
-        $database = $data['database'] ?? $type->database();
-        $processes = $data['processes'] ?? $type->processes();
         $deployKey = $data['deploy_key'] ?? false;
         // A bad own key fails here with its own message. Git would only report that GitHub refused the key.
         $ownKey = isset($data['deploy_private_key']) ? $this->sshKeygen->keyPairOf($data['deploy_private_key'])['private'] : null;
@@ -73,9 +59,12 @@ class CreateApplication
         // repository until the user adds it on GitHub, so that path makes no remote call and takes main as the default branch.
         $draft = new Application(['repository' => $data['repository'], 'deploy_private_key' => $ownKey]);
         $branch = ($data['branch'] ?? null) ?: ($deployKey ? 'main' : Git::defaultBranch($draft));
-        $commitSha = $deployKey ? null : Git::head($draft, $branch);
 
-        [$application, $production] = DB::transaction(function () use ($by, $data, $type, $branch, $env, $database, $processes, $deployKey, $ownKey) {
+        if (! $deployKey) {
+            Git::head($draft, $branch);
+        }
+
+        return DB::transaction(function () use ($by, $data, $type, $branch, $deployKey, $ownKey) {
             $application = Application::create([
                 'name' => $data['name'],
                 'repository' => $data['repository'],
@@ -87,7 +76,6 @@ class CreateApplication
             $settings = [
                 'deploy_commands' => $type->deployCommands(),
                 'health_path' => $type->healthPath(),
-                ...($data['settings'] ?? []),
             ];
 
             $production = $application->environments()->create([
@@ -98,14 +86,13 @@ class CreateApplication
                 ...$settings,
             ]);
 
-            // Previews run as one small instance, so the template takes the commands but not the size.
             $template = $application->environments()->create([
                 'name' => 'preview-template',
                 'kind' => EnvironmentKind::PREVIEW_TEMPLATE,
                 'is_protected' => false,
                 'auto_deploy' => false,
                 'sleep_after_minutes' => Environment::PREVIEW_SLEEP_AFTER_MINUTES,
-                ...Arr::except($settings, ['size', 'min_instances', 'max_instances', 'cpu_target']),
+                ...$settings,
             ]);
 
             AuditEvent::record($by, 'application.created', $application, ['repository' => $application->repository, 'type' => $type->value]);
@@ -115,7 +102,7 @@ class CreateApplication
             }
 
             // A new process takes the size and the CPU target of web, with one instance. A scheduled process drops the instances.
-            foreach ($processes as $process) {
+            foreach ($type->processes() as $process) {
                 foreach ([$production, $template] as $environment) {
                     $this->addProcess->execute(
                         $environment, $by, $process['name'], $process['command'], $process['kind'], $process['schedule'] ?? null,
@@ -124,40 +111,17 @@ class CreateApplication
                 }
             }
 
-            foreach (array_diff_key($type->generatedSecrets(), array_flip(array_column($env, 'key'))) as $key => $value) {
+            foreach ($type->generatedSecrets() as $key => $value) {
                 $this->setEnvVar->execute($production, $by, $key, $value, true, EnvVarAvailability::RUNTIME);
             }
 
-            foreach ($env as $value) {
-                $availableAt = $value['available_at'] ?? EnvVarAvailability::RUNTIME;
-
-                $this->setEnvVar->execute(
-                    $production,
-                    $by,
-                    $value['key'],
-                    $value['value'],
-                    $value['is_secret'] ?? false,
-                    $availableAt instanceof EnvVarAvailability ? $availableAt : EnvVarAvailability::from($availableAt),
-                );
-            }
-
-            if ($database !== 'none') {
-                $this->attachDatastore->execute($production, $by, DatastoreKind::from($database));
-            }
-
-            foreach ($data['domains'] ?? [] as $hostname) {
-                $this->addDomain->execute($production, $by, $hostname);
+            if ($type->database() !== 'none') {
+                $this->attachDatastore->execute($production, $by, DatastoreKind::from($type->database()));
             }
 
             $this->defaultDomain->add($production, $by);
 
-            return [$application, $production];
+            return $application;
         });
-
-        if (! $deployKey) {
-            $this->startDeployment->execute($production, $by, $commitSha);
-        }
-
-        return $application;
     }
 }

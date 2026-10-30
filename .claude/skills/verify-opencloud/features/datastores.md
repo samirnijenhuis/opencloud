@@ -5,7 +5,7 @@ A user attaches a database or a cache to an environment, and the app gets the co
 ## Sub-features
 
 - `datastore-env-names` gives the env names of the preset. A Laravel app gets the Laravel env names. A Node.js, Python, Ruby, or static app gets the generic env names. A Dockerfile app gets both sets for the same resource.
-- `datastore-mysql` attaches MySQL 8.4 from the create form or with Add resource. With the Laravel env names it sets `DB_CONNECTION=mysql` and the other `DB_*` values. With the generic env names it sets `DATABASE_URL=mysql://...`.
+- `datastore-mysql` attaches MySQL 8.4 with Add resource, or gets it from the Laravel preset. With the Laravel env names it sets `DB_CONNECTION=mysql` and the other `DB_*` values. With the generic env names it sets `DATABASE_URL=mysql://...`.
 - `datastore-postgres` attaches Postgres 17. With the Laravel env names it sets `DB_CONNECTION=pgsql`. With the generic env names it sets `DATABASE_URL=postgresql://...`.
 - `datastore-sqlite` uses a SQLite file in the image or in the pod, with no attachment.
 - `datastore-valkey` attaches Valkey with Add resource. With the Laravel env names it sets the `REDIS_*` values, `REDIS_CLIENT=phpredis`, and `CACHE_STORE=redis`. With the generic env names it sets `REDIS_URL`.
@@ -13,7 +13,7 @@ A user attaches a database or a cache to an environment, and the app gets the co
 
 ## How to get to it (user POV)
 
-- Choose the `Database` option in the create form. The form offers it for each preset.
+- A Laravel app has MySQL from its preset after Create. The other presets have no database. Remove the MySQL of a Laravel app with `DELETE /datastore-attachments/<id>` on the canvas.
 - On the `Environment` tab, choose `Add resource`, then a kind. Then choose `Deploy`.
 - Add resource posts to `POST /environments/<id>/datastores` with `{"kind": "<kind>"}`. For MySQL or Postgres, the form asks for a connection name and posts it as `name`. The first database of an environment is the default. Its name is `main` when the form gives no name.
 - On the sheet of a database, `Make default` posts to `POST /datastore-attachments/<id>/default`. The keys change on the next deploy.
@@ -33,7 +33,7 @@ Preconditions:
 
 ## Gotchas
 
-- The `static` and `php` cells get their MySQL or Postgres database with Add resource before the second deploy. The other cells get it from the create form. So the matrix proves both paths.
+- The `static` and `php` cells get their MySQL or Postgres database with Add resource before the second deploy. The other cells get it before the first deploy: the runner keeps the MySQL of a Laravel preset, adds it for the other presets, and swaps it for Postgres. So the matrix proves both paths.
 - Valkey values reach the app only on the next deploy. The deploy waits up to 10 minutes for each attachment to be `ready`, and it fails when an attachment fails. The runner waits for `ready` before it chooses Deploy.
 - The matrix posts `CACHE_STORE=redis` as a user value with Valkey, because a `none` Laravel cell has the user value `CACHE_STORE=file` from step 1. A user value wins, so the matrix does not prove that the Laravel env names set `CACHE_STORE`.
 - Each SQLite pod has its own copy of the file, and a redeploy starts empty. The matrix checks no persistence for SQLite.

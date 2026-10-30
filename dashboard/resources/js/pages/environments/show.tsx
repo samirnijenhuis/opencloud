@@ -4,6 +4,7 @@ import { Canvas } from '@/components/environment/canvas';
 import { instancesText } from '@/components/environment/compute-fields';
 import { DomainsSheet } from '@/components/environment/domains-sheet';
 import { EditorSheet } from '@/components/environment/editor-sheet';
+import { PreviewsSheet } from '@/components/environment/previews-sheet';
 import { ProcessSheet, scheduleWords } from '@/components/environment/process-sheet';
 import { AddResourceMenu, namedTextsFor, ResourceSheet, statusLabels, statusTones } from '@/components/environment/resource-sheet';
 import {
@@ -12,6 +13,7 @@ import {
     type Capacity,
     type Domain,
     type LiveStatus,
+    type PreviewTemplateSettings,
     type Resources,
     type Sheet,
 } from '@/components/environment/types';
@@ -21,11 +23,24 @@ import { Button } from '@/components/ui/button';
 import { useDeploymentPoll } from '@/hooks/use-deployment-poll';
 import { usePoll } from '@/hooks/use-poll';
 import EnvironmentLayout from '@/layouts/environment-layout';
-import { duration, memoryText, shortSha, sizeLabel, sizeText, timeAgo, vcpu } from '@/lib/format';
+import { duration, memoryText, previewWildcard, shortSha, sizeLabel, sizeText, timeAgo, vcpu } from '@/lib/format';
 import { kindLabels as clusterKindLabels } from '@/pages/clusters/cluster-status';
 import { type Process, type Size, type SizeOption } from '@/types';
 import { Link, router } from '@inertiajs/react';
-import { Boxes, CalendarClock, Database, ExternalLink, Globe, HardDrive, Plus, Server, ShieldCheck, SquareTerminal, Zap } from 'lucide-react';
+import {
+    Boxes,
+    CalendarClock,
+    Database,
+    ExternalLink,
+    GitPullRequest,
+    Globe,
+    HardDrive,
+    Plus,
+    Server,
+    ShieldCheck,
+    SquareTerminal,
+    Zap,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const resourceIcons = { mysql: Database, postgres: Database, valkey: Zap, rustfs: HardDrive } as const;
@@ -71,6 +86,37 @@ function VisitSite({ domains }: { domains: Domain[] }) {
                 <ExternalLink /> Visit site
             </a>
         </Button>
+    );
+}
+
+function PreviewsBlock({ previews, onOpen }: { previews: PreviewTemplateSettings; onOpen: () => void }) {
+    const wildcard = previews.preview_domain ? previewWildcard(previews.preview_domain) : null;
+    const labels = previews.preview_labels.join(', ');
+
+    return (
+        <Block icon={GitPullRequest} title="Previews" onOpen={onOpen}>
+            <Row label="Address">
+                {previews.address ? (
+                    <span className="flex items-center gap-2">
+                        {previews.preview_domain === null && <span className="text-muted-foreground text-xs">Free</span>}
+                        <code className="truncate font-mono text-xs" title={previews.address}>
+                            {previews.address}
+                        </code>
+                    </span>
+                ) : (
+                    'No address'
+                )}
+            </Row>
+            {wildcard && (
+                <Row label="DNS record">
+                    <code className="font-mono text-xs">{`${wildcard} to ${previews.ingress_ip ?? 'the cluster'}`}</code>
+                </Row>
+            )}
+            <Row label="Pull requests">
+                {!previews.previews_enabled ? <Status tone="off">Off</Status> : labels === '' ? 'Each pull request' : `With label ${labels}`}
+            </Row>
+            <Row label="At most">{`${previews.max_previews} at the same time`}</Row>
+        </Block>
     );
 }
 
@@ -317,7 +363,7 @@ function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: 
 }
 
 export default function EnvironmentShow(props: CanvasProps) {
-    const { environment, cluster, compute, sizes, processes, domains, datastores, deployments, can } = props;
+    const { environment, cluster, compute, sizes, processes, domains, datastores, deployments, previews, can } = props;
     const [sheet, setSheet] = useState<Sheet>({ kind: 'app', tab: 'general' });
     const [open, setOpen] = useState(false);
     const hasPods = environment.kind !== 'preview_template';
@@ -351,52 +397,58 @@ export default function EnvironmentShow(props: CanvasProps) {
     );
 
     return (
-        <EnvironmentLayout page={props} tab="environment" title="Environment" actions={<VisitSite domains={domains} />}>
+        <EnvironmentLayout page={props} tab="environment" title="Environment" actions={!previews && <VisitSite domains={domains} />}>
             <Canvas className="@container rounded-xl border bg-neutral-50/70 bg-[radial-gradient(var(--color-neutral-300)_1px,transparent_1px)] bg-[size:14px_14px] p-4 pb-20 sm:p-6 sm:pb-20 dark:bg-neutral-950 dark:bg-[radial-gradient(var(--color-neutral-800)_1px,transparent_1px)]">
                 <div className="mx-auto grid max-w-md grid-cols-1 gap-6 @4xl:max-w-none @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)] @4xl:items-start @4xl:gap-x-7">
                     <Group column="network" label="Network" aside="Caddy">
-                        <Block icon={ShieldCheck} title="HTTPS" onOpen={() => show({ kind: 'https' })}>
-                            <Row label="Certificates">
-                                <Status tone={certTone}>{certText}</Status>
-                            </Row>
-                            <Row label="HTTP to HTTPS">
-                                <Status tone="ok">On</Status>
-                            </Row>
-                            <Row label="Issuer">{issuerLabels[props.tls_issuer]}</Row>
-                            <Row label="Cloudflare DNS">
-                                {cloudflareCount > 0 ? `${cloudflareCount} of ${domains.length} domains` : <Status tone="off">Off</Status>}
-                            </Row>
-                        </Block>
-                        <Block icon={Globe} title="Domains" onOpen={() => show({ kind: 'domains', adding: false })}>
-                            {domains.length === 0 && <p className="text-muted-foreground px-3 py-1.5 text-sm">No domain yet.</p>}
-                            {domains.map((domain) => {
-                                const [tone, text] = domainState(domain);
-
-                                return (
-                                    <Row
-                                        key={domain.id}
-                                        label={
-                                            <a
-                                                href={`https://${domain.hostname}`}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                title={domain.hostname}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="text-foreground focus-visible:ring-ring rounded-sm outline-none hover:underline focus-visible:ring-2"
-                                            >
-                                                {domain.hostname}
-                                            </a>
-                                        }
-                                    >
-                                        <span className="flex items-center gap-2">
-                                            {domain.generated && <span className="text-muted-foreground text-xs">Free</span>}
-                                            <Status tone={tone}>{text}</Status>
-                                        </span>
+                        {previews ? (
+                            <PreviewsBlock previews={previews} onOpen={() => show({ kind: 'previews' })} />
+                        ) : (
+                            <>
+                                <Block icon={ShieldCheck} title="HTTPS" onOpen={() => show({ kind: 'https' })}>
+                                    <Row label="Certificates">
+                                        <Status tone={certTone}>{certText}</Status>
                                     </Row>
-                                );
-                            })}
-                            {can.manage_domains && <AddButton onClick={() => show({ kind: 'domains', adding: true })}>Add domain</AddButton>}
-                        </Block>
+                                    <Row label="HTTP to HTTPS">
+                                        <Status tone="ok">On</Status>
+                                    </Row>
+                                    <Row label="Issuer">{issuerLabels[props.tls_issuer]}</Row>
+                                    <Row label="Cloudflare DNS">
+                                        {cloudflareCount > 0 ? `${cloudflareCount} of ${domains.length} domains` : <Status tone="off">Off</Status>}
+                                    </Row>
+                                </Block>
+                                <Block icon={Globe} title="Domains" onOpen={() => show({ kind: 'domains', adding: false })}>
+                                    {domains.length === 0 && <p className="text-muted-foreground px-3 py-1.5 text-sm">No domain yet.</p>}
+                                    {domains.map((domain) => {
+                                        const [tone, text] = domainState(domain);
+
+                                        return (
+                                            <Row
+                                                key={domain.id}
+                                                label={
+                                                    <a
+                                                        href={`https://${domain.hostname}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        title={domain.hostname}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="text-foreground focus-visible:ring-ring rounded-sm outline-none hover:underline focus-visible:ring-2"
+                                                    >
+                                                        {domain.hostname}
+                                                    </a>
+                                                }
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    {domain.generated && <span className="text-muted-foreground text-xs">Free</span>}
+                                                    <Status tone={tone}>{text}</Status>
+                                                </span>
+                                            </Row>
+                                        );
+                                    })}
+                                    {can.manage_domains && <AddButton onClick={() => show({ kind: 'domains', adding: true })}>Add domain</AddButton>}
+                                </Block>
+                            </>
+                        )}
                     </Group>
 
                     <Group column="cluster" label={cluster.name} aside={clusterKindLabels[cluster.kind]}>
@@ -476,7 +528,7 @@ export default function EnvironmentShow(props: CanvasProps) {
                 )}
                 {(can.manage_domains || can.update) && (
                     <div className="bg-background absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1 rounded-lg border p-1 shadow-sm">
-                        {can.manage_domains && (
+                        {can.manage_domains && !previews && (
                             <Button variant="ghost" size="sm" onClick={() => show({ kind: 'domains', adding: true })}>
                                 <Plus /> Domain
                             </Button>
@@ -493,36 +545,41 @@ export default function EnvironmentShow(props: CanvasProps) {
 
             {hasPods && <CapacityBar clusterName={cluster.name} capacity={capacity} requests={status?.requests ?? null} />}
 
-            <section className="space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                    <h2 className="text-base font-medium">Latest deployments</h2>
-                    <Link href={route('environments.deployments', environment.id)} className="text-muted-foreground hover:text-foreground text-sm">
-                        View all
-                    </Link>
-                </div>
-                {deployments.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">No deployments yet. Select Deploy to start the first one.</p>
-                ) : (
-                    <ul className="divide-y rounded-lg border">
-                        {deployments.map((deployment) => (
-                            <li key={deployment.id}>
-                                <Link
-                                    href={route('deployments.show', deployment.id)}
-                                    className="hover:bg-muted/50 flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm"
-                                >
-                                    <DeploymentBadge status={deployment.status} />
-                                    <code className="text-muted-foreground font-mono text-xs">{shortSha(deployment.commit_sha)}</code>
-                                    <span>{deployment.triggered_by ?? 'Automatic'}</span>
-                                    <span className="text-muted-foreground ml-auto">
-                                        {isRunning(deployment.status) ? 'Running' : duration(deployment.started_at, deployment.finished_at)},{' '}
-                                        {timeAgo(deployment.created_at)}
-                                    </span>
-                                </Link>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </section>
+            {!previews && (
+                <section className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <h2 className="text-base font-medium">Latest deployments</h2>
+                        <Link
+                            href={route('environments.deployments', environment.id)}
+                            className="text-muted-foreground hover:text-foreground text-sm"
+                        >
+                            View all
+                        </Link>
+                    </div>
+                    {deployments.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">No deployments yet. Select Deploy to start the first one.</p>
+                    ) : (
+                        <ul className="divide-y rounded-lg border">
+                            {deployments.map((deployment) => (
+                                <li key={deployment.id}>
+                                    <Link
+                                        href={route('deployments.show', deployment.id)}
+                                        className="hover:bg-muted/50 flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm"
+                                    >
+                                        <DeploymentBadge status={deployment.status} />
+                                        <code className="text-muted-foreground font-mono text-xs">{shortSha(deployment.commit_sha)}</code>
+                                        <span>{deployment.triggered_by ?? 'Automatic'}</span>
+                                        <span className="text-muted-foreground ml-auto">
+                                            {isRunning(deployment.status) ? 'Running' : duration(deployment.started_at, deployment.finished_at)},{' '}
+                                            {timeAgo(deployment.created_at)}
+                                        </span>
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
+            )}
 
             <HttpsSheet open={open && sheet.kind === 'https'} onClose={close} props={props} />
             <DomainsSheet
@@ -535,6 +592,15 @@ export default function EnvironmentShow(props: CanvasProps) {
                 cloudflareZones={props.cloudflare_zones}
                 canManage={can.manage_domains}
             />
+            {previews && (
+                <PreviewsSheet
+                    open={open && sheet.kind === 'previews'}
+                    onClose={close}
+                    applicationId={props.application.id}
+                    previews={previews}
+                    canManage={can.manage_domains}
+                />
+            )}
             <AppSheet
                 open={open && sheet.kind === 'app'}
                 onClose={close}

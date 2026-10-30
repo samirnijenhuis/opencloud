@@ -62,7 +62,7 @@ class DeleteEnvironmentTest extends TestCase
         app(AttachDatastore::class)->execute($production, $this->admin, DatastoreKind::VALKEY);
         $this->staging = app(CreateEnvironment::class)->execute($this->application, $this->admin, 'staging', 'staging', $production);
         Domain::factory()->for($this->staging)->create(['hostname' => 'staging.example.com']);
-        $this->staging->deployments()->sole()->update(['status' => DeploymentStatus::LIVE]);
+        Deployment::factory()->for($this->staging)->create(['status' => DeploymentStatus::LIVE]);
 
         $this->kubectl->calls = [];
         AuditEvent::query()->delete();

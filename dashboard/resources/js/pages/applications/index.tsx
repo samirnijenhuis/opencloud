@@ -35,7 +35,7 @@ export default function ApplicationsIndex({ applications, canCreate }: { applica
                         <h2 className="text-lg font-medium">No applications yet</h2>
                         <p className="text-muted-foreground max-w-md text-sm">
                             {canCreate
-                                ? 'Enter the name of a GitHub repository and opencloud builds and deploys it for you.'
+                                ? 'Choose a GitHub repository and a cluster. Then select Deploy on the environment page.'
                                 : 'Ask an owner or an admin to create the first application.'}
                         </p>
                         {canCreate && (

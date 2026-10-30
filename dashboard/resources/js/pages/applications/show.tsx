@@ -1,15 +1,12 @@
 import HeadingSmall from '@/components/heading-small';
-import InputError from '@/components/input-error';
 import { DeploymentBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
 import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import { DeployKey } from './deploy-key';
 import { NewEnvironment } from './new-environment';
 
@@ -25,19 +22,10 @@ type EnvironmentRow = {
     url: string | null;
 };
 
-type PreviewSettings = {
-    previews_enabled: boolean;
-    allow_forks: boolean;
-    preview_domain: string | null;
-    ingress_ip: string | null;
-    max_previews: number;
-    template_id: number | null;
-};
-
 type Props = {
     application: { id: number; name: string; repository: string; type: ApplicationType; port: number };
     environments: EnvironmentRow[];
-    previews: PreviewSettings;
+    previews: { previews_enabled: boolean; max_previews: number };
     deployPublicKey: string | null;
     canUpdate: boolean;
 };
@@ -56,62 +44,16 @@ function PullRequest({ environment }: { environment: EnvironmentRow }) {
     );
 }
 
-function PreviewsForm({ application, previews, canUpdate }: { application: Props['application']; previews: PreviewSettings; canUpdate: boolean }) {
-    const form = useForm({
-        previews_enabled: previews.previews_enabled,
-        allow_forks: previews.allow_forks,
-        preview_domain: previews.preview_domain ?? '',
-    });
-    const { data, setData, errors, processing, recentlySuccessful } = form;
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        form.patch(route('applications.previews.update', application.id), { preserveScroll: true });
-    };
-
-    const example = data.preview_domain.trim() || 'preview.example.com';
-    const domainHelp =
-        `Add one DNS record *.${example} that points to ${previews.ingress_ip ?? 'the cluster'}. ` +
-        `Each preview then gets an address like pr-12.${example}. Leave it empty to use a free sslip.io address.`;
-
-    return (
-        <form onSubmit={submit} className="space-y-4 rounded-lg border p-4">
-            <fieldset disabled={!canUpdate} className="space-y-4">
-                <Label className="flex items-center gap-2 font-normal">
-                    <Checkbox checked={data.previews_enabled} onCheckedChange={(checked) => setData('previews_enabled', checked === true)} />
-                    Create a preview for each pull request
-                </Label>
-
-                <Label className="flex items-center gap-2 font-normal">
-                    <Checkbox checked={data.allow_forks} onCheckedChange={(checked) => setData('allow_forks', checked === true)} />
-                    Also create previews for pull requests from forks
-                </Label>
-
-                <div className="grid gap-2">
-                    <Label htmlFor="preview_domain">Preview domain</Label>
-                    <Input
-                        id="preview_domain"
-                        className="max-w-sm"
-                        value={data.preview_domain}
-                        onChange={(e) => setData('preview_domain', e.target.value)}
-                        placeholder="preview.example.com"
-                    />
-                    <p className="text-muted-foreground text-sm">{domainHelp}</p>
-                    <InputError message={errors.preview_domain} />
-                </div>
-            </fieldset>
-
-            {canUpdate && (
-                <div className="flex items-center gap-3">
-                    <Button disabled={processing}>Save</Button>
-                    {recentlySuccessful && <span className="text-muted-foreground text-sm">Saved</span>}
-                </div>
-            )}
-        </form>
-    );
-}
-
 export default function ApplicationShow({ application, environments, previews, deployPublicKey, canUpdate }: Props) {
+    const [saving, setSaving] = useState(false);
+
+    const setPreviews = (enabled: boolean) =>
+        router.patch(
+            route('applications.previews.update', application.id),
+            { previews_enabled: enabled },
+            { preserveScroll: true, onStart: () => setSaving(true), onFinish: () => setSaving(false) },
+        );
+
     return (
         <AppLayout
             breadcrumbs={[
@@ -124,9 +66,15 @@ export default function ApplicationShow({ application, environments, previews, d
             <div className="mx-auto w-full max-w-5xl space-y-6 p-4">
                 <div className="space-y-1">
                     <h1 className="text-2xl font-semibold tracking-tight">{application.name}</h1>
-                    <p className="text-muted-foreground text-sm">
-                        {application.repository} - {applicationTypeLabels[application.type]}
-                    </p>
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+                        <span>{application.repository}</span>
+                        <Badge
+                            variant="secondary"
+                            title="The preset is fixed. It also sets the env names that the databases, Valkey, and the buckets give the app."
+                        >
+                            {applicationTypeLabels[application.type]}
+                        </Badge>
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap items-end justify-between gap-4">
@@ -147,9 +95,16 @@ export default function ApplicationShow({ application, environments, previews, d
                                     </Link>
                                     {environment.is_protected && <Badge variant="outline">Protected</Badge>}
                                     {environment.kind === 'preview' && <Badge variant="outline">Preview</Badge>}
+                                    {environment.kind === 'preview_template' && <Badge variant="outline">Preview template</Badge>}
                                 </div>
                                 <p className="text-muted-foreground text-sm">
-                                    {environment.kind === 'preview' ? <PullRequest environment={environment} /> : `Branch ${environment.branch}`}
+                                    {environment.kind === 'preview' ? (
+                                        <PullRequest environment={environment} />
+                                    ) : environment.kind === 'preview_template' ? (
+                                        `Each new preview copies its settings, processes, and env values. At most ${previews.max_previews} previews run at the same time.`
+                                    ) : (
+                                        `Branch ${environment.branch}`
+                                    )}
                                 </p>
                                 {environment.url && (
                                     <a
@@ -162,51 +117,29 @@ export default function ApplicationShow({ application, environments, previews, d
                                     </a>
                                 )}
                             </div>
-                            <DeploymentBadge status={environment.status} />
+                            {environment.kind === 'preview_template' ? (
+                                <Label
+                                    className="text-muted-foreground flex items-center gap-2 text-sm font-normal"
+                                    title="Create a preview for each pull request"
+                                >
+                                    Previews
+                                    <Switch checked={previews.previews_enabled} disabled={!canUpdate || saving} onCheckedChange={setPreviews} />
+                                </Label>
+                            ) : (
+                                <DeploymentBadge status={environment.status} />
+                            )}
                         </li>
                     ))}
                 </ul>
 
-                {/* The controller sorts production first. */}
+                {/* The controller sorts production first. The steps matter until production deploys once. */}
                 <DeployKey
                     applicationId={application.id}
                     publicKey={deployPublicKey}
                     settingsUrl={`${route('environments.settings', environments[0].id)}#deployments`}
                     canUpdate={canUpdate}
+                    defaultOpen={deployPublicKey !== null && environments[0].status === null}
                 />
-
-                <div className="space-y-4">
-                    <HeadingSmall
-                        title="Preset"
-                        description="The preset is fixed. It also sets the env names that the databases, Valkey, and the buckets give the app."
-                    />
-                    <div className="space-y-1 rounded-lg border p-4">
-                        <p className="font-medium">{applicationTypeLabels[application.type]}</p>
-                        <p className="text-muted-foreground text-sm">To use another preset, create a new application with the same repository.</p>
-                    </div>
-                </div>
-
-                <div className="space-y-4">
-                    <HeadingSmall
-                        title="Previews"
-                        description={`Each pull request gets its own environment with an empty database. At most ${previews.max_previews} previews run at the same time.`}
-                    />
-
-                    {previews.template_id && (
-                        <p className="text-sm">
-                            Previews copy the settings and the environment values of the{' '}
-                            <Link
-                                href={`${route('environments.settings', previews.template_id)}#environment-values`}
-                                className="font-medium hover:underline"
-                            >
-                                preview template
-                            </Link>
-                            . Production values never go to a preview.
-                        </p>
-                    )}
-
-                    <PreviewsForm application={application} previews={previews} canUpdate={canUpdate} />
-                </div>
             </div>
         </AppLayout>
     );

@@ -179,13 +179,14 @@ send POST "${setup_url#"$BASE"}" --data-urlencode name=Owner --data-urlencode "e
 dashboard_php "$MACHINE_A" >"$WORK/create.log" 2>&1 <<PHP
 \$owner = App\Domains\Members\Models\User::where('email', '$EMAIL')->sole();
 app(App\Domains\Backups\Actions\StoreBackupTarget::class)->handle(\$owner, 'http://$S3_HOST:$S3_PORT', '$BUCKET', '$S3_ACCESS_KEY', '$S3_SECRET_KEY');
-app(App\Domains\Applications\Actions\CreateApplication::class)->handle(\$owner, [
+\$application = app(App\Domains\Applications\Actions\CreateApplication::class)->execute(\$owner, [
     'name' => '$APPLICATION',
     'repository' => '$REPOSITORY',
     'branch' => '$BRANCH',
     'cluster_id' => App\Domains\Clusters\Models\Cluster::where('kind', 'local')->value('id'),
-    'database' => 'mysql',
 ]);
+\$production = \$application->environments()->where('name', 'production')->sole();
+app(App\Domains\Deployments\Actions\StartDeployment::class)->execute(\$production, \$owner);
 echo 'created', "\n";
 PHP
 grep -qx created "$WORK/create.log" || { echo "The owner, the backup target, or the application was not created on machine A."; cat "$WORK/create.log"; exit 1; }

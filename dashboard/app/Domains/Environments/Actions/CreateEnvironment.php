@@ -8,7 +8,6 @@ use App\Domains\Builds\Git;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Models\DatastoreAttachment;
-use App\Domains\Deployments\Actions\StartDeployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
@@ -22,8 +21,8 @@ use RuntimeException;
 
 /**
  * Adds a permanent environment for a branch. It copies the settings, the processes, and the user env values of production
- * or of the preview template, and it gets standard resources, a free domain, and a first deployment of its own.
- * A copy of production gets only its plain user values.
+ * or of the preview template, and it gets standard resources and a free domain.
+ * It starts no deployment. A copy of production gets only its plain user values.
  */
 class CreateEnvironment
 {
@@ -33,7 +32,6 @@ class CreateEnvironment
         private ConnectionInterface $db,
         private AttachDatastore $attachDatastore,
         private DefaultDomain $defaultDomain,
-        private StartDeployment $startDeployment,
     ) {}
 
     /**
@@ -45,7 +43,7 @@ class CreateEnvironment
     {
         // A wrong branch fails here, before any record exists.
         try {
-            $commitSha = Git::head($application, $branch);
+            Git::head($application, $branch);
         } catch (RuntimeException $e) {
             throw ValidationException::withMessages(['branch' => $e->getMessage()]);
         }
@@ -87,8 +85,6 @@ class CreateEnvironment
 
             return $environment;
         });
-
-        $this->startDeployment->execute($environment, $by, $commitSha);
 
         return $environment;
     }

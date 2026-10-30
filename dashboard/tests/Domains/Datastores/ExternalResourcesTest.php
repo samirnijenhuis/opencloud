@@ -295,7 +295,7 @@ class ExternalResourcesTest extends TestCase
         $attach->execute($this->environment, $this->owner, DatastoreKind::VALKEY, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::VALKEY));
         $attach->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::RUSTFS));
 
-        $preview = app(OpenPreview::class)->execute($application, new PullRequestEvent(PullRequestAction::OPENED, $application->repository, 12, 'feature/login', str_repeat('1', 40), fromFork: false));
+        $preview = app(OpenPreview::class)->execute($application, new PullRequestEvent(PullRequestAction::OPENED, $application->repository, 12, 'feature/login', str_repeat('1', 40), fromFork: false, labels: [], changedLabel: null));
 
         $this->assertSame([
             ['postgres', 'standard', 'main', true, 'local'],

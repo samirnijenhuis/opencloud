@@ -1,3 +1,4 @@
+import { Chip } from '@/components/chip';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -5,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
-import { Chip } from './presets';
 
 const sources = [
     {
@@ -55,7 +55,8 @@ export function NewEnvironment({ applicationId }: { applicationId: number }) {
                     <DialogHeader>
                         <DialogTitle>New environment</DialogTitle>
                         <DialogDescription>
-                            The environment gets its own free domain and new, empty resources. Each push to its branch deploys it.
+                            The environment gets its own free domain and new, empty resources. It deploys when you select Deploy or push to its
+                            branch.
                         </DialogDescription>
                     </DialogHeader>
 

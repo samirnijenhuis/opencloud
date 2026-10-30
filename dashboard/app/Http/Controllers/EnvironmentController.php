@@ -24,6 +24,7 @@ use App\Domains\Environments\Actions\CreateEnvironment;
 use App\Domains\Environments\Actions\DeleteEnvironment;
 use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
 use App\Domains\Environments\DotenvText;
+use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
@@ -31,6 +32,7 @@ use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
 use App\Domains\Members\Enums\Ability;
 use App\Domains\Members\Enums\Role;
+use App\Domains\Previews\PreviewHostname;
 use App\Domains\Routing\CloudflareDns;
 use App\Domains\Routing\Models\Domain;
 use App\Domains\Routing\PrimaryDomain;
@@ -80,7 +82,7 @@ class EnvironmentController extends Controller
     ];
 
     /** The canvas: the network, the app, and the resources of one environment, each with the data its sheet edits. */
-    public function show(Request $request, Environment $environment): Response
+    public function show(Request $request, Environment $environment, PreviewHostname $previewHostname): Response
     {
         Gate::authorize('view', $environment);
 
@@ -99,6 +101,14 @@ class EnvironmentController extends Controller
             ],
             'cluster' => ['id' => $cluster->id, 'name' => $cluster->name, 'kind' => $cluster->kind, 'ingress_ip' => $cluster->ingress_ip],
             'tls_issuer' => config('opencloud.tls_issuer'),
+            'previews' => $environment->kind === EnvironmentKind::PREVIEW_TEMPLATE ? [
+                'previews_enabled' => $environment->application->previews_enabled,
+                'address' => $previewHostname->pattern($environment->application),
+                'preview_domain' => $environment->application->preview_domain,
+                'preview_labels' => $environment->application->preview_labels,
+                'ingress_ip' => $cluster->ingress_ip,
+                'max_previews' => config('opencloud.max_previews'),
+            ] : null,
             'compute' => $environment->only(['size', 'min_instances', 'max_instances', 'cpu_target', 'health_path']),
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,

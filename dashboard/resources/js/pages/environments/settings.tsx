@@ -290,7 +290,11 @@ export default function EnvironmentSettings(props: Props) {
                     <Section
                         id="environment-values"
                         title="Environment values"
-                        description="The env values of the app. Changes apply on the next deploy."
+                        description={
+                            environment.kind === 'preview_template'
+                                ? 'Each new preview copies these values. In a value, {pr_number}, {branch}, and {url} become the pull request number, the branch, and the address of that preview.'
+                                : 'The env values of the app. Changes apply on the next deploy.'
+                        }
                     >
                         <EnvValues environmentId={environment.id} envVars={envVars} envText={envText} canUpdate={can.update} />
                     </Section>

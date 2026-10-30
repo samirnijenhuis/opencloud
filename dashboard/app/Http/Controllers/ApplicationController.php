@@ -10,8 +10,6 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
-use App\Domains\Environments\Enums\ProcessKind;
-use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\GitHub\RepositoryName;
 use App\Domains\Routing\Models\Domain;
@@ -74,12 +72,6 @@ class ApplicationController extends Controller
         return Inertia::render('applications/create', [
             'clusters' => $clusters,
             'defaultClusterId' => ($clusters->firstWhere('kind', ClusterKind::LOCAL) ?? $clusters->first())?->id,
-            'sizes' => array_map(fn (Size $size) => [
-                'value' => $size->value,
-                'cpu_millicores' => $size->cpuMillicores(),
-                'memory_mib' => $size->memoryMib(),
-            ], Size::cases()),
-            'presets' => self::presets(),
         ]);
     }
 
@@ -98,28 +90,6 @@ class ApplicationController extends Controller
                 'branch' => $data['branch'] ?? null,
                 'deploy_key' => $request->boolean('deploy_key'),
                 'deploy_private_key' => $data['deploy_private_key'] ?? null,
-                'env' => array_map(fn (array $row) => [
-                    'key' => $row['key'],
-                    'value' => $row['value'] ?? '',
-                    'is_secret' => $row['is_secret'] ?? false,
-                    'available_at' => $row['available_at'] ?? 'runtime',
-                ], $data['env'] ?? []),
-                'domains' => isset($data['domain']) ? [$data['domain']] : [],
-                'database' => $data['database'],
-                ...(isset($data['processes']) ? ['processes' => array_map(fn (array $row) => [
-                    'name' => $row['name'],
-                    'kind' => ProcessKind::from($row['kind']),
-                    'command' => $row['command'],
-                    'schedule' => $row['schedule'] ?? null,
-                ], $data['processes'])] : []),
-                'settings' => [
-                    'size' => $data['size'],
-                    'min_instances' => $data['min_instances'],
-                    'max_instances' => $data['max_instances'],
-                    'cpu_target' => $data['cpu_target'],
-                    'build_command' => $data['build_command'] ?? null,
-                    'deploy_commands' => $data['deploy_commands'] ?? [],
-                ],
             ]);
         } catch (DeployKeyRefused) {
             return back()->withInput($request->except('deploy_private_key'))->withErrors(['deploy_private_key' => DeployKeyRefused::STEP]);
@@ -127,7 +97,7 @@ class ApplicationController extends Controller
             return back()->withInput($request->except('deploy_private_key'))->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
         }
 
-        // No deployment runs yet, so the user goes to the page that shows the key and the steps to add it on GitHub.
+        // The user adds the new key on GitHub first, so the page that shows the key and the steps comes before the environment.
         if ($request->boolean('deploy_key')) {
             return to_route('applications.show', $application);
         }
@@ -142,7 +112,6 @@ class ApplicationController extends Controller
         Gate::authorize('view', $application);
 
         $environments = $application->environments()
-            ->where('kind', '!=', EnvironmentKind::PREVIEW_TEMPLATE)
             ->with(['domains' => fn ($query) => $query->orderBy('id')])
             ->get();
 
@@ -163,16 +132,17 @@ class ApplicationController extends Controller
             ],
             'previews' => [
                 'previews_enabled' => $application->previews_enabled,
-                'allow_forks' => $application->allow_forks,
-                'preview_domain' => $application->preview_domain,
-                'ingress_ip' => $application->cluster->ingress_ip,
                 'max_previews' => config('opencloud.max_previews'),
-                'template_id' => $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->value('id'),
             ],
             'deployPublicKey' => $application->deploy_public_key,
             'canUpdate' => $request->user()->can('update', $application),
             'environments' => $environments
-                ->sortBy(fn (Environment $environment) => [$environment->name === 'production' ? 0 : ($environment->kind === EnvironmentKind::PERMANENT ? 1 : 2), $environment->name])
+                ->sortBy(fn (Environment $environment) => [match (true) {
+                    $environment->name === 'production' => 0,
+                    $environment->kind === EnvironmentKind::PERMANENT => 1,
+                    $environment->kind === EnvironmentKind::PREVIEW_TEMPLATE => 2,
+                    default => 3,
+                }, $environment->name])
                 ->map(fn (Environment $environment) => [
                     'id' => $environment->id,
                     'name' => $environment->name,
@@ -186,19 +156,5 @@ class ApplicationController extends Controller
                 ])
                 ->values(),
         ]);
-    }
-
-    /** @return list<array<string, mixed>> */
-    private static function presets(): array
-    {
-        return array_map(fn (ApplicationType $type) => [
-            'value' => $type->value,
-            'port' => $type->defaultPort(),
-            'chooses_port' => $type->choosesPort(),
-            'uses_build_command' => $type->usesBuildCommand(),
-            'deploy_commands' => $type->deployCommands(),
-            'processes' => $type->processes(),
-            'database' => $type->database(),
-        ], ApplicationType::cases());
     }
 }
