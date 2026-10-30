@@ -3,9 +3,10 @@
 namespace App\Domains\Applications\Actions;
 
 use App\Domains\Applications\Enums\ApplicationType;
+use App\Domains\Applications\Enums\RepositoryRead;
 use App\Domains\Applications\Models\Application;
+use App\Domains\Applications\RepositoryProbe;
 use App\Domains\Audit\Models\AuditEvent;
-use App\Domains\Builds\Git;
 use App\Domains\Builds\SshKeygen;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Enums\DatastoreKind;
@@ -17,6 +18,7 @@ use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\DefaultDomain;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CreateApplication
 {
@@ -27,6 +29,7 @@ class CreateApplication
         private DefaultDomain $defaultDomain,
         private AddDeployKey $addDeployKey,
         private SshKeygen $sshKeygen,
+        private RepositoryProbe $repositoryProbe,
     ) {}
 
     /**
@@ -46,6 +49,8 @@ class CreateApplication
      *     deploy_key?: bool,
      *     deploy_private_key?: string|null,
      * } $data
+     *
+     * @throws ValidationException when opencloud cannot read the repository, the branch, or the own key
      */
     public function execute(User $by, array $data): Application
     {
@@ -57,11 +62,23 @@ class CreateApplication
 
         // A wrong repository or branch fails here, before any record exists. A new deploy key cannot read the
         // repository until the user adds it on GitHub, so that path makes no remote call and takes main as the default branch.
-        $draft = new Application(['repository' => $data['repository'], 'deploy_private_key' => $ownKey]);
-        $branch = ($data['branch'] ?? null) ?: ($deployKey ? 'main' : Git::defaultBranch($draft));
+        $branch = ($data['branch'] ?? null) ?: null;
 
-        if (! $deployKey) {
-            Git::head($draft, $branch);
+        if ($deployKey) {
+            $branch ??= 'main';
+        } else {
+            $access = $this->repositoryProbe->access(new Application(['repository' => $data['repository'], 'deploy_private_key' => $ownKey]), $branch);
+
+            if (! $access->read->works()) {
+                throw ValidationException::withMessages([match ($access->read) {
+                    RepositoryRead::BRANCH_MISSING => 'branch',
+                    RepositoryRead::KEY_REFUSED => 'deploy_private_key',
+                    default => 'repository',
+                } => $access->summary()]);
+            }
+
+            // An empty repository has no HEAD, so git finds no default branch.
+            $branch ??= $access->defaultBranch ?? throw ValidationException::withMessages(['branch' => 'The repository has no branch yet. Push a commit first.']);
         }
 
         return DB::transaction(function () use ($by, $data, $type, $branch, $deployKey, $ownKey) {
