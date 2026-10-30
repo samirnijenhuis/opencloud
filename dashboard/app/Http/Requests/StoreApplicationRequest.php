@@ -35,13 +35,33 @@ class StoreApplicationRequest extends FormRequest
         return $repository;
     }
 
+    /**
+     * CheckRepositoryAccessRequest shares the repository and branch rules.
+     *
+     * @return array<string, mixed>
+     */
+    public static function repositoryRules(): array
+    {
+        return [
+            'repository' => ['required', 'string', 'max:500', 'regex:#^https://[^\s/]+/\S+$#'],
+            'branch' => ['nullable', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public static function repositoryMessages(): array
+    {
+        return [
+            'repository.regex' => 'Use owner/repo, git@github.com:owner/repo.git, or a full https address.',
+        ];
+    }
+
     /** @return array<string, mixed> */
     public function rules(): array
     {
         return [
-            'repository' => ['required', 'string', 'max:500', 'regex:#^https://[^\s/]+/\S+$#'],
+            ...self::repositoryRules(),
             'name' => ['nullable', 'string', 'max:100'],
-            'branch' => ['nullable', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
             'deploy_key' => ['boolean'],
             'deploy_private_key' => ['nullable', 'string', 'max:16384', 'prohibited_if_accepted:deploy_key'],
             'cluster_id' => ['required', 'integer', 'exists:clusters,id'],
@@ -54,7 +74,7 @@ class StoreApplicationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'repository.regex' => 'Use owner/repo, git@github.com:owner/repo.git, or a full https address.',
+            ...self::repositoryMessages(),
             'deploy_private_key.prohibited_if_accepted' => 'Choose a new key or your own key. Do not choose both.',
         ];
     }

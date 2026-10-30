@@ -19,6 +19,7 @@ use App\Http\Controllers\InviteAcceptController;
 use App\Http\Controllers\LiveStatusController;
 use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\ProcessController;
+use App\Http\Controllers\RepositoryAccessController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 
@@ -39,6 +40,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('applications', [ApplicationController::class, 'index'])->name('applications.index');
     Route::get('applications/create', [ApplicationController::class, 'create'])->name('applications.create');
+    Route::get('applications/create/repository-access', [RepositoryAccessController::class, 'check'])->middleware('throttle:30,1')->name('applications.repository-access.check');
     Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
     Route::get('applications/{application}', [ApplicationController::class, 'show'])->name('applications.show');
     Route::patch('applications/{application}/previews', [PreviewSettingsController::class, 'update'])->name('applications.previews.update');
@@ -56,6 +58,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('environments/{environment}/logs/read', [EnvironmentLogController::class, 'read'])->name('environments.logs.read');
 
     Route::get('environments/{environment}/status', [LiveStatusController::class, 'environment'])->name('environments.status');
+    Route::get('environments/{environment}/repository-access', [RepositoryAccessController::class, 'show'])->name('environments.repository-access');
 
     Route::get('environments/{environment}/commands', [EnvironmentController::class, 'commands'])->name('environments.commands');
     Route::get('environments/{environment}/command-runs', [CommandRunController::class, 'index'])->name('environments.command-runs');
