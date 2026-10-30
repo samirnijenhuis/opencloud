@@ -13,7 +13,7 @@
   <img alt="Status: hobby project" src="https://img.shields.io/badge/status-hobby%20project-orange">
   <a href="https://github.com/samirnijenhuis/opencloud/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/samirnijenhuis/opencloud"></a>
   <a href="https://github.com/samirnijenhuis/opencloud/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/samirnijenhuis/opencloud/actions/workflows/tests.yml/badge.svg"></a>
-  <img alt="Laravel 12" src="https://img.shields.io/badge/Laravel-12-FF2D20?logo=laravel&logoColor=white">
+  <img alt="Laravel 12" src="https://img.shields.io/badge/Laravel-12-FF2D20">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
   <img alt="Kubernetes with k3s" src="https://img.shields.io/badge/Kubernetes-k3s-FFC61C?logo=k3s&logoColor=black">
   <img alt="OpenTofu" src="https://img.shields.io/badge/IaC-OpenTofu-FFDA18?logo=opentofu&logoColor=black">
@@ -484,4 +484,6 @@ And [Laravel Cloud](https://cloud.laravel.com), the product that this project tr
 
 ## License
 
-Opencloud has no license yet. Until one is chosen, the default copyright rules apply. The [design document](docs/superpowers/specs/2026-10-22-opencloud-design.md) lists the choice of a license as an open item.
+Opencloud uses the [Apache License 2.0](LICENSE). The Dockerfile templates in [`dashboard/resources/docker/`](dashboard/resources/docker) go into the builds of your apps. So they use [MIT No Attribution](dashboard/resources/docker/LICENSE), and you can use them in your own images without a notice.
+
+Laravel and the Laravel logo are trademarks of Laravel Holdings Inc. Opencloud uses the name Laravel only to say what it works with, and it does not use the Laravel logo.
