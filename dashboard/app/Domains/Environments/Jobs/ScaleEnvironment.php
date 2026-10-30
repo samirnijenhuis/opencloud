@@ -50,6 +50,13 @@ class ScaleEnvironment implements ShouldBeUniqueUntilProcessing, ShouldQueue
         $namespace = $environment->kubeNamespace();
         $selector = [Labels::ENVIRONMENT => (string) $environment->id];
         $manifests = new EnvironmentManifests($environment);
+        $scaleDatastores = fn () => $environment->datastoreAttachments()->where('status', DatastoreStatus::READY)->with('datastore.cluster')->get()
+            ->each(fn (DatastoreAttachment $attachment) => Provisioners::of($attachment->datastore)->scale($attachment, awake: ! $asleep));
+
+        // A pod can use Valkey as soon as it starts, so a wake starts Valkey first and a sleep stops it last.
+        if (! $asleep) {
+            $scaleDatastores();
+        }
 
         // An autoscaler keeps its minimum of pods, so it goes first.
         if ($asleep) {
@@ -76,7 +83,8 @@ class ScaleEnvironment implements ShouldBeUniqueUntilProcessing, ShouldQueue
             ])->throw();
         }
 
-        $environment->datastoreAttachments()->where('status', DatastoreStatus::READY)->with('datastore.cluster')->get()
-            ->each(fn (DatastoreAttachment $attachment) => Provisioners::of($attachment->datastore)->scale($attachment, awake: ! $asleep));
+        if ($asleep) {
+            $scaleDatastores();
+        }
     }
 }

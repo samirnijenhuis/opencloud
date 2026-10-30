@@ -74,6 +74,8 @@ class ScaleEnvironmentTest extends TestCase
         $id = $this->environment->id;
         $namespace = "--namespace=oc-env-{$id}";
         $this->assertSame([
+            // Valkey starts before the pods that use it.
+            ['scale', "deployment/valkey-{$this->valkey->id}", '--replicas=1', '--namespace=oc-datastores'],
             ['get', 'deployments', "--selector=opencloud.dev/environment={$id}", $namespace, '--ignore-not-found', '-o', 'json'],
             ['scale', 'deployment/web', '--replicas=2', $namespace],
             ['scale', 'deployment/worker', '--replicas=3', $namespace],
@@ -82,7 +84,6 @@ class ScaleEnvironmentTest extends TestCase
             ['apply', '--server-side', '--force-conflicts', '--field-manager=opencloud', '-f', '-'],
             ['get', 'cronjobs', "--selector=opencloud.dev/environment={$id}", $namespace, '--ignore-not-found', '-o', 'json'],
             ['patch', 'cronjob/cleanup', $namespace, '--type=merge', '--patch={"spec":{"suspend":false}}'],
-            ['scale', "deployment/valkey-{$this->valkey->id}", '--replicas=1', '--namespace=oc-datastores'],
         ], array_column($this->kubectl->calls, 'args'));
 
         $autoscaler = $this->kubectl->appliedManifests()[0];

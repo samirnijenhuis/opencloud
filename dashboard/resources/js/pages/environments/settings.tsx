@@ -122,7 +122,7 @@ function GeneralForm({ environment, settings, locked }: { environment: Props['en
                 </Field>
                 <Field
                     label="Sleep when idle"
-                    description="Stop the pods after this many minutes without a request. The next request starts them again, and the visitor sees a Starting page for about 15 seconds."
+                    description="Stop the pods after this many minutes without a request. Queue workers and scheduled tasks stop too, and a task that is due during sleep does not run later. The next request starts the pods again, and the visitor sees a Starting page for about 15 seconds."
                     htmlFor="sleep"
                 >
                     <div className="flex flex-wrap items-center gap-3">
