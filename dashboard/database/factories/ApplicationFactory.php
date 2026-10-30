@@ -19,7 +19,8 @@ class ApplicationFactory extends Factory
     {
         return [
             'name' => fake()->unique()->slug(2),
-            'repository' => fake()->userName().'/'.fake()->slug(2),
+            // A GitHub owner name has no dot, so fake()->userName() can give a repository that RepositoryName::parse() refuses.
+            'repository' => fake()->word().'/'.fake()->slug(2),
             'cluster_id' => Cluster::factory(),
             'type' => ApplicationType::LARAVEL,
         ];
