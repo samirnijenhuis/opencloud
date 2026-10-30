@@ -130,9 +130,9 @@ enum ApplicationType: string
      * @param  list<string>  $hostnames  the domains of the environment, oldest first
      * @return array<string, string>
      */
-    public function systemEnv(int $port, array $hostnames): array
+    public function systemEnv(int $port, ?string $primary, array $hostnames): array
     {
-        $url = $hostnames === [] ? [] : ['APP_URL' => "https://{$hostnames[0]}"];
+        $url = $primary === null ? [] : ['APP_URL' => "https://{$primary}"];
         $port = ['PORT' => (string) $port];
 
         return match ($this) {

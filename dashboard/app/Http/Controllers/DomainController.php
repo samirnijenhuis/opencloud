@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Routing\Actions\AddDomain;
 use App\Domains\Routing\Actions\RemoveDomain;
+use App\Domains\Routing\Actions\SetPrimaryDomain;
 use App\Domains\Routing\Jobs\CheckDomain;
 use App\Domains\Routing\Models\Domain;
 use App\Http\Requests\DomainRequest;
+use App\Http\Requests\SetPrimaryDomainRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -38,6 +40,13 @@ class DomainController extends Controller
         Gate::authorize('update', $domain->environment->application);
 
         CheckDomain::dispatch($domain);
+
+        return back();
+    }
+
+    public function makePrimary(SetPrimaryDomainRequest $request, Domain $domain, SetPrimaryDomain $setPrimaryDomain): RedirectResponse
+    {
+        $setPrimaryDomain->execute($domain, $request->user());
 
         return back();
     }
