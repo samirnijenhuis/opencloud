@@ -70,7 +70,7 @@ class PreviewLifecycleTest extends TestCase
         app(AttachDatastore::class)->execute($this->environment('production'), $owner, DatastoreKind::VALKEY);
 
         $template = $this->environment('preview-template');
-        $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force']]);
+        $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force'], 'sleep_after_minutes' => 30]);
         $template->processes()->where('name', 'worker')->delete();
         Process::factory()->for($template)->create(['name' => 'horizon', 'command' => 'php artisan horizon', 'size' => Size::M, 'min_instances' => 1, 'max_instances' => 3, 'cpu_target' => 60]);
         $setEnvVar = app(SetEnvVar::class);
@@ -89,8 +89,8 @@ class PreviewLifecycleTest extends TestCase
 
         $preview = $this->environment('pr-12');
         $this->assertSame(
-            [EnvironmentKind::PREVIEW, 12, 'feature/login', false, 's', 1, 1, '/health', ['php artisan migrate --force', 'php artisan db:seed --force']],
-            [$preview->kind, $preview->pr_number, $preview->branch, $preview->is_protected, $preview->size->value, $preview->min_instances, $preview->max_instances, $preview->health_path, $preview->deploy_commands],
+            [EnvironmentKind::PREVIEW, 12, 'feature/login', false, 's', 1, 1, '/health', ['php artisan migrate --force', 'php artisan db:seed --force'], 30],
+            [$preview->kind, $preview->pr_number, $preview->branch, $preview->is_protected, $preview->size->value, $preview->min_instances, $preview->max_instances, $preview->health_path, $preview->deploy_commands, $preview->sleep_after_minutes],
         );
         $this->assertSame(
             [

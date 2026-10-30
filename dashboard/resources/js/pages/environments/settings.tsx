@@ -19,6 +19,7 @@ type Settings = {
     auto_deploy: boolean;
     build_command: string | null;
     deploy_commands: string[];
+    sleep_after_minutes: number | null;
 };
 
 type Props = EnvironmentPageProps & { settings: Settings; envVars: EnvVar[]; envText: string; canDelete: boolean };
@@ -30,6 +31,9 @@ const sections = [
 ] as const;
 
 const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
+
+/** The minutes that sleep starts with when the user turns it on. A new preview starts with the same value. */
+const SLEEP_AFTER_MINUTES = 15;
 
 /** The active section is the last one whose heading is above a line near the top of the screen, or the last one at the end of the page. */
 function useActiveSection(): string {
@@ -90,7 +94,7 @@ function Field({ label, description, htmlFor, children }: { label: string; descr
 }
 
 function GeneralForm({ environment, settings, locked }: { environment: Props['environment']; settings: Settings; locked: boolean }) {
-    const form = useForm({ branch: settings.branch, auto_deploy: settings.auto_deploy });
+    const form = useForm({ branch: settings.branch, auto_deploy: settings.auto_deploy, sleep_after_minutes: settings.sleep_after_minutes });
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -116,6 +120,42 @@ function GeneralForm({ environment, settings, locked }: { environment: Props['en
                         />
                         {form.data.auto_deploy ? 'On' : 'Off'}
                     </Label>
+                </Field>
+                <Field
+                    label="Sleep when idle"
+                    description="Stop the pods after this many minutes without a request. Queue workers and scheduled tasks stop too, and a task that is due during sleep does not run later. The next request starts the pods again, and the visitor sees a Starting page for about 15 seconds."
+                    htmlFor="sleep"
+                >
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Label className="flex items-center gap-2 font-normal">
+                            <Checkbox
+                                id="sleep"
+                                checked={form.data.sleep_after_minutes !== null}
+                                onCheckedChange={(checked) =>
+                                    form.setData(
+                                        'sleep_after_minutes',
+                                        checked === true ? (settings.sleep_after_minutes ?? SLEEP_AFTER_MINUTES) : null,
+                                    )
+                                }
+                            />
+                            {form.data.sleep_after_minutes !== null ? 'On' : 'Off'}
+                        </Label>
+                        {form.data.sleep_after_minutes !== null && (
+                            <Label className="flex items-center gap-2 font-normal">
+                                <Input
+                                    id="sleep_after_minutes"
+                                    type="number"
+                                    min={5}
+                                    max={1440}
+                                    className="w-24"
+                                    value={form.data.sleep_after_minutes}
+                                    onChange={(e) => form.setData('sleep_after_minutes', Number(e.target.value))}
+                                />
+                                minutes
+                            </Label>
+                        )}
+                    </div>
+                    <InputError message={form.errors.sleep_after_minutes} />
                 </Field>
                 <Field label="Color" description="The color that tells this environment apart in the dashboard.">
                     <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Environment color">

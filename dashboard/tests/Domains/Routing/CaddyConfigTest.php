@@ -15,7 +15,7 @@ class CaddyConfigTest extends TestCase
         ]);
 
         $this->assertSame(
-            '{"apps":{"http":{"servers":{'.
+            '{"apps":{"http":{"metrics":{"per_host":true},"servers":{'.
             '"dashboard":{"listen":[":8000"],"routes":[{"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"dashboard.opencloud.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]},'.
             '"apps":{"listen":[":443"],"routes":['.
             '{"match":[{"host":["a.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"web.oc-env-3.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]},'.
@@ -29,10 +29,23 @@ class CaddyConfigTest extends TestCase
     {
         $this->assertSame([
             'apps' => [
-                'http' => ['servers' => ['apps' => ['listen' => [':443'], 'routes' => []]]],
+                'http' => ['metrics' => ['per_host' => true], 'servers' => ['apps' => ['listen' => [':443'], 'routes' => []]]],
                 'tls' => ['automation' => ['policies' => [['issuers' => [['module' => 'acme', 'email' => 'ops@example.com']]]]]],
             ],
         ], (new CaddyConfig('acme', 'ops@example.com'))->build(false, []));
+    }
+
+    public function test_a_request_whose_app_does_not_answer_goes_to_the_wake_path_of_the_dashboard(): void
+    {
+        $config = (new CaddyConfig('internal', null))->build(false, ['a.example.com' => 'web.oc-env-3.svc.cluster.local:8080'], wakeUpstream: '203.0.113.10:8000');
+
+        $this->assertSame(
+            '{"routes":[{"match":[{"expression":"{http.error.status_code} == 502"}],"handle":['.
+            '{"handler":"rewrite","uri":"/_opencloud/wake/{http.request.host}"},'.
+            '{"handler":"reverse_proxy","upstreams":[{"dial":"203.0.113.10:8000"}],"load_balancing":{"try_duration":"5s"}}'.
+            ']}]}',
+            json_encode($config['apps']['http']['servers']['apps']['errors'], JSON_UNESCAPED_SLASHES),
+        );
     }
 
     public function test_acme_without_an_email_sends_no_email(): void

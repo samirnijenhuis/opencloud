@@ -42,6 +42,9 @@ trait PresentsEnvironment
                 'branch' => $environment->branch,
                 'auto_deploy' => $environment->auto_deploy,
                 'status' => $latest?->status,
+                'sleep_after_minutes' => $environment->sleep_after_minutes,
+                'slept_at' => $environment->slept_at?->toIso8601String(),
+                'last_request_at' => $environment->last_request_at?->toIso8601String(),
             ],
             'can' => [
                 'update' => $user->can('update', $environment),

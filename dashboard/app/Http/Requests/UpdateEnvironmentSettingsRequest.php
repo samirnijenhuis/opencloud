@@ -39,6 +39,15 @@ class UpdateEnvironmentSettingsRequest extends FormRequest
             'build_command' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'deploy_commands' => ['sometimes', 'array', 'max:20'],
             'deploy_commands.*' => ['string', 'max:1000'],
+            'sleep_after_minutes' => ['sometimes', 'nullable', 'integer', 'min:5', 'max:1440'],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'sleep_after_minutes.*' => 'Enter a number of minutes from 5 to 1440.',
         ];
     }
 

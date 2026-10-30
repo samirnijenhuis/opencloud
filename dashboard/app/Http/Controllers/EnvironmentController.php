@@ -150,6 +150,7 @@ class EnvironmentController extends Controller
                 'auto_deploy' => $environment->auto_deploy,
                 'build_command' => $environment->build_command,
                 'deploy_commands' => $environment->deploy_commands,
+                'sleep_after_minutes' => $environment->sleep_after_minutes,
             ],
             'canDelete' => $request->user()->can('delete', $environment),
             'envText' => $dotenv->format(

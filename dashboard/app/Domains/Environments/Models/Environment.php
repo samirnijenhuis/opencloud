@@ -25,6 +25,9 @@ class Environment extends Model
 {
     use HasFactory;
 
+    /** A new preview template, and so each new preview, sleeps after this many minutes without a request. */
+    public const PREVIEW_SLEEP_AFTER_MINUTES = 15;
+
     protected $fillable = [
         'application_id',
         'name',
@@ -43,6 +46,7 @@ class Environment extends Model
         'deploy_commands',
         'health_path',
         'pr_comment_id',
+        'sleep_after_minutes',
     ];
 
     protected $hidden = ['deploy_hook_token'];
@@ -82,12 +86,25 @@ class Environment extends Model
             'max_instances' => 'integer',
             'cpu_target' => 'integer',
             'deploy_commands' => 'array',
+            'sleep_after_minutes' => 'integer',
+            'last_request_at' => 'datetime',
+            'slept_at' => 'datetime',
+            'woke_at' => 'datetime',
         ];
     }
 
     public function kubeNamespace(): string
     {
         return "oc-env-{$this->id}";
+    }
+
+    /**
+     * True for 5 minutes after a wake. A wake takes about 13 seconds, so a pod that is not ready after that time has
+     * another problem than the sleep.
+     */
+    public function isWaking(): bool
+    {
+        return $this->woke_at?->isAfter(now()->subMinutes(5)) ?? false;
     }
 
     /** @return list<string> web and the names of the other processes */

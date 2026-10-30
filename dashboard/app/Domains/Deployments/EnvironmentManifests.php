@@ -31,6 +31,17 @@ final readonly class EnvironmentManifests
         return $this->environment->max_instances > $this->environment->min_instances;
     }
 
+    /**
+     * The pods that each Deployment starts with, also under an autoscaler. An autoscaler does nothing for a Deployment at
+     * zero pods, so the wake sets these counts before it applies the autoscalers again.
+     *
+     * @return array<string, int> the minimum instances of web and of each long-running process
+     */
+    public function minimumReplicas(): array
+    {
+        return [Process::WEB => $this->environment->min_instances, ...$this->longRunning()->pluck('min_instances', 'name')->all()];
+    }
+
     /** @return list<array<string, mixed>> the Deployments of web and the long-running processes, the Service, and the autoscalers */
     public function workloads(Deployment $deployment): array
     {

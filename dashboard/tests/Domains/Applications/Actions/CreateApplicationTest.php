@@ -65,11 +65,11 @@ class CreateApplicationTest extends TestCase
         $this->assertSame(['shop', 'acme/shop', ApplicationType::LARAVEL, 8080], [$application->name, $application->repository, $application->type, $application->fresh()->port]);
 
         $environments = $application->environments()->orderBy('id')->get()->map(fn (Environment $e) => [
-            $e->name, $e->kind, $e->is_protected, $e->branch, $e->deploy_commands,
+            $e->name, $e->kind, $e->is_protected, $e->branch, $e->deploy_commands, $e->sleep_after_minutes,
         ])->all();
         $this->assertSame([
-            ['production', EnvironmentKind::PERMANENT, true, 'main', ['php artisan migrate --force']],
-            ['preview-template', EnvironmentKind::PREVIEW_TEMPLATE, false, null, ['php artisan migrate --force']],
+            ['production', EnvironmentKind::PERMANENT, true, 'main', ['php artisan migrate --force'], null],
+            ['preview-template', EnvironmentKind::PREVIEW_TEMPLATE, false, null, ['php artisan migrate --force'], 15],
         ], $environments);
 
         $production = $application->environments()->where('name', 'production')->sole();

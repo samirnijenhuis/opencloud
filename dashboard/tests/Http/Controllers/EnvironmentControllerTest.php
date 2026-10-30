@@ -139,7 +139,7 @@ class EnvironmentControllerTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('environments/settings')
-                ->where('settings', ['branch' => 'main', 'auto_deploy' => true, 'build_command' => null, 'deploy_commands' => ['php artisan migrate --force']]));
+                ->where('settings', ['branch' => 'main', 'auto_deploy' => true, 'build_command' => null, 'deploy_commands' => ['php artisan migrate --force'], 'sleep_after_minutes' => null]));
     }
 
     public function test_a_developer_cannot_change_a_protected_environment(): void
@@ -230,6 +230,34 @@ class EnvironmentControllerTest extends TestCase
         $this->assertSame(['auto_deploy' => ['from' => true, 'to' => false]], AuditEvent::sole()->context['changes']);
     }
 
+    public function test_the_user_turns_sleep_on_and_off(): void
+    {
+        $environment = $this->makeEnvironment(false, 'staging');
+        $developer = User::factory()->create();
+
+        $this->actingAs($developer)->patch("/environments/{$environment->id}/settings", ['sleep_after_minutes' => 30])->assertRedirect();
+        $this->assertSame(30, $environment->fresh()->sleep_after_minutes);
+
+        $this->actingAs($developer)->patch("/environments/{$environment->id}/settings", ['sleep_after_minutes' => null])->assertRedirect();
+        $this->assertNull($environment->fresh()->sleep_after_minutes);
+        $this->assertSame(
+            [['sleep_after_minutes' => ['from' => null, 'to' => 30]], ['sleep_after_minutes' => ['from' => 30, 'to' => null]]],
+            AuditEvent::query()->orderBy('id')->pluck('context')->map(fn (array $context) => $context['changes'])->all(),
+        );
+    }
+
+    public function test_the_canvas_shows_that_the_environment_sleeps_and_its_last_request(): void
+    {
+        $environment = $this->makeEnvironment(attributes: ['sleep_after_minutes' => 15]);
+        $environment->forceFill(['slept_at' => '2026-10-29 10:15:00', 'last_request_at' => '2026-10-29 10:00:00'])->save();
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('environment.sleep_after_minutes', 15)
+                ->where('environment.slept_at', '2026-10-29T10:15:00+00:00')
+                ->where('environment.last_request_at', '2026-10-29T10:00:00+00:00'));
+    }
+
     public function test_saving_unchanged_settings_records_nothing(): void
     {
         $environment = $this->makeEnvironment(false);
@@ -252,6 +280,9 @@ class EnvironmentControllerTest extends TestCase
             ['cpu_target', 100],
             ['health_path', 'up'],
             ['deploy_commands', 'not an array'],
+            ['sleep_after_minutes', 4],
+            ['sleep_after_minutes', 1441],
+            ['sleep_after_minutes', 'soon'],
         ];
 
         foreach ($cases as [$field, $value]) {
