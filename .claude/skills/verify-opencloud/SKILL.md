@@ -25,7 +25,7 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 - **Checks.** The `checks` of a fixture list what its verify endpoint reports: `marker` (the runtime env value), `build`, `secret`, `db`, `extra` (the database `reports`), and `cache`. The runner prints `SKIP` for a check that the fixture does not report. A skip is not a pass. `static` reports `marker` and `build`. `site` has no server process, so it reports only `build`. The other fixtures report all six.
 - **Databases.** The `databases` of a fixture list the values that it supports.
   - `none` attaches no database.
-  - `mysql` and `postgres` use the database option of the create form for a fixture with `database_in_create_form`: `laravel`, `node`, `python`, and `ruby`. The `static` and `php` cells add it with "Add resource" before the second deploy, the way a user does, so the matrix proves both paths.
+  - `mysql` and `postgres` exist before the first deploy for a fixture with `database_before_first_deploy`: `laravel`, `node`, `python`, and `ruby`. The runner removes the other database of the preset and adds the missing one on the canvas. A Laravel app starts with MySQL, so the `laravel` cells with `postgres` remove it first. The `static` and `php` cells add the database with "Add resource" before the second deploy, so the matrix proves both paths.
   - `mysqlpostgres` creates the app with MySQL, the default database `main`. In step 2 it adds Postgres with Add resource and the connection name `reports`. The app gets `REPORTS_DB_URL` with the Laravel env names and `REPORTS_DATABASE_URL` with the generic env names. A Dockerfile app gets both. The verify endpoint connects with the name that its fixture reads. From step 2 on, `extra.reports` must report `ok` with the driver `pgsql`.
   - `sqlite` sets `DB_CONNECTION=sqlite`. Laravel bakes a migrated file into the image with its build command. PHP writes to a file in the pod. Each pod has its own copy, and a redeploy starts empty, so the matrix checks no persistence for SQLite. The generic fixtures have no `sqlite` cells.
   - `site` supports only `none`.
@@ -39,7 +39,7 @@ Everything runs from the repository root. The helpers are in `.claude/skills/ver
 
 Each cell does three deploys:
 
-1. **Create.** The cell posts the create form with its build command, deploy commands, env values, a secret, a build env value, and `processes: []`. It also posts the private key of the matrix in `deploy_private_key`, as the choice "Use my own key" does. The dashboard reads the branch over SSH with that key and starts the first deploy. The first deploy must go live. Then the page and the verify endpoint must report the runtime env value, the build marker, the hash of the secret, the database, and the cache, as far as the fixture reports them.
+1. **Create and configure.** The cell posts the create form with the repository, the branch, the name, the cluster, the type, the port, and the private key of the matrix in `deploy_private_key`, as the choice "Use my own key" does. The dashboard reads the branch over SSH with that key and starts no deploy. Then the cell configures production as a user does. It removes the processes of the preset, saves the build command and the deploy commands in the settings, makes the database that the cell has before the first deploy, and adds the env values with a secret and a build env value. Last, it clicks Deploy. The first deploy must go live. Then the page and the verify endpoint must report the runtime env value, the build marker, the hash of the secret, the database, and the cache, as far as the fixture reports them.
 2. **Change and redeploy.** The cell changes `VERIFY_MARKER` to `-v2`, adds the database `reports` and Valkey when the cell has them, and clicks Deploy. The new value must show. The MySQL and Postgres rows from step 1 must still be there.
 3. **Redeploy under traffic.** The cell polls the verify endpoint four times a second during a third deploy. No request may fail.
 
@@ -97,10 +97,13 @@ The runner prints one `PASS`, `FAIL`, or `SKIP` line per check and a summary tab
 
 The runner posts JSON to the same routes as the dashboard forms, with the session cookie and the `X-XSRF-TOKEN` header of a browser:
 
-- `POST /applications` is the create form.
+- `POST /applications` is the create form. It sets only the repository, the branch, the name, the key, the cluster, the type, and the port.
+- `DELETE /processes/{id}` removes a process of the preset from the canvas.
+- `PATCH /environments/{id}/settings` saves the build command and the deploy commands.
+- `DELETE /datastore-attachments/{id}` removes the database of the preset when the cell wants another one.
 - `POST /environments/{id}/env` is Settings, then Environment values.
 - `POST /environments/{id}/datastores` with `{"kind": "valkey"}` is Add resource. A database can have a connection name, for example `{"kind": "postgres", "name": "reports"}`.
-- `POST /environments/{id}/deployments` is the Deploy button.
+- `POST /environments/{id}/deployments` is the Deploy button. The first deploy starts with it too.
 
 It reads the page props from the `data-page` attribute of `GET /environments/{id}`, `/deployments/{id}`, and `/applications/create`. It checks the sites with HTTPS requests to the free address. The test machines use Caddy's local CA, so the runner does not check the certificate chain.
 
@@ -129,7 +132,7 @@ Each run writes to `.verify/runs/<YYYYMMDD-HHMMSS>/`, which git ignores:
 - `summary.md` holds one row per cell: the verdict, the seconds, the first deploy time, the number of skipped checks, and the failed checks.
 - `machine.json` holds the machine, `BASE`, `BUILT_FROM`, the `HEAD` at the run, and the cells.
 - `<cell>/` holds:
-  - `config.json`, the body of the create form, with the secret value as `<secret>` and the deploy key as `<key>`;
+  - `config.json`, the body of the create form plus the settings, the database, and the env values that the runner configures, with the secret value as `<secret>` and the deploy key as `<key>`;
   - `deployment-1.log` to `deployment-3.log`, the deploy logs;
   - `step-N-page.html` and `step-N-verify.json`, the live responses of each step;
   - `step-3-requests.json`, the request count and the failures during the third deploy;
@@ -159,7 +162,7 @@ Proof standards:
 - The runner sends every request through `curl`. macOS Local Network privacy can block the sockets of Python, including Homebrew's and Apple's, to the OrbStack address with "No route to host". It allows `curl`, which is a system binary. Do not change the runner back to `urllib`. If a quick check from Python fails with that error, use `curl` instead.
 - A second run on the same machine reuses the app names. The free address then gets the app id in its name. The runner reads the address from the page props, so this is harmless.
 - A Dockerfile app and a static site ignore the build command. The Laravel, Node.js, Python, and Ruby templates run it. A Dockerfile fixture reads a build env value with `RUN --mount=type=secret,id=<KEY>`. The Node.js and static templates put each build env value in the env of the build script, so `node` and `site` read `process.env.VERIFY_BUILD`.
-- The `type` of a fixture in `matrix.json` decides its env names. The create form has no field for them. A fixture that reads the wrong names reports no database and no cache.
+- The `type` of a fixture in `matrix.json` decides its env names. The user sets no env names. A fixture that reads the wrong names reports no database and no cache.
 - A static site has no server process. It cannot read a runtime env value, a secret, or a datastore, so `site` skips those checks. Its verify endpoint is the file `/verify.json`, because the static preset answers each other path with `index.html`.
 - The `python` and `ruby` cells need the Python and Ruby presets. The Ruby preset must have a C compiler and the MySQL client headers, because `puma`, `nio4r`, and `mysql2` compile. `pg` installs as a binary gem.
 - The first build of each fixture on a new machine downloads every package and can take several minutes. Later builds use the BuildKit cache and take seconds.

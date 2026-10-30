@@ -20,7 +20,7 @@ Preconditions:
 - `matrix.py doctor` reports `OK` on every line.
 
 - **Change and redeploy.** Change a value, add Postgres and Valkey, and deploy. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'php-postgres-valkey'`. The output shows `PASS Add resource attaches postgres`, `PASS deployment 2 goes live`, and `PASS step 2: the redis cache works`.
-- **Data stays.** Compare the rows before and after each redeploy. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'laravel-mysqlpostgres-valkey' --only 'php-postgres-valkey'`. The output shows `PASS step N: the rows of earlier steps are still there (<new count> > <old count>)`. The Laravel cell gets MySQL in the create form, so it shows the check from step 2. The PHP cell gets Postgres at step 2, so it shows the check only at step 3.
+- **Data stays.** Compare the rows before and after each redeploy. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'laravel-mysqlpostgres-valkey' --only 'php-postgres-valkey'`. The output shows `PASS step N: the rows of earlier steps are still there (<new count> > <old count>)`. The Laravel cell has MySQL before the first deploy, so it shows the check from step 2. The PHP cell gets Postgres at step 2, so it shows the check only at step 3.
 - **Traffic.** Deploy while the runner polls the site four times a second. The output shows `PASS the redeploy under traffic fails no request (0 of <n> failed)`.
 - **Proof.** Open `step-3-requests.json` of the cell. `failed` is `0`, and `failures` is empty.
 
