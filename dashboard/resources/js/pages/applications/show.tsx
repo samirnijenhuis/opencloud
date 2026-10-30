@@ -7,7 +7,6 @@ import AppLayout from '@/layouts/app-layout';
 import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { DeployKey } from './deploy-key';
 import { NewEnvironment } from './new-environment';
 
 type EnvironmentRow = {
@@ -26,7 +25,6 @@ type Props = {
     application: { id: number; name: string; repository: string; type: ApplicationType; port: number };
     environments: EnvironmentRow[];
     previews: { previews_enabled: boolean; max_previews: number };
-    deployPublicKey: string | null;
     canUpdate: boolean;
 };
 
@@ -44,7 +42,7 @@ function PullRequest({ environment }: { environment: EnvironmentRow }) {
     );
 }
 
-export default function ApplicationShow({ application, environments, previews, deployPublicKey, canUpdate }: Props) {
+export default function ApplicationShow({ application, environments, previews, canUpdate }: Props) {
     const [saving, setSaving] = useState(false);
 
     const setPreviews = (enabled: boolean) =>
@@ -131,15 +129,6 @@ export default function ApplicationShow({ application, environments, previews, d
                         </li>
                     ))}
                 </ul>
-
-                {/* The controller sorts production first. The steps matter until production deploys once. */}
-                <DeployKey
-                    applicationId={application.id}
-                    publicKey={deployPublicKey}
-                    settingsUrl={`${route('environments.settings', environments[0].id)}#deployments`}
-                    canUpdate={canUpdate}
-                    defaultOpen={deployPublicKey !== null && environments[0].status === null}
-                />
             </div>
         </AppLayout>
     );

@@ -6,6 +6,7 @@ import { DomainsSheet } from '@/components/environment/domains-sheet';
 import { EditorSheet } from '@/components/environment/editor-sheet';
 import { PreviewsSheet } from '@/components/environment/previews-sheet';
 import { ProcessSheet, scheduleWords } from '@/components/environment/process-sheet';
+import { previewStates, useRepositoryAccess } from '@/components/environment/repository-sheet';
 import { AddResourceMenu, namedTextsFor, ResourceSheet, statusLabels, statusTones } from '@/components/environment/resource-sheet';
 import {
     type Attachment,
@@ -92,6 +93,8 @@ function VisitSite({ domains }: { domains: Domain[] }) {
 function PreviewsBlock({ previews, onOpen }: { previews: PreviewTemplateSettings; onOpen: () => void }) {
     const wildcard = previews.preview_domain ? previewWildcard(previews.preview_domain) : null;
     const labels = previews.preview_labels.join(', ');
+    const delivery = useRepositoryAccess().access?.previews ?? (previews.previews_enabled ? 'on' : 'off');
+    const [tone, state] = previewStates[delivery];
 
     return (
         <Block icon={GitPullRequest} title="Previews" onOpen={onOpen}>
@@ -113,7 +116,7 @@ function PreviewsBlock({ previews, onOpen }: { previews: PreviewTemplateSettings
                 </Row>
             )}
             <Row label="Pull requests">
-                {!previews.previews_enabled ? <Status tone="off">Off</Status> : labels === '' ? 'Each pull request' : `With label ${labels}`}
+                {delivery !== 'on' ? <Status tone={tone}>{state}</Status> : labels === '' ? 'Each pull request' : `With label ${labels}`}
             </Row>
             <Row label="At most">{`${previews.max_previews} at the same time`}</Row>
         </Block>

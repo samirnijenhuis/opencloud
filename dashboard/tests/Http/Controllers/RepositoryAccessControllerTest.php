@@ -77,7 +77,7 @@ class RepositoryAccessControllerTest extends TestCase
         $this->getJson('/applications/create/repository-access?repository=acme/shop')->assertTooManyRequests();
     }
 
-    public function test_the_environment_route_adds_the_branch_the_deliveries_the_public_key_and_the_update_right(): void
+    public function test_the_environment_route_adds_the_branch_the_deliveries_the_public_key_and_the_rights(): void
     {
         Carbon::setTestNow('2026-10-31 12:00:00');
         $this->makeGitHubApp();
@@ -107,10 +107,13 @@ class RepositoryAccessControllerTest extends TestCase
 
         $this->actingAs(User::factory()->create())->getJson("/environments/{$environment->id}/repository-access")
             ->assertOk()
-            ->assertExactJson([...$json, 'can_update' => false]);
+            ->assertExactJson([...$json, 'can_update' => false, 'can_manage_credentials' => false]);
         $this->actingAs(User::factory()->admin()->create())->getJson("/environments/{$environment->id}/repository-access")
             ->assertOk()
-            ->assertExactJson([...$json, 'can_update' => true]);
+            ->assertExactJson([...$json, 'can_update' => true, 'can_manage_credentials' => false]);
+        $this->actingAs(User::factory()->owner()->create())->getJson("/environments/{$environment->id}/repository-access")
+            ->assertOk()
+            ->assertExactJson([...$json, 'can_update' => true, 'can_manage_credentials' => true]);
 
         $this->assertSame([['git', 'ls-remote', '--symref', 'https://x-access-token:'.self::TOKEN.'@github.com/acme/shop.git', 'HEAD', 'refs/heads/main']], $git->commands());
     }

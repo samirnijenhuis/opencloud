@@ -6,6 +6,7 @@ use App\Domains\Applications\RepositoryAccess;
 use App\Domains\Applications\RepositoryProbe;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\GitHub\Models\GithubApp;
+use App\Domains\Members\Enums\Ability;
 use App\Http\Requests\CheckRepositoryAccessRequest;
 use App\Http\Requests\ShowRepositoryAccessRequest;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +31,7 @@ class RepositoryAccessController extends Controller
             'previews' => $access->previews($application),
             'deploy_public_key' => $application->deploy_public_key,
             'can_update' => $request->user()->can('update', $application),
+            'can_manage_credentials' => $request->user()->role->allows(Ability::MANAGE_CREDENTIALS),
         ]);
     }
 

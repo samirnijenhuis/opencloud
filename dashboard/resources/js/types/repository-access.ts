@@ -29,4 +29,5 @@ export type EnvironmentRepositoryAccess = RepositoryAccess & {
     previews: PreviewDelivery;
     deploy_public_key: string | null;
     can_update: boolean;
+    can_manage_credentials: boolean;
 };
