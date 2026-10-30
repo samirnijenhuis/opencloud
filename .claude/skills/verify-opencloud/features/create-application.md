@@ -27,12 +27,12 @@ Preconditions:
 - **Dockerfile apps.** Create the static and PHP apps. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'static-none-none' --only 'php-none-none'`. Both cells show `PASS step 1: the page answers 200 over HTTPS`.
 - **Apps with no Dockerfile.** Create the Node.js, static site, Python, and Ruby apps. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'node-none-none' --only 'site-none-none' --only 'python-none-none' --only 'ruby-none-none'`. Each cell shows `PASS deployment 1 goes live` and `PASS step 1: the page answers 200 over HTTPS`.
 - **Before a run.** Prove a new fixture and its preset in Docker on this computer. Run `.claude/skills/verify-opencloud/scripts/matrix.py local --set full --only 'node-none-none'`. The output shows `PASS the image builds with the Dockerfile of the preset (.opencloud.Dockerfile, see build.log)`.
-- **Free address.** Read the address from the environment page. The output shows `PASS the environment has a free address (<cell>-production.<ip>.sslip.io)`. `canvas.json` lists that domain with `"generated": true`.
-- **Proof.** Open `.verify/runs/<run id>/<cell>/step-1-page.html`. It holds the `<title>` of the fixture, for example `opencloud verify: static`.
+- **Free address.** Read the address from the environment page. The output shows `PASS the environment has a free address (<cell>-production.<ip>.sslip.io)`. `canvas.json` lists that domain with `"generated": true`, `"primary": true`, and `"certificate_status": "issued"`.
+- **Proof.** Open `.verify/runs/<run id>/<cell>/step-1-page.html`. It holds the `<title>` of the fixture, for example `opencloud verify: static`. In `canvas.json`, `processes` is `[]`. No check asserts this, so read the file to prove `create-no-processes`.
 
 ## Gotchas
 
-- The create form needs a full `https://` repository URL or `owner/repo`. A `http://` URL fails validation.
+- The create form needs a full `https://` repository URL, `owner/repo`, or `git@github.com:owner/repo.git`. A `http://` URL fails validation.
 - The fixture repository is private. Without `.verify/fixtures-deploy-key`, `matrix.py run` stops. A key that GitHub does not have fails each cell at `the form creates the application`, because the form redirects back and not to the environment. `matrix.py doctor` names the cause. Run `matrix.py fixtures key`.
 - Without `processes`, a Laravel app gets a worker and a scheduler. The runner sends `processes: []` to keep each cell small.
 - The first build of a fixture on a new machine can take several minutes. The runner waits up to 40 minutes for it.
