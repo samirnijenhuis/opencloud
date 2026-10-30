@@ -163,7 +163,6 @@ class ApplicationController extends Controller
             ],
             'previews' => [
                 'previews_enabled' => $application->previews_enabled,
-                'allow_forks' => $application->allow_forks,
                 'preview_domain' => $application->preview_domain,
                 'preview_labels' => $application->preview_labels,
                 'ingress_ip' => $application->cluster->ingress_ip,

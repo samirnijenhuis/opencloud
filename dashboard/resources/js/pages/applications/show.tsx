@@ -27,7 +27,6 @@ type EnvironmentRow = {
 
 type PreviewSettings = {
     previews_enabled: boolean;
-    allow_forks: boolean;
     preview_domain: string | null;
     preview_labels: string[];
     ingress_ip: string | null;
@@ -60,7 +59,6 @@ function PullRequest({ environment }: { environment: EnvironmentRow }) {
 function PreviewsForm({ application, previews, canUpdate }: { application: Props['application']; previews: PreviewSettings; canUpdate: boolean }) {
     const form = useForm({
         previews_enabled: previews.previews_enabled,
-        allow_forks: previews.allow_forks,
         preview_domain: previews.preview_domain ?? '',
         preview_labels: previews.preview_labels.join(', '),
     });
@@ -82,11 +80,6 @@ function PreviewsForm({ application, previews, canUpdate }: { application: Props
                 <Label className="flex items-center gap-2 font-normal">
                     <Checkbox checked={data.previews_enabled} onCheckedChange={(checked) => setData('previews_enabled', checked === true)} />
                     Create a preview for each pull request
-                </Label>
-
-                <Label className="flex items-center gap-2 font-normal">
-                    <Checkbox checked={data.allow_forks} onCheckedChange={(checked) => setData('allow_forks', checked === true)} />
-                    Also create previews for pull requests from forks
                 </Label>
 
                 <div className="grid gap-2">

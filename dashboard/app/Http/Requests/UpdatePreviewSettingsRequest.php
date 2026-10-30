@@ -23,7 +23,6 @@ class UpdatePreviewSettingsRequest extends FormRequest
     {
         return [
             'previews_enabled' => ['required', 'boolean'],
-            'allow_forks' => ['required', 'boolean'],
             'preview_domain' => ['nullable', 'string', 'max:200', 'regex:'.StoreApplicationRequest::HOSTNAME],
             'preview_labels' => ['nullable', 'string', 'max:500'],
         ];
@@ -41,13 +40,12 @@ class UpdatePreviewSettingsRequest extends FormRequest
     /**
      * The form sends the labels as one text with commas between them.
      *
-     * @return array{previews_enabled: bool, allow_forks: bool, preview_domain: ?string, preview_labels: list<string>}
+     * @return array{previews_enabled: bool, preview_domain: ?string, preview_labels: list<string>}
      */
     public function settings(): array
     {
         return [
             'previews_enabled' => $this->boolean('previews_enabled'),
-            'allow_forks' => $this->boolean('allow_forks'),
             'preview_domain' => $this->validated('preview_domain'),
             'preview_labels' => collect(explode(',', (string) $this->validated('preview_labels')))
                 ->map(fn (string $label) => trim($label))

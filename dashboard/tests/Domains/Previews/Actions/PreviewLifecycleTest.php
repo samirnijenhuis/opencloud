@@ -102,7 +102,7 @@ class PreviewLifecycleTest extends TestCase
             ])->all(),
         );
         $this->assertSame(
-            ['pr_number' => 12, 'branch' => 'feature/login', 'from_fork' => false, 'processes' => ['scheduler', 'horizon']],
+            ['pr_number' => 12, 'branch' => 'feature/login', 'processes' => ['scheduler', 'horizon']],
             AuditEvent::where('action', 'preview.created')->sole()->context,
         );
 
@@ -226,7 +226,7 @@ class PreviewLifecycleTest extends TestCase
         $this->assertSame(['pr-12.preview.example.com'], $this->environment('pr-12')->domains()->pluck('hostname')->all());
     }
 
-    public function test_a_pull_request_from_a_fork_gets_no_preview_unless_the_application_allows_forks(): void
+    public function test_a_pull_request_from_a_fork_gets_no_preview(): void
     {
         $fork = $this->pullRequest('opened', self::OPENED_SHA, headRepository: 'mallory/shop');
 
@@ -234,11 +234,6 @@ class PreviewLifecycleTest extends TestCase
 
         $this->assertSame(0, Environment::query()->where('kind', EnvironmentKind::PREVIEW)->count());
         $this->assertSame(['preview.skipped', ['pr_number' => 12, 'reason' => 'fork']], [AuditEvent::sole()->action, AuditEvent::sole()->context]);
-
-        $this->application->update(['allow_forks' => true]);
-        $this->postWebhook('pull_request', $fork, delivery: 'd-2')->assertStatus(202);
-
-        $this->assertSame(self::OPENED_SHA, $this->environment('pr-12')->deployments()->sole()->commit_sha);
     }
 
     public function test_switched_off_previews_create_nothing(): void

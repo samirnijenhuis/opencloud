@@ -41,7 +41,7 @@ class OpenPreview
     {
         $skipped = match (true) {
             ! $application->previews_enabled => 'previews_disabled',
-            $pullRequest->fromFork && ! $application->allow_forks => 'fork',
+            $pullRequest->fromFork => 'fork',
             default => null,
         };
 
@@ -101,7 +101,6 @@ class OpenPreview
             AuditEvent::record(null, 'preview.created', $preview, [
                 'pr_number' => $pullRequest->number,
                 'branch' => $pullRequest->headRef,
-                'from_fork' => $pullRequest->fromFork,
                 'processes' => $template->processes->pluck('name')->all(),
             ]);
 

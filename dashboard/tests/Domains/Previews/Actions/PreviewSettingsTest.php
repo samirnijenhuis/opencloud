@@ -43,7 +43,6 @@ class PreviewSettingsTest extends TestCase
                 ->where('environments.0.pr_url', null)
                 ->where('previews', [
                     'previews_enabled' => true,
-                    'allow_forks' => false,
                     'preview_domain' => null,
                     'preview_labels' => ['preview'],
                     'ingress_ip' => '203.0.113.10',
@@ -56,33 +55,33 @@ class PreviewSettingsTest extends TestCase
     public function test_an_admin_saves_the_preview_settings_from_a_pasted_wildcard_record(): void
     {
         $this->actingAs(User::factory()->admin()->create())
-            ->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => false, 'allow_forks' => true, 'preview_domain' => ' *.Preview.Example.com. ', 'preview_labels' => ' preview, Deploy me ,, '])
+            ->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => false, 'preview_domain' => ' *.Preview.Example.com. ', 'preview_labels' => ' preview, Deploy me ,, '])
             ->assertSessionHasNoErrors();
 
         $this->application->refresh();
-        $this->assertSame([false, true, 'preview.example.com', ['preview', 'Deploy me']], [$this->application->previews_enabled, $this->application->allow_forks, $this->application->preview_domain, $this->application->preview_labels]);
+        $this->assertSame([false, 'preview.example.com', ['preview', 'Deploy me']], [$this->application->previews_enabled, $this->application->preview_domain, $this->application->preview_labels]);
         $this->assertSame(
-            ['application.previews_updated', ['previews_enabled' => false, 'allow_forks' => true, 'preview_domain' => 'preview.example.com', 'preview_labels' => ['preview', 'Deploy me']]],
+            ['application.previews_updated', ['previews_enabled' => false, 'preview_domain' => 'preview.example.com', 'preview_labels' => ['preview', 'Deploy me']]],
             [AuditEvent::sole()->action, AuditEvent::sole()->context],
         );
 
-        $this->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => true, 'allow_forks' => false, 'preview_domain' => '', 'preview_labels' => ''])->assertSessionHasNoErrors();
+        $this->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => true, 'preview_domain' => '', 'preview_labels' => ''])->assertSessionHasNoErrors();
         $this->assertSame([null, []], [$this->application->fresh()->preview_domain, $this->application->fresh()->preview_labels]);
     }
 
     public function test_a_wrong_domain_is_refused_and_a_developer_cannot_change_the_settings(): void
     {
         $this->actingAs(User::factory()->admin()->create())
-            ->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => true, 'allow_forks' => false, 'preview_domain' => 'not a domain'])
+            ->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => true, 'preview_domain' => 'not a domain'])
             ->assertSessionHasErrors(['preview_domain' => 'Enter a domain like preview.example.com.']);
-        $this->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => true, 'allow_forks' => false, 'preview_domain' => '', 'preview_labels' => str_repeat('a', 501)])
+        $this->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => true, 'preview_domain' => '', 'preview_labels' => str_repeat('a', 501)])
             ->assertSessionHasErrors(['preview_labels' => 'Keep the labels to 500 characters or fewer.']);
 
         $this->actingAs(User::factory()->create())
-            ->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => false, 'allow_forks' => true, 'preview_domain' => ''])
+            ->patch("/applications/{$this->application->id}/previews", ['previews_enabled' => false, 'preview_domain' => ''])
             ->assertForbidden();
 
-        $this->assertSame([true, false, null, []], [$this->application->fresh()->previews_enabled, $this->application->fresh()->allow_forks, $this->application->fresh()->preview_domain, $this->application->fresh()->preview_labels]);
+        $this->assertSame([true, null, []], [$this->application->fresh()->previews_enabled, $this->application->fresh()->preview_domain, $this->application->fresh()->preview_labels]);
         $this->assertSame(0, AuditEvent::count());
     }
 }
