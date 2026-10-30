@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Backups\Enums\BackupStatus;
 use App\Domains\Backups\Models\Backup;
@@ -19,6 +20,8 @@ use App\Domains\Datastores\ExternalField;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Actions\CreateEnvironment;
+use App\Domains\Environments\Actions\DeleteEnvironment;
 use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
 use App\Domains\Environments\DotenvText;
 use App\Domains\Environments\Enums\EnvVarSource;
@@ -33,6 +36,8 @@ use App\Domains\Routing\Models\Domain;
 use App\Domains\Routing\PrimaryDomain;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Http\Requests\AttachDatastoreRequest;
+use App\Http\Requests\CreateEnvironmentRequest;
+use App\Http\Requests\DeleteEnvironmentRequest;
 use App\Http\Requests\UpdateEnvironmentSettingsRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -146,6 +151,7 @@ class EnvironmentController extends Controller
                 'build_command' => $environment->build_command,
                 'deploy_commands' => $environment->deploy_commands,
             ],
+            'canDelete' => $request->user()->can('delete', $environment),
             'envText' => $dotenv->format(
                 $environment->envVars()->where('source', EnvVarSource::USER)->where('is_secret', false)->orderBy('key')->pluck('value', 'key')->all(),
             ),
@@ -171,6 +177,20 @@ class EnvironmentController extends Controller
         }
 
         return back();
+    }
+
+    public function store(CreateEnvironmentRequest $request, Application $application, CreateEnvironment $createEnvironment): RedirectResponse
+    {
+        $environment = $createEnvironment->execute($application, $request->user(), $request->validated('name'), $request->validated('branch'), $request->copyFrom());
+
+        return to_route('environments.show', $environment);
+    }
+
+    public function destroy(DeleteEnvironmentRequest $request, Environment $environment, DeleteEnvironment $deleteEnvironment): RedirectResponse
+    {
+        $deleteEnvironment->execute($environment, $request->user());
+
+        return to_route('applications.show', $environment->application_id);
     }
 
     /** @return array<string, mixed> */

@@ -2,6 +2,7 @@
 
 namespace App\Domains\Environments\Policies;
 
+use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Enums\Ability;
 use App\Domains\Members\Models\User;
@@ -38,8 +39,19 @@ class EnvironmentPolicy
             : Ability::DEPLOY);
     }
 
+    /**
+     * Only an environment that a user added can go. Production is protected, and a preview goes with its pull request.
+     */
     public function delete(User $user, Environment $environment): bool
     {
+        if ($environment->kind !== EnvironmentKind::PERMANENT) {
+            return false;
+        }
+
+        if ($environment->is_protected) {
+            return false;
+        }
+
         return $user->role->allows(Ability::MANAGE_APPLICATIONS);
     }
 }

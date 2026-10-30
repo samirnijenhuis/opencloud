@@ -11,6 +11,7 @@ import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, typ
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 import { DeployKey } from './deploy-key';
+import { NewEnvironment } from './new-environment';
 
 type EnvironmentRow = {
     id: number;
@@ -126,6 +127,14 @@ export default function ApplicationShow({ application, environments, previews, d
                     <p className="text-muted-foreground text-sm">
                         {application.repository} - {applicationTypeLabels[application.type]}
                     </p>
+                </div>
+
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                    <HeadingSmall
+                        title="Environments"
+                        description="Production, an environment for each other branch that you add, and the previews."
+                    />
+                    {canUpdate && <NewEnvironment applicationId={application.id} />}
                 </div>
 
                 <ul className="divide-y rounded-lg border">
