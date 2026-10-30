@@ -44,8 +44,10 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('applications/{application}/previews', [PreviewSettingsController::class, 'update'])->name('applications.previews.update');
     Route::post('applications/{application}/deploy-key', [DeployKeyController::class, 'store'])->name('applications.deploy-key.store');
     Route::delete('applications/{application}/deploy-key', [DeployKeyController::class, 'destroy'])->name('applications.deploy-key.destroy');
+    Route::post('applications/{application}/environments', [EnvironmentController::class, 'store'])->name('environments.store');
 
     Route::get('environments/{environment}', [EnvironmentController::class, 'show'])->name('environments.show');
+    Route::delete('environments/{environment}', [EnvironmentController::class, 'destroy'])->name('environments.destroy');
     Route::get('environments/{environment}/deployments', [DeploymentController::class, 'index'])->name('environments.deployments');
     Route::post('environments/{environment}/deployments', [DeploymentController::class, 'store'])->name('deployments.store');
     Route::get('deployments/{deployment}', [DeploymentController::class, 'show'])->name('deployments.show');
@@ -68,6 +70,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('environments/{environment}/domains', [DomainController::class, 'index'])->name('environments.domains');
     Route::post('environments/{environment}/domains', [DomainController::class, 'store'])->name('domains.store');
     Route::post('domains/{domain}/check', [DomainController::class, 'check'])->name('domains.check');
+    Route::post('domains/{domain}/primary', [DomainController::class, 'makePrimary'])->name('domains.primary');
     Route::delete('domains/{domain}', [DomainController::class, 'destroy'])->name('domains.destroy');
 
     Route::get('environments/{environment}/settings', [EnvironmentController::class, 'settings'])->name('environments.settings');

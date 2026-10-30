@@ -1,4 +1,5 @@
 import { environmentColors } from '@/components/environment-color';
+import { DeleteEnvironment } from '@/components/environment/delete-environment';
 import { DeployHook } from '@/components/environment/deploy-hook';
 import { EnvValues, type EnvVar } from '@/components/environment/env-values';
 import InputError from '@/components/input-error';
@@ -21,7 +22,7 @@ type Settings = {
     sleep_after_minutes: number | null;
 };
 
-type Props = EnvironmentPageProps & { settings: Settings; envVars: EnvVar[]; envText: string };
+type Props = EnvironmentPageProps & { settings: Settings; envVars: EnvVar[]; envText: string; canDelete: boolean };
 
 const sections = [
     { id: 'general', title: 'General' },
@@ -247,7 +248,7 @@ function DeploymentsForm({ environmentId, settings, locked }: { environmentId: n
 }
 
 export default function EnvironmentSettings(props: Props) {
-    const { environment, settings, envVars, envText, can } = props;
+    const { environment, settings, envVars, envText, can, canDelete } = props;
     const locked = !can.update;
     const active = useActiveSection();
     useScrollToHash();
@@ -293,6 +294,12 @@ export default function EnvironmentSettings(props: Props) {
                     >
                         <EnvValues environmentId={environment.id} envVars={envVars} envText={envText} canUpdate={can.update} />
                     </Section>
+
+                    {canDelete && (
+                        <Section id="delete" title="Delete environment" description="Remove this environment and everything that it runs.">
+                            <DeleteEnvironment environment={environment} />
+                        </Section>
+                    )}
                 </div>
             </div>
         </EnvironmentLayout>

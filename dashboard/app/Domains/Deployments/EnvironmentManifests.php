@@ -8,6 +8,7 @@ use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Routing\PrimaryDomain;
 use App\Support\Kube\Labels;
 use Illuminate\Support\Collection;
 use stdClass;
@@ -162,13 +163,13 @@ final readonly class EnvironmentManifests
 
     /**
      * The kubelet sends the pod address as the Host header. An app that checks the host, for example Django with
-     * ALLOWED_HOSTS, refuses it, so the probe sends the first domain of the environment.
+     * ALLOWED_HOSTS, refuses it, so the probe sends the primary domain of the environment.
      *
      * @return array{httpHeaders?: list<array{name: string, value: string}>}
      */
     private function probeHost(): array
     {
-        $hostname = $this->environment->domains->sortBy('id')->first()?->hostname;
+        $hostname = PrimaryDomain::of($this->environment->domains)?->hostname;
 
         return $hostname === null ? [] : ['httpHeaders' => [['name' => 'Host', 'value' => $hostname]]];
     }

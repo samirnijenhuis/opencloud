@@ -45,16 +45,19 @@ function domainState(domain: Domain): [Tone, string] {
     return ['ok', 'Live'];
 }
 
-/** The domain that the header link opens: the first live one, and a custom domain before the free generated one. */
-const liveDomain = (domains: Domain[]) =>
-    domains.find((domain) => !domain.generated && domainState(domain)[0] === 'ok') ?? domains.find((domain) => domainState(domain)[0] === 'ok');
-
+/** The header link opens the primary domain, so it opens the same address as APP_URL. */
 function VisitSite({ domains }: { domains: Domain[] }) {
-    const domain = liveDomain(domains);
+    const primary = domains.find((domain) => domain.primary);
 
-    if (!domain) {
+    if (!primary || domainState(primary)[0] !== 'ok') {
         return (
-            <span title="No domain is live yet. Add a domain, or wait for its certificate.">
+            <span
+                title={
+                    primary
+                        ? 'The primary domain is not live yet. Open Domains to see why.'
+                        : 'No domain is live yet. Add a domain, or wait for its certificate.'
+                }
+            >
                 <Button variant="outline" disabled>
                     <ExternalLink /> Visit site
                 </Button>
@@ -64,7 +67,7 @@ function VisitSite({ domains }: { domains: Domain[] }) {
 
     return (
         <Button variant="outline" asChild>
-            <a href={`https://${domain.hostname}`} target="_blank" rel="noreferrer" title={domain.hostname}>
+            <a href={`https://${primary.hostname}`} target="_blank" rel="noreferrer" title={primary.hostname}>
                 <ExternalLink /> Visit site
             </a>
         </Button>

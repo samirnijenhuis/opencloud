@@ -178,7 +178,7 @@ class EnvironmentActionsTest extends TestCase
 
         $this->assertSame(0, Domain::count());
         Queue::assertPushed(SyncCaddy::class, fn (SyncCaddy $job) => $job->cluster->is($this->environment->application->cluster));
-        $this->assertSame(['domain.removed', ['hostname' => 'old.example.com']], [AuditEvent::sole()->action, AuditEvent::sole()->context]);
+        $this->assertSame(['domain.removed', ['hostname' => 'old.example.com', 'primary' => true]], [AuditEvent::sole()->action, AuditEvent::sole()->context]);
     }
 
     public function test_read_logs_reads_one_process_and_masks_secrets(): void

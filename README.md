@@ -11,8 +11,9 @@
 
 <p align="center">
   <img alt="Status: hobby project" src="https://img.shields.io/badge/status-hobby%20project-orange">
-  <img alt="No release yet" src="https://img.shields.io/badge/release-none%20yet-lightgrey">
-  <img alt="Laravel 12" src="https://img.shields.io/badge/Laravel-12-FF2D20?logo=laravel&logoColor=white">
+  <a href="https://github.com/samirnijenhuis/opencloud/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/samirnijenhuis/opencloud"></a>
+  <a href="https://github.com/samirnijenhuis/opencloud/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/samirnijenhuis/opencloud/actions/workflows/tests.yml/badge.svg"></a>
+  <img alt="Laravel 12" src="https://img.shields.io/badge/Laravel-12-FF2D20">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
   <img alt="Kubernetes with k3s" src="https://img.shields.io/badge/Kubernetes-k3s-FFC61C?logo=k3s&logoColor=black">
   <img alt="OpenTofu" src="https://img.shields.io/badge/IaC-OpenTofu-FFDA18?logo=opentofu&logoColor=black">
@@ -28,15 +29,95 @@
 </p>
 
 > [!WARNING]
-> **Opencloud is not a Laravel Cloud alternative, in any way.** It is a hobby project. Its purpose is to understand how something like [Laravel Cloud](https://cloud.laravel.com) works, by building a very small part of it. Laravel Cloud is a real product with a team, global infrastructure, support, and years of work behind it. Opencloud has none of these. It has no public release, no security review, and no promise of support. Do not run anything important on it.
+> **Opencloud is not a Laravel Cloud alternative, in any way.** It is a hobby project. Its purpose is to understand how something like [Laravel Cloud](https://cloud.laravel.com) works, by building a very small part of it. Laravel Cloud is a real product with a team, global infrastructure, support, and years of work behind it. Opencloud has none of these. It has had no security review, and it has no promise of support. Do not run anything important on it.
 >
 > Opencloud is not affiliated with Laravel, and Laravel does not endorse it. "opencloud" is a working name.
 
+## Quick start
+
+### On a Linux server
+
+You need Ubuntu 24.04 on an **amd64 (x86_64)** server with at least 2 vCPU, 4 GB of RAM, a public IP address, and open ports 80, 443, and 8000. Run this one command on the server:
+
+```bash
+curl -fsSL https://github.com/samirnijenhuis/opencloud/releases/latest/download/install.sh | sudo OPENCLOUD_REPO=samirnijenhuis/opencloud bash
+```
+
+The installer checks the server first, and it stops with a clear message when something is missing. Then it installs k3s, pulls the dashboard and Caddy images of the [latest release](https://github.com/samirnijenhuis/opencloud/releases) from `ghcr.io/samirnijenhuis`, and prints a setup URL. Only a person with that URL can create the owner account.
+
+- `OPENCLOUD_REPO` is needed, because the default repository of the installer is still the old placeholder `opencloud-dev/opencloud`.
+- To install a specific release, also set `OPENCLOUD_VERSION`, for example `OPENCLOUD_VERSION=v0.1.1`.
+
+> [!IMPORTANT]
+> Keep a copy of `/var/lib/opencloud/APP_KEY` in a safe place. The dashboard encrypts its secrets and the OpenTofu state with this key. Without it, nobody can read that data again.
+
+### Upgrade a server
+
+```bash
+sudo opencloud upgrade            # the latest release
+sudo opencloud upgrade v0.1.1     # one specific release
+```
+
+The upgrade downloads the release, copies the dashboard database, runs the installer of the new release, and checks that the dashboard answers. When that check fails, it goes back to the old images and the database copy by itself.
+
+A server that was installed from source, or with the old default repository, needs `OPENCLOUD_REPO` once:
+
+```bash
+sudo OPENCLOUD_REPO=samirnijenhuis/opencloud opencloud upgrade v0.1.1
+```
+
+After that upgrade, the server remembers the repository, and `sudo opencloud upgrade` is enough.
+
+### On your Mac
+
+You need [OrbStack](https://orbstack.dev), about 8 GB of free memory, and 20 GB of free disk space.
+
+```bash
+git clone https://github.com/samirnijenhuis/opencloud.git && cd opencloud
+./scripts/try-on-mac.sh
+```
+
+The script creates a Linux machine in OrbStack, builds opencloud from your checkout for the CPU of your Mac, and runs the real installer on that machine. At the end, it prints the dashboard address and a setup URL. Run the script again to update the machine to your current code. [Run opencloud on your Mac](docs/run-on-your-mac.md) has the details.
+
+<details>
+<summary><strong>Install from source on a Linux server</strong>, for an ARM server or your own changes</summary>
+
+The release images are for amd64 only. For an ARM (`arm64`) server, or to run your own changes, build the images yourself.
+
+1. On a computer with Docker, build the two images for the CPU type of the server (`linux/amd64` or `linux/arm64`):
+
+   ```bash
+   git clone https://github.com/samirnijenhuis/opencloud.git && cd opencloud
+   docker build --platform linux/arm64 --build-context tofu=tofu -t ghcr.io/opencloud-dev/opencloud:dev dashboard
+   docker build --platform linux/arm64 -t ghcr.io/opencloud-dev/opencloud-caddy:dev platform/images/caddy
+   docker save -o opencloud.tar ghcr.io/opencloud-dev/opencloud:dev
+   docker save -o caddy.tar ghcr.io/opencloud-dev/opencloud-caddy:dev
+   ```
+
+2. Copy the `opencloud` folder, with the two archives in it, to the server.
+3. On the server, run the installer from that folder:
+
+   ```bash
+   sudo OPENCLOUD_VERSION=dev OPENCLOUD_IMAGE_ARCHIVE=$PWD/opencloud.tar OPENCLOUD_CADDY_IMAGE_ARCHIVE=$PWD/caddy.tar ./install.sh
+   ```
+
+Run the same steps again to update such a server. The images keep the `opencloud-dev` name, because the installer looks for that name when `OPENCLOUD_REPO` is not set.
+
+</details>
+
+### First steps
+
+1. Open the setup URL and create the owner account.
+2. Open **Applications > New application**. A repository is enough, because every other field has a default.
+3. For a private repository, select **Private repository: use a deploy key**. Then add the public key on GitHub under **Settings > Deploy keys**.
+4. Add a domain. The dashboard shows the DNS record to add.
+5. Open **Settings > Members** to invite people, and **Settings > Backups** to add an S3 bucket.
+
 ## Contents
 
+- [Quick start](#quick-start)
 - [What opencloud does](#what-opencloud-does)
 - [Features](#features)
-- [Quick start](#quick-start)
 - [How it works](#how-it-works)
 - [Hidden mechanisms](#hidden-mechanisms)
 - [Commands on the server](#commands-on-the-server)
@@ -124,56 +205,6 @@ Everything runs on servers and cloud accounts that you own, with your own API ke
 - Nightly database dumps to the server disk or to S3, a restore button, and nightly bucket copies.
 - A full restore of a lost server from the S3 backup, and an upgrade command that rolls back on failure.
 - More clusters: connect any Kubernetes cluster with its kubeconfig, or let OpenTofu create one at DigitalOcean.
-
-## Quick start
-
-> [!NOTE]
-> Opencloud has no published release yet. You build it from this repository.
-
-### On your Mac
-
-You need [OrbStack](https://orbstack.dev), about 8 GB of free memory, and 20 GB of free disk space.
-
-```bash
-git clone <this repository> opencloud && cd opencloud
-./scripts/try-on-mac.sh
-```
-
-The script creates a Linux machine in OrbStack, builds opencloud from your checkout, and runs the real installer on that machine. At the end, it prints the dashboard address and a setup URL. [Run opencloud on your Mac](docs/run-on-your-mac.md) has the details.
-
-### On a Linux server
-
-You need Ubuntu 24.04 with at least 2 vCPU, 4 GB of RAM, a public IP address, and open ports 80, 443, and 8000.
-
-1. On a computer with Docker, build the two images for the CPU type of the server (`linux/amd64` or `linux/arm64`):
-
-   ```bash
-   git clone <this repository> opencloud && cd opencloud
-   docker build --platform linux/amd64 --build-context tofu=tofu -t ghcr.io/opencloud-dev/opencloud:dev dashboard
-   docker build --platform linux/amd64 -t ghcr.io/opencloud-dev/opencloud-caddy:dev platform/images/caddy
-   docker save -o opencloud.tar ghcr.io/opencloud-dev/opencloud:dev
-   docker save -o caddy.tar ghcr.io/opencloud-dev/opencloud-caddy:dev
-   ```
-
-2. Copy the `opencloud` folder, with the two archives in it, to the server.
-3. On the server, run the installer from that folder:
-
-   ```bash
-   sudo OPENCLOUD_VERSION=dev OPENCLOUD_IMAGE_ARCHIVE=$PWD/opencloud.tar OPENCLOUD_CADDY_IMAGE_ARCHIVE=$PWD/caddy.tar ./install.sh
-   ```
-
-The installer checks the server first. It stops with a clear message when something is missing. At the end, it prints a setup URL. Only a person with that URL can create the owner account.
-
-> [!IMPORTANT]
-> Keep a copy of `/var/lib/opencloud/APP_KEY` in a safe place. The dashboard encrypts its secrets and the OpenTofu state with this key. Without it, nobody can read that data again.
-
-### First steps
-
-1. Open the setup URL and create the owner account.
-2. Open **Applications > New application**. A repository is enough, because every other field has a default.
-3. For a private repository, select **Private repository: use a deploy key**. Then add the public key on GitHub under **Settings > Deploy keys**.
-4. Add a domain. The dashboard shows the DNS record to add.
-5. Open **Settings > Members** to invite people, and **Settings > Backups** to add an S3 bucket.
 
 ## How it works
 
@@ -323,7 +354,12 @@ You can restore the whole install on a new server when the old server is lost. Y
    ```
 
 3. Make the file readable for root only: `chmod 600 /root/opencloud-restore.env`.
-4. Run the installer with `OPENCLOUD_RESTORE_FILE=/root/opencloud-restore.env`.
+4. Run the installer of the latest release in restore mode:
+
+   ```bash
+   curl -fsSL https://github.com/samirnijenhuis/opencloud/releases/latest/download/install.sh | sudo OPENCLOUD_REPO=samirnijenhuis/opencloud OPENCLOUD_RESTORE_FILE=/root/opencloud-restore.env bash
+   ```
+
 5. Follow the restore with `sudo opencloud restore-status`. The restore provisions the datastores again, restores the databases and the buckets, and deploys each environment that was live.
 6. Point the DNS records of your domains at the new server.
 7. Delete the restore file, or keep it in a safe place.
@@ -402,6 +438,13 @@ npm run format:check && npx eslint . && npx tsc --noEmit
 | `tests/e2e/` | End-to-end scripts that install opencloud on new machines |
 | `.claude/` | The rules for coding agents, and the `verify-opencloud` skill that runs the deploy matrix |
 
+### Releasing
+
+1. Run the [verify matrix](.claude/skills/verify-opencloud/SKILL.md) on the commit of `main` that you want to release.
+2. Tag that commit, for example `git tag -a v0.1.2 -m "opencloud v0.1.2"`, and push the tag.
+3. The release workflow (`.github/workflows/release.yml`) builds the dashboard and Caddy images for amd64, pushes them to `ghcr.io/samirnijenhuis` with the tag and `latest`, and creates the GitHub release with `install.sh` and the release archive. For `v0.1.1`, it took 205 seconds.
+4. Each server then upgrades with `sudo opencloud upgrade`.
+
 [`AGENTS.md`](AGENTS.md) is the starting point for a coding agent. The rules in `.claude/rules/` are the review rules of this project.
 
 ## Not built yet
@@ -441,4 +484,6 @@ And [Laravel Cloud](https://cloud.laravel.com), the product that this project tr
 
 ## License
 
-Opencloud has no license yet. Until one is chosen, the default copyright rules apply. The [design document](docs/superpowers/specs/2026-10-22-opencloud-design.md) lists the choice of a license as an open item.
+Opencloud uses the [Apache License 2.0](LICENSE). The Dockerfile templates in [`dashboard/resources/docker/`](dashboard/resources/docker) go into the builds of your apps. So they use [MIT No Attribution](dashboard/resources/docker/LICENSE), and you can use them in your own images without a notice.
+
+Laravel and the Laravel logo are trademarks of Laravel Holdings Inc. Opencloud uses the name Laravel only to say what it works with, and it does not use the Laravel logo.

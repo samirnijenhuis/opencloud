@@ -5,6 +5,7 @@ namespace App\Domains\Deployments;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Models\Environment;
+use App\Domains\Routing\PrimaryDomain;
 
 /**
  * Merges the env of an environment. A user value beats a datastore value, and both beat the system defaults.
@@ -47,7 +48,9 @@ final class EnvironmentVariables
     private static function systemDefaults(Environment $environment): array
     {
         $application = $environment->application;
+        // The manifests of the deploy read the same loaded relation, so APP_URL and the Host header of the probe agree.
+        $domains = $environment->domains->sortBy('id');
 
-        return $application->type->systemEnv($application->port, $environment->domains()->orderBy('id')->pluck('hostname')->all());
+        return $application->type->systemEnv($application->port, PrimaryDomain::of($domains)?->hostname, $domains->pluck('hostname')->values()->all());
     }
 }
