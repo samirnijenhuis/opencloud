@@ -4,8 +4,8 @@ This file lists behavior that you cannot see at the call site. Check it before y
 
 ## On each boot and each start
 
-- `AppServiceProvider::boot()` calls `DashboardDomain::applyRootUrl()` (`app/Providers/AppServiceProvider.php:42`). With a verified dashboard domain, it sets `app.url`, forces the root URL, and forces `https` (`app/Domains/Routing/Models/DashboardDomain.php:70-86`).
-- `applyRootUrl()` reads the `dashboard_domains` table on each boot. It ignores a `QueryException`, so the app boots before the first migration.
+- `AppServiceProvider::boot()` calls `DashboardDomain::applyRootUrl()` (`app/Providers/AppServiceProvider.php:42`). With a verified dashboard domain, it sets `app.url`, sets `session.secure` to true, forces the root URL, and forces `https` (`app/Domains/Routing/Models/DashboardDomain.php:70-86`).
+- `applyRootUrl()` reads the `dashboard_domains` table on each boot. It ignores a `QueryException`, so the app boots before the first migration. Without a verified domain, `session.secure` stays empty, because the dashboard runs on plain HTTP at port 8000 and a Secure cookie would break the login.
 - A queue worker reads the root URL once, when it boots. So each change of the dashboard domain runs `queue:restart` (`app/Domains/Routing/Jobs/CheckDashboardDomain.php:41`, `app/Domains/Routing/Actions/RemoveDashboardDomain.php:25`, `app/Domains/Restore/RestoreInstall.php:304`).
 - At each start, the `web` container runs `php artisan migrate --force`, then `opencloud:bootstrap` when that command exists, then `config:cache`, `route:cache`, and `view:cache` (`docker/entrypoint.sh:17-27`).
 - The `worker`, `builder`, and `scheduler` containers wait until no migration is pending (`docker/entrypoint.sh:4-10`).
@@ -24,6 +24,10 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - `Kubectl` runs `kubectl` with Symfony Process (`app/Support/Kube/Kubectl.php:136-138`). `Process::fake()` does not catch a `kubectl` call.
 - `RunDeployment` deletes each Deployment, CronJob, and HorizontalPodAutoscaler in the environment namespace with an `opencloud.dev/process` label that no process of the environment uses as that kind (`EnvironmentManifests::strays()`). A Deployment, a CronJob, or an autoscaler that you add by hand with that label goes away on the next deploy.
 - After a deployment goes live, `RunDeployment::pruneEnvSecrets()` keeps the live env Secret and the two newest, and deletes the others (`app/Domains/Deployments/Jobs/RunDeployment.php:272-289`).
+- Each deployment applies two NetworkPolicies to the namespace of the environment (`EnvironmentManifests::networkPolicies()`, `app/Domains/Deployments/Jobs/RunDeployment.php:111-116`). An app pod takes traffic only from its own namespace and from the Caddy pods. It reaches every pod, because the ingress policy of the target decides. It reaches every IPv4 address except the endpoints of the Kubernetes API, which `RunDeployment::apiServerIps()` reads. An existing environment gets its policies at its next deploy.
+- The namespace `oc-datastores` takes traffic only from its own namespace and from each namespace with the label `opencloud.dev/environment` (`DatastoreManifests::networkPolicy()`, `app/Domains/Datastores/DatastoreManifests.php:77`). The dashboard reaches a datastore with `kubectl exec`, which does not use the pod network. A new route from Caddy or the dashboard to a datastore over the pod network needs a new rule. A pod in another namespace, for example a load test, cannot reach the web Service of an environment.
+- A cluster whose network plugin does not enforce NetworkPolicies ignores them without an error. `platform/networkpolicies.yaml` lets only Caddy reach the dashboard on port 8080, so `trustProxies(at: '*')` trusts only Caddy.
+- Every pod of an environment has `automountServiceAccountToken: false` and the seccomp profile `RuntimeDefault` (`EnvironmentManifests::POD_SECURITY`, `app/Domains/Deployments/EnvironmentManifests.php:26`). Every container has `allowPrivilegeEscalation: false`, drops all capabilities, and adds back `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `FSETID`, `KILL`, `SETGID`, `SETUID`, and `NET_BIND_SERVICE` (`CONTAINER_SECURITY`, `:35`). `CommandManifests` uses the same constants. A new pod spec for an environment needs both, and an app cannot call the Kubernetes API. An image that needs another capability fails to start, and the log of the pod shows the denied call.
 
 ## Secrets and the audit log
 
@@ -31,6 +35,13 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - Masking is not global. Each writer masks its own text: `DeploymentLog::write()` (`app/Domains/Deployments/DeploymentLog.php:36`), `TofuLog` (`app/Support/Tofu/TofuLog.php:21`), `RunCommand` for the audit context (`app/Domains/Environments/Actions/RunCommand.php:39`), and `ExecuteCommandRun` for the output (`app/Domains/Environments/Jobs/ExecuteCommandRun.php:157`). New text that can hold a secret needs its own masker.
 - `SecretMasker` never masks a value shorter than 4 characters (`app/Support/SecretMasker.php:13`).
 - `SecretMasker::forEnvironment()` reads the secret env values and the attachment passwords when you build it (`app/Support/SecretMasker.php:41-50`). A secret that the code adds later is not in that masker.
+
+## Builds
+
+- `Builder::build()` clones into `repository/` of a temporary folder and writes the Dockerfile into `dockerfile/` (`app/Domains/Builds/Builder.php:58-62`). Never write a file into the clone. A symbolic link of the repository sends the write to a file of the builder container.
+- `RepositoryFiles::in()` throws when a symbolic link puts a path outside the clone (`app/Domains/Builds/RepositoryFiles.php:27`). Read each file of the clone through it, not with `file_get_contents()`.
+- `buildctl` gets no build value in its env. Each value is a file in `secrets/`, passed with `--secret id=<key>,src=<file>` (`app/Domains/Builds/Builder.php:75-81`). Do not add `->env()` to that process. `buildctl` starts `kubectl`, so a user value such as `PATH` or `LD_PRELOAD` runs code from the repository.
+- Each cache mount of a preset template has the id `${OPENCLOUD_CACHE_ID}<target>` (`resources/docker/*.Dockerfile`). A new cache mount without that id shares its cache with every application on the BuildKit server.
 
 ## Queues and the scheduler
 
@@ -47,8 +58,10 @@ This file lists behavior that you cannot see at the call site. Check it before y
 ## Requests and pages
 
 - `routes/webhooks.php` loads as the `api` group with an empty prefix (`bootstrap/app.php:13-14`). Its routes have no session, no cookies, and no CSRF check. A webhook route in `routes/web.php` gets a 419.
+- With a verified dashboard domain, port 8000 proxies only `CaddyConfig::PLAIN_HTTP_PATHS` and redirects each other request to HTTPS (`app/Domains/Routing/CaddyConfig.php`). A new route in `routes/webhooks.php` needs its path in that list, or a caller of `http://<ip>:8000` gets a 308.
 - `trustProxies(at: '*')` trusts the forwarded scheme, host, and client address from each sender (`bootstrap/app.php:20`). `$request->ip()` returns the forwarded address.
-- `dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`). A hand-written `back()->withInput()` flashes every field, so `ApplicationController::store()` leaves out `deploy_private_key` itself.
+- `dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key', 'env', 'value'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`). `env` is the env rows of `StoreApplicationRequest`, and `value` is the field of `EnvVarRequest`. A hand-written `back()->withInput()` flashes every field, so `ApplicationController::store()` leaves out `deploy_private_key` and `env` itself.
+- `AuthenticateSession` is in the web group (`bootstrap/app.php`). It stores a hash of the password in the session and logs out a session whose hash no longer matches the password of the user. After the request, it stores the current hash, so the session that changes the password stays signed in. A session without a hash gets one at its next request. A new web login flow works without a change, because the hash is stored after the login request.
 - `HandleInertiaRequests::share()` sends each page `auth.user`, three `can` flags, and, for a signed-in user, the version and the newer release for the owner (`app/Http/Middleware/HandleInertiaRequests.php:40-62`). `auth.user` is the whole `User` model without its `$hidden` fields.
 - `GitHubWebhookController` stores each `X-GitHub-Delivery` id for one day with `Cache::add()` (`app/Http/Controllers/GitHubWebhookController.php:30-34`). A repeated id answers 200 and queues nothing.
 

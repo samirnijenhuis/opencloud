@@ -172,6 +172,19 @@ class EnvVarControllerTest extends TestCase
         $this->actingAs($admin)->post("/environments/{$environment->id}/env", ['key' => 'DB_HOST', 'value' => 'x', 'available_at' => 'runtime'])->assertSessionHasErrors('key');
     }
 
+    public function test_a_refused_value_form_never_flashes_the_value(): void
+    {
+        $environment = $this->makeEnvironment();
+
+        $this->actingAs(User::factory()->admin()->create())->from("/environments/{$environment->id}/settings")
+            ->post("/environments/{$environment->id}/env", ['key' => '1BAD', 'value' => 'sk_live_TOP_SECRET', 'is_secret' => true, 'available_at' => 'runtime'])
+            ->assertRedirect("/environments/{$environment->id}/settings")
+            ->assertSessionHasErrors('key');
+
+        $this->assertSame([null, '1BAD'], [session()->getOldInput('value'), session()->getOldInput('key')]);
+        $this->assertStringNotContainsString('sk_live_TOP_SECRET', json_encode(session()->all()));
+    }
+
     public function test_it_deletes_a_user_value_through_the_action(): void
     {
         $environment = $this->makeEnvironment();

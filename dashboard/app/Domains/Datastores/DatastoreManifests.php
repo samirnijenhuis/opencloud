@@ -6,6 +6,7 @@ use App\Domains\Backups\Models\BackupTarget;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Support\Kube\Labels;
+use stdClass;
 
 /**
  * Builds the Kubernetes objects of the standard datastores in the namespace oc-datastores. Each method is pure.
@@ -67,6 +68,29 @@ final class DatastoreManifests
         return ['apiVersion' => 'v1', 'kind' => 'Namespace', 'metadata' => ['name' => self::NAMESPACE]];
     }
 
+    /**
+     * The datastores take traffic only from their own namespace, where the bucket copy Job runs, and from the namespaces
+     * of the environments. The dashboard needs no rule, because it reaches a datastore with `kubectl exec`.
+     *
+     * @return array<string, mixed>
+     */
+    public static function networkPolicy(): array
+    {
+        return [
+            'apiVersion' => 'networking.k8s.io/v1',
+            'kind' => 'NetworkPolicy',
+            'metadata' => self::metadata('ingress-from-environments', []),
+            'spec' => [
+                'podSelector' => new stdClass,
+                'policyTypes' => ['Ingress'],
+                'ingress' => [['from' => [
+                    ['podSelector' => new stdClass],
+                    ['namespaceSelector' => ['matchExpressions' => [['key' => Labels::ENVIRONMENT, 'operator' => 'Exists']]]],
+                ]]],
+            ],
+        ];
+    }
+
     /** @return list<array<string, mixed>> */
     public static function mysql(Datastore $datastore): array
     {
@@ -83,6 +107,7 @@ final class DatastoreManifests
                     'ports' => [['name' => 'mysql', 'containerPort' => 3306]],
                     'readinessProbe' => ['tcpSocket' => ['port' => 'mysql'], 'periodSeconds' => 5],
                     'volumeMounts' => [['name' => 'data', 'mountPath' => '/var/lib/mysql']],
+                    'resources' => self::memory('256Mi', '2Gi'),
                 ]],
             ]),
         ];
@@ -109,6 +134,7 @@ final class DatastoreManifests
                     'ports' => [['name' => 'postgres', 'containerPort' => 5432]],
                     'readinessProbe' => ['tcpSocket' => ['port' => 'postgres'], 'periodSeconds' => 5],
                     'volumeMounts' => [['name' => 'data', 'mountPath' => '/var/lib/postgresql/data']],
+                    'resources' => self::memory('128Mi', '2Gi'),
                 ]],
             ]),
         ];
@@ -145,12 +171,14 @@ final class DatastoreManifests
                         'ports' => [['name' => 's3', 'containerPort' => 9000]],
                         'readinessProbe' => ['tcpSocket' => ['port' => 's3'], 'periodSeconds' => 5],
                         'volumeMounts' => [['name' => 'data', 'mountPath' => '/data']],
+                        'resources' => self::memory('128Mi', '1Gi'),
                     ],
                     [
                         'name' => 'rc',
                         'image' => self::RC_IMAGE,
                         'command' => ['sleep', '2147483647'],
                         'envFrom' => $credentials,
+                        'resources' => self::memory('16Mi', '128Mi'),
                     ],
                 ],
             ]),
@@ -190,11 +218,13 @@ final class DatastoreManifests
                             'containers' => [[
                                 'name' => 'valkey',
                                 'image' => self::image($attachment->datastore),
-                                'args' => ['valkey-server', '--requirepass', '$(VALKEY_PASSWORD)', '--appendonly', 'yes', '--dir', '/data'],
+                                // The default policy noeviction makes a full Valkey refuse a write, so it never drops a queued job.
+                                'args' => ['valkey-server', '--requirepass', '$(VALKEY_PASSWORD)', '--appendonly', 'yes', '--dir', '/data', '--maxmemory', '256mb'],
                                 'env' => [['name' => 'VALKEY_PASSWORD', 'valueFrom' => ['secretKeyRef' => ['name' => $name, 'key' => 'VALKEY_PASSWORD']]]],
                                 'ports' => [['name' => 'valkey', 'containerPort' => 6379]],
                                 'readinessProbe' => ['tcpSocket' => ['port' => 'valkey'], 'periodSeconds' => 5],
                                 'volumeMounts' => [['name' => 'data', 'mountPath' => '/data']],
+                                'resources' => self::memory('32Mi', '512Mi'),
                             ]],
                             'volumes' => [['name' => 'data', 'persistentVolumeClaim' => ['claimName' => $name]]],
                         ],
@@ -307,6 +337,16 @@ final class DatastoreManifests
                 'ports' => [['name' => $portName, 'port' => $port, 'targetPort' => $portName]],
             ],
         ];
+    }
+
+    /**
+     * No CPU limit: a datastore that finds spare CPU should use it. The memory limit stops one app from filling the node.
+     *
+     * @return array{requests: array{memory: string}, limits: array{memory: string}}
+     */
+    private static function memory(string $request, string $limit): array
+    {
+        return ['requests' => ['memory' => $request], 'limits' => ['memory' => $limit]];
     }
 
     /** @return array<string, mixed> */

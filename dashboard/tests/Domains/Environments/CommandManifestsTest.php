@@ -35,6 +35,8 @@ class CommandManifestsTest extends TestCase
                     'metadata' => ['labels' => $labels],
                     'spec' => [
                         'restartPolicy' => 'Never',
+                        'automountServiceAccountToken' => false,
+                        'securityContext' => ['seccompProfile' => ['type' => 'RuntimeDefault']],
                         'containers' => [[
                             'name' => 'command',
                             'image' => 'registry.opencloud.svc.cluster.local:5000/3/7:abc1234-12',
@@ -43,6 +45,13 @@ class CommandManifestsTest extends TestCase
                             'resources' => [
                                 'requests' => ['cpu' => '1000m', 'memory' => '1024Mi'],
                                 'limits' => ['cpu' => '1000m', 'memory' => '1024Mi'],
+                            ],
+                            'securityContext' => [
+                                'allowPrivilegeEscalation' => false,
+                                'capabilities' => [
+                                    'drop' => ['ALL'],
+                                    'add' => ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'FSETID', 'KILL', 'SETGID', 'SETUID', 'NET_BIND_SERVICE'],
+                                ],
                             ],
                         ]],
                     ],

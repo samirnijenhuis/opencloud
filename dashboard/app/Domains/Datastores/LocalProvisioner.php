@@ -158,7 +158,7 @@ abstract class LocalProvisioner implements Provisioner
 
         try {
             $server = $this->server($datastore);
-            $kubectl->apply([DatastoreManifests::namespace(), ...$server]);
+            $kubectl->apply([DatastoreManifests::namespace(), DatastoreManifests::networkPolicy(), ...$server]);
 
             if ($server !== []) {
                 $kubectl->rolloutStatus(DatastoreManifests::NAMESPACE, 'statefulset', DatastoreManifests::serverName($datastore), self::SERVER_ROLLOUT_SECONDS)->throw();

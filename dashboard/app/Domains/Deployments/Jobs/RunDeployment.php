@@ -108,8 +108,12 @@ class RunDeployment implements ShouldQueue
 
         $kubectl = Kubectl::for($application->cluster);
         $manifests = new EnvironmentManifests($environment);
-        $kubectl->apply([$manifests->namespace(), $manifests->secret($deployment, EnvironmentVariables::runtime($environment))]);
-        $log->write('Applied the namespace and the env Secret.');
+        $kubectl->apply([
+            $manifests->namespace(),
+            ...$manifests->networkPolicies($this->apiServerIps($kubectl)),
+            $manifests->secret($deployment, EnvironmentVariables::runtime($environment)),
+        ]);
+        $log->write('Applied the namespace, the network policies, and the env Secret.');
 
         $log->step(DeploymentStep::RUNNING_DEPLOY_COMMANDS);
 
@@ -180,6 +184,18 @@ class RunDeployment implements ShouldQueue
 
             Sleep::for(2)->seconds();
         }
+    }
+
+    /**
+     * The egress policy of an environment leaves these addresses out. Only IPv4 addresses, because the policy allows 0.0.0.0/0.
+     *
+     * @return list<string>
+     */
+    private function apiServerIps(Kubectl $kubectl): array
+    {
+        $addresses = data_get($kubectl->get('endpoints', 'kubernetes', 'default'), 'subsets.*.addresses.*.ip', []);
+
+        return array_values(array_filter($addresses, fn (string $ip) => filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false));
     }
 
     /** The env Secret holds the datastore credentials, and the deploy commands migrate, so both wait for the datastores. */

@@ -75,6 +75,7 @@ class RunDeploymentTest extends TestCase
         $this->kubectl->respond("logs job/deploy-{$this->new->id}", new KubectlResult(0, "Migrating: create_users_table\nconnected with hunter22\n"));
         $this->kubectl->respond('exec deploy/web', new KubectlResult(0, 'HTTP/1.1 200 OK'));
         $this->kubectl->respond('get secrets', $this->secretList(['env', "env-{$this->old->id}", "env-{$this->new->id}"]));
+        $this->kubectl->respond('get endpoints kubernetes', $this->apiEndpoints([['192.0.2.10']]));
 
         Deployment::updated(function (Deployment $deployment) {
             if ($deployment->wasChanged('status')) {
@@ -93,6 +94,7 @@ class RunDeploymentTest extends TestCase
 
         $this->assertSame([['new', 'building'], ['new', 'deploying'], ['old', 'superseded'], ['new', 'live']], $this->moves);
         $this->assertSame([
+            ['get', 'endpoints', 'kubernetes', '--namespace=default', '--ignore-not-found', '-o', 'json'],
             self::APPLY,
             self::APPLY,
             ['wait', '--for=condition=complete', $job, "--namespace={$namespace}", '--timeout=10s'],
@@ -122,18 +124,18 @@ class RunDeploymentTest extends TestCase
 
         $applied = $this->kubectl->appliedManifests();
         $this->assertSame(
-            ['Namespace', 'Secret', 'Job', 'Deployment', 'Deployment', 'Service', 'CronJob'],
+            ['Namespace', 'NetworkPolicy', 'NetworkPolicy', 'Secret', 'Job', 'Deployment', 'Deployment', 'Service', 'CronJob'],
             array_column($applied, 'kind'),
         );
-        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[6]['spec']['jobTemplate']['spec']['template']['spec']['containers'][0]['envFrom']);
+        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[8]['spec']['jobTemplate']['spec']['template']['spec']['containers'][0]['envFrom']);
         $this->assertSame(
             ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'DB_PASSWORD' => 'hunter22', 'LOG_CHANNEL' => 'stderr'],
-            array_map(base64_decode(...), $applied[1]['data']),
+            array_map(base64_decode(...), $applied[3]['data']),
         );
-        $this->assertSame("env-{$this->new->id}", $applied[1]['metadata']['name']);
-        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[2]['spec']['template']['spec']['containers'][0]['envFrom']);
-        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[3]['spec']['template']['spec']['containers'][0]['envFrom']);
-        $this->assertSame($image, $applied[3]['spec']['template']['spec']['containers'][0]['image']);
+        $this->assertSame("env-{$this->new->id}", $applied[3]['metadata']['name']);
+        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[4]['spec']['template']['spec']['containers'][0]['envFrom']);
+        $this->assertSame([['secretRef' => ['name' => "env-{$this->new->id}"]]], $applied[5]['spec']['template']['spec']['containers'][0]['envFrom']);
+        $this->assertSame($image, $applied[5]['spec']['template']['spec']['containers'][0]['image']);
 
         $new = $this->new->fresh();
         $this->assertSame(DeploymentStatus::LIVE, $new->status);
@@ -151,7 +153,7 @@ class RunDeploymentTest extends TestCase
             "2026-10-23T12:00:00Z \x1epushing_application\n".
             "2026-10-23T12:00:00Z The cluster pulls the image from the local registry. Nothing to push.\n".
             "2026-10-23T12:00:00Z \x1epreparing_deploy\n".
-            "2026-10-23T12:00:00Z Applied the namespace and the env Secret.\n".
+            "2026-10-23T12:00:00Z Applied the namespace, the network policies, and the env Secret.\n".
             "2026-10-23T12:00:00Z \x1erunning_deploy_commands\n".
             "2026-10-23T12:00:00Z Running the deploy commands: php artisan migrate --force\n".
             "2026-10-23T12:00:00Z Migrating: create_users_table\n".
@@ -279,7 +281,7 @@ class RunDeploymentTest extends TestCase
         );
         $this->assertSame(
             [['Deployment', 'web'], ['Deployment', 'scheduler'], ['Service', 'web'], ['CronJob', 'worker']],
-            array_map(fn (array $m) => [$m['kind'], $m['metadata']['name']], array_slice($this->kubectl->appliedManifests(), 3)),
+            array_map(fn (array $m) => [$m['kind'], $m['metadata']['name']], array_slice($this->kubectl->appliedManifests(), 5)),
         );
         $this->assertSame([
             ['delete', 'deployment', "--selector={$environment},opencloud.dev/process,opencloud.dev/process notin (web,scheduler)", "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
@@ -309,6 +311,37 @@ class RunDeploymentTest extends TestCase
         ]], array_column($this->kubectl->callsStartingWith('delete cronjob'), 'args'));
     }
 
+    public function test_the_deploy_applies_the_network_policies_with_the_ipv4_addresses_of_the_kubernetes_api(): void
+    {
+        $this->kubectl->respond('get endpoints kubernetes', $this->apiEndpoints([['192.0.2.10', '2001:db8::10'], ['192.0.2.11']]));
+
+        RunDeployment::dispatchSync($this->new);
+
+        $namespace = "oc-env-{$this->environment->id}";
+        $applied = $this->kubectl->appliedManifests();
+        $policies = collect($applied)->where('kind', 'NetworkPolicy')->values();
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
+        $this->assertSame(['Namespace', 'NetworkPolicy', 'NetworkPolicy', 'Secret'], array_column(json_decode($this->kubectl->calls[1]['stdin'], true)['items'], 'kind'));
+        $this->assertCount(1, $this->kubectl->callsStartingWith('get endpoints'));
+        $this->assertSame(['ingress-from-namespace-and-caddy', 'egress-to-pods-and-internet'], $policies->pluck('metadata.name')->all());
+        $this->assertSame([$namespace, $namespace], $policies->pluck('metadata.namespace')->all());
+        $this->assertSame(
+            ['cidr' => '0.0.0.0/0', 'except' => ['192.0.2.10/32', '192.0.2.11/32']],
+            $policies[1]['spec']['egress'][0]['to'][1]['ipBlock'],
+        );
+    }
+
+    public function test_a_cluster_without_api_endpoints_gets_an_egress_policy_without_an_except_list(): void
+    {
+        $this->kubectl->respond('get endpoints kubernetes', new KubectlResult(0, ''));
+
+        RunDeployment::dispatchSync($this->new);
+
+        $egress = collect($this->kubectl->appliedManifests())->firstWhere('metadata.name', 'egress-to-pods-and-internet');
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
+        $this->assertSame(['cidr' => '0.0.0.0/0'], $egress['spec']['egress'][0]['to'][1]['ipBlock']);
+    }
+
     public function test_a_failing_deploy_command_fails_the_deployment_and_keeps_the_old_one_live(): void
     {
         $this->kubectl->respond('wait --for=condition=complete', new KubectlResult(1, '', 'error: timed out waiting for the condition'));
@@ -320,7 +353,7 @@ class RunDeploymentTest extends TestCase
         $this->assertSame([['new', 'building'], ['new', 'deploying'], ['new', 'failed']], $this->moves);
         $this->assertSame(DeploymentStatus::FAILED, $this->new->fresh()->status);
         $this->assertSame(DeploymentStatus::LIVE, $this->old->fresh()->status);
-        $this->assertSame(['Namespace', 'Secret', 'Job'], array_column($this->kubectl->appliedManifests(), 'kind'));
+        $this->assertSame(['Namespace', 'NetworkPolicy', 'NetworkPolicy', 'Secret', 'Job'], array_column($this->kubectl->appliedManifests(), 'kind'));
         $this->assertSame([], $this->kubectl->callsStartingWith('rollout'));
         $this->assertSame([], $this->kubectl->callsStartingWith('exec'));
         $this->assertStringEndsWith(
@@ -347,7 +380,7 @@ class RunDeploymentTest extends TestCase
         ], array_column($this->kubectl->callsStartingWith('rollout'), 'args'));
         $this->assertSame([], $this->kubectl->callsStartingWith('delete'));
         $this->assertSame(
-            ['Namespace', 'Secret', 'Job', 'Deployment', 'Deployment', 'Service'],
+            ['Namespace', 'NetworkPolicy', 'NetworkPolicy', 'Secret', 'Job', 'Deployment', 'Deployment', 'Service'],
             array_column($this->kubectl->appliedManifests(), 'kind'),
             'The CronJob keeps the old schedule, because it has no rollout to undo.',
         );
@@ -403,7 +436,7 @@ class RunDeploymentTest extends TestCase
         Sleep::assertSleptTimes(3);
         $this->assertStringContainsString(
             "2026-10-23T12:00:00Z Waiting for the datastores: mysql.\n".
-            "2026-10-23T12:00:15Z Applied the namespace and the env Secret.\n".
+            "2026-10-23T12:00:15Z Applied the namespace, the network policies, and the env Secret.\n".
             "2026-10-23T12:00:15Z \x1erunning_deploy_commands\n".
             "2026-10-23T12:00:15Z Running the deploy commands: php artisan migrate --force\n",
             $this->new->fresh()->log,
@@ -439,7 +472,7 @@ class RunDeploymentTest extends TestCase
             'DB_PORT' => '3306',
             'DB_USERNAME' => 'env_1',
             'LOG_CHANNEL' => 'stderr',
-        ], array_map(base64_decode(...), $this->kubectl->appliedManifests()[1]['data']));
+        ], array_map(base64_decode(...), $this->kubectl->appliedManifests()[3]['data']));
     }
 
     public function test_a_failed_datastore_fails_the_deployment_with_its_error(): void
@@ -511,6 +544,15 @@ class RunDeploymentTest extends TestCase
         $this->assertSame([['new', 'building'], ['new', 'failed']], $this->moves);
         $this->assertSame([], $this->kubectl->calls);
         $this->assertStringEndsWith("2026-10-23T12:00:00Z The deployment failed. buildctl exited with code 1.\n", $this->new->fresh()->log);
+    }
+
+    /** @param  list<list<string>>  $subsets  the addresses of each subset */
+    private function apiEndpoints(array $subsets): KubectlResult
+    {
+        return new KubectlResult(0, json_encode(['subsets' => array_map(
+            fn (array $ips) => ['addresses' => array_map(fn (string $ip) => ['ip' => $ip], $ips), 'ports' => [['name' => 'https', 'port' => 6443, 'protocol' => 'TCP']]],
+            $subsets,
+        )]));
     }
 
     /** @param  list<string>  $names */

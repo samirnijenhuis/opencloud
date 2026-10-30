@@ -6,6 +6,7 @@ use App\Domains\Applications\Actions\CreateApplication;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Builds\Exceptions\DeployKeyRefused;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
@@ -17,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\Concerns\BuildsEnvironments;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
@@ -284,6 +286,42 @@ class ApplicationControllerTest extends TestCase
 
         $this->assertSame([0, 0], [Application::count(), AuditEvent::count()]);
         Queue::assertNothingPushed();
+    }
+
+    #[DataProvider('failedCreates')]
+    public function test_a_failed_create_keeps_the_form_input_but_never_flashes_the_env_values(RuntimeException $failure, string $errorField): void
+    {
+        $this->mock(CreateApplication::class)->shouldReceive('execute')->once()->andThrow($failure);
+        $this->actingAs(User::factory()->owner()->create())->from('/applications/create');
+
+        $this->post('/applications', $this->validForm(['env' => [['key' => 'STRIPE_SECRET', 'value' => 'sk_live_TOP_SECRET', 'is_secret' => true, 'available_at' => 'runtime']]]))
+            ->assertRedirect('/applications/create')
+            ->assertSessionHasErrors($errorField);
+
+        $this->assertSame(['https://github.com/acme/shop.git', null], [session()->getOldInput('repository'), session()->getOldInput('env')]);
+        $this->assertStringNotContainsString('sk_live_TOP_SECRET', json_encode(session()->all()));
+    }
+
+    /** @return array<string, array{RuntimeException, string}> */
+    public static function failedCreates(): array
+    {
+        return [
+            'the repository is not found' => [new RuntimeException('Not found.'), 'repository'],
+            'GitHub refuses the deploy key' => [new DeployKeyRefused('Permission denied.'), 'deploy_private_key'],
+        ];
+    }
+
+    public function test_a_create_form_that_fails_validation_never_flashes_the_env_values(): void
+    {
+        $this->mock(CreateApplication::class)->shouldNotReceive('execute');
+        $this->actingAs(User::factory()->owner()->create())->from('/applications/create');
+
+        $this->post('/applications', $this->validForm(['env' => [['key' => '1BAD', 'value' => 'sk_live_TOP_SECRET', 'is_secret' => true, 'available_at' => 'runtime']]]))
+            ->assertRedirect('/applications/create')
+            ->assertSessionHasErrors('env.0.key');
+
+        $this->assertSame(['acme/shop', null], [session()->getOldInput('repository'), session()->getOldInput('env')]);
+        $this->assertStringNotContainsString('sk_live_TOP_SECRET', json_encode(session()->all()));
     }
 
     public function test_the_create_form_keeps_a_build_command_with_several_lines_and_drops_comment_and_empty_lines(): void

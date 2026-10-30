@@ -10,6 +10,7 @@ use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -46,7 +47,9 @@ class BuilderTest extends TestCase
         $image = (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
         $dir = $processes->ran[0]['path'];
+        $root = dirname($dir);
         $this->assertSame("registry.opencloud.svc.cluster.local:5000/{$deployment->environment->application_id}/{$deployment->environment_id}:0123456-{$deployment->id}", $image);
+        $this->assertSame('repository', basename($dir));
         $this->assertSame([
             ['git', 'init', '--quiet'],
             ['git', 'fetch', '--quiet', '--depth', '1', 'https://github.com/acme/shop.git', self::SHA],
@@ -54,19 +57,21 @@ class BuilderTest extends TestCase
             [
                 'buildctl', '--addr', 'kube-pod://buildkitd-test?namespace=opencloud',
                 'build', '--progress=plain', '--frontend', 'dockerfile.v0',
-                '--local', "context={$dir}", '--local', "dockerfile={$dir}", '--opt', 'filename=.opencloud.Dockerfile',
+                '--local', "context={$dir}", '--local', "dockerfile={$root}/dockerfile", '--opt', 'filename=.opencloud.Dockerfile',
                 '--opt', 'build-arg:OPENCLOUD_BUILD_ENV=a41cb0306208220797c400e27ec48dac355d1011defd7fc63dd02a8f0eb02ef6',
-                '--secret', 'id=COMPOSER_AUTH,env=COMPOSER_AUTH',
+                '--opt', 'build-arg:OPENCLOUD_CACHE_ID=d666f71848dc0a4e7b5efa225228f477d8817d300345f339d884bb1805ecdf98',
+                '--secret', "id=COMPOSER_AUTH,src={$root}/secrets/COMPOSER_AUTH",
                 '--output', "type=image,name={$image},push=true,registry.insecure=true",
             ],
         ], $processes->commands());
         $this->assertSame([$dir, $dir, $dir, $dir], array_column($processes->ran, 'path'));
-        $this->assertSame(['COMPOSER_AUTH' => 'ghp_secret_token'], $processes->ran[3]['env']);
+        $this->assertSame([], $processes->ran[3]['env']);
+        $this->assertSame([['COMPOSER_AUTH' => 'ghp_secret_token']], $processes->secrets);
         $this->assertStringContainsString(
-            "RUN --mount=type=cache,target=/tmp/composer-cache --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist\n\n# Vite plugins such as Wayfinder run artisan during the asset build, so this stage has PHP and Node.\nFROM base AS assets\nARG OPENCLOUD_BUILD_ENV\n",
+            "RUN --mount=type=cache,id=\${OPENCLOUD_CACHE_ID}/tmp/composer-cache,target=/tmp/composer-cache --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist\n\n# Vite plugins such as Wayfinder run artisan during the asset build, so this stage has PHP and Node.\nFROM base AS assets\nARG OPENCLOUD_BUILD_ENV\n",
             $processes->dockerfiles[0],
         );
-        $this->assertStringContainsString("FROM base AS vendor\n# Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.\nARG OPENCLOUD_BUILD_ENV\nCOPY . .\n", $processes->dockerfiles[0]);
+        $this->assertStringContainsString("FROM base AS vendor\n# Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.\nARG OPENCLOUD_BUILD_ENV\n# Opencloud sets this to a key of the application, so the cache mounts of one application never reach another.\nARG OPENCLOUD_CACHE_ID\nCOPY . .\n", $processes->dockerfiles[0]);
         $this->assertSame(
             "2026-10-23T12:00:00Z \x1epreparing_build\n".
             '2026-10-23T12:00:00Z Cloning acme/shop at '.self::SHA.".\n".
@@ -77,7 +82,7 @@ class BuilderTest extends TestCase
             "2026-10-23T12:00:00Z #9 DONE 1.2s\n",
             $deployment->fresh()->log,
         );
-        $this->assertDirectoryDoesNotExist($dir);
+        $this->assertDirectoryDoesNotExist($root);
     }
 
     public function test_the_dockerfile_preset_builds_the_repository_dockerfile_also_in_a_laravel_repository(): void
@@ -113,7 +118,7 @@ class BuilderTest extends TestCase
         $this->assertSame([
             'FROM node:22-slim',
             'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
-            'RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile',
+            'RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.npm,target=/root/.npm --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.local/share/pnpm/store,target=/root/.local/share/pnpm/store --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/usr/local/share/.cache/yarn,target=/usr/local/share/.cache/yarn npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile',
             'RUN pnpm run build',
             "RUN <<'OPENCLOUD_BUILD'",
             'ENTRYPOINT ["/usr/bin/tini", "--"]',
@@ -138,12 +143,12 @@ class BuilderTest extends TestCase
         (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
         $this->assertContains('filename=.opencloud.Dockerfile', $processes->commands()[3]);
-        $this->assertContains('id=PIP_INDEX_URL,env=PIP_INDEX_URL', $processes->commands()[3]);
+        $this->assertSame([['PIP_INDEX_URL' => 'https://pypi.example.com/simple']], $processes->secrets);
         $this->assertSame([
             'FROM python:3.14',
             'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
             'RUN python -m venv /opt/venv',
-            'RUN --mount=type=cache,target=/root/.cache --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL pip install -r requirements.txt',
+            'RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.cache,target=/root/.cache --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL pip install -r requirements.txt',
             "RUN --mount=type=secret,id=PIP_INDEX_URL,env=PIP_INDEX_URL <<'OPENCLOUD_BUILD'",
             'ENTRYPOINT ["/usr/bin/tini", "--"]',
             'CMD ["sh", "-c", "exec gunicorn shop.wsgi:app --bind 0.0.0.0:$PORT"]',
@@ -169,7 +174,7 @@ class BuilderTest extends TestCase
         $this->assertSame([
             'FROM ruby:3.3.6',
             'RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*',
-            'RUN --mount=type=cache,target=/usr/local/bundle/cache bundle install',
+            'RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/usr/local/bundle/cache,target=/usr/local/bundle/cache bundle install',
             'RUN SECRET_KEY_BASE_DUMMY=1 bin/rails assets:precompile',
             'ENTRYPOINT ["/usr/bin/tini", "--"]',
             'CMD ["sh", "-c", "exec bin/rails server -b 0.0.0.0 -p $PORT"]',
@@ -277,7 +282,7 @@ class BuilderTest extends TestCase
         }
 
         $this->assertSame(['git', 'git', 'git'], array_column($processes->commands(), 0));
-        $this->assertDirectoryDoesNotExist($processes->ran[0]['path']);
+        $this->assertDirectoryDoesNotExist(dirname($processes->ran[0]['path']));
     }
 
     public function test_a_failed_buildctl_throws_after_the_output_is_logged(): void
@@ -299,6 +304,137 @@ class BuilderTest extends TestCase
             "2026-10-23T12:00:00Z ERROR: failed to solve: process \"/bin/sh -c composer install\" did not complete successfully\n",
             $deployment->fresh()->log,
         );
+    }
+
+    /** @return array<string, array{ApplicationType, array<string, string>}> */
+    public static function presetsWithBuildValues(): array
+    {
+        return [
+            'the dockerfile preset' => [ApplicationType::DOCKERFILE, ['Dockerfile' => "#!/bin/sh\necho owned\n"]],
+            'the laravel preset' => [ApplicationType::LARAVEL, [
+                'composer.json' => '{"require":{"laravel/framework":"^12.0"}}',
+                'Dockerfile' => "#!/bin/sh\necho owned\n",
+            ]],
+        ];
+    }
+
+    /** @param  array<string, string>  $repository */
+    #[DataProvider('presetsWithBuildValues')]
+    public function test_a_link_in_the_repository_does_not_let_the_builder_overwrite_a_file_outside_the_repository(ApplicationType $type, array $repository): void
+    {
+        $kubectl = $this->outside('kubectl', "the real kubectl\n");
+        $processes = FakeProcesses::install();
+        $processes->repository = $repository;
+        $processes->links = [
+            '.opencloud.Dockerfile' => $kubectl,
+            '.opencloud.Dockerfile.dockerignore' => $kubectl,
+            '.opencloud.repository.Dockerfile' => $kubectl,
+            '.opencloud.repository.Dockerfile.dockerignore' => $kubectl,
+        ];
+        $deployment = $this->deployment('acme/shop', $type);
+        EnvVar::factory()->for($deployment->environment)->create(['key' => 'VITE_API', 'value' => 'https://api.example.com', 'available_at' => EnvVarAvailability::BUILD]);
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertSame("the real kubectl\n", file_get_contents($kubectl));
+        $this->assertSame('buildctl', $processes->commands()[3][0]);
+        $this->assertStringNotContainsString('the real kubectl', $processes->dockerfiles[0]);
+    }
+
+    /** @return array<string, array{ApplicationType, array<string, string>, array<string, string>, string}> */
+    public static function linksOutOfTheRepository(): array
+    {
+        return [
+            'a Dockerfile that links to a token' => [ApplicationType::DOCKERFILE, [], ['Dockerfile' => 'token'], 'Dockerfile'],
+            'a composer.json that links to a token' => [ApplicationType::LARAVEL, ['package.json' => '{}'], ['composer.json' => 'token'], 'composer.json'],
+            'a .ruby-version that links to a token' => [ApplicationType::RUBY, ['Gemfile' => "gem \"rack\"\n", 'config.ru' => "run App\n"], ['.ruby-version' => 'token'], '.ruby-version'],
+            'a folder that links out of the repository' => [ApplicationType::RUBY, ['Gemfile' => "gem \"rails\"\n", 'config.ru' => "run App\n", 'bin/rails' => "#!/usr/bin/env ruby\n"], ['config' => 'folder'], 'config/application.rb'],
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $repository
+     * @param  array<string, string>  $links  path => "token" for a file outside the repository, or "folder" for a folder outside it
+     */
+    #[DataProvider('linksOutOfTheRepository')]
+    public function test_the_builder_refuses_a_repository_file_that_a_link_puts_outside_the_repository(ApplicationType $type, array $repository, array $links, string $path): void
+    {
+        $token = $this->outside('token', 'eyJhbGciOiJSUzI1NiJ9.service-account-token');
+        $folder = dirname($this->outside('folder/application.rb', "module Shop\nend\n"));
+        $processes = FakeProcesses::install();
+        $processes->repository = $repository;
+        $processes->links = array_map(fn (string $target) => $target === 'token' ? $token : $folder, $links);
+        $deployment = $this->deployment('acme/shop', $type);
+
+        try {
+            (new Builder)->build($deployment, DeploymentLog::for($deployment));
+            $this->fail('The build did not fail.');
+        } catch (RuntimeException $e) {
+            $this->assertSame("The path {$path} in the repository leads out of the repository through a symbolic link. Opencloud does not follow such a link. Put the file itself in the repository.", $e->getMessage());
+        }
+
+        $this->assertSame(['git', 'git', 'git'], array_column($processes->commands(), 0));
+        $this->assertStringNotContainsString('service-account-token', (string) $deployment->fresh()->log);
+    }
+
+    public function test_a_link_to_a_file_inside_the_repository_still_builds(): void
+    {
+        $processes = FakeProcesses::install();
+        $processes->repository = ['docker/Dockerfile' => "FROM nginx:alpine\n"];
+        $processes->links = ['Dockerfile' => 'docker/Dockerfile'];
+        $deployment = $this->deployment('acme/site', ApplicationType::DOCKERFILE);
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertSame(["FROM nginx:alpine\n"], $processes->dockerfiles);
+    }
+
+    public function test_a_build_value_reaches_buildctl_only_as_a_secret_file_and_never_as_its_env(): void
+    {
+        $processes = FakeProcesses::install()->withLaravelRepository();
+        // buildctl starts kubectl for its kube-pod:// address. PATH=. made it start this file of the repository.
+        $processes->repository['kubectl'] = "#!/bin/sh\necho owned\n";
+        $deployment = $this->deployment('acme/shop');
+
+        foreach (['PATH' => '.', 'LD_PRELOAD' => './evil.so'] as $key => $value) {
+            EnvVar::factory()->for($deployment->environment)->create(['key' => $key, 'value' => $value, 'available_at' => EnvVarAvailability::BUILD]);
+        }
+
+        (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+        $this->assertSame([], $processes->ran[3]['env']);
+        $this->assertSame([['LD_PRELOAD' => './evil.so', 'PATH' => '.']], $processes->secrets);
+    }
+
+    public function test_each_application_gets_its_own_package_cache(): void
+    {
+        $ids = [];
+
+        foreach (['acme/shop', 'acme/blog'] as $repository) {
+            $processes = FakeProcesses::install()->withLaravelRepository();
+            $deployment = $this->deployment($repository);
+
+            (new Builder)->build($deployment, DeploymentLog::for($deployment));
+
+            $ids[] = collect($processes->commands()[3])->first(fn (string $arg) => str_starts_with($arg, 'build-arg:OPENCLOUD_CACHE_ID='));
+            $this->assertStringContainsString('--mount=type=cache,id=${OPENCLOUD_CACHE_ID}/tmp/composer-cache,target=/tmp/composer-cache ', $processes->dockerfiles[0]);
+        }
+
+        $this->assertSame([
+            'build-arg:OPENCLOUD_CACHE_ID=d666f71848dc0a4e7b5efa225228f477d8817d300345f339d884bb1805ecdf98',
+            'build-arg:OPENCLOUD_CACHE_ID=a7cc271488013e5ab008cd4af57b78aa47e27ee49918bbb4ffc5540105d14a30',
+        ], $ids);
+    }
+
+    /** A file outside the checkout, as a path of the builder container would be. */
+    private function outside(string $path, string $contents): string
+    {
+        $file = sys_get_temp_dir().'/opencloud-builder-test-'.$this->name().'-'.getmypid().'/'.$path;
+        is_dir(dirname($file)) || mkdir(dirname($file), 0700, true);
+        file_put_contents($file, $contents);
+        $this->beforeApplicationDestroyed(fn () => (new Filesystem)->deleteDirectory(dirname($file, substr_count($path, '/') + 1)));
+
+        return $file;
     }
 
     private function deployment(string $repository, ApplicationType $type = ApplicationType::LARAVEL): Deployment

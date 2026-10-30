@@ -20,6 +20,8 @@ class NodeDockerfileTest extends TestCase
             RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
             # Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
             ARG OPENCLOUD_BUILD_ENV
+            # Opencloud sets this to a key of the application, so the cache mounts of one application never reach another.
+            ARG OPENCLOUD_CACHE_ID
             # A stalled download fails after 60 seconds and npm tries again, instead of waiting 5 minutes.
             # IPv6 goes first, because on some networks IPv4 downloads stall while IPv6 does not. Without IPv6, Node falls back to IPv4 at once.
             # These are build args, so the running app does not get them.
@@ -28,7 +30,7 @@ class NodeDockerfileTest extends TestCase
             ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
             WORKDIR /app
             COPY . .
-            RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN npm ci $NPM_FLAGS
+            RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.npm,target=/root/.npm --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.local/share/pnpm/store,target=/root/.local/share/pnpm/store --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/usr/local/share/.cache/yarn,target=/usr/local/share/.cache/yarn --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN npm ci $NPM_FLAGS
             RUN --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN npm run build
             RUN --mount=type=secret,id=NPM_TOKEN,env=NPM_TOKEN <<'OPENCLOUD_BUILD'
             set -e
@@ -46,7 +48,7 @@ class NodeDockerfileTest extends TestCase
     /** @return array<string, array{array<string, mixed>, string|null, list<string>}> */
     public static function projects(): array
     {
-        $install = 'RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn ';
+        $install = 'RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.npm,target=/root/.npm --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.local/share/pnpm/store,target=/root/.local/share/pnpm/store --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/usr/local/share/.cache/yarn,target=/usr/local/share/.cache/yarn ';
 
         return [
             'pnpm with packageManager and only a main file' => [

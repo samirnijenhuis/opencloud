@@ -1,5 +1,5 @@
 # Only the dashboard and BuildKit may reach the registry. BuildKit has no network port at all.
-# Other pods in namespace opencloud (Caddy) and the dashboard Service stay open.
+# Only Caddy may reach the dashboard. Caddy itself takes traffic from every pod.
 # The node pulls images through the registry ClusterIP. kube-router lets traffic from the node itself reach local pods,
 # so the node needs no rule here. tests/e2e proves it.
 apiVersion: networking.k8s.io/v1
@@ -23,3 +23,23 @@ spec:
       ports:
         - protocol: TCP
           port: 5000
+---
+# Caddy is the only pod that calls the dashboard Service, so a forwarded header can come only from Caddy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard-from-caddy
+  namespace: opencloud
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: dashboard
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: caddy
+      ports:
+        - protocol: TCP
+          port: 8080

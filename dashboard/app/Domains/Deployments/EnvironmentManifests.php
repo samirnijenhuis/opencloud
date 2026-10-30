@@ -2,6 +2,7 @@
 
 namespace App\Domains\Deployments;
 
+use App\Domains\Clusters\ClusterPartsManifests;
 use App\Domains\Clusters\ClusterRegistry;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\ProcessKind;
@@ -21,6 +22,24 @@ final readonly class EnvironmentManifests
     public const SERVICE_PORT = 8080;
 
     public const PULL_SECRET = 'opencloud-registry';
+
+    /** The pod settings of every pod of an environment: the deployment pods, the CronJobs, the deploy Job, and the command Job. */
+    public const POD_SECURITY = [
+        'automountServiceAccountToken' => false,
+        'securityContext' => ['seccompProfile' => ['type' => 'RuntimeDefault']],
+    ];
+
+    /**
+     * The images run as root, and nginx and Apache start as root and then switch to their own user, so the container
+     * keeps the default set of capabilities without NET_RAW, MKNOD, AUDIT_WRITE, SETFCAP, SETPCAP, and SYS_CHROOT.
+     */
+    public const CONTAINER_SECURITY = [
+        'allowPrivilegeEscalation' => false,
+        'capabilities' => [
+            'drop' => ['ALL'],
+            'add' => ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'FSETID', 'KILL', 'SETGID', 'SETUID', 'NET_BIND_SERVICE'],
+        ],
+    ];
 
     private const ROLLING = ['type' => 'RollingUpdate', 'rollingUpdate' => ['maxUnavailable' => 0, 'maxSurge' => 1]];
 
@@ -93,6 +112,50 @@ final readonly class EnvironmentManifests
             'metadata' => [
                 'name' => $this->environment->kubeNamespace(),
                 'labels' => Labels::environment($this->environment),
+            ],
+        ];
+    }
+
+    /**
+     * The pods of an environment take traffic only from their own namespace and from Caddy. They send traffic to every
+     * pod, because the ingress policy of the target decides, and to every address except the Kubernetes API. The API
+     * runs on the host network, where no ingress policy can guard it. An IPv6 address stays out of the list, because
+     * it is not inside 0.0.0.0/0 and Kubernetes then rejects the policy.
+     *
+     * @param  list<string>  $apiServerIps  the IPv4 addresses of the endpoints of the Service kubernetes
+     * @return list<array<string, mixed>>
+     */
+    public function networkPolicies(array $apiServerIps): array
+    {
+        $any = new stdClass;
+        $internet = ['cidr' => '0.0.0.0/0', ...($apiServerIps === [] ? [] : ['except' => array_map(fn (string $ip) => "{$ip}/32", $apiServerIps)])];
+
+        return [
+            [
+                'apiVersion' => 'networking.k8s.io/v1',
+                'kind' => 'NetworkPolicy',
+                'metadata' => $this->metadata('ingress-from-namespace-and-caddy', Labels::environment($this->environment)),
+                'spec' => [
+                    'podSelector' => $any,
+                    'policyTypes' => ['Ingress'],
+                    'ingress' => [['from' => [
+                        ['podSelector' => $any],
+                        [
+                            'namespaceSelector' => ['matchLabels' => ['kubernetes.io/metadata.name' => ClusterPartsManifests::NAMESPACE]],
+                            'podSelector' => ['matchLabels' => ['app.kubernetes.io/name' => 'caddy']],
+                        ],
+                    ]]],
+                ],
+            ],
+            [
+                'apiVersion' => 'networking.k8s.io/v1',
+                'kind' => 'NetworkPolicy',
+                'metadata' => $this->metadata('egress-to-pods-and-internet', Labels::environment($this->environment)),
+                'spec' => [
+                    'podSelector' => $any,
+                    'policyTypes' => ['Egress'],
+                    'egress' => [['to' => [['namespaceSelector' => $any], ['ipBlock' => $internet]]]],
+                ],
             ],
         ];
     }
@@ -210,6 +273,7 @@ final readonly class EnvironmentManifests
                             'spec' => [
                                 'restartPolicy' => 'Never',
                                 ...$this->imagePullSecrets(),
+                                ...self::POD_SECURITY,
                                 'containers' => [$this->container($process->name, $deployment, $process->size, $this->commandOf($process))],
                             ],
                         ],
@@ -315,6 +379,7 @@ final readonly class EnvironmentManifests
                     'spec' => [
                         'restartPolicy' => 'Never',
                         ...$this->imagePullSecrets(),
+                        ...self::POD_SECURITY,
                         'containers' => [$this->container(Process::DEPLOY, $deployment, $this->environment->size, [
                             'command' => ['sh', '-c', implode(' && ', $this->environment->deploy_commands)],
                         ])],
@@ -350,7 +415,7 @@ final readonly class EnvironmentManifests
                 'strategy' => self::ROLLING,
                 'template' => [
                     'metadata' => ['labels' => Labels::deployment($this->environment, $process, $deployment)],
-                    'spec' => [...$this->imagePullSecrets(), 'containers' => [$this->container($process, $deployment, $size, $container)]],
+                    'spec' => [...$this->imagePullSecrets(), ...self::POD_SECURITY, 'containers' => [$this->container($process, $deployment, $size, $container)]],
                 ],
             ],
         ];
@@ -376,6 +441,7 @@ final readonly class EnvironmentManifests
             ...$extra,
             'envFrom' => [['secretRef' => ['name' => self::secretName($deployment)]]],
             'resources' => ['requests' => $resources, 'limits' => $resources],
+            'securityContext' => self::CONTAINER_SECURITY,
         ];
     }
 

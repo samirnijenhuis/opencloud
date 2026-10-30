@@ -11,8 +11,12 @@ class ClusterPartsManifestsTest extends TestCase
 
     private const METADATA = ['name' => 'caddy', 'namespace' => 'opencloud', 'labels' => self::LABELS];
 
-    public function test_the_parts_are_two_namespaces_and_caddy_with_a_volume_and_a_load_balancer(): void
+    public function test_the_parts_are_two_namespaces_the_datastore_policy_and_caddy_with_a_volume_and_a_load_balancer(): void
     {
+        $parts = (new ClusterPartsManifests('caddy:9.9.9'))->all();
+        $policy = array_splice($parts, 2, 1)[0];
+
+        $this->assertSame(['NetworkPolicy', 'ingress-from-environments', 'oc-datastores'], [$policy['kind'], $policy['metadata']['name'], $policy['metadata']['namespace']]);
         $this->assertSame([
             ['apiVersion' => 'v1', 'kind' => 'Namespace', 'metadata' => ['name' => 'opencloud']],
             ['apiVersion' => 'v1', 'kind' => 'Namespace', 'metadata' => ['name' => 'oc-datastores']],
@@ -64,6 +68,6 @@ class ClusterPartsManifestsTest extends TestCase
                     ],
                 ],
             ],
-        ], (new ClusterPartsManifests('caddy:9.9.9'))->all());
+        ], $parts);
     }
 }

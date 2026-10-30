@@ -3,16 +3,33 @@
 namespace App\Domains\Builds;
 
 use Closure;
+use RuntimeException;
 
-/** The files of a cloned repository, read when a preset asks for them. */
+/**
+ * The files of a cloned repository, read when a preset asks for them. A symbolic link of the repository can point
+ * anywhere in the builder container, for example at the service account token, so a path that a link puts outside the clone is refused.
+ */
 final readonly class RepositoryFiles
 {
     /** @param  Closure(string): ?string  $read  the contents of a path relative to the root, or null when no such file exists */
     public function __construct(private Closure $read) {}
 
+    /** @throws RuntimeException when a link puts the path outside $dir */
     public static function in(string $dir): self
     {
-        return new self(fn (string $path) => is_file("{$dir}/{$path}") ? file_get_contents("{$dir}/{$path}") : null);
+        $root = realpath($dir).'/';
+
+        return new self(function (string $path) use ($dir, $root) {
+            if (! is_file("{$dir}/{$path}")) {
+                return null;
+            }
+
+            if (! str_starts_with(realpath("{$dir}/{$path}"), $root)) {
+                throw new RuntimeException("The path {$path} in the repository leads out of the repository through a symbolic link. Opencloud does not follow such a link. Put the file itself in the repository.");
+            }
+
+            return file_get_contents("{$dir}/{$path}");
+        });
     }
 
     public function read(string $path): ?string

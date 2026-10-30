@@ -7,6 +7,7 @@ use App\Domains\Datastores\DatastoreManifests;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
+use stdClass;
 use Tests\TestCase;
 
 class DatastoreManifestsTest extends TestCase
@@ -15,6 +16,26 @@ class DatastoreManifestsTest extends TestCase
         'metadata' => ['name' => 'data'],
         'spec' => ['accessModes' => ['ReadWriteOnce'], 'resources' => ['requests' => ['storage' => '10Gi']]],
     ]];
+
+    public function test_the_datastores_take_traffic_only_from_their_namespace_and_the_environment_namespaces(): void
+    {
+        $policy = DatastoreManifests::networkPolicy();
+
+        $this->assertEquals([
+            'apiVersion' => 'networking.k8s.io/v1',
+            'kind' => 'NetworkPolicy',
+            'metadata' => ['name' => 'ingress-from-environments', 'namespace' => 'oc-datastores'],
+            'spec' => [
+                'podSelector' => new stdClass,
+                'policyTypes' => ['Ingress'],
+                'ingress' => [['from' => [
+                    ['podSelector' => new stdClass],
+                    ['namespaceSelector' => ['matchExpressions' => [['key' => 'opencloud.dev/environment', 'operator' => 'Exists']]]],
+                ]]],
+            ],
+        ], $policy);
+        $this->assertStringContainsString('"podSelector":{},"policyTypes":["Ingress"]', json_encode($policy), 'An empty selector must be a JSON object.');
+    }
 
     public function test_mysql_is_a_secret_a_service_and_a_statefulset_with_a_volume(): void
     {
@@ -52,6 +73,7 @@ class DatastoreManifestsTest extends TestCase
                                 'ports' => [['name' => 'mysql', 'containerPort' => 3306]],
                                 'readinessProbe' => ['tcpSocket' => ['port' => 'mysql'], 'periodSeconds' => 5],
                                 'volumeMounts' => [['name' => 'data', 'mountPath' => '/var/lib/mysql']],
+                                'resources' => ['requests' => ['memory' => '256Mi'], 'limits' => ['memory' => '2Gi']],
                             ]],
                         ],
                     ],
@@ -77,6 +99,7 @@ class DatastoreManifestsTest extends TestCase
                 'ports' => [['name' => 'postgres', 'containerPort' => 5432]],
                 'readinessProbe' => ['tcpSocket' => ['port' => 'postgres'], 'periodSeconds' => 5],
                 'volumeMounts' => [['name' => 'data', 'mountPath' => '/var/lib/postgresql/data']],
+                'resources' => ['requests' => ['memory' => '128Mi'], 'limits' => ['memory' => '2Gi']],
             ]],
         ], $statefulSet['spec']['template']['spec']);
         $this->assertSame(self::VOLUME_CLAIMS, $statefulSet['spec']['volumeClaimTemplates']);
@@ -104,12 +127,14 @@ class DatastoreManifestsTest extends TestCase
                     'ports' => [['name' => 's3', 'containerPort' => 9000]],
                     'readinessProbe' => ['tcpSocket' => ['port' => 's3'], 'periodSeconds' => 5],
                     'volumeMounts' => [['name' => 'data', 'mountPath' => '/data']],
+                    'resources' => ['requests' => ['memory' => '128Mi'], 'limits' => ['memory' => '1Gi']],
                 ],
                 [
                     'name' => 'rc',
                     'image' => 'rustfs/rc:v0.1.36',
                     'command' => ['sleep', '2147483647'],
                     'envFrom' => [['secretRef' => ['name' => 'rustfs-5']]],
+                    'resources' => ['requests' => ['memory' => '16Mi'], 'limits' => ['memory' => '128Mi']],
                 ],
             ],
         ], $statefulSet['spec']['template']['spec']);
@@ -152,11 +177,12 @@ class DatastoreManifestsTest extends TestCase
                             'containers' => [[
                                 'name' => 'valkey',
                                 'image' => 'valkey/valkey:9.1',
-                                'args' => ['valkey-server', '--requirepass', '$(VALKEY_PASSWORD)', '--appendonly', 'yes', '--dir', '/data'],
+                                'args' => ['valkey-server', '--requirepass', '$(VALKEY_PASSWORD)', '--appendonly', 'yes', '--dir', '/data', '--maxmemory', '256mb'],
                                 'env' => [['name' => 'VALKEY_PASSWORD', 'valueFrom' => ['secretKeyRef' => ['name' => 'valkey-9', 'key' => 'VALKEY_PASSWORD']]]],
                                 'ports' => [['name' => 'valkey', 'containerPort' => 6379]],
                                 'readinessProbe' => ['tcpSocket' => ['port' => 'valkey'], 'periodSeconds' => 5],
                                 'volumeMounts' => [['name' => 'data', 'mountPath' => '/data']],
+                                'resources' => ['requests' => ['memory' => '32Mi'], 'limits' => ['memory' => '512Mi']],
                             ]],
                             'volumes' => [['name' => 'data', 'persistentVolumeClaim' => ['claimName' => 'valkey-9']]],
                         ],

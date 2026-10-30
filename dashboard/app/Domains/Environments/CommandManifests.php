@@ -41,12 +41,14 @@ final readonly class CommandManifests
                     'spec' => [
                         'restartPolicy' => 'Never',
                         ...$pullSecrets,
+                        ...EnvironmentManifests::POD_SECURITY,
                         'containers' => [[
                             'name' => self::PROCESS,
                             'image' => $deployment->image,
                             'command' => ['sh', '-c', $this->run->command],
                             'envFrom' => [['secretRef' => ['name' => EnvironmentManifests::secretName($deployment)]]],
                             'resources' => ['requests' => $resources, 'limits' => $resources],
+                            'securityContext' => EnvironmentManifests::CONTAINER_SECURITY,
                         ]],
                     ],
                 ],

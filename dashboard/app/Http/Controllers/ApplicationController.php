@@ -122,9 +122,9 @@ class ApplicationController extends Controller
                 ],
             ]);
         } catch (DeployKeyRefused) {
-            return back()->withInput($request->except('deploy_private_key'))->withErrors(['deploy_private_key' => DeployKeyRefused::STEP]);
+            return back()->withInput($request->except(['deploy_private_key', 'env']))->withErrors(['deploy_private_key' => DeployKeyRefused::STEP]);
         } catch (RuntimeException) {
-            return back()->withInput($request->except('deploy_private_key'))->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
+            return back()->withInput($request->except(['deploy_private_key', 'env']))->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
         }
 
         // No deployment runs yet, so the user goes to the page that shows the key and the steps to add it on GitHub.

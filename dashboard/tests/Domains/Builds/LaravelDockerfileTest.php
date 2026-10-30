@@ -24,12 +24,15 @@ class LaravelDockerfileTest extends TestCase
             FROM base AS vendor
             # Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
             ARG OPENCLOUD_BUILD_ENV
+            # Opencloud sets this to a key of the application, so the cache mounts of one application never reach another.
+            ARG OPENCLOUD_CACHE_ID
             COPY . .
-            RUN --mount=type=cache,target=/tmp/composer-cache composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
+            RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/tmp/composer-cache,target=/tmp/composer-cache composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
 
             # Vite plugins such as Wayfinder run artisan during the asset build, so this stage has PHP and Node.
             FROM base AS assets
             ARG OPENCLOUD_BUILD_ENV
+            ARG OPENCLOUD_CACHE_ID
             COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
             COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
             RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
@@ -41,7 +44,7 @@ class LaravelDockerfileTest extends TestCase
             COPY --from=vendor /app/vendor ./vendor
             RUN composer dump-autoload --no-dev --no-scripts && php artisan package:discover --ansi && if [ -d vendor/laravel/wayfinder ]; then php artisan wayfinder:generate; fi
             # The lock file picks the package manager.
-            RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/share/pnpm/store --mount=type=cache,target=/usr/local/share/.cache/yarn if [ -f pnpm-lock.yaml ]; then npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile && pnpm run build; elif [ -f yarn.lock ]; then corepack enable && yarn install && yarn run build; elif [ -f package-lock.json ]; then npm ci $NPM_FLAGS && npm run build; else npm install $NPM_FLAGS && npm run build; fi
+            RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.npm,target=/root/.npm --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.local/share/pnpm/store,target=/root/.local/share/pnpm/store --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/usr/local/share/.cache/yarn,target=/usr/local/share/.cache/yarn if [ -f pnpm-lock.yaml ]; then npm install -g $NPM_FLAGS "pnpm@latest" && pnpm install --frozen-lockfile && pnpm run build; elif [ -f yarn.lock ]; then corepack enable && yarn install && yarn run build; elif [ -f package-lock.json ]; then npm ci $NPM_FLAGS && npm run build; else npm install $NPM_FLAGS && npm run build; fi
 
             FROM base
             COPY . .
@@ -79,8 +82,10 @@ class LaravelDockerfileTest extends TestCase
             FROM base AS vendor
             # Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
             ARG OPENCLOUD_BUILD_ENV
+            # Opencloud sets this to a key of the application, so the cache mounts of one application never reach another.
+            ARG OPENCLOUD_CACHE_ID
             COPY . .
-            RUN --mount=type=cache,target=/tmp/composer-cache --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH --mount=type=secret,id=NOVA_LICENSE,env=NOVA_LICENSE composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
+            RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/tmp/composer-cache,target=/tmp/composer-cache --mount=type=secret,id=COMPOSER_AUTH,env=COMPOSER_AUTH --mount=type=secret,id=NOVA_LICENSE,env=NOVA_LICENSE composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
 
             FROM base
             COPY . .

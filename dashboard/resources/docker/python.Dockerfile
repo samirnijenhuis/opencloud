@@ -8,9 +8,11 @@ RUN python -m venv /opt/venv
 ENV VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH UV_PROJECT_ENVIRONMENT=/opt/venv UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 # Opencloud sets this to a key of the build values, so a build with other values never reuses a layer that read a secret.
 ARG OPENCLOUD_BUILD_ENV
+# Opencloud sets this to a key of the application, so the cache mounts of one application never reach another.
+ARG OPENCLOUD_CACHE_ID
 WORKDIR /app
 COPY . .
-RUN --mount=type=cache,target=/root/.cache {{ secret_mounts }}{{ install }}
+RUN --mount=type=cache,id=${OPENCLOUD_CACHE_ID}/root/.cache,target=/root/.cache {{ secret_mounts }}{{ install }}
 {{ build_command }}
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD {{ start }}

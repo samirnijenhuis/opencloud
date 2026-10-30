@@ -56,15 +56,15 @@ class ImageCopyTest extends TestCase
 
         $applied = $this->kubectl->appliedManifests();
         $this->assertSame(
-            [['Namespace', 'oc-env-'.$environment->id], ['Secret', 'opencloud-registry'], ['Namespace', 'oc-env-'.$environment->id], ['Secret', "env-{$deployment->id}"], ['Deployment', 'web'], ['Service', 'web']],
+            [['Namespace', 'oc-env-'.$environment->id], ['Secret', 'opencloud-registry'], ['Namespace', 'oc-env-'.$environment->id], ['NetworkPolicy', 'ingress-from-namespace-and-caddy'], ['NetworkPolicy', 'egress-to-pods-and-internet'], ['Secret', "env-{$deployment->id}"], ['Deployment', 'web'], ['Service', 'web']],
             array_map(fn (array $manifest) => [$manifest['kind'], $manifest['metadata']['name']], $applied),
         );
         $this->assertSame(
             '{"auths":{"registry.example.com":{"username":"robot","password":"REGISTRY_PASSWORD","auth":"cm9ib3Q6UkVHSVNUUllfUEFTU1dPUkQ="}}}',
             base64_decode($applied[1]['data']['.dockerconfigjson']),
         );
-        $this->assertSame([['name' => 'opencloud-registry']], $applied[4]['spec']['template']['spec']['imagePullSecrets']);
-        $this->assertSame($target, $applied[4]['spec']['template']['spec']['containers'][0]['image']);
+        $this->assertSame([['name' => 'opencloud-registry']], $applied[6]['spec']['template']['spec']['imagePullSecrets']);
+        $this->assertSame($target, $applied[6]['spec']['template']['spec']['containers'][0]['image']);
         $this->assertStringContainsString("Copying the image to {$target}.", $deployment->fresh()->log);
     }
 

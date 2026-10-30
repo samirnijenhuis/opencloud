@@ -25,6 +25,24 @@ class DashboardRootUrlTest extends TestCase
         $this->assertSame('https://admin.example.com/login', route('login'));
     }
 
+    public function test_a_verified_domain_makes_the_session_cookie_secure_also_for_a_request_over_plain_http(): void
+    {
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::OK]);
+
+        DashboardDomain::applyRootUrl();
+
+        $this->assertTrue($this->get('http://admin.example.com/login')->getCookie(config('session.cookie'), false)->isSecure());
+    }
+
+    public function test_without_a_verified_domain_the_session_cookie_works_over_plain_http(): void
+    {
+        DashboardDomain::create(['hostname' => 'admin.example.com', 'dns_status' => DnsStatus::MISSING]);
+
+        DashboardDomain::applyRootUrl();
+
+        $this->assertFalse($this->get('/login')->getCookie(config('session.cookie'), false)->isSecure());
+    }
+
     public function test_a_domain_that_did_not_pass_keeps_the_app_url(): void
     {
         config(['app.url' => 'http://203.0.113.10:8000']);
