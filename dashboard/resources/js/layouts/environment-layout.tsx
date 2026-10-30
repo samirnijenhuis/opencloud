@@ -141,7 +141,7 @@ export default function EnvironmentLayout({
                                 <span className="text-muted-foreground flex items-center gap-2 font-normal">
                                     / <ColorDot color={environment.color} /> <span className="break-all">{environment.name}</span>
                                 </span>
-                                <DeploymentBadge status={environment.status} />
+                                {environment.kind !== 'preview_template' && <DeploymentBadge status={environment.status} />}
                             </h1>
                             <p className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
                                 <span>{applicationTypeLabels[application.type]}</span>

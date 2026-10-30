@@ -16,10 +16,10 @@ use App\Domains\Environments\Models\EnvVar;
 use App\Domains\GitHub\Enums\PullRequestAction;
 use App\Domains\GitHub\GitHubClient;
 use App\Domains\GitHub\PullRequestEvent;
+use App\Domains\Previews\PreviewHostname;
 use App\Domains\Routing\Jobs\CheckDomain;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -34,6 +34,7 @@ class OpenPreview
         private AttachDatastore $attachDatastore,
         private StartDeployment $startDeployment,
         private GitHubClient $github,
+        private PreviewHostname $previewHostname,
     ) {}
 
     /** @return Environment|null null when the application gets no preview for this pull request */
@@ -104,10 +105,10 @@ class OpenPreview
                 'processes' => $template->processes->pluck('name')->all(),
             ]);
 
-            $hostname = $this->hostname($application, $pullRequest->number);
+            $hostname = $this->previewHostname->for($application, $pullRequest->number);
 
             $this->copyEnv($application, $template, $preview, [
-                '{pr_number}' => (string) $pullRequest->number,
+                PreviewHostname::PR_NUMBER => (string) $pullRequest->number,
                 '{branch}' => $pullRequest->headRef,
                 '{url}' => $hostname === null ? '' : "https://{$hostname}",
             ]);
@@ -150,21 +151,6 @@ class OpenPreview
         }
 
         AuditEvent::record(null, 'preview.env_copied', $preview, ['keys' => $copied->all(), 'generated' => $generated]);
-    }
-
-    /** With a preview domain the owner points one wildcard record at the cluster. Without one, sslip.io resolves the IP in the name. */
-    private function hostname(Application $application, int $number): ?string
-    {
-        if ($application->preview_domain !== null) {
-            return "pr-{$number}.{$application->preview_domain}";
-        }
-
-        $ip = $application->cluster->ingress_ip;
-
-        // A DNS label holds at most 63 characters.
-        $slug = rtrim(substr(Str::slug($application->name), 0, 50), '-');
-
-        return $ip === null ? null : "pr-{$number}-{$slug}.{$ip}.sslip.io";
     }
 
     /** A comment is a courtesy, so a failure only goes to the log. */

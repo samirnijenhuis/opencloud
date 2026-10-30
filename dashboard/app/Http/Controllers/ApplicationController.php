@@ -132,11 +132,7 @@ class ApplicationController extends Controller
             ],
             'previews' => [
                 'previews_enabled' => $application->previews_enabled,
-                'preview_domain' => $application->preview_domain,
-                'preview_labels' => $application->preview_labels,
-                'ingress_ip' => $application->cluster->ingress_ip,
                 'max_previews' => config('opencloud.max_previews'),
-                'template_id' => $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->value('id'),
             ],
             'deployPublicKey' => $application->deploy_public_key,
             'canUpdate' => $request->user()->can('update', $application),

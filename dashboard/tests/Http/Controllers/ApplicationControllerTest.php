@@ -384,9 +384,9 @@ class ApplicationControllerTest extends TestCase
                 ->where('environments.3.pr_number', 7)
                 ->has('previews', fn (Assert $previews) => $previews
                     ->where('previews_enabled', true)
-                    ->where('preview_domain', null)
-                    ->missing('allow_forks')
-                    ->etc()));
+                    ->where('max_previews', 5)
+                    ->missing('preview_domain')
+                    ->missing('allow_forks')));
     }
 
     public function test_the_application_page_shows_the_public_key_of_the_deploy_key_to_a_developer_and_never_the_private_key(): void

@@ -217,13 +217,23 @@ class PreviewLifecycleTest extends TestCase
         $this->assertNotSame($managed->id, $preview->datastoreAttachments()->where('name', 'reports')->sole()->datastore_id);
     }
 
-    public function test_a_preview_domain_gives_each_preview_a_subdomain(): void
+    public function test_an_address_pattern_gives_each_preview_its_address_and_its_url_value(): void
     {
-        $this->application->update(['preview_domain' => 'preview.example.com']);
+        $this->application->update(['preview_domain' => 'pr-{pr_number}.previews.example.com']);
+        app(SetEnvVar::class)->execute($this->environment('preview-template'), User::factory()->owner()->create(), 'PREVIEW_LINK', '{url}/', false, EnvVarAvailability::RUNTIME);
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA))->assertStatus(202);
 
-        $this->assertSame(['pr-12.preview.example.com'], $this->environment('pr-12')->domains()->pluck('hostname')->all());
+        $preview = $this->environment('pr-12');
+        $this->assertSame(['pr-12.previews.example.com'], $preview->domains()->pluck('hostname')->all());
+        $this->assertSame('https://pr-12.previews.example.com/', $preview->envVars()->where('key', 'PREVIEW_LINK')->sole()->value);
+    }
+
+    public function test_without_an_address_pattern_a_preview_keeps_the_free_address(): void
+    {
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA))->assertStatus(202);
+
+        $this->assertSame(['pr-12-shop.203.0.113.10.sslip.io'], $this->environment('pr-12')->domains()->pluck('hostname')->all());
     }
 
     public function test_a_pull_request_from_a_fork_gets_no_preview(): void

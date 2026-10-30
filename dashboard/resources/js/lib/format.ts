@@ -35,3 +35,10 @@ export const memoryText = (mib: number) => (mib >= 1024 ? `${Math.round((mib / 1
 export const sizeText = (size: SizeOption) => `${vcpu(size.cpu_millicores)} vCPU, ${memoryText(size.memory_mib)}`;
 
 export const sizeLabel = (value: Size) => value.toUpperCase();
+
+/** The wildcard DNS name for a preview address pattern, or null when the pattern has no parent name. */
+export const previewWildcard = (pattern: string) => {
+    const [first, ...rest] = pattern.trim().split('.');
+
+    return first.includes('{pr_number}') && rest.length > 0 ? `*.${rest.join('.')}` : null;
+};
