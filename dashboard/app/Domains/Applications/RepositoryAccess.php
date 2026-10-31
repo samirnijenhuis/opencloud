@@ -6,7 +6,6 @@ use App\Domains\Applications\Enums\PreviewDelivery;
 use App\Domains\Applications\Enums\PushDelivery;
 use App\Domains\Applications\Enums\RepositoryRead;
 use App\Domains\Applications\Models\Application;
-use App\Domains\Builds\Exceptions\DeployKeyRefused;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\GitHub\Enums\AppReach;
@@ -72,7 +71,8 @@ final readonly class RepositoryAccess
             RepositoryRead::BRANCH_MISSING => $this->defaultBranch === null
                 ? "The branch {$this->branch} does not exist in {$name}."
                 : "The branch {$this->branch} does not exist in {$name}. The default branch is {$this->defaultBranch}.",
-            RepositoryRead::KEY_REFUSED => DeployKeyRefused::STEP,
+            // A new key always waits until the user adds it on GitHub, so the environment page shows a step, not a failure.
+            RepositoryRead::KEY_REFUSED => 'GitHub does not accept the deploy key yet. Add the public key to the repository under Settings, Deploy keys.',
             RepositoryRead::UNREADABLE => $this->githubRepository === null
                 ? 'Opencloud cannot read this repository. Outside github.com, opencloud reads only a public repository.'
                 : "Opencloud cannot read {$name}. It is private, or the name is wrong.",

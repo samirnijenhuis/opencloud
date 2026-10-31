@@ -69,7 +69,7 @@ class RepositoryAccessTest extends TestCase
             'public on another host' => [self::access(RepositoryRead::PUBLIC, $gitlab), 'Public repository on gitlab.com. Opencloud can read it.'],
             'a missing branch' => [self::access(RepositoryRead::BRANCH_MISSING, branch: 'develop', defaultBranch: 'main'), 'The branch develop does not exist in acme/shop. The default branch is main.'],
             'a missing branch in an empty repository' => [self::access(RepositoryRead::BRANCH_MISSING, branch: 'develop'), 'The branch develop does not exist in acme/shop.'],
-            'a refused key' => [self::access(RepositoryRead::KEY_REFUSED), 'GitHub refused the deploy key. Add the public key to the repository under Settings, Deploy keys.'],
+            'a refused key' => [self::access(RepositoryRead::KEY_REFUSED), 'GitHub does not accept the deploy key yet. Add the public key to the repository under Settings, Deploy keys.'],
             'unreadable on github.com' => [self::access(RepositoryRead::UNREADABLE), 'Opencloud cannot read acme/shop. It is private, or the name is wrong.'],
             'unreadable on another host' => [self::access(RepositoryRead::UNREADABLE, $gitlab), 'Opencloud cannot read this repository. Outside github.com, opencloud reads only a public repository.'],
         ];

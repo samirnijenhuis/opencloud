@@ -113,6 +113,8 @@ export default function EnvironmentLayout({
         (data) => !data.read_works,
     );
     const [repositoryOpen, setRepositoryOpen] = useState(false);
+    // A new deploy key always waits until the user adds it on GitHub, so a refused key is a step to do, not a failure.
+    const waitsForKey = access?.read === 'key_refused';
 
     return (
         <AppLayout
@@ -175,7 +177,7 @@ export default function EnvironmentLayout({
                                         {repositoryName(application.repository)}
                                         {environment.branch && `:${environment.branch}`}
                                     </span>
-                                    <Status tone={access === null ? 'off' : access.read_works ? 'ok' : 'bad'}>
+                                    <Status tone={access === null ? 'off' : access.read_works ? 'ok' : waitsForKey ? 'warn' : 'bad'}>
                                         <span className="sr-only">{access === null ? 'Checking the repository' : access.summary}</span>
                                     </Status>
                                 </button>
@@ -196,10 +198,16 @@ export default function EnvironmentLayout({
                 </div>
 
                 {access && !access.read_works && (
-                    <Alert variant="destructive" className="flex flex-wrap items-center justify-between gap-3 py-3">
+                    <Alert
+                        variant={waitsForKey ? 'default' : 'destructive'}
+                        className={cn(
+                            'flex flex-wrap items-center justify-between gap-3 py-3',
+                            waitsForKey && 'border-amber-500/50 text-amber-700 dark:text-amber-400',
+                        )}
+                    >
                         <AlertDescription>{access.summary}</AlertDescription>
                         <Button variant="secondary" size="sm" onClick={() => setRepositoryOpen(true)}>
-                            Show the steps
+                            {waitsForKey ? 'Show the key' : 'Show the steps'}
                         </Button>
                     </Alert>
                 )}

@@ -27,7 +27,7 @@ const buildStates: Record<RepositoryRead, [Tone, string]> = {
     deploy_key: ['ok', 'Through the deploy key'],
     public: ['ok', 'Through the public URL'],
     branch_missing: ['bad', 'Branch missing'],
-    key_refused: ['bad', 'Key refused'],
+    key_refused: ['warn', 'Waiting for the key'],
     unreadable: ['bad', 'No access'],
 };
 

@@ -7,6 +7,7 @@ use App\Domains\Applications\Enums\RepositoryRead;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Applications\RepositoryProbe;
 use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Builds\Exceptions\DeployKeyRefused;
 use App\Domains\Builds\SshKeygen;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Enums\DatastoreKind;
@@ -70,11 +71,12 @@ class CreateApplication
             $access = $this->repositoryProbe->access(new Application(['repository' => $data['repository'], 'deploy_private_key' => $ownKey]), $branch);
 
             if (! $access->read->works()) {
-                throw ValidationException::withMessages([match ($access->read) {
-                    RepositoryRead::BRANCH_MISSING => 'branch',
-                    RepositoryRead::KEY_REFUSED => 'deploy_private_key',
-                    default => 'repository',
-                } => $access->summary()]);
+                throw ValidationException::withMessages(match ($access->read) {
+                    RepositoryRead::BRANCH_MISSING => ['branch' => $access->summary()],
+                    // The pasted key fails the create here. summary() describes a key that the environment page waits for.
+                    RepositoryRead::KEY_REFUSED => ['deploy_private_key' => DeployKeyRefused::STEP],
+                    default => ['repository' => $access->summary()],
+                });
             }
 
             // An empty repository has no HEAD, so git finds no default branch.
