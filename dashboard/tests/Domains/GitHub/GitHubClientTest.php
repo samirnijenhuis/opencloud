@@ -3,9 +3,11 @@
 namespace Tests\Domains\GitHub;
 
 use App\Domains\GitHub\AppJwt;
+use App\Domains\GitHub\Enums\AppReach;
 use App\Domains\GitHub\GitHubClient;
 use App\Domains\GitHub\RepositoryName;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -68,6 +70,33 @@ class GitHubClientTest extends TestCase
         $this->makeGitHubApp();
         $this->assertNull($client->installationToken('acme/public'));
         $this->assertSame(['GET https://api.github.com/repos/acme/public/installation'], $this->sentRequests());
+    }
+
+    public function test_the_private_app_reaches_only_the_installed_repositories_of_its_own_account(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'api.github.com/repos/acme/shop/installation' => Http::response(['id' => 77]),
+            'api.github.com/repos/acme/blog/installation' => Http::response(['message' => 'Not Found'], 404),
+            'api.github.com/repos/acme/down/installation' => Http::response(['message' => 'Server Error'], 500),
+        ]);
+        $client = app(GitHubClient::class);
+
+        $this->assertSame(AppReach::NO_APP, $client->reach('acme/shop'));
+        $this->assertSame([], $this->sentRequests());
+
+        $this->makeGitHubApp()->update(['owner' => 'Acme']);
+        $this->assertSame(
+            [AppReach::INSTALLED, AppReach::NOT_INSTALLED, AppReach::OTHER_ACCOUNT],
+            [$client->reach('acme/shop'), $client->reach('acme/blog'), $client->reach('samir/shop')],
+        );
+        $this->assertSame([
+            'GET https://api.github.com/repos/acme/shop/installation',
+            'GET https://api.github.com/repos/acme/blog/installation',
+        ], $this->sentRequests());
+
+        $this->expectException(RequestException::class);
+        $client->reach('acme/down');
     }
 
     public function test_repository_names_come_from_owner_and_name_or_a_github_url(): void

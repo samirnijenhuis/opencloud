@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,6 +7,7 @@ import { previewWildcard } from '@/lib/format';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 import { EditorSheet } from './editor-sheet';
+import { previewSentence, useRepositoryAccess } from './repository-sheet';
 import { type PreviewTemplateSettings } from './types';
 
 export function PreviewsSheet({
@@ -25,6 +27,7 @@ export function PreviewsSheet({
     const form = useForm(saved);
     const { data, setData, errors } = form;
     const wildcard = previewWildcard(data.preview_domain);
+    const { access } = useRepositoryAccess();
 
     useEffect(() => {
         if (open) {
@@ -58,6 +61,12 @@ export function PreviewsSheet({
                 </>
             }
         >
+            {access?.previews === 'not_connected' && (
+                <Alert>
+                    <AlertDescription>{previewSentence(access)}</AlertDescription>
+                </Alert>
+            )}
+
             {!canManage && <p className="text-muted-foreground text-sm">Only an admin or an owner can change the previews.</p>}
 
             <form id="previews-settings" onSubmit={save}>

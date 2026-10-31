@@ -2,6 +2,7 @@
 
 namespace App\Domains\GitHub;
 
+use App\Domains\GitHub\Enums\AppReach;
 use App\Domains\GitHub\Models\GithubApp;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
@@ -9,6 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -88,6 +90,37 @@ class GitHubClient
         Cache::put($key, Crypt::encryptString($token), Carbon::parse($created->json('expires_at'))->subMinute());
 
         return $token;
+    }
+
+    /**
+     * The manifest creates the app as private, and GitHub installs a private app only on the account that owns it.
+     * So a repository of another account needs no API call.
+     *
+     * @param  string  $repository  "owner/name"
+     *
+     * @throws RequestException when GitHub refuses the app
+     */
+    public function reach(string $repository): AppReach
+    {
+        $app = GithubApp::query()->first();
+
+        if ($app === null) {
+            return AppReach::NO_APP;
+        }
+
+        if (strcasecmp(Str::before($repository, '/'), $app->owner) !== 0) {
+            return AppReach::OTHER_ACCOUNT;
+        }
+
+        $installation = $this->asApp($app)->get("/repos/{$repository}/installation");
+
+        if ($installation->notFound()) {
+            return AppReach::NOT_INSTALLED;
+        }
+
+        $installation->throw();
+
+        return AppReach::INSTALLED;
     }
 
     /**

@@ -25,7 +25,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
-use RuntimeException;
 use Tests\Fakes\FakeProcesses;
 use Tests\TestCase;
 
@@ -39,7 +38,6 @@ class CreateApplicationTest extends TestCase
     {
         Queue::fake();
         $processes = FakeProcesses::install();
-        $processes->lsRemote = self::SHA."\trefs/heads/main\n";
         $owner = User::factory()->create();
         $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
 
@@ -51,7 +49,6 @@ class CreateApplicationTest extends TestCase
 
         $this->assertSame([
             ['git', 'ls-remote', '--symref', 'https://github.com/acme/shop.git', 'HEAD'],
-            ['git', 'ls-remote', 'https://github.com/acme/shop.git', 'refs/heads/main'],
         ], $processes->commands());
         $this->assertSame(['shop', 'acme/shop', ApplicationType::LARAVEL, 8080], [$application->name, $application->repository, $application->type, $application->fresh()->port]);
 
@@ -113,7 +110,7 @@ class CreateApplicationTest extends TestCase
     public function test_a_new_app_gets_the_generated_secret_of_its_preset_and_the_preview_template_does_not(ApplicationType $type, string $key, string $pattern): void
     {
         Queue::fake();
-        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+        FakeProcesses::install();
 
         $application = app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => 'api',
@@ -132,7 +129,6 @@ class CreateApplicationTest extends TestCase
         Queue::fake();
         $processes = FakeProcesses::install();
         $processes->symref = "ref: refs/heads/13.x\tHEAD\n".self::SHA."\tHEAD\n";
-        $processes->lsRemote = self::SHA."\trefs/heads/13.x\n";
 
         $application = app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => 'laravel',
@@ -141,16 +137,13 @@ class CreateApplicationTest extends TestCase
         ]);
 
         $this->assertSame('13.x', $application->environments()->where('name', 'production')->sole()->branch);
-        $this->assertSame(
-            [['git', 'ls-remote', '--symref', 'https://github.com/laravel/laravel.git', 'HEAD'], ['git', 'ls-remote', 'https://github.com/laravel/laravel.git', 'refs/heads/13.x']],
-            array_slice(array_column($processes->ran, 'command'), 0, 2),
-        );
+        $this->assertSame([['git', 'ls-remote', '--symref', 'https://github.com/laravel/laravel.git', 'HEAD']], $processes->commands());
     }
 
     public function test_a_dockerfile_app_gets_no_processes_no_app_key_no_database_and_no_deploy_commands(): void
     {
         Queue::fake();
-        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+        FakeProcesses::install();
 
         $application = app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => 'site',
@@ -172,7 +165,7 @@ class CreateApplicationTest extends TestCase
     public function test_a_new_application_gets_the_port_of_its_preset_unless_it_asks_for_another(): void
     {
         Queue::fake();
-        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+        FakeProcesses::install();
         $cluster = Cluster::factory()->create();
         $create = fn (string $name, array $extra) => app(CreateApplication::class)->execute(User::factory()->create(), [
             'name' => $name,
@@ -233,7 +226,6 @@ class CreateApplicationTest extends TestCase
     {
         Queue::fake();
         $processes = FakeProcesses::install();
-        $processes->lsRemote = self::SHA."\trefs/heads/main\n";
         $owner = User::factory()->create();
 
         $application = app(CreateApplication::class)->execute($owner, [
@@ -246,7 +238,6 @@ class CreateApplicationTest extends TestCase
         $this->assertSame([
             ['ssh-keygen', '-y'],
             ['git', 'ls-remote', '--symref', 'git@github.com:acme/shop.git', 'HEAD'],
-            ['git', 'ls-remote', 'git@github.com:acme/shop.git', 'refs/heads/main'],
             ['ssh-keygen', '-y'],
         ], array_map(fn (array $command) => $command[0] === 'git' ? $command : array_slice($command, 0, 2), $processes->commands()));
         $this->assertSame([FakeProcesses::PRIVATE_KEY, FakeProcesses::PUBLIC_KEY.' me@example.com'], [$application->deploy_private_key, $application->deploy_public_key]);
@@ -282,7 +273,7 @@ class CreateApplicationTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_an_own_key_that_github_refuses_creates_nothing(): void
+    public function test_an_own_key_that_github_refuses_comes_back_on_the_key_field_and_creates_nothing(): void
     {
         Queue::fake();
         FakeProcesses::install()->lsRemoteError = "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n";
@@ -295,18 +286,18 @@ class CreateApplicationTest extends TestCase
                 'deploy_private_key' => FakeProcesses::PRIVATE_KEY,
             ]);
             $this->fail('No exception.');
-        } catch (DeployKeyRefused $e) {
-            $this->assertStringEndsWith("\n".DeployKeyRefused::STEP, $e->getMessage());
+        } catch (ValidationException $e) {
+            $this->assertSame(['deploy_private_key' => [DeployKeyRefused::STEP]], $e->errors());
         }
 
         $this->assertSame([0, 0], [Application::count(), AuditEvent::count()]);
         Queue::assertNothingPushed();
     }
 
-    public function test_a_missing_branch_creates_nothing(): void
+    public function test_a_missing_branch_comes_back_on_the_branch_field_and_creates_nothing(): void
     {
         Queue::fake();
-        FakeProcesses::install()->lsRemote = '';
+        $processes = FakeProcesses::install();
 
         try {
             app(CreateApplication::class)->execute(User::factory()->create(), [
@@ -316,8 +307,49 @@ class CreateApplicationTest extends TestCase
                 'branch' => 'nope',
             ]);
             $this->fail('No exception.');
-        } catch (RuntimeException $e) {
-            $this->assertSame('The branch nope does not exist in https://github.com/acme/shop.git.', $e->getMessage());
+        } catch (ValidationException $e) {
+            $this->assertSame(['branch' => ['The branch nope does not exist in acme/shop. The default branch is main.']], $e->errors());
+        }
+
+        $this->assertSame([['git', 'ls-remote', '--symref', 'https://github.com/acme/shop.git', 'HEAD', 'refs/heads/nope']], $processes->commands());
+        $this->assertSame(0, Application::count());
+        Queue::assertNothingPushed();
+    }
+
+    public function test_a_repository_that_opencloud_cannot_read_comes_back_on_the_repository_field_and_creates_nothing(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemoteError = "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n";
+
+        try {
+            app(CreateApplication::class)->execute(User::factory()->create(), [
+                'name' => 'shop',
+                'repository' => 'acme/shop',
+                'cluster_id' => Cluster::factory()->create()->id,
+            ]);
+            $this->fail('No exception.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['repository' => ['Opencloud cannot read acme/shop. It is private, or the name is wrong.']], $e->errors());
+        }
+
+        $this->assertSame([0, 0], [Application::count(), AuditEvent::count()]);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_an_empty_repository_without_a_branch_comes_back_on_the_branch_field_and_creates_nothing(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->symref = '';
+
+        try {
+            app(CreateApplication::class)->execute(User::factory()->create(), [
+                'name' => 'shop',
+                'repository' => 'acme/shop',
+                'cluster_id' => Cluster::factory()->create()->id,
+            ]);
+            $this->fail('No exception.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['branch' => ['The repository has no branch yet. Push a commit first.']], $e->errors());
         }
 
         $this->assertSame(0, Application::count());

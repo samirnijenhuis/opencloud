@@ -106,7 +106,8 @@ In a test, the machine kept its IP address after `orb stop` and `orb start`. The
 | The dashboard does not answer | Run `orb -m opencloud sudo opencloud status` and check that all pods are `Running`. |
 | A part shows errors | Run `orb -m opencloud sudo opencloud logs web`. Replace `web` with `worker`, `builder`, `scheduler`, or `caddy`. |
 | The first build is slow | The build downloads every package once. A slow network makes npm wait and try again. Later builds use the cache and take seconds. |
-| "We could not find this repository and branch" | Check the repository name. Leave the branch empty, or type a branch that exists. |
+| "Opencloud cannot read owner/repo" | Check the repository name. For a private repository, install the GitHub App or use a deploy key. |
+| "The branch … does not exist" | Leave the branch empty, or type a branch that exists. |
 | A domain shows "Wrong address" | A domain that you add must contain the IP address of the machine, for example `shop.192.168.139.51.sslip.io`. The free address always has the correct IP address. |
 
 ## Trust the local certificate

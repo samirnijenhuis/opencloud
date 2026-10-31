@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Domains\Applications\Actions\CreateApplication;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
-use App\Domains\Builds\Exceptions\DeployKeyRefused;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Deployments\Models\Deployment;
@@ -19,7 +18,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
-use RuntimeException;
 
 class ApplicationController extends Controller
 {
@@ -80,27 +78,16 @@ class ApplicationController extends Controller
         $data = $request->validated();
         $user = $request->user();
 
-        try {
-            $application = $createApplication->execute($user, [
-                'name' => $data['name'] ?? basename(preg_replace('/\.git$/', '', $data['repository'])),
-                'repository' => $data['repository'],
-                'cluster_id' => $data['cluster_id'],
-                'type' => ApplicationType::from($data['type']),
-                'port' => $data['port'] ?? null,
-                'branch' => $data['branch'] ?? null,
-                'deploy_key' => $request->boolean('deploy_key'),
-                'deploy_private_key' => $data['deploy_private_key'] ?? null,
-            ]);
-        } catch (DeployKeyRefused) {
-            return back()->withInput($request->except('deploy_private_key'))->withErrors(['deploy_private_key' => DeployKeyRefused::STEP]);
-        } catch (RuntimeException) {
-            return back()->withInput($request->except('deploy_private_key'))->withErrors(['repository' => 'We could not find this repository and branch. Check the address and the branch name.']);
-        }
-
-        // The user adds the new key on GitHub first, so the page that shows the key and the steps comes before the environment.
-        if ($request->boolean('deploy_key')) {
-            return to_route('applications.show', $application);
-        }
+        $application = $createApplication->execute($user, [
+            'name' => $data['name'] ?? basename(preg_replace('/\.git$/', '', $data['repository'])),
+            'repository' => $data['repository'],
+            'cluster_id' => $data['cluster_id'],
+            'type' => ApplicationType::from($data['type']),
+            'port' => $data['port'] ?? null,
+            'branch' => $data['branch'] ?? null,
+            'deploy_key' => $request->boolean('deploy_key'),
+            'deploy_private_key' => $data['deploy_private_key'] ?? null,
+        ]);
 
         $production = $application->environments()->where('name', 'production')->firstOrFail();
 
@@ -134,7 +121,6 @@ class ApplicationController extends Controller
                 'previews_enabled' => $application->previews_enabled,
                 'max_previews' => config('opencloud.max_previews'),
             ],
-            'deployPublicKey' => $application->deploy_public_key,
             'canUpdate' => $request->user()->can('update', $application),
             'environments' => $environments
                 ->sortBy(fn (Environment $environment) => [match (true) {

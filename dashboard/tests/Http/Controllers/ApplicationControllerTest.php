@@ -136,19 +136,31 @@ class ApplicationControllerTest extends TestCase
         $this->actingAs($admin)->post('/applications', $this->validForm())->assertRedirect("/environments/{$production->id}");
     }
 
-    public function test_the_deploy_key_choice_reaches_create_application_and_opens_the_application_page(): void
+    public function test_a_new_deploy_key_creates_the_application_without_a_remote_call_and_opens_the_production_environment_page(): void
     {
-        $created = Application::factory()->for($this->makeCluster())->create();
+        Queue::fake();
+        $processes = FakeProcesses::install();
 
-        $this->mock(CreateApplication::class)
-            ->shouldReceive('execute')
-            ->once()
-            ->withArgs(fn (User $by, array $data) => [$data['deploy_key'], $data['branch']] === [true, null])
-            ->andReturn($created);
+        $response = $this->actingAs(User::factory()->admin()->create())
+            ->post('/applications', $this->validForm(['branch' => '', 'deploy_key' => true]));
 
-        $this->actingAs(User::factory()->admin()->create())
-            ->post('/applications', $this->validForm(['branch' => '', 'deploy_key' => true]))
-            ->assertRedirect("/applications/{$created->id}");
+        $application = Application::sole();
+        $response->assertRedirect("/environments/{$application->environments()->where('name', 'production')->sole()->id}");
+        $this->assertSame([FakeProcesses::PUBLIC_KEY.' opencloud shop', ['ssh-keygen']], [$application->deploy_public_key, array_unique(array_column($processes->commands(), 0))]);
+    }
+
+    public function test_the_create_form_refuses_a_deploy_key_for_a_repository_outside_github(): void
+    {
+        $processes = FakeProcesses::install();
+        $owner = User::factory()->owner()->create();
+
+        foreach ([['deploy_key' => true], ['deploy_private_key' => FakeProcesses::PRIVATE_KEY]] as $key) {
+            $this->actingAs($owner)
+                ->post('/applications', $this->validForm(['repository' => 'https://gitlab.com/acme/shop.git', ...$key]))
+                ->assertSessionHasErrors([array_key_first($key) => 'A deploy key works only for a repository on github.com.']);
+        }
+
+        $this->assertSame([0, []], [Application::count(), $processes->commands()]);
     }
 
     public function test_an_own_key_reaches_create_application_and_opens_the_environment_page(): void
@@ -175,7 +187,7 @@ class ApplicationControllerTest extends TestCase
             ->assertSessionHasErrors(['deploy_private_key' => 'Choose a new key or your own key. Do not choose both.']);
     }
 
-    /** A bad key fails in CreateApplication, and a refused key fails in the controller. Each path keeps the other input and drops the key. */
+    /** A bad key and a refused key both fail in CreateApplication. Each path keeps the other input and drops the key. */
     public function test_a_bad_or_refused_own_key_comes_back_on_the_key_field_creates_nothing_and_never_reaches_the_session(): void
     {
         Queue::fake();
@@ -191,7 +203,7 @@ class ApplicationControllerTest extends TestCase
         $this->post('/applications', $this->validForm(['deploy_private_key' => FakeProcesses::PRIVATE_KEY]))
             ->assertRedirect('/applications/create')
             ->assertSessionHasErrors(['deploy_private_key' => 'GitHub refused the deploy key. Add the public key to the repository under Settings, Deploy keys.']);
-        $this->assertSame(['https://github.com/acme/shop.git', null], [session()->getOldInput('repository'), session()->getOldInput('deploy_private_key')]);
+        $this->assertSame(['acme/shop', null], [session()->getOldInput('repository'), session()->getOldInput('deploy_private_key')]);
 
         $this->assertSame([0, 0], [Application::count(), AuditEvent::count()]);
         Queue::assertNothingPushed();
@@ -200,8 +212,7 @@ class ApplicationControllerTest extends TestCase
     public function test_it_creates_an_application_end_to_end_from_a_repository_alone_and_starts_no_deployment(): void
     {
         Queue::fake();
-        $processes = FakeProcesses::install();
-        $processes->lsRemote = self::SHA."\trefs/heads/main\n";
+        FakeProcesses::install();
         $owner = User::factory()->owner()->create();
 
         $response = $this->actingAs($owner)->post('/applications', [
@@ -264,7 +275,7 @@ class ApplicationControllerTest extends TestCase
     public function test_the_form_creates_each_preset_with_its_defaults(array $form, array $expected): void
     {
         Queue::fake();
-        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+        FakeProcesses::install()->symref .= self::SHA."\trefs/heads/main\n";
 
         $this->actingAs(User::factory()->owner()->create())
             ->post('/applications', $this->validForm($form))
@@ -286,7 +297,7 @@ class ApplicationControllerTest extends TestCase
     public function test_the_create_form_takes_no_env_names_and_the_preset_names_the_database_values(): void
     {
         Queue::fake();
-        FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
+        FakeProcesses::install()->symref .= self::SHA."\trefs/heads/main\n";
 
         $this->actingAs(User::factory()->owner()->create())
             ->post('/applications', $this->validForm(['env_profile' => 'django']))
@@ -328,14 +339,14 @@ class ApplicationControllerTest extends TestCase
                 ->where('canUpdate', true));
     }
 
-    public function test_a_repository_that_git_cannot_read_comes_back_as_a_form_error(): void
+    public function test_a_repository_that_git_cannot_read_comes_back_with_the_summary_on_the_repository_field(): void
     {
-        FakeProcesses::install()->lsRemote = '';
+        FakeProcesses::install()->lsRemoteError = "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n";
 
         $this->actingAs(User::factory()->owner()->create())->from('/applications/create')
             ->post('/applications', $this->validForm(['repository' => 'acme/missing']))
             ->assertRedirect('/applications/create')
-            ->assertSessionHasErrors('repository');
+            ->assertSessionHasErrors(['repository' => 'Opencloud cannot read acme/missing. It is private, or the name is wrong.']);
 
         $this->assertSame(0, Application::count());
     }
@@ -389,7 +400,7 @@ class ApplicationControllerTest extends TestCase
                     ->missing('allow_forks')));
     }
 
-    public function test_the_application_page_shows_the_public_key_of_the_deploy_key_to_a_developer_and_never_the_private_key(): void
+    public function test_the_application_page_shows_no_deploy_key(): void
     {
         $application = $this->makeEnvironment()->application;
         $application->update(['deploy_private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nsecret-key-text\n-----END OPENSSH PRIVATE KEY-----\n", 'deploy_public_key' => 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKey opencloud shop']);
@@ -397,9 +408,10 @@ class ApplicationControllerTest extends TestCase
         $this->actingAs(User::factory()->create())->get("/applications/{$application->id}")
             ->assertOk()
             ->assertDontSee('secret-key-text')
+            ->assertDontSee('AAAAC3NzaC1lZDI1NTE5AAAAIKey')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('applications/show')
-                ->where('deployPublicKey', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKey opencloud shop')
+                ->missing('deployPublicKey')
                 ->where('canUpdate', false));
     }
 }
