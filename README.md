@@ -37,13 +37,21 @@
 
 ### On a Linux server
 
-You need Ubuntu 24.04 or 26.04 on an **amd64 (x86_64)** server with at least 2 vCPU, 4 GB of RAM, a public IP address, and open ports 80, 443, and 8000. Run this one command on the server:
+You need a Linux server with systemd on **amd64 (x86_64)**, with at least 2 vCPU, 4 GB of RAM, a public IP address, and open ports 80, 443, and 8000. Run this one command on the server:
 
 ```bash
 curl -fsSL https://github.com/samirnijenhuis/opencloud/releases/latest/download/install.sh | sudo OPENCLOUD_REPO=samirnijenhuis/opencloud bash
 ```
 
 The installer checks the server first, and it stops with a clear message when something is missing. Then it installs k3s, pulls the dashboard and Caddy images of the [latest release](https://github.com/samirnijenhuis/opencloud/releases) from `ghcr.io/samirnijenhuis`, and prints a setup URL. Only a person with that URL can create the owner account.
+
+Tested on:
+
+- Ubuntu 24.04
+- Ubuntu 26.04
+- Debian 13
+
+Other Linux systems with systemd should work, but they are not tested. The installer stops when the server does not run systemd or is not amd64.
 
 - `OPENCLOUD_REPO` is needed, because the default repository of the installer is still the old placeholder `opencloud-dev/opencloud`.
 - To install a specific release, also set `OPENCLOUD_VERSION`, for example `OPENCLOUD_VERSION=v0.1.1`.
@@ -340,7 +348,7 @@ On a Mac, put `orb -m opencloud` in front of each command, for example `orb -m o
 
 You can restore the whole install on a new server when the old server is lost. You need an S3 backup target in **Settings > Backups** and the saved `APP_KEY`.
 
-1. Start a new Ubuntu 24.04 or 26.04 server.
+1. Start a new server that meets the needs in [On a Linux server](#on-a-linux-server).
 2. Write the file `/root/opencloud-restore.env` with the settings of the backup target and the `APP_KEY`:
 
    ```bash
@@ -376,7 +384,7 @@ The installer refuses restore mode on a server that already has a dashboard data
 | Part | Proof |
 |---|---|
 | Install, setup URL, a second install run, the `curl \| bash` install | Live (`fresh-machine.sh`, `curl-install.sh`) |
-| Install on Ubuntu 26.04 | Live: `E2E_UBUNTU=resolute fresh-machine.sh` passed each check. The other live checks ran on Ubuntu 24.04. |
+| Install on Ubuntu 26.04 and Debian 13 | Live: `fresh-machine.sh` with `E2E_DISTRO=ubuntu:resolute` and with `E2E_DISTRO=debian:trixie` passed each check. The other live checks ran on Ubuntu 24.04. |
 | Deploys of Laravel, plain PHP, Node.js, Python, Ruby, a static site, and a Dockerfile site, with MySQL, Postgres, SQLite, and Valkey | Live, with the [verify matrix](.claude/skills/verify-opencloud/SKILL.md): 12 of 12 smoke cells. Each cell deploys three times, and the third deploy runs under traffic with no failed request |
 | A private GitHub repository with a deploy key | Live: 12 of 12 cells against a private repository on a machine with no GitHub App |
 | The 7 deployment steps | Live: each deploy of the matrix finishes all 7 steps |
