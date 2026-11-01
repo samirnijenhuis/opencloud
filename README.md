@@ -37,7 +37,7 @@
 
 ### On a Linux server
 
-You need Ubuntu 24.04 on an **amd64 (x86_64)** server with at least 2 vCPU, 4 GB of RAM, a public IP address, and open ports 80, 443, and 8000. Run this one command on the server:
+You need Ubuntu 24.04 or 26.04 on an **amd64 (x86_64)** server with at least 2 vCPU, 4 GB of RAM, a public IP address, and open ports 80, 443, and 8000. Run this one command on the server:
 
 ```bash
 curl -fsSL https://github.com/samirnijenhuis/opencloud/releases/latest/download/install.sh | sudo OPENCLOUD_REPO=samirnijenhuis/opencloud bash
@@ -340,7 +340,7 @@ On a Mac, put `orb -m opencloud` in front of each command, for example `orb -m o
 
 You can restore the whole install on a new server when the old server is lost. You need an S3 backup target in **Settings > Backups** and the saved `APP_KEY`.
 
-1. Start a new Ubuntu 24.04 server.
+1. Start a new Ubuntu 24.04 or 26.04 server.
 2. Write the file `/root/opencloud-restore.env` with the settings of the backup target and the `APP_KEY`:
 
    ```bash
@@ -376,6 +376,7 @@ The installer refuses restore mode on a server that already has a dashboard data
 | Part | Proof |
 |---|---|
 | Install, setup URL, a second install run, the `curl \| bash` install | Live (`fresh-machine.sh`, `curl-install.sh`) |
+| Install on Ubuntu 26.04 | Live: `E2E_UBUNTU=resolute fresh-machine.sh` passed each check. The other live checks ran on Ubuntu 24.04. |
 | Deploys of Laravel, plain PHP, Node.js, Python, Ruby, a static site, and a Dockerfile site, with MySQL, Postgres, SQLite, and Valkey | Live, with the [verify matrix](.claude/skills/verify-opencloud/SKILL.md): 12 of 12 smoke cells. Each cell deploys three times, and the third deploy runs under traffic with no failed request |
 | A private GitHub repository with a deploy key | Live: 12 of 12 cells against a private repository on a machine with no GitHub App |
 | The 7 deployment steps | Live: each deploy of the matrix finishes all 7 steps |

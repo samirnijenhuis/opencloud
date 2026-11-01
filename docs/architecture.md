@@ -6,7 +6,7 @@ This document is the contract for the code. The design document `docs/superpower
 
 | Path | Contents |
 |---|---|
-| `install.sh` | The one-command installer for a fresh Ubuntu 24.04 server. |
+| `install.sh` | The one-command installer for a fresh Ubuntu 24.04 or 26.04 server. |
 | `bin/opencloud` | The CLI that the installer puts on the server, for example `opencloud upgrade`. |
 | `platform/` | Kubernetes manifests for the opencloud parts on the `local` cluster. `platform/images/caddy/` holds the Caddy image. |
 | `dashboard/` | The Laravel app. It is the dashboard, the API, and the queue worker. |

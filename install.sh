@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs opencloud on a fresh Ubuntu 24.04 server. Run it again to repair or update an install.
+# Installs opencloud on a fresh Ubuntu 24.04 or 26.04 server. Run it again to repair or update an install.
 set -euo pipefail
 
 K3S_VERSION=v1.36.5+k3s1
@@ -102,8 +102,8 @@ preflight() {
     local os="unknown"
     # shellcheck source=/dev/null
     [[ -r /etc/os-release ]] && os=$(. /etc/os-release && echo "${ID:-} ${VERSION_ID:-}")
-    if [[ $os != "ubuntu 24.04" && ${OPENCLOUD_SKIP_OS_CHECK:-0} != 1 ]]; then
-        fail "Opencloud supports Ubuntu 24.04 only. This server runs $os. Use Ubuntu 24.04, or set OPENCLOUD_SKIP_OS_CHECK=1 to try at your own risk."
+    if [[ $os != "ubuntu 24.04" && $os != "ubuntu 26.04" && ${OPENCLOUD_SKIP_OS_CHECK:-0} != 1 ]]; then
+        fail "Opencloud supports Ubuntu 24.04 and 26.04. This server runs $os. Use one of them, or set OPENCLOUD_SKIP_OS_CHECK=1 to try at your own risk."
     fi
 
     local tool
