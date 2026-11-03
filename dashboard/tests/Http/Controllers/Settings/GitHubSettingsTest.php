@@ -92,6 +92,9 @@ class GitHubSettingsTest extends TestCase
         $this->assertStringNotContainsString('whsec-from-github', $page->getContent());
         $this->assertStringNotContainsString('PRIVATE KEY', $page->getContent());
 
+        $conversionCall = Http::recorded(fn (Request $request) => str_contains($request->url(), '/app-manifests/'))->sole()[0];
+        $this->assertSame('{}', $conversionCall->body());
+
         $installationsCall = Http::recorded(fn (Request $request) => $request->url() === 'https://api.github.com/app/installations')->sole()[0];
         $this->assertStringStartsWith('Bearer ey', $installationsCall->header('Authorization')[0]);
     }
