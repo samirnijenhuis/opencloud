@@ -51,7 +51,10 @@ class GitHubController extends Controller
         try {
             $connect->execute($request->user(), $code);
         } catch (RequestException $e) {
-            return to_route('github.index')->withErrors(['github' => "GitHub did not accept the code. It answered with status {$e->response->status()}. Create the GitHub App again."]);
+            report($e);
+            $reason = GitHubClient::errorText($e->response);
+
+            return to_route('github.index')->withErrors(['github' => "GitHub did not accept the code. It answered with status {$e->response->status()}".($reason === '' ? '.' : ": {$reason}").' Create the GitHub App again.']);
         }
 
         return to_route('github.index')->with('status', 'Opencloud is connected to the new GitHub App. Install it on your repositories next.');
