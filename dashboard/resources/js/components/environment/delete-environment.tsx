@@ -48,7 +48,7 @@ export function DeleteEnvironment({ environment }: { environment: { id: number; 
                             <DialogTitle>Delete {environment.name}?</DialogTitle>
                             <DialogDescription>
                                 Opencloud deletes the namespace, the domains, and the data of each database, bucket, and Valkey of {environment.name}.
-                                You cannot undo this. Production keeps its data.
+                                You cannot undo this. The other environments keep their data.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-2">

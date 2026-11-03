@@ -40,7 +40,8 @@ class EnvironmentPolicy
     }
 
     /**
-     * Only an environment that a user added can go. Production is protected, and a preview goes with its pull request.
+     * Only a permanent environment can go, production too. A protected one needs someone trusted with production.
+     * A preview goes with its pull request, and the preview template goes with its application.
      */
     public function delete(User $user, Environment $environment): bool
     {
@@ -49,7 +50,7 @@ class EnvironmentPolicy
         }
 
         if ($environment->is_protected) {
-            return false;
+            return $user->role->allows(Ability::CHANGE_PROTECTED_ENVIRONMENT);
         }
 
         return $user->role->allows(Ability::MANAGE_APPLICATIONS);

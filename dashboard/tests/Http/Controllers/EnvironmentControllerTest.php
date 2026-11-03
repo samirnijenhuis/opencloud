@@ -408,7 +408,7 @@ class EnvironmentControllerTest extends TestCase
         $kubectl->assertRan("delete namespace oc-env-{$staging->id}");
     }
 
-    public function test_production_a_preview_and_the_preview_template_cannot_be_deleted(): void
+    public function test_a_preview_and_the_preview_template_cannot_be_deleted_but_production_can(): void
     {
         Queue::fake();
         $kubectl = FakeKubectl::install();
@@ -418,7 +418,7 @@ class EnvironmentControllerTest extends TestCase
         $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
         $owner = User::factory()->owner()->create();
 
-        foreach ([$production, $template, $preview] as $environment) {
+        foreach ([$template, $preview] as $environment) {
             $this->actingAs($owner)->get("/environments/{$environment->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', false));
             $this->actingAs($owner)->delete("/environments/{$environment->id}", ['confirm' => $environment->name])->assertForbidden();
         }
@@ -429,5 +429,27 @@ class EnvironmentControllerTest extends TestCase
         $staging = Environment::factory()->for($application)->create(['name' => 'staging']);
         $this->actingAs($owner)->get("/environments/{$staging->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', true));
         $this->actingAs(User::factory()->create())->get("/environments/{$staging->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', false));
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$production->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', false));
+        $this->actingAs($owner)->get("/environments/{$production->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', true));
+        $this->actingAs($owner)->delete("/environments/{$production->id}", ['confirm' => 'production'])
+            ->assertRedirect(route('applications.show', $application));
+        $this->assertNull($production->fresh());
+        $kubectl->assertRan("delete namespace oc-env-{$production->id}");
+    }
+
+    public function test_without_production_the_new_environment_form_refuses_a_copy_of_production(): void
+    {
+        Queue::fake();
+        $application = $this->makeEnvironment(name: 'staging', protected: false)->application;
+        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post("/applications/{$application->id}/environments", ['name' => 'qa', 'branch' => 'qa', 'copy_from' => 'production'])
+            ->assertSessionHasErrors(['copy_from' => 'This application has no production. Copy the preview template.']);
+
+        $this->assertSame(2, Environment::count());
+        $this->assertSame(0, AuditEvent::count());
+        Queue::assertNothingPushed();
     }
 }

@@ -7,6 +7,7 @@ import AppLayout from '@/layouts/app-layout';
 import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { ApplicationSettings } from './application-settings';
 import { NewEnvironment } from './new-environment';
 
 type EnvironmentRow = {
@@ -26,6 +27,7 @@ type Props = {
     environments: EnvironmentRow[];
     previews: { previews_enabled: boolean; max_previews: number };
     canUpdate: boolean;
+    canDelete: boolean;
 };
 
 function PullRequest({ environment }: { environment: EnvironmentRow }) {
@@ -42,7 +44,7 @@ function PullRequest({ environment }: { environment: EnvironmentRow }) {
     );
 }
 
-export default function ApplicationShow({ application, environments, previews, canUpdate }: Props) {
+export default function ApplicationShow({ application, environments, previews, canUpdate, canDelete }: Props) {
     const [saving, setSaving] = useState(false);
 
     const setPreviews = (enabled: boolean) =>
@@ -62,17 +64,20 @@ export default function ApplicationShow({ application, environments, previews, c
             <Head title={application.name} />
 
             <div className="mx-auto w-full max-w-5xl space-y-6 p-4">
-                <div className="space-y-1">
-                    <h1 className="text-2xl font-semibold tracking-tight">{application.name}</h1>
-                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
-                        <span>{application.repository}</span>
-                        <Badge
-                            variant="secondary"
-                            title="The preset is fixed. It also sets the env names that the databases, Valkey, and the buckets give the app."
-                        >
-                            {applicationTypeLabels[application.type]}
-                        </Badge>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-1">
+                        <h1 className="text-2xl font-semibold tracking-tight">{application.name}</h1>
+                        <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+                            <span>{application.repository}</span>
+                            <Badge
+                                variant="secondary"
+                                title="The preset is fixed. It also sets the env names that the databases, Valkey, and the buckets give the app."
+                            >
+                                {applicationTypeLabels[application.type]}
+                            </Badge>
+                        </div>
                     </div>
+                    {canUpdate && <ApplicationSettings application={application} canDelete={canDelete} />}
                 </div>
 
                 <div className="flex flex-wrap items-end justify-between gap-4">

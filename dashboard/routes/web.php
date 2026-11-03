@@ -43,6 +43,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('applications/create/repository-access', [RepositoryAccessController::class, 'check'])->middleware('throttle:30,1')->name('applications.repository-access.check');
     Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
     Route::get('applications/{application}', [ApplicationController::class, 'show'])->name('applications.show');
+    Route::patch('applications/{application}', [ApplicationController::class, 'update'])->name('applications.update');
+    Route::delete('applications/{application}', [ApplicationController::class, 'destroy'])->name('applications.destroy');
     Route::patch('applications/{application}/previews', [PreviewSettingsController::class, 'update'])->name('applications.previews.update');
     Route::post('applications/{application}/deploy-key', [DeployKeyController::class, 'store'])->name('applications.deploy-key.store');
     Route::delete('applications/{application}/deploy-key', [DeployKeyController::class, 'destroy'])->name('applications.deploy-key.destroy');
