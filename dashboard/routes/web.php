@@ -17,6 +17,7 @@ use App\Http\Controllers\EnvTextController;
 use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\InviteAcceptController;
 use App\Http\Controllers\LiveStatusController;
+use App\Http\Controllers\PreviewPullRequestController;
 use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\ProcessController;
 use App\Http\Controllers\RepositoryAccessController;
@@ -61,6 +62,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/status', [LiveStatusController::class, 'environment'])->name('environments.status');
     Route::get('environments/{environment}/repository-access', [RepositoryAccessController::class, 'show'])->name('environments.repository-access');
+
+    Route::get('environments/{environment}/pull-requests', [PreviewPullRequestController::class, 'index'])->name('environments.pull-requests');
+    Route::post('environments/{environment}/pull-requests/{number}/preview', [PreviewPullRequestController::class, 'deploy'])->whereNumber('number')->name('environments.pull-requests.deploy');
 
     Route::get('environments/{environment}/commands', [EnvironmentController::class, 'commands'])->name('environments.commands');
     Route::get('environments/{environment}/command-runs', [CommandRunController::class, 'index'])->name('environments.command-runs');

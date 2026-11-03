@@ -51,6 +51,10 @@ trait PresentsEnvironment
                 'deploy' => $user->can('deploy', $environment),
                 'manage_domains' => $user->can('update', $application),
             ],
+            // The preview template is only a template. It never deploys, so it has no deployments, commands, or logs.
+            'tabs' => $environment->kind === EnvironmentKind::PREVIEW_TEMPLATE
+                ? ['environment', 'pull-requests', 'settings']
+                : ['environment', 'deployments', 'commands', 'logs', 'settings'],
         ];
     }
 

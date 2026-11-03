@@ -107,7 +107,7 @@ class EnvironmentController extends Controller
                 'preview_domain' => $environment->application->preview_domain,
                 'preview_labels' => $environment->application->preview_labels,
                 'ingress_ip' => $cluster->ingress_ip,
-                'max_previews' => config('opencloud.max_previews'),
+                'max_previews' => $environment->application->max_previews,
             ] : null,
             'compute' => $environment->only(['size', 'min_instances', 'max_instances', 'cpu_target', 'health_path']),
             'sizes' => array_map(fn (Size $size) => [

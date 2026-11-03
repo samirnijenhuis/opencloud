@@ -12,7 +12,7 @@ class UpdatePreviewSettings
      * Stores only the settings in the array. The settings apply to the next pull request event.
      * Previews that run keep their domain until their pull request closes.
      *
-     * @param  array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>}  $settings
+     * @param  array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>, max_previews?: int}  $settings
      */
     public function execute(Application $application, User $by, array $settings): void
     {

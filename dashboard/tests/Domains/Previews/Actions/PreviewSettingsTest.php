@@ -106,6 +106,30 @@ class PreviewSettingsTest extends TestCase
         $this->assertSame(['changes' => ['previews_enabled' => ['from' => true, 'to' => false]]], AuditEvent::sole()->context);
     }
 
+    public function test_an_admin_sets_the_limit_and_both_pages_show_it(): void
+    {
+        $this->actingAs(User::factory()->admin()->create())
+            ->patch("/applications/{$this->application->id}/previews", ['max_previews' => 0])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(0, $this->application->fresh()->max_previews);
+        $this->assertSame(['changes' => ['max_previews' => ['from' => 5, 'to' => 0]]], AuditEvent::sole()->context);
+        $this->get("/applications/{$this->application->id}")->assertInertia(fn (Assert $page) => $page->where('previews.max_previews', 0));
+        $this->get("/environments/{$this->template->id}")->assertInertia(fn (Assert $page) => $page->where('previews.max_previews', 0));
+    }
+
+    public function test_a_limit_outside_0_to_1000_is_refused(): void
+    {
+        foreach ([-1, 1001, 'many'] as $limit) {
+            $this->actingAs(User::factory()->admin()->create())
+                ->patch("/applications/{$this->application->id}/previews", ['max_previews' => $limit])
+                ->assertSessionHasErrors(['max_previews' => 'Enter a number from 0 to 1000. 0 means no limit.']);
+        }
+
+        $this->assertSame(5, $this->application->fresh()->max_previews);
+        $this->assertSame(0, AuditEvent::count());
+    }
+
     public function test_a_save_that_changes_nothing_records_nothing(): void
     {
         $this->actingAs(User::factory()->admin()->create())

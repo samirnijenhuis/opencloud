@@ -17,6 +17,7 @@ use App\Domains\GitHub\Enums\PullRequestAction;
 use App\Domains\GitHub\GitHubClient;
 use App\Domains\GitHub\PullRequestEvent;
 use App\Domains\Previews\PreviewHostname;
+use App\Domains\Previews\PreviewRules;
 use App\Domains\Routing\Jobs\CheckDomain;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -64,9 +65,8 @@ class OpenPreview
 
     private function create(Application $application, PullRequestEvent $pullRequest): ?Environment
     {
-        $limit = config('opencloud.max_previews');
-
-        if ($application->environments()->where('kind', EnvironmentKind::PREVIEW)->count() >= $limit) {
+        if (PreviewRules::atLimit($application)) {
+            $limit = $application->max_previews;
             AuditEvent::record(null, 'preview.limit_reached', $application, ['pr_number' => $pullRequest->number, 'limit' => $limit]);
 
             // A push to the pull request tries again, so a push gets no comment.

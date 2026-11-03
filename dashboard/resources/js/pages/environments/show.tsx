@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { useDeploymentPoll } from '@/hooks/use-deployment-poll';
 import { usePoll } from '@/hooks/use-poll';
 import EnvironmentLayout from '@/layouts/environment-layout';
-import { duration, memoryText, previewWildcard, shortSha, sizeLabel, sizeText, timeAgo, vcpu } from '@/lib/format';
+import { duration, memoryText, previewLimitText, previewWildcard, shortSha, sizeLabel, sizeText, timeAgo, vcpu } from '@/lib/format';
 import { kindLabels as clusterKindLabels } from '@/pages/clusters/cluster-status';
 import { type Process, type Size, type SizeOption } from '@/types';
 import { Link, router } from '@inertiajs/react';
@@ -118,7 +118,7 @@ function PreviewsBlock({ previews, onOpen }: { previews: PreviewTemplateSettings
             <Row label="Pull requests">
                 {delivery !== 'on' ? <Status tone={tone}>{state}</Status> : labels === '' ? 'Each pull request' : `With label ${labels}`}
             </Row>
-            <Row label="At most">{`${previews.max_previews} at the same time`}</Row>
+            <Row label="Limit">{previewLimitText(previews.max_previews)}</Row>
         </Block>
     );
 }

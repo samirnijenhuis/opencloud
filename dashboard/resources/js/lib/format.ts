@@ -42,3 +42,7 @@ export const previewWildcard = (pattern: string) => {
 
     return first.includes('{pr_number}') && rest.length > 0 ? `*.${rest.join('.')}` : null;
 };
+
+/** The preview limit of an application in one sentence. 0 means no limit. */
+export const previewLimitText = (maxPreviews: number) =>
+    maxPreviews === 0 ? 'Previews have no limit.' : `At most ${maxPreviews} previews run at the same time.`;

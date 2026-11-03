@@ -100,6 +100,59 @@ class GitHubClientTest extends TestCase
         $client->reach('acme/down');
     }
 
+    public function test_the_open_pull_requests_come_as_plain_values_with_their_labels_and_whether_they_come_from_a_fork(): void
+    {
+        $this->makeGitHubApp();
+        $this->fakeGitHub(more: ['api.github.com/repos/acme/shop/pulls?*' => Http::response([
+            self::apiPullRequest(12, ['preview', 'Bug']),
+            self::apiPullRequest(13, [], 'mallory/shop'),
+            self::apiPullRequest(14, [], null),
+        ])]);
+
+        $this->assertSame([
+            ['number' => 12, 'title' => 'Change number 12', 'author' => 'samir', 'head_ref' => 'feature/12', 'head_sha' => self::HEAD_SHA, 'labels' => ['preview', 'Bug'], 'url' => 'https://github.com/acme/shop/pull/12', 'from_fork' => false, 'open' => true],
+            ['number' => 13, 'title' => 'Change number 13', 'author' => 'samir', 'head_ref' => 'feature/13', 'head_sha' => self::HEAD_SHA, 'labels' => [], 'url' => 'https://github.com/acme/shop/pull/13', 'from_fork' => true, 'open' => true],
+            ['number' => 14, 'title' => 'Change number 14', 'author' => 'samir', 'head_ref' => 'feature/14', 'head_sha' => self::HEAD_SHA, 'labels' => [], 'url' => 'https://github.com/acme/shop/pull/14', 'from_fork' => true, 'open' => true],
+        ], app(GitHubClient::class)->openPullRequests('acme/shop'));
+
+        $list = Http::recorded()[2][0];
+        $this->assertSame('https://api.github.com/repos/acme/shop/pulls?state=open&per_page=100', $list->url());
+        $this->assertSame('Bearer '.self::TOKEN, $list->header('Authorization')[0]);
+    }
+
+    public function test_one_pull_request_comes_with_its_state_and_an_unknown_number_gives_null(): void
+    {
+        $this->makeGitHubApp();
+        $this->fakeGitHub(more: [
+            'api.github.com/repos/acme/shop/pulls/12' => Http::response(self::apiPullRequest(12, state: 'closed')),
+            'api.github.com/repos/acme/shop/pulls/99' => Http::response(['message' => 'Not Found'], 404),
+        ]);
+        $client = app(GitHubClient::class);
+
+        $this->assertSame(
+            ['number' => 12, 'title' => 'Change number 12', 'author' => 'samir', 'head_ref' => 'feature/12', 'head_sha' => self::HEAD_SHA, 'labels' => [], 'url' => 'https://github.com/acme/shop/pull/12', 'from_fork' => false, 'open' => false],
+            $client->pullRequest('acme/shop', 12),
+        );
+        $this->assertNull($client->pullRequest('acme/shop', 99));
+    }
+
+    public function test_without_an_app_on_the_repository_there_are_no_pull_requests_to_read(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['api.github.com/repos/acme/blog/installation' => Http::response(['message' => 'Not Found'], 404)]);
+        $client = app(GitHubClient::class);
+
+        $this->assertNull($client->openPullRequests('acme/blog'));
+        $this->assertSame([], $this->sentRequests());
+
+        $this->makeGitHubApp();
+        $this->assertSame([null, null], [$client->openPullRequests('acme/blog'), $client->pullRequest('acme/blog', 12)]);
+        $this->assertSame([
+            'GET https://api.github.com/repos/acme/blog/installation',
+            'GET https://api.github.com/repos/acme/blog/installation',
+        ], $this->sentRequests());
+    }
+
     public function test_repository_names_come_from_owner_and_name_or_a_github_url(): void
     {
         $this->assertSame(

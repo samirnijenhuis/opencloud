@@ -41,6 +41,7 @@ class UpdatePreviewSettingsRequest extends FormRequest
                 }
             }],
             'preview_labels' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'max_previews' => ['sometimes', 'integer', 'min:0', 'max:1000'],
         ];
     }
 
@@ -50,14 +51,15 @@ class UpdatePreviewSettingsRequest extends FormRequest
         return [
             'preview_domain.max' => self::HOST,
             'preview_labels.max' => 'Keep the labels to 500 characters or fewer.',
+            'max_previews.*' => 'Enter a number from 0 to 1000. 0 means no limit.',
         ];
     }
 
     /**
-     * The row switch sends only the switch. The template sheet sends the address and the labels.
+     * The row switch sends only the switch. The template sheet sends the address, the labels, and the limit.
      * The sheet sends the labels as one text with commas between them.
      *
-     * @return array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>}
+     * @return array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>, max_previews?: int}
      */
     public function settings(): array
     {
@@ -66,7 +68,6 @@ class UpdatePreviewSettingsRequest extends FormRequest
         if (array_key_exists('previews_enabled', $settings)) {
             $settings['previews_enabled'] = $this->boolean('previews_enabled');
         }
-
         if (array_key_exists('preview_labels', $settings)) {
             $settings['preview_labels'] = collect(explode(',', (string) $settings['preview_labels']))
                 ->map(fn (string $label) => trim($label))

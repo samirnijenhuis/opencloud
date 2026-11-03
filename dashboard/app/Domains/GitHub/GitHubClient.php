@@ -166,6 +166,71 @@ class GitHubClient
         return (int) $this->request()->withToken($token)->post("/repos/{$repository}/issues/{$issue}/comments", ['body' => $body])->throw()->json('id');
     }
 
+    /**
+     * The open pull requests of a repository, newest first. One page of 100 is the limit, so a repository with more
+     * open pull requests shows only the newest 100.
+     *
+     * @param  string  $repository  "owner/name" from RepositoryName::parse()
+     * @return list<array{number: int, title: string, author: string, head_ref: string, head_sha: string, labels: list<string>, url: string, from_fork: bool, open: bool}>|null null when this install has no GitHub App, or the app is not installed on the repository
+     *
+     * @throws RequestException when GitHub refuses the call
+     */
+    public function openPullRequests(string $repository): ?array
+    {
+        $token = $this->installationToken($repository);
+
+        if ($token === null) {
+            return null;
+        }
+
+        $pullRequests = $this->request()->withToken($token)->get("/repos/{$repository}/pulls", ['state' => 'open', 'per_page' => 100])->throw()->json();
+
+        return array_map(fn (array $pullRequest) => self::pullRequestValues($pullRequest, $repository), $pullRequests);
+    }
+
+    /**
+     * @param  string  $repository  "owner/name" from RepositoryName::parse()
+     * @return array{number: int, title: string, author: string, head_ref: string, head_sha: string, labels: list<string>, url: string, from_fork: bool, open: bool}|null null when this install has no GitHub App, the app is not installed on the repository, or the pull request does not exist
+     *
+     * @throws RequestException when GitHub refuses the call
+     */
+    public function pullRequest(string $repository, int $number): ?array
+    {
+        $token = $this->installationToken($repository);
+
+        if ($token === null) {
+            return null;
+        }
+
+        // The number comes from the browser, so it can be an issue or a number that does not exist.
+        $response = $this->request()->withToken($token)->get("/repos/{$repository}/pulls/{$number}");
+
+        if ($response->notFound()) {
+            return null;
+        }
+
+        return self::pullRequestValues($response->throw()->json(), $repository);
+    }
+
+    /**
+     * @param  array<string, mixed>  $pullRequest  a pull request object of the GitHub API
+     * @return array{number: int, title: string, author: string, head_ref: string, head_sha: string, labels: list<string>, url: string, from_fork: bool, open: bool}
+     */
+    private static function pullRequestValues(array $pullRequest, string $repository): array
+    {
+        return [
+            'number' => (int) $pullRequest['number'],
+            'title' => (string) $pullRequest['title'],
+            'author' => (string) ($pullRequest['user']['login'] ?? ''),
+            'head_ref' => (string) $pullRequest['head']['ref'],
+            'head_sha' => (string) $pullRequest['head']['sha'],
+            'labels' => array_column($pullRequest['labels'] ?? [], 'name'),
+            'url' => (string) $pullRequest['html_url'],
+            'from_fork' => PullRequestEvent::isFork($pullRequest, $repository),
+            'open' => $pullRequest['state'] === 'open',
+        ];
+    }
+
     private function asApp(GithubApp $app): PendingRequest
     {
         return $this->request()->withToken(AppJwt::sign($app->app_id, $app->private_key, now()->getTimestamp()));
