@@ -40,7 +40,7 @@ class GitHubSettingsTest extends TestCase
             'hook_attributes' => ['url' => 'http://203.0.113.10:8000/webhooks/github', 'active' => true],
             'redirect_url' => 'http://203.0.113.10:8000/settings/github/callback',
             'public' => false,
-            'default_permissions' => ['contents' => 'read', 'metadata' => 'read', 'pull_requests' => 'write', 'issues' => 'write'],
+            'default_permissions' => ['contents' => 'read', 'metadata' => 'read', 'pull_requests' => 'write'],
             'default_events' => ['push', 'pull_request'],
         ], json_decode($props['manifest'], true));
         $this->assertSame(40, strlen($props['state']));

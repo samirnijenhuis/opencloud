@@ -17,14 +17,10 @@ use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Datastores\SqlConnection;
-use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
-use App\Domains\GitHub\Enums\PullRequestAction;
-use App\Domains\GitHub\PullRequestEvent;
 use App\Domains\Members\Models\User;
-use App\Domains\Previews\Actions\OpenPreview;
 use App\Support\Kube\FakeKubectl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
@@ -283,32 +279,6 @@ class ExternalResourcesTest extends TestCase
 
         $this->assertSame([0, 0, []], [DatastoreAttachment::query()->count(), Datastore::query()->count(), $this->env()]);
         $this->assertNothingRan();
-    }
-
-    public function test_a_preview_gets_local_resources_for_the_external_resources_of_production(): void
-    {
-        $application = $this->environment->application;
-        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
-        $attach = app(AttachDatastore::class);
-        $attach->execute($this->environment, $this->owner, DatastoreKind::POSTGRES, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::POSTGRES));
-        $attach->execute($this->environment, $this->owner, DatastoreKind::MYSQL, DatastoreSource::EXTERNAL, 'reports', $this->typed(DatastoreKind::MYSQL));
-        $attach->execute($this->environment, $this->owner, DatastoreKind::VALKEY, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::VALKEY));
-        $attach->execute($this->environment, $this->owner, DatastoreKind::RUSTFS, DatastoreSource::EXTERNAL, null, $this->typed(DatastoreKind::RUSTFS));
-
-        $preview = app(OpenPreview::class)->execute($application, new PullRequestEvent(PullRequestAction::OPENED, $application->repository, 12, 'feature/login', str_repeat('1', 40), fromFork: false, labels: [], changedLabel: null));
-
-        $this->assertSame([
-            ['postgres', 'standard', 'main', true, 'local'],
-            ['rustfs', 'standard', 'main', true, 'local'],
-            ['mysql', 'standard', 'reports', false, 'local'],
-            ['valkey', 'standard', null, false, 'local'],
-        ], $preview->datastoreAttachments()->with('datastore.cluster')->orderBy('id')->get()
-            ->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->datastore->source->value, $a->name, $a->is_default, $a->datastore->cluster?->name])->all());
-        $this->assertSame(
-            ['postgres-', 'env_'.$preview->id],
-            [substr($preview->envVars()->where('key', 'DB_HOST')->sole()->value, 0, 9), $preview->envVars()->where('key', 'DB_DATABASE')->sole()->value],
-        );
-        $this->assertSame([], $this->tofu->ran);
     }
 
     private function typed(DatastoreKind $kind): Connection

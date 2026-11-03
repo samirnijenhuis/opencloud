@@ -15,7 +15,8 @@ import { router, useForm } from '@inertiajs/react';
 import { FormEventHandler, type ReactNode, useEffect, useState } from 'react';
 
 type Settings = {
-    branch: string;
+    /** Null for the preview template. A preview deploys the branch of its pull request. */
+    branch: string | null;
     auto_deploy: boolean;
     build_command: string | null;
     deploy_commands: string[];
@@ -94,10 +95,15 @@ function Field({ label, description, htmlFor, children }: { label: string; descr
 }
 
 function GeneralForm({ environment, settings, locked }: { environment: Props['environment']; settings: Settings; locked: boolean }) {
-    const form = useForm({ branch: settings.branch, auto_deploy: settings.auto_deploy, sleep_after_minutes: settings.sleep_after_minutes });
+    const template = environment.kind === 'preview_template';
+    const form = useForm({ branch: settings.branch ?? '', auto_deploy: settings.auto_deploy, sleep_after_minutes: settings.sleep_after_minutes });
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        // The server refuses a branch and deploy on push for the preview template.
+        if (template) {
+            form.transform(({ sleep_after_minutes }) => ({ sleep_after_minutes }));
+        }
         form.patch(route('environments.update', environment.id), { preserveScroll: true, onSuccess: () => form.setDefaults() });
     };
 
@@ -107,20 +113,29 @@ function GeneralForm({ environment, settings, locked }: { environment: Props['en
     return (
         <form onSubmit={submit} className="divide-y rounded-lg border">
             <fieldset disabled={locked} className="divide-y">
-                <Field label="Branch" description="The Git branch that this environment deploys." htmlFor="branch">
-                    <Input id="branch" className="font-mono" value={form.data.branch} onChange={(e) => form.setData('branch', e.target.value)} />
-                    <InputError message={form.errors.branch} />
-                </Field>
-                <Field label="Deploy on push" description="Deploy each new commit on the branch." htmlFor="auto_deploy">
-                    <Label className="flex items-center gap-2 font-normal">
-                        <Checkbox
-                            id="auto_deploy"
-                            checked={form.data.auto_deploy}
-                            onCheckedChange={(checked) => form.setData('auto_deploy', checked === true)}
-                        />
-                        {form.data.auto_deploy ? 'On' : 'Off'}
-                    </Label>
-                </Field>
+                {!template && (
+                    <>
+                        <Field label="Branch" description="The Git branch that this environment deploys." htmlFor="branch">
+                            <Input
+                                id="branch"
+                                className="font-mono"
+                                value={form.data.branch}
+                                onChange={(e) => form.setData('branch', e.target.value)}
+                            />
+                            <InputError message={form.errors.branch} />
+                        </Field>
+                        <Field label="Deploy on push" description="Deploy each new commit on the branch." htmlFor="auto_deploy">
+                            <Label className="flex items-center gap-2 font-normal">
+                                <Checkbox
+                                    id="auto_deploy"
+                                    checked={form.data.auto_deploy}
+                                    onCheckedChange={(checked) => form.setData('auto_deploy', checked === true)}
+                                />
+                                {form.data.auto_deploy ? 'On' : 'Off'}
+                            </Label>
+                        </Field>
+                    </>
+                )}
                 <Field
                     label="Sleep when idle"
                     description="Stop the pods after this many minutes without a request. Queue workers and scheduled tasks stop too, and a task that is due during sleep does not run later. The next request starts the pods again, and the visitor sees a Starting page for about 15 seconds."

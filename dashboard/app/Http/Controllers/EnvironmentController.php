@@ -107,7 +107,13 @@ class EnvironmentController extends Controller
                 'preview_domain' => $environment->application->preview_domain,
                 'preview_labels' => $environment->application->preview_labels,
                 'ingress_ip' => $cluster->ingress_ip,
-                'max_previews' => config('opencloud.max_previews'),
+                'max_previews' => $environment->application->max_previews,
+                // What each new preview gets. The template itself gets nothing.
+                'attachments' => array_map(function (array $entry) {
+                    $kind = DatastoreKind::from($entry['kind']);
+
+                    return [...$entry, 'family' => $kind->family(), 'label' => self::label($kind, DatastoreSource::STANDARD, Provisioners::for($kind, DatastoreSource::STANDARD)->capabilities())];
+                }, $environment->preview_attachments),
             ] : null,
             'compute' => $environment->only(['size', 'min_instances', 'max_instances', 'cpu_target', 'health_path']),
             'sizes' => array_map(fn (Size $size) => [
@@ -209,10 +215,15 @@ class EnvironmentController extends Controller
     {
         $attachments = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get();
         $rows = $attachments->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment, $role));
+        // The add menu of the template adds to its list, so the list decides what it still offers. Its old attachments do not count.
+        $template = $environment->kind === EnvironmentKind::PREVIEW_TEMPLATE;
+        $taken = $template
+            ? collect($environment->preview_attachments)->map(fn (array $entry) => ['family' => DatastoreKind::from($entry['kind'])->family(), 'name' => $entry['name']])
+            : $attachments->map(fn (DatastoreAttachment $attachment) => ['family' => $attachment->family, 'name' => $attachment->name]);
 
         return [
             'attachments' => $rows,
-            'offers' => $this->offers($environment->application->cluster, $role, $attachments),
+            'offers' => $this->offers($environment->application->cluster, $role, $taken, standardOnly: $template),
             'has_backup_target' => BackupTarget::query()->exists(),
             'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::PENDING, DatastoreStatus::PROVISIONING], true)
                 || $row['server']['status'] === DatastoreStatus::DESTROYING
@@ -225,12 +236,12 @@ class EnvironmentController extends Controller
      * Each kind and source of the registry that the environment can still add, with the reason when this user cannot
      * add it here. The add menu shows exactly this list, so a new arm of the registry needs no change in the dashboard.
      *
-     * @param  Collection<int, DatastoreAttachment>  $attachments
+     * @param  Collection<int, array{family: ResourceFamily, name: ?string}>  $taken  the resources that the environment has
+     * @param  bool  $standardOnly  for the list of the preview template, because each preview gets a standard resource
      * @return list<array<string, mixed>>
      */
-    private function offers(Cluster $cluster, Role $role, Collection $attachments): array
+    private function offers(Cluster $cluster, Role $role, Collection $taken, bool $standardOnly): array
     {
-        $taken = $attachments->map(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family());
         $provider = self::providerName($cluster);
         $offered = [];
         $offers = [];
@@ -239,7 +250,11 @@ class EnvironmentController extends Controller
             $family = $kind->family();
 
             // An environment has one key-value store, and as many databases and buckets as it needs.
-            if (! $family->isNamed() && $taken->contains($family)) {
+            if (! $family->isNamed() && $taken->contains('family', $family)) {
+                continue;
+            }
+
+            if ($standardOnly && $source !== DatastoreSource::STANDARD) {
                 continue;
             }
 
@@ -250,7 +265,7 @@ class EnvironmentController extends Controller
                 'kind' => $kind,
                 'source' => $source,
                 'family' => $family,
-                'name_field' => $family->isNamed() ? self::nameField($family, $attachments) : null,
+                'name_field' => $family->isNamed() ? self::nameField($family, $taken) : null,
                 'label' => self::label($kind, $source, $capabilities),
                 'description' => self::PURPOSES[$family->value],
                 'group' => match ($source) {
@@ -278,13 +293,13 @@ class EnvironmentController extends Controller
     /**
      * The first database or bucket of an environment is the default, so its dialog starts with the name "main".
      *
-     * @param  Collection<int, DatastoreAttachment>  $attachments
+     * @param  Collection<int, array{family: ResourceFamily, name: ?string}>  $taken
      * @return array{label: string, placeholder: string, value: string, description: string}
      */
-    private static function nameField(ResourceFamily $family, Collection $attachments): array
+    private static function nameField(ResourceFamily $family, Collection $taken): array
     {
         $texts = self::NAME_FIELDS[$family->value];
-        $first = ! $attachments->contains(fn (DatastoreAttachment $attachment) => $attachment->family === $family && $attachment->name !== null);
+        $first = ! $taken->contains(fn (array $resource) => $resource['family'] === $family && $resource['name'] !== null);
 
         return [
             'label' => $texts['label'],

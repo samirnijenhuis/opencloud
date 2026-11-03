@@ -22,7 +22,7 @@ class Application extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'preview_domain', 'preview_labels', 'deploy_private_key', 'deploy_public_key'];
+    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'preview_domain', 'preview_labels', 'max_previews', 'deploy_private_key', 'deploy_public_key'];
 
     protected $hidden = ['deploy_private_key'];
 
@@ -30,6 +30,7 @@ class Application extends Model
         'port' => 8080,
         'previews_enabled' => true,
         'preview_labels' => '[]',
+        'max_previews' => 5,
     ];
 
     protected function casts(): array
@@ -39,6 +40,7 @@ class Application extends Model
             'port' => 'integer',
             'previews_enabled' => 'boolean',
             'preview_labels' => 'array',
+            'max_previews' => 'integer',
             'deploy_private_key' => 'encrypted',
         ];
     }

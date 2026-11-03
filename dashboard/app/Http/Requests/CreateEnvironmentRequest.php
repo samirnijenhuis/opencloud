@@ -24,7 +24,12 @@ class CreateEnvironmentRequest extends FormRequest
             // A preview takes the name pr-<number> when its pull request opens.
             'name' => ['required', 'string', 'regex:'.self::NAME, 'not_regex:/^pr-\d+$/', Rule::unique(Environment::class)->where('application_id', $this->route('application')->id)],
             'branch' => ['required', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
-            'copy_from' => ['required', Rule::in(['production', 'preview_template'])],
+            'copy_from' => [
+                'required',
+                Rule::in(['production', 'preview_template']),
+                // A user can delete production. Then only the preview template is left to copy.
+                Rule::when(fn () => ! $this->route('application')->environments()->where('name', 'production')->exists(), [Rule::notIn(['production'])]),
+            ],
         ];
     }
 
@@ -38,6 +43,7 @@ class CreateEnvironmentRequest extends FormRequest
             'name.unique' => 'This application already has an environment with this name.',
             'branch' => 'Enter a branch name, for example staging.',
             'copy_from' => 'Choose production or the preview template.',
+            'copy_from.not_in' => 'This application has no production. Copy the preview template.',
         ];
     }
 

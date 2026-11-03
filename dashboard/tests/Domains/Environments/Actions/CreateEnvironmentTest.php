@@ -161,6 +161,17 @@ class CreateEnvironmentTest extends TestCase
         );
     }
 
+    public function test_without_production_a_copy_of_the_preview_template_gets_no_resources(): void
+    {
+        $this->environment('production')->delete();
+
+        $qa = app(CreateEnvironment::class)->execute($this->application, $this->admin, 'qa', 'qa', $this->environment('preview-template'));
+
+        $this->assertSame([EnvironmentKind::PERMANENT, 0], [$qa->kind, $qa->datastoreAttachments()->count()]);
+        $this->assertSame(['scheduler', 'horizon'], $qa->processes->pluck('name')->all());
+        $this->assertSame(['shop-qa.203.0.113.10.sslip.io'], $qa->domains()->pluck('hostname')->all());
+    }
+
     public function test_a_branch_that_does_not_exist_creates_nothing(): void
     {
         $this->processes->lsRemote = '';

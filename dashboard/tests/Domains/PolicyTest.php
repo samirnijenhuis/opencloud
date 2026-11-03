@@ -5,6 +5,7 @@ namespace Tests\Domains;
 use App\Domains\Applications\Models\Application;
 use App\Domains\CloudProviders\Models\ProviderCredential;
 use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Enums\Role;
 use App\Domains\Members\Models\User;
@@ -37,6 +38,32 @@ class PolicyTest extends TestCase
 
         $this->assertSame($expected, $user->can('update', $environment));
         $this->assertSame($expected, $user->can('deploy', $environment));
+    }
+
+    /** @return array<string, array{Role, array<string, bool>}> */
+    public static function environmentDeletes(): array
+    {
+        return [
+            'owner' => [Role::OWNER, ['protected production' => true, 'unprotected environment' => true, 'preview' => false, 'preview template' => false]],
+            'admin' => [Role::ADMIN, ['protected production' => true, 'unprotected environment' => true, 'preview' => false, 'preview template' => false]],
+            'developer' => [Role::DEVELOPER, ['protected production' => false, 'unprotected environment' => false, 'preview' => false, 'preview template' => false]],
+        ];
+    }
+
+    /** @param array<string, bool> $expected */
+    #[DataProvider('environmentDeletes')]
+    public function test_owners_and_admins_delete_a_permanent_environment_and_nobody_deletes_a_preview_or_the_template(Role $role, array $expected): void
+    {
+        $user = User::factory()->create(['role' => $role]);
+        $application = Application::factory()->create();
+        $environment = fn (array $attributes) => Environment::factory()->for($application)->create($attributes);
+
+        $this->assertSame($expected, [
+            'protected production' => $user->can('delete', $environment(['name' => 'production', 'kind' => EnvironmentKind::PERMANENT, 'is_protected' => true])),
+            'unprotected environment' => $user->can('delete', $environment(['name' => 'staging', 'kind' => EnvironmentKind::PERMANENT, 'is_protected' => false])),
+            'preview' => $user->can('delete', $environment(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12, 'is_protected' => false])),
+            'preview template' => $user->can('delete', $environment(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'is_protected' => false])),
+        ]);
     }
 
     /** @return array<string, array{Role, array<string, bool>}> */

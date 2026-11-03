@@ -7,6 +7,7 @@ use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\ExternalConnectionForm;
 use App\Domains\Datastores\Provisioners;
+use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Members\Enums\Ability;
 use App\Domains\Members\Enums\Role;
 use Closure;
@@ -15,6 +16,8 @@ use Illuminate\Validation\Rule;
 
 class AttachDatastoreRequest extends FormRequest
 {
+    private const TEMPLATE_REFUSAL = 'The preview template never deploys, so it gets no resource. Add the resource to its list, and each new preview gets it.';
+
     /** A managed resource costs money on the cloud account of the owner, so only the owner creates one. */
     public static function sourceRefusal(Role $role, DatastoreSource $source): ?string
     {
@@ -38,6 +41,13 @@ class AttachDatastoreRequest extends FormRequest
 
         return [
             'kind' => ['required', Rule::enum(DatastoreKind::class), function (string $attribute, mixed $value, Closure $fail) {
+                // The template never deploys, so a resource of its own would run for no app.
+                if ($this->route('environment')->kind === EnvironmentKind::PREVIEW_TEMPLATE) {
+                    $fail(self::TEMPLATE_REFUSAL);
+
+                    return;
+                }
+
                 $kind = DatastoreKind::tryFrom((string) $value);
                 $source = DatastoreSource::tryFrom((string) $this->input('source')) ?? DatastoreSource::STANDARD;
                 $notOffered = $kind === null ? null : Provisioners::notOffered($kind, $source);

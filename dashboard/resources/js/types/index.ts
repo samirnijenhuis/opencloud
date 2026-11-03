@@ -125,5 +125,7 @@ export interface EnvironmentPageProps {
         last_request_at: string | null;
     };
     can: { update: boolean; deploy: boolean; manage_domains: boolean };
+    /** The keys of the tabs that this kind of environment has, in order. */
+    tabs: string[];
     [key: string]: unknown;
 }

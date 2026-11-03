@@ -120,6 +120,42 @@ class EnvironmentControllerTest extends TestCase
                 ]));
     }
 
+    public function test_the_preview_template_has_only_the_environment_pull_requests_and_settings_tabs(): void
+    {
+        $production = $this->makeEnvironment();
+        $template = Environment::factory()->for($production->application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
+        $preview = Environment::factory()->for($production->application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
+        $this->actingAs(User::factory()->create());
+
+        $this->get("/environments/{$template->id}/settings")
+            ->assertInertia(fn (Assert $page) => $page->where('tabs', ['environment', 'pull-requests', 'settings']));
+
+        foreach ([$production, $preview] as $environment) {
+            $this->get("/environments/{$environment->id}")
+                ->assertInertia(fn (Assert $page) => $page->where('tabs', ['environment', 'deployments', 'commands', 'logs', 'settings']));
+        }
+    }
+
+    public function test_the_preview_template_refuses_a_branch_and_deploy_on_push_but_keeps_its_other_settings(): void
+    {
+        $production = $this->makeEnvironment();
+        $template = Environment::factory()->for($production->application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null, 'auto_deploy' => false]);
+        $developer = User::factory()->create();
+
+        $this->actingAs($developer)->patch("/environments/{$template->id}/settings", ['branch' => 'main', 'auto_deploy' => false])
+            ->assertSessionHasErrors([
+                'branch' => 'The preview template has no branch. Each preview deploys the branch of its pull request.',
+                'auto_deploy' => 'The preview template has no deploy on push. Each push to a pull request deploys its preview.',
+            ]);
+
+        $template->refresh();
+        $this->assertSame([null, false], [$template->branch, $template->auto_deploy]);
+        $this->assertSame(0, AuditEvent::count());
+
+        $this->actingAs($developer)->patch("/environments/{$template->id}/settings", ['sleep_after_minutes' => 30])->assertSessionHasNoErrors();
+        $this->assertSame(30, $template->fresh()->sleep_after_minutes);
+    }
+
     public function test_the_rights_follow_the_role_and_the_protection_of_the_environment(): void
     {
         $protected = $this->makeEnvironment(true, 'production');
@@ -408,7 +444,7 @@ class EnvironmentControllerTest extends TestCase
         $kubectl->assertRan("delete namespace oc-env-{$staging->id}");
     }
 
-    public function test_production_a_preview_and_the_preview_template_cannot_be_deleted(): void
+    public function test_a_preview_and_the_preview_template_cannot_be_deleted_but_production_can(): void
     {
         Queue::fake();
         $kubectl = FakeKubectl::install();
@@ -418,7 +454,7 @@ class EnvironmentControllerTest extends TestCase
         $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
         $owner = User::factory()->owner()->create();
 
-        foreach ([$production, $template, $preview] as $environment) {
+        foreach ([$template, $preview] as $environment) {
             $this->actingAs($owner)->get("/environments/{$environment->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', false));
             $this->actingAs($owner)->delete("/environments/{$environment->id}", ['confirm' => $environment->name])->assertForbidden();
         }
@@ -429,5 +465,27 @@ class EnvironmentControllerTest extends TestCase
         $staging = Environment::factory()->for($application)->create(['name' => 'staging']);
         $this->actingAs($owner)->get("/environments/{$staging->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', true));
         $this->actingAs(User::factory()->create())->get("/environments/{$staging->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', false));
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$production->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', false));
+        $this->actingAs($owner)->get("/environments/{$production->id}/settings")->assertInertia(fn (Assert $page) => $page->where('canDelete', true));
+        $this->actingAs($owner)->delete("/environments/{$production->id}", ['confirm' => 'production'])
+            ->assertRedirect(route('applications.show', $application));
+        $this->assertNull($production->fresh());
+        $kubectl->assertRan("delete namespace oc-env-{$production->id}");
+    }
+
+    public function test_without_production_the_new_environment_form_refuses_a_copy_of_production(): void
+    {
+        Queue::fake();
+        $application = $this->makeEnvironment(name: 'staging', protected: false)->application;
+        Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post("/applications/{$application->id}/environments", ['name' => 'qa', 'branch' => 'qa', 'copy_from' => 'production'])
+            ->assertSessionHasErrors(['copy_from' => 'This application has no production. Copy the preview template.']);
+
+        $this->assertSame(2, Environment::count());
+        $this->assertSame(0, AuditEvent::count());
+        Queue::assertNothingPushed();
     }
 }

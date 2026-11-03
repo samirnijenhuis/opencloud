@@ -23,7 +23,11 @@ export function PreviewsSheet({
     previews: PreviewTemplateSettings;
     canManage: boolean;
 }) {
-    const saved = { preview_domain: previews.preview_domain ?? '', preview_labels: previews.preview_labels.join(', ') };
+    const saved = {
+        preview_domain: previews.preview_domain ?? '',
+        preview_labels: previews.preview_labels.join(', '),
+        max_previews: previews.max_previews,
+    };
     const form = useForm(saved);
     const { data, setData, errors } = form;
     const wildcard = previewWildcard(data.preview_domain);
@@ -100,6 +104,21 @@ export function PreviewsSheet({
                             it loses the last one. Leave it empty to give each pull request a preview.
                         </p>
                         <InputError message={errors.preview_labels} />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="max_previews">Most previews at the same time</Label>
+                        <Input
+                            id="max_previews"
+                            type="number"
+                            min={0}
+                            max={1000}
+                            className="w-24"
+                            value={data.max_previews}
+                            onChange={(e) => setData('max_previews', Number(e.target.value))}
+                        />
+                        <p className="text-muted-foreground text-sm">0 means no limit.</p>
+                        <InputError message={errors.max_previews} />
                     </div>
                 </fieldset>
             </form>

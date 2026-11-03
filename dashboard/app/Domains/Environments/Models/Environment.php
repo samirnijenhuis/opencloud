@@ -47,6 +47,7 @@ class Environment extends Model
         'health_path',
         'pr_comment_id',
         'sleep_after_minutes',
+        'preview_attachments',
     ];
 
     protected $hidden = ['deploy_hook_token'];
@@ -61,6 +62,7 @@ class Environment extends Model
         'cpu_target' => 70,
         'deploy_commands' => '[]',
         'health_path' => '/up',
+        'preview_attachments' => '[]',
     ];
 
     protected static function booted(): void
@@ -90,6 +92,7 @@ class Environment extends Model
             'last_request_at' => 'datetime',
             'slept_at' => 'datetime',
             'woke_at' => 'datetime',
+            'preview_attachments' => 'array',
         ];
     }
 

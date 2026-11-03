@@ -17,6 +17,7 @@ use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
+use App\Domains\Previews\Actions\AddPreviewAttachment;
 use App\Domains\Routing\DefaultDomain;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -31,11 +32,13 @@ class CreateApplication
         private AddDeployKey $addDeployKey,
         private SshKeygen $sshKeygen,
         private RepositoryProbe $repositoryProbe,
+        private AddPreviewAttachment $addPreviewAttachment,
     ) {}
 
     /**
      * Creates the application, its protected production environment, the preview template, and the free sslip.io domain
      * of production. The preset in `type` gives the settings, the processes, the database, and the generated secrets.
+     * Production gets the database, and the list of the template gets it for each new preview.
      * It starts no deployment. The user sets size, scaling, env values, commands, and domains on the environment, then deploys.
      * With `deploy_key`, it makes the deploy key, and the user adds that key on GitHub before the first deployment.
      * With `deploy_private_key`, it reads the repository with that key.
@@ -136,6 +139,7 @@ class CreateApplication
 
             if ($type->database() !== 'none') {
                 $this->attachDatastore->execute($production, $by, DatastoreKind::from($type->database()));
+                $this->addPreviewAttachment->execute($template, $by, DatastoreKind::from($type->database()));
             }
 
             $this->defaultDomain->add($production, $by);

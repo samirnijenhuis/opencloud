@@ -13,6 +13,7 @@ use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Models\Domain;
+use App\Support\Kube\FakeKubectl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -398,6 +399,63 @@ class ApplicationControllerTest extends TestCase
                     ->where('max_previews', 5)
                     ->missing('preview_domain')
                     ->missing('allow_forks')));
+    }
+
+    public function test_an_admin_renames_the_application_and_a_developer_cannot(): void
+    {
+        $application = $this->makeEnvironment()->application;
+
+        $this->actingAs(User::factory()->create())->patch("/applications/{$application->id}", ['name' => 'store'])->assertForbidden();
+        $this->assertSame('shop', $application->fresh()->name);
+        $this->assertSame(0, AuditEvent::count());
+
+        $admin = User::factory()->admin()->create();
+        $this->actingAs($admin)->patch("/applications/{$application->id}", ['name' => ''])->assertSessionHasErrors(['name' => 'Give the application a name.']);
+        $this->actingAs($admin)->patch("/applications/{$application->id}", ['name' => str_repeat('a', 101)])
+            ->assertSessionHasErrors(['name' => 'Keep the name to 100 characters or fewer.']);
+        $this->assertSame('shop', $application->fresh()->name);
+
+        $this->actingAs($admin)->patch("/applications/{$application->id}", ['name' => 'store'])
+            ->assertRedirect(route('applications.show', $application));
+        $this->assertSame('store', $application->fresh()->name);
+        $this->assertSame(['from' => 'shop', 'to' => 'store'], AuditEvent::where('action', 'application.renamed')->sole()->context);
+    }
+
+    public function test_deleting_an_application_needs_its_name_and_then_opens_the_applications_list(): void
+    {
+        Queue::fake();
+        $kubectl = FakeKubectl::install();
+        $production = $this->makeEnvironment();
+        $application = $production->application;
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)->get("/applications/{$application->id}")->assertInertia(fn (Assert $page) => $page->where('canDelete', true));
+        $this->actingAs($admin)->delete("/applications/{$application->id}", ['confirm' => 'Shop'])
+            ->assertSessionHasErrors(['confirm' => 'Type the name of the application to confirm.']);
+        $this->assertSame([], $kubectl->calls);
+        $this->assertNotNull($application->fresh());
+
+        $this->actingAs($admin)->delete("/applications/{$application->id}", ['confirm' => 'shop'])
+            ->assertRedirect(route('applications.index'));
+        $this->assertNull($application->fresh());
+        $this->assertNull($production->fresh());
+        $kubectl->assertRan("delete namespace oc-env-{$production->id}");
+    }
+
+    public function test_a_developer_cannot_delete_an_application(): void
+    {
+        Queue::fake();
+        $kubectl = FakeKubectl::install();
+        $application = $this->makeEnvironment()->application;
+        $developer = User::factory()->create();
+
+        $this->actingAs($developer)->get("/applications/{$application->id}")->assertInertia(fn (Assert $page) => $page->where('canDelete', false));
+        $this->actingAs($developer)->delete("/applications/{$application->id}", ['confirm' => 'shop'])->assertForbidden();
+
+        $this->assertSame([1, 1], [Application::count(), Environment::count()]);
+        $this->assertSame([], $kubectl->calls);
+        $this->assertSame(0, AuditEvent::count());
+        Queue::assertNothingPushed();
     }
 
     public function test_the_application_page_shows_no_deploy_key(): void

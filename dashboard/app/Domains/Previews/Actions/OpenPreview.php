@@ -5,8 +5,8 @@ namespace App\Domains\Previews\Actions;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Datastores\Actions\AttachDatastore;
+use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
-use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\Actions\StartDeployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
@@ -16,7 +16,9 @@ use App\Domains\Environments\Models\EnvVar;
 use App\Domains\GitHub\Enums\PullRequestAction;
 use App\Domains\GitHub\GitHubClient;
 use App\Domains\GitHub\PullRequestEvent;
+use App\Domains\Members\Models\User;
 use App\Domains\Previews\PreviewHostname;
+use App\Domains\Previews\PreviewRules;
 use App\Domains\Routing\Jobs\CheckDomain;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -37,8 +39,11 @@ class OpenPreview
         private PreviewHostname $previewHostname,
     ) {}
 
-    /** @return Environment|null null when the application gets no preview for this pull request */
-    public function execute(Application $application, PullRequestEvent $pullRequest): ?Environment
+    /**
+     * @param  User|null  $by  the user who deploys the pull request by hand, or null for a pull request event
+     * @return Environment|null null when the application gets no preview for this pull request
+     */
+    public function execute(Application $application, ?User $by, PullRequestEvent $pullRequest): ?Environment
     {
         $skipped = match (true) {
             ! $application->previews_enabled => 'previews_disabled',
@@ -56,7 +61,7 @@ class OpenPreview
             ?? $this->create($application, $pullRequest);
 
         if ($preview !== null) {
-            $this->startDeployment->execute($preview, null, $pullRequest->headSha);
+            $this->startDeployment->execute($preview, $by, $pullRequest->headSha);
         }
 
         return $preview;
@@ -64,9 +69,8 @@ class OpenPreview
 
     private function create(Application $application, PullRequestEvent $pullRequest): ?Environment
     {
-        $limit = config('opencloud.max_previews');
-
-        if ($application->environments()->where('kind', EnvironmentKind::PREVIEW)->count() >= $limit) {
+        if (PreviewRules::atLimit($application)) {
+            $limit = $application->max_previews;
             AuditEvent::record(null, 'preview.limit_reached', $application, ['pr_number' => $pullRequest->number, 'limit' => $limit]);
 
             // A push to the pull request tries again, so a push gets no comment.
@@ -78,10 +82,8 @@ class OpenPreview
         }
 
         $template = $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->firstOrFail();
-        $production = $application->environments()->where('name', 'production')->first();
-        // The default comes first, so it is the default of the preview too. A database that DigitalOcean destroys has no name.
-        $attachments = $production?->datastoreAttachments()->with('datastore')->orderByDesc('is_default')->orderBy('id')->get()
-            ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family()->isNamed() && $attachment->name === null) ?? collect();
+        // The default comes first, so it is the default of the preview too.
+        $attachments = collect($template->preview_attachments)->sortByDesc('is_default');
 
         return DB::transaction(function () use ($application, $pullRequest, $template, $attachments) {
             $preview = $application->environments()->create([
@@ -113,9 +115,9 @@ class OpenPreview
                 '{url}' => $hostname === null ? '' : "https://{$hostname}",
             ]);
 
+            // A preview never creates a paid cloud resource and never shares data, so each resource is a new standard one.
             foreach ($attachments as $attachment) {
-                // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
-                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name);
+                $this->attachDatastore->execute($preview, null, DatastoreKind::from($attachment['kind']), DatastoreSource::STANDARD, $attachment['name']);
             }
 
             if ($hostname !== null) {

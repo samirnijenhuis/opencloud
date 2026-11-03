@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Domains\Applications\Actions\CreateApplication;
+use App\Domains\Applications\Actions\DeleteApplication;
+use App\Domains\Applications\Actions\RenameApplication;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Clusters\Enums\ClusterKind;
@@ -12,6 +14,8 @@ use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\GitHub\RepositoryName;
 use App\Domains\Routing\Models\Domain;
+use App\Http\Requests\DeleteApplicationRequest;
+use App\Http\Requests\RenameApplicationRequest;
 use App\Http\Requests\StoreApplicationRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -119,9 +123,10 @@ class ApplicationController extends Controller
             ],
             'previews' => [
                 'previews_enabled' => $application->previews_enabled,
-                'max_previews' => config('opencloud.max_previews'),
+                'max_previews' => $application->max_previews,
             ],
             'canUpdate' => $request->user()->can('update', $application),
+            'canDelete' => $request->user()->can('delete', $application),
             'environments' => $environments
                 ->sortBy(fn (Environment $environment) => [match (true) {
                     $environment->name === 'production' => 0,
@@ -142,5 +147,19 @@ class ApplicationController extends Controller
                 ])
                 ->values(),
         ]);
+    }
+
+    public function update(RenameApplicationRequest $request, Application $application, RenameApplication $renameApplication): RedirectResponse
+    {
+        $renameApplication->execute($application, $request->user(), $request->validated('name'));
+
+        return to_route('applications.show', $application);
+    }
+
+    public function destroy(DeleteApplicationRequest $request, Application $application, DeleteApplication $deleteApplication): RedirectResponse
+    {
+        $deleteApplication->execute($application, $request->user());
+
+        return to_route('applications.index');
     }
 }

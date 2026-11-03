@@ -101,6 +101,16 @@ export type Datastores = {
     polling: boolean;
 };
 
+/** One resource that each new preview gets from the preview template. The template itself gets none. */
+export type PreviewAttachment = {
+    kind: DatastoreKind;
+    family: ResourceFamily;
+    /** The name of a database or a bucket, or null for a key-value store. */
+    name: string | null;
+    is_default: boolean;
+    label: string;
+};
+
 export type Compute = { size: Size; min_instances: number; max_instances: number; cpu_target: number; health_path: string };
 
 /** What each new preview copies from the preview template. Only the template canvas has it. */
@@ -113,6 +123,7 @@ export type PreviewTemplateSettings = {
     preview_labels: string[];
     ingress_ip: string | null;
     max_previews: number;
+    attachments: PreviewAttachment[];
 };
 
 export type CanvasProps = EnvironmentPageProps & {
@@ -171,4 +182,5 @@ export type Sheet =
     | { kind: 'previews' }
     | { kind: 'app'; tab: AppTab }
     | { kind: 'process'; id: number | null; tab: AppTab }
-    | { kind: 'resource'; id: number };
+    | { kind: 'resource'; id: number }
+    | { kind: 'preview-attachment'; key: string };

@@ -48,10 +48,11 @@ class CreateEnvironment
             throw ValidationException::withMessages(['branch' => $e->getMessage()]);
         }
 
-        $production = $application->environments()->where('name', 'production')->sole();
+        // A user can delete production. Then the new environment gets no resources.
+        $production = $application->environments()->where('name', 'production')->first();
         // The default comes first, so it is the default of the new environment too. A database that DigitalOcean destroys has no name.
-        $attachments = $production->datastoreAttachments()->with('datastore')->orderByDesc('is_default')->orderBy('id')->get()
-            ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family()->isNamed() && $attachment->name === null);
+        $attachments = $production?->datastoreAttachments()->with('datastore')->orderByDesc('is_default')->orderBy('id')->get()
+            ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family()->isNamed() && $attachment->name === null) ?? collect();
 
         $environment = $this->db->transaction(function () use ($application, $by, $name, $branch, $from, $attachments) {
             $environment = $application->environments()->create([

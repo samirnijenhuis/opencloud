@@ -17,6 +17,8 @@ use App\Http\Controllers\EnvTextController;
 use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\InviteAcceptController;
 use App\Http\Controllers\LiveStatusController;
+use App\Http\Controllers\PreviewAttachmentController;
+use App\Http\Controllers\PreviewPullRequestController;
 use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\ProcessController;
 use App\Http\Controllers\RepositoryAccessController;
@@ -43,6 +45,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('applications/create/repository-access', [RepositoryAccessController::class, 'check'])->middleware('throttle:30,1')->name('applications.repository-access.check');
     Route::post('applications', [ApplicationController::class, 'store'])->name('applications.store');
     Route::get('applications/{application}', [ApplicationController::class, 'show'])->name('applications.show');
+    Route::patch('applications/{application}', [ApplicationController::class, 'update'])->name('applications.update');
+    Route::delete('applications/{application}', [ApplicationController::class, 'destroy'])->name('applications.destroy');
     Route::patch('applications/{application}/previews', [PreviewSettingsController::class, 'update'])->name('applications.previews.update');
     Route::post('applications/{application}/deploy-key', [DeployKeyController::class, 'store'])->name('applications.deploy-key.store');
     Route::delete('applications/{application}/deploy-key', [DeployKeyController::class, 'destroy'])->name('applications.deploy-key.destroy');
@@ -59,6 +63,11 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/status', [LiveStatusController::class, 'environment'])->name('environments.status');
     Route::get('environments/{environment}/repository-access', [RepositoryAccessController::class, 'show'])->name('environments.repository-access');
+
+    Route::get('environments/{environment}/pull-requests', [PreviewPullRequestController::class, 'index'])->name('environments.pull-requests');
+    Route::post('environments/{environment}/pull-requests/{number}/preview', [PreviewPullRequestController::class, 'deploy'])->whereNumber('number')->name('environments.pull-requests.deploy');
+    Route::post('environments/{environment}/preview-attachments', [PreviewAttachmentController::class, 'store'])->name('preview-attachments.store');
+    Route::delete('environments/{environment}/preview-attachments', [PreviewAttachmentController::class, 'destroy'])->name('preview-attachments.destroy');
 
     Route::get('environments/{environment}/commands', [EnvironmentController::class, 'commands'])->name('environments.commands');
     Route::get('environments/{environment}/command-runs', [CommandRunController::class, 'index'])->name('environments.command-runs');
