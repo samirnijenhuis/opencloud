@@ -30,7 +30,8 @@ class GitHubClient
      */
     public function convertManifest(string $code): array
     {
-        $app = $this->request()->post('/app-manifests/'.rawurlencode($code).'/conversions')->throw()->json();
+        // Without data, the HTTP client sends the JSON body []. GitHub refuses it: "[] is not a null or object".
+        $app = $this->request()->post('/app-manifests/'.rawurlencode($code).'/conversions', (object) [])->throw()->json();
 
         return [
             'id' => (int) $app['id'],
@@ -103,7 +104,7 @@ class GitHubClient
             return null;
         }
 
-        $created = $this->asApp($app)->post('/app/installations/'.$installation->throw()->json('id').'/access_tokens')->throw();
+        $created = $this->asApp($app)->post('/app/installations/'.$installation->throw()->json('id').'/access_tokens', (object) [])->throw();
         $token = (string) $created->json('token');
         Cache::put($key, Crypt::encryptString($token), Carbon::parse($created->json('expires_at'))->subMinute());
 

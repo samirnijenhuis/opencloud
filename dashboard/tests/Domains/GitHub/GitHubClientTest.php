@@ -48,6 +48,7 @@ class GitHubClientTest extends TestCase
             'GET https://api.github.com/repos/acme/shop/installation',
             'POST https://api.github.com/app/installations/77/access_tokens',
         ], $this->sentRequests());
+        $this->assertSame('{}', Http::recorded()[1][0]->body());
         $this->assertStringNotContainsString(self::TOKEN, (string) Cache::get('github-token:4242:acme/shop'));
 
         $sentJwt = substr(Http::recorded()[0][0]->header('Authorization')[0], strlen('Bearer '));
