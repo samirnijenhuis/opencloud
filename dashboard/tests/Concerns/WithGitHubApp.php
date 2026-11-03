@@ -12,6 +12,8 @@ trait WithGitHubApp
 
     private const TOKEN = 'ghs_installationtoken0123456789';
 
+    private const HEAD_SHA = 'abcdef0123456789abcdef0123456789abcdef01';
+
     private static ?string $privateKey = null;
 
     /** One RSA key per test run, because creating a key takes a moment. */
@@ -49,6 +51,27 @@ trait WithGitHubApp
             "api.github.com/repos/{$repository}/installation" => Http::response(['id' => 77]),
             'api.github.com/app/installations/77/access_tokens' => Http::response(['token' => self::TOKEN, 'expires_at' => now()->addHour()->toIso8601ZuluString()], 201),
         ]);
+    }
+
+    /**
+     * A pull request of acme/shop as the GitHub API sends it.
+     *
+     * @param  list<string>  $labels
+     * @param  string|null  $headRepository  null when the fork is gone
+     * @return array<string, mixed>
+     */
+    protected static function apiPullRequest(int $number, array $labels = [], ?string $headRepository = 'acme/shop', string $state = 'open'): array
+    {
+        return [
+            'number' => $number,
+            'state' => $state,
+            'title' => "Change number {$number}",
+            'html_url' => "https://github.com/acme/shop/pull/{$number}",
+            'user' => ['login' => 'samir'],
+            'head' => ['ref' => "feature/{$number}", 'sha' => self::HEAD_SHA, 'repo' => $headRepository === null ? null : ['full_name' => $headRepository]],
+            'base' => ['ref' => 'main', 'repo' => ['full_name' => 'acme/shop']],
+            'labels' => array_map(fn (string $name) => ['name' => $name, 'color' => 'ededed'], $labels),
+        ];
     }
 
     /** @param  array<string, mixed>  $payload */

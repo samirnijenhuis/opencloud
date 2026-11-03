@@ -22,11 +22,13 @@ import { Head, Link } from '@inertiajs/react';
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react';
 import { useState } from 'react';
 
+/** Each tab that an environment can have. The page prop tabs says which of them this environment has. */
 const tabs = [
     { key: 'environment', title: 'Environment', route: 'environments.show' },
     { key: 'deployments', title: 'Deployments', route: 'environments.deployments' },
     { key: 'commands', title: 'Commands', route: 'environments.commands' },
     { key: 'logs', title: 'Logs', route: 'environments.logs' },
+    { key: 'pull-requests', title: 'Pull requests', route: 'environments.pull-requests' },
     { key: 'settings', title: 'Settings', route: 'environments.settings' },
 ] as const;
 
@@ -106,7 +108,8 @@ export default function EnvironmentLayout({
     children: React.ReactNode;
 }) {
     const { application, environment, can } = page;
-    const routeName = tabs.find((item) => item.key === tab)?.route ?? 'environments.show';
+    // The switcher lists no preview template, so the Pull requests tab of the template opens the canvas of the other environment.
+    const routeName = (tab !== 'pull-requests' && tabs.find((item) => item.key === tab)?.route) || 'environments.show';
     const [access, refresh] = usePoll<EnvironmentRepositoryAccess>(
         route('environments.repository-access', environment.id),
         10_000,
@@ -134,20 +137,22 @@ export default function EnvironmentLayout({
                     className="mx-auto flex max-w-6xl gap-6 overflow-x-auto overflow-y-hidden px-4 [scrollbar-width:none]"
                     aria-label="Environment sections"
                 >
-                    {tabs.map((item) => (
-                        <Link
-                            key={item.key}
-                            href={route(item.route, environment.id)}
-                            className={cn(
-                                '-mb-px border-b-2 py-2.5 text-sm whitespace-nowrap',
-                                item.key === tab
-                                    ? 'border-foreground text-foreground'
-                                    : 'text-muted-foreground hover:text-foreground border-transparent',
-                            )}
-                        >
-                            {item.title}
-                        </Link>
-                    ))}
+                    {tabs
+                        .filter((item) => page.tabs.includes(item.key))
+                        .map((item) => (
+                            <Link
+                                key={item.key}
+                                href={route(item.route, environment.id)}
+                                className={cn(
+                                    '-mb-px border-b-2 py-2.5 text-sm whitespace-nowrap',
+                                    item.key === tab
+                                        ? 'border-foreground text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground border-transparent',
+                                )}
+                            >
+                                {item.title}
+                            </Link>
+                        ))}
                 </nav>
             </div>
 

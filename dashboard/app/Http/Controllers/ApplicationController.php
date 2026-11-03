@@ -119,7 +119,7 @@ class ApplicationController extends Controller
             ],
             'previews' => [
                 'previews_enabled' => $application->previews_enabled,
-                'max_previews' => config('opencloud.max_previews'),
+                'max_previews' => $application->max_previews,
             ],
             'canUpdate' => $request->user()->can('update', $application),
             'environments' => $environments

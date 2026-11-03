@@ -58,11 +58,6 @@ return [
 
     'data_path' => env('OPENCLOUD_DATA_PATH', storage_path('opencloud')),
 
-    /*
-     * The most previews that one application runs at the same time, to protect the VPS.
-     */
-    'max_previews' => (int) env('OPENCLOUD_MAX_PREVIEWS', 5),
-
     'tofu_binary' => env('OPENCLOUD_TOFU_BINARY', 'tofu'),
 
     /*

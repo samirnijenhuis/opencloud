@@ -258,7 +258,7 @@ class PreviewLifecycleTest extends TestCase
 
     public function test_over_the_limit_a_comment_says_so_and_nothing_is_created(): void
     {
-        config(['opencloud.max_previews' => 1]);
+        $this->application->update(['max_previews' => 1]);
         $this->fakeGitHub(more: ['api.github.com/repos/acme/shop/issues/13/comments' => Http::response(['id' => 9001], 201)]);
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1');
 
@@ -275,6 +275,17 @@ class PreviewLifecycleTest extends TestCase
             $comments[0][0]->data(),
         );
         $this->assertSame(['pr_number' => 13, 'limit' => 1], AuditEvent::query()->where('action', 'preview.limit_reached')->first()->context);
+    }
+
+    public function test_a_limit_of_0_lets_each_pull_request_have_a_preview(): void
+    {
+        $this->application->update(['max_previews' => 0]);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA, number: 13), delivery: 'd-2')->assertStatus(202);
+
+        $this->assertSame(['pr-12', 'pr-13'], Environment::query()->where('kind', EnvironmentKind::PREVIEW)->orderBy('id')->pluck('name')->all());
+        $this->assertSame(0, AuditEvent::query()->where('action', 'preview.limit_reached')->count());
     }
 
     public function test_a_close_waits_while_a_deployment_of_the_preview_still_builds(): void

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
+use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\Size;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -49,9 +50,12 @@ class UpdateEnvironmentSettingsRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
+        // A preview deploys the branch of its pull request, so the preview template has no branch to deploy.
+        $template = $this->route('environment')->kind === EnvironmentKind::PREVIEW_TEMPLATE;
+
         return [
-            'branch' => ['sometimes', 'required', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
-            'auto_deploy' => ['sometimes', 'boolean'],
+            'branch' => ['sometimes', Rule::prohibitedIf($template), 'required', 'string', 'max:255', 'regex:/^[\w.\/-]+$/'],
+            'auto_deploy' => ['sometimes', Rule::prohibitedIf($template), 'boolean'],
             'size' => ['sometimes', Rule::enum(Size::class)],
             'min_instances' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'max_instances' => ['sometimes', 'integer', 'min:1', 'max:50', 'gte:min_instances'],
@@ -68,6 +72,8 @@ class UpdateEnvironmentSettingsRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'branch.prohibited' => 'The preview template has no branch. Each preview deploys the branch of its pull request.',
+            'auto_deploy.prohibited' => 'The preview template has no deploy on push. Each push to a pull request deploys its preview.',
             'sleep_after_minutes.*' => 'Enter a number of minutes from 5 to 1440.',
         ];
     }

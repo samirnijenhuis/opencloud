@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
+import { previewLimitText } from '@/lib/format';
 import { applicationTypeLabels, type ApplicationType, type DeploymentStatus, type EnvironmentKind } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -99,7 +100,7 @@ export default function ApplicationShow({ application, environments, previews, c
                                     {environment.kind === 'preview' ? (
                                         <PullRequest environment={environment} />
                                     ) : environment.kind === 'preview_template' ? (
-                                        `Each new preview copies its settings, processes, and env values. At most ${previews.max_previews} previews run at the same time.`
+                                        `Each new preview copies its settings, processes, and env values. ${previewLimitText(previews.max_previews)}`
                                     ) : (
                                         `Branch ${environment.branch}`
                                     )}

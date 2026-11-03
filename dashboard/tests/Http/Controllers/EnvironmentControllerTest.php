@@ -120,6 +120,42 @@ class EnvironmentControllerTest extends TestCase
                 ]));
     }
 
+    public function test_the_preview_template_has_only_the_environment_pull_requests_and_settings_tabs(): void
+    {
+        $production = $this->makeEnvironment();
+        $template = Environment::factory()->for($production->application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
+        $preview = Environment::factory()->for($production->application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
+        $this->actingAs(User::factory()->create());
+
+        $this->get("/environments/{$template->id}/settings")
+            ->assertInertia(fn (Assert $page) => $page->where('tabs', ['environment', 'pull-requests', 'settings']));
+
+        foreach ([$production, $preview] as $environment) {
+            $this->get("/environments/{$environment->id}")
+                ->assertInertia(fn (Assert $page) => $page->where('tabs', ['environment', 'deployments', 'commands', 'logs', 'settings']));
+        }
+    }
+
+    public function test_the_preview_template_refuses_a_branch_and_deploy_on_push_but_keeps_its_other_settings(): void
+    {
+        $production = $this->makeEnvironment();
+        $template = Environment::factory()->for($production->application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null, 'auto_deploy' => false]);
+        $developer = User::factory()->create();
+
+        $this->actingAs($developer)->patch("/environments/{$template->id}/settings", ['branch' => 'main', 'auto_deploy' => false])
+            ->assertSessionHasErrors([
+                'branch' => 'The preview template has no branch. Each preview deploys the branch of its pull request.',
+                'auto_deploy' => 'The preview template has no deploy on push. Each push to a pull request deploys its preview.',
+            ]);
+
+        $template->refresh();
+        $this->assertSame([null, false], [$template->branch, $template->auto_deploy]);
+        $this->assertSame(0, AuditEvent::count());
+
+        $this->actingAs($developer)->patch("/environments/{$template->id}/settings", ['sleep_after_minutes' => 30])->assertSessionHasNoErrors();
+        $this->assertSame(30, $template->fresh()->sleep_after_minutes);
+    }
+
     public function test_the_rights_follow_the_role_and_the_protection_of_the_environment(): void
     {
         $protected = $this->makeEnvironment(true, 'production');
