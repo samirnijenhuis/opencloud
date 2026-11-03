@@ -96,6 +96,23 @@ class GitHubSettingsTest extends TestCase
         $this->assertStringStartsWith('Bearer ey', $installationsCall->header('Authorization')[0]);
     }
 
+    public function test_a_refused_code_shows_the_reason_that_github_gives(): void
+    {
+        Http::fake([
+            'api.github.com/app-manifests/code-123/conversions' => Http::response([
+                'message' => 'Validation Failed',
+                'errors' => [['resource' => 'Integration', 'code' => 'custom', 'field' => 'name', 'message' => 'Name is already in use']],
+            ], 422),
+        ]);
+        $this->actingAs(User::factory()->owner()->create())->withSession(['github_manifest_state' => 'state-abc']);
+
+        $this->get('/settings/github/callback?code=code-123&state=state-abc')
+            ->assertRedirect('/settings/github')
+            ->assertSessionHasErrors(['github' => 'GitHub did not accept the code. It answered with status 422: Validation Failed. Name is already in use. Create the GitHub App again.']);
+
+        $this->assertSame(0, GithubApp::count());
+    }
+
     public function test_a_callback_with_a_wrong_state_never_calls_github(): void
     {
         $this->actingAs(User::factory()->owner()->create())->withSession(['github_manifest_state' => 'state-abc']);

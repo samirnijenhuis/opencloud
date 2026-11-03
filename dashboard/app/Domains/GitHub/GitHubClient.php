@@ -6,6 +6,7 @@ use App\Domains\GitHub\Enums\AppReach;
 use App\Domains\GitHub\Models\GithubApp;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -38,6 +39,23 @@ class GitHubClient
             'pem' => (string) $app['pem'],
             'webhook_secret' => (string) $app['webhook_secret'],
         ];
+    }
+
+    /**
+     * The reason in an error answer of GitHub: its message and the message of each validation error.
+     * A validation error is an object with a message or only a code, or a plain string. An HTML error page gives "".
+     */
+    public static function errorText(Response $response): string
+    {
+        $errors = array_map(
+            fn (mixed $error) => is_array($error) ? (string) ($error['message'] ?? $error['code'] ?? '') : (string) $error,
+            (array) $response->json('errors', []),
+        );
+
+        return collect([$response->json('message'), ...$errors])
+            ->filter(fn (mixed $text) => is_string($text) && $text !== '')
+            ->map(fn (string $text) => rtrim($text, '.').'.')
+            ->implode(' ');
     }
 
     /**
