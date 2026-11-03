@@ -20,8 +20,8 @@ type PullRequest = {
     refusal: string | null;
 };
 
-/** pull_requests is null when the GitHub App cannot read the pull requests of the repository. */
-type Props = EnvironmentPageProps & { repository: string; pull_requests: PullRequest[] | null };
+/** pull_requests is null when the GitHub App cannot read the pull requests of the repository, or GitHub did not answer. */
+type Props = EnvironmentPageProps & { repository: string; github_error: string | null; pull_requests: PullRequest[] | null };
 
 /** A refused deploy comes back as the error "deploy". The button keeps that error itself, as the Deploy button of the header does. */
 function DeployPreview({ environmentId, pullRequest }: { environmentId: number; pullRequest: PullRequest }) {
@@ -61,11 +61,13 @@ function DeployPreview({ environmentId, pullRequest }: { environmentId: number; 
 }
 
 export default function EnvironmentPullRequests(props: Props) {
-    const { environment, can, repository, pull_requests: pullRequests } = props;
+    const { environment, can, repository, github_error: githubError, pull_requests: pullRequests } = props;
 
     return (
         <EnvironmentLayout page={props} tab="pull-requests" title="Pull requests">
-            {pullRequests === null ? (
+            {githubError ? (
+                <p className="text-muted-foreground text-sm">{githubError}</p>
+            ) : pullRequests === null ? (
                 <p className="text-muted-foreground text-sm">
                     The GitHub App is not installed on {repository}. Install it in{' '}
                     <Link href={route('github.index')} className="text-foreground font-medium underline">

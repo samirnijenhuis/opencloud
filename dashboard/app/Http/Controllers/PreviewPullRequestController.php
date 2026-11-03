@@ -12,6 +12,7 @@ use App\Domains\Previews\PreviewRules;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Http\Requests\DeployPullRequestRequest;
 use App\Http\Requests\ShowPullRequestsRequest;
+use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
 use Inertia\Inertia;
@@ -26,7 +27,17 @@ class PreviewPullRequestController extends Controller
     {
         $application = $environment->application;
         $repository = RepositoryName::parse($application->repository);
-        $pullRequests = $repository === null ? null : $github->openPullRequests($repository);
+        $githubError = null;
+
+        // A GitHub outage or an error answer must not break the page.
+        try {
+            $pullRequests = $repository === null ? null : $github->openPullRequests($repository);
+        } catch (HttpClientException $e) {
+            report($e);
+            $pullRequests = null;
+            $githubError = 'GitHub did not answer. Try again in a minute.';
+        }
+
         $previews = $application->environments()->where('kind', EnvironmentKind::PREVIEW)->get()->keyBy('pr_number');
         $latest = Deployment::query()
             ->whereIn('id', Deployment::query()->selectRaw('max(id)')->whereIn('environment_id', $previews->modelKeys())->groupBy('environment_id'))
@@ -36,7 +47,8 @@ class PreviewPullRequestController extends Controller
         return Inertia::render('environments/pull-requests', [
             ...$this->environmentProps($environment, $request->user()),
             'repository' => $repository ?? $application->repository,
-            // Null when the GitHub App cannot read the pull requests of the repository.
+            'github_error' => $githubError,
+            // Null when the GitHub App cannot read the pull requests of the repository, or GitHub did not answer.
             'pull_requests' => $pullRequests === null ? null : array_map(fn (array $pullRequest) => [
                 ...Arr::only($pullRequest, ['number', 'title', 'author', 'head_ref', 'labels', 'url']),
                 'preview' => ($preview = $previews->get($pullRequest['number'])) === null ? null : [

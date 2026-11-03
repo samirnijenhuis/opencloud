@@ -11,10 +11,16 @@ use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
 use App\Support\Kube\FakeKubectl;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\HttpClientException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\BuildsEnvironments;
 use Tests\Concerns\WithGitHubApp;
 use Tests\TestCase;
@@ -81,7 +87,36 @@ class PreviewPullRequestControllerTest extends TestCase
 
         $this->actingAs(User::factory()->create())->get("/environments/{$this->template->id}/pull-requests")
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->where('repository', 'acme/shop')->where('pull_requests', null));
+            ->assertInertia(fn (Assert $page) => $page->where('repository', 'acme/shop')->where('pull_requests', null)->where('github_error', null));
+    }
+
+    /** @return array<string, array{Closure(): mixed, class-string<HttpClientException>}> */
+    public static function outages(): array
+    {
+        return [
+            'an error answer' => [fn () => Http::response(['message' => 'Bad gateway'], 502), RequestException::class],
+            'no answer' => [fn () => Http::failedConnection(), ConnectionException::class],
+        ];
+    }
+
+    /**
+     * @param  Closure(): mixed  $answer
+     * @param  class-string<HttpClientException>  $reported
+     */
+    #[DataProvider('outages')]
+    public function test_when_github_does_not_answer_the_page_says_so_and_reports_the_error(Closure $answer, string $reported): void
+    {
+        Exceptions::fake();
+        $this->fakeGitHub(more: ['api.github.com/repos/acme/shop/pulls?*' => $answer()]);
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$this->template->id}/pull-requests")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('environments/pull-requests')
+                ->where('pull_requests', null)
+                ->where('github_error', 'GitHub did not answer. Try again in a minute.'));
+
+        Exceptions::assertReported($reported);
     }
 
     public function test_a_developer_deploys_a_pull_request_from_the_page_and_a_refusal_comes_back_as_the_deploy_error(): void
