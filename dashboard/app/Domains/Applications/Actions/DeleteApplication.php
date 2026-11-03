@@ -25,6 +25,10 @@ class DeleteApplication
      */
     public function execute(Application $application, User $by): void
     {
+        // OpenPreview skips an application with previews off. A pull request that opens during the delete would else get
+        // a preview after the previews went, and the cascade at the end would leave its namespace on the cluster.
+        $application->update(['previews_enabled' => false]);
+
         foreach (self::ORDER as $kind) {
             foreach ($application->environments()->where('kind', $kind)->orderBy('id')->get() as $environment) {
                 $this->deleteEnvironment->execute($environment, $by);

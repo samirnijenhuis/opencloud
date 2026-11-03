@@ -108,6 +108,7 @@ class DeleteApplicationTest extends TestCase
     {
         $deployment = $this->production->deployments()->sole();
         $deployment->update(['status' => DeploymentStatus::DEPLOYING]);
+        $this->application->update(['previews_enabled' => true]);
 
         try {
             app(DeleteApplication::class)->execute($this->application, $this->admin);
@@ -120,6 +121,7 @@ class DeleteApplicationTest extends TestCase
         $this->assertNull(Environment::find($this->preview->id));
         $this->assertSame([$this->production->id, $this->template->id, $this->staging->id], $this->application->environments()->orderBy('id')->pluck('id')->all());
         $this->assertNotNull(Application::find($this->application->id));
+        $this->assertFalse(Application::find($this->application->id)->previews_enabled, 'A pull request must open no new preview during the delete.');
         $this->assertSame(0, AuditEvent::where('action', 'application.deleted')->count());
 
         $deployment->update(['status' => DeploymentStatus::LIVE]);
