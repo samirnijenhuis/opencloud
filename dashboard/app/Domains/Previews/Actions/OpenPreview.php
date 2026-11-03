@@ -5,8 +5,8 @@ namespace App\Domains\Previews\Actions;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Datastores\Actions\AttachDatastore;
+use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
-use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\Actions\StartDeployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
@@ -82,10 +82,8 @@ class OpenPreview
         }
 
         $template = $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->firstOrFail();
-        $production = $application->environments()->where('name', 'production')->first();
-        // The default comes first, so it is the default of the preview too. A database that DigitalOcean destroys has no name.
-        $attachments = $production?->datastoreAttachments()->with('datastore')->orderByDesc('is_default')->orderBy('id')->get()
-            ->reject(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family()->isNamed() && $attachment->name === null) ?? collect();
+        // The default comes first, so it is the default of the preview too.
+        $attachments = collect($template->preview_attachments)->sortByDesc('is_default');
 
         return DB::transaction(function () use ($application, $pullRequest, $template, $attachments) {
             $preview = $application->environments()->create([
@@ -117,9 +115,9 @@ class OpenPreview
                 '{url}' => $hostname === null ? '' : "https://{$hostname}",
             ]);
 
+            // A preview never creates a paid cloud resource and never shares data, so each resource is a new standard one.
             foreach ($attachments as $attachment) {
-                // A preview never creates a paid cloud resource, so a managed database of production becomes a local one.
-                $this->attachDatastore->execute($preview, null, $attachment->datastore->kind, DatastoreSource::STANDARD, $attachment->name);
+                $this->attachDatastore->execute($preview, null, DatastoreKind::from($attachment['kind']), DatastoreSource::STANDARD, $attachment['name']);
             }
 
             if ($hostname !== null) {

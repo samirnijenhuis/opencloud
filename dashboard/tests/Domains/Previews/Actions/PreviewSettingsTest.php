@@ -5,6 +5,9 @@ namespace Tests\Domains\Previews\Actions;
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
@@ -62,6 +65,7 @@ class PreviewSettingsTest extends TestCase
                 'preview_labels' => ['preview'],
                 'ingress_ip' => '203.0.113.10',
                 'max_previews' => 5,
+                'attachments' => [],
             ]));
 
         $this->application->update(['preview_domain' => null]);
@@ -71,6 +75,33 @@ class PreviewSettingsTest extends TestCase
 
         $production = $this->application->environments()->where('name', 'production')->sole();
         $this->get("/environments/{$production->id}")->assertInertia(fn (Assert $page) => $page->where('previews', null));
+    }
+
+    public function test_the_template_canvas_shows_its_list_and_its_menu_offers_what_the_list_can_still_take(): void
+    {
+        $this->template->update(['preview_attachments' => [
+            ['kind' => 'mysql', 'name' => 'main', 'is_default' => true],
+            ['kind' => 'valkey', 'name' => null, 'is_default' => false],
+        ]]);
+        // A bucket that an older release attached to the template stays on the page, but it does not count for the list.
+        $bucket = DatastoreAttachment::factory()->create([
+            'datastore_id' => Datastore::factory()->for($this->application->cluster)->create(['kind' => DatastoreKind::RUSTFS])->id,
+            'environment_id' => $this->template->id,
+            'name' => 'main',
+            'is_default' => true,
+        ]);
+
+        $page = $this->actingAs(User::factory()->create())->get("/environments/{$this->template->id}")->viewData('page');
+
+        $this->assertSame([
+            ['kind' => 'mysql', 'name' => 'main', 'is_default' => true, 'family' => 'database', 'label' => 'MySQL'],
+            ['kind' => 'valkey', 'name' => null, 'is_default' => false, 'family' => 'key_value', 'label' => 'Valkey'],
+        ], json_decode(json_encode($page['props']['previews']['attachments']), true));
+        $this->assertSame([$bucket->id], array_column(json_decode(json_encode($page['props']['datastores']['attachments']), true), 'id'));
+        $this->assertSame(
+            [['standard', 'mysql', ''], ['standard', 'postgres', ''], ['standard', 'rustfs', 'main']],
+            array_map(fn (array $offer) => [$offer['source'], $offer['kind'], $offer['name_field']['value']], json_decode(json_encode($page['props']['datastores']['offers']), true)),
+        );
     }
 
     public function test_an_admin_saves_the_address_and_the_labels_from_the_template_sheet(): void

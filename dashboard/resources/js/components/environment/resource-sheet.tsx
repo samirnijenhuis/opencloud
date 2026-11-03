@@ -28,6 +28,7 @@ import {
     type DatastoreStatus,
     type Datastores,
     type Offer,
+    type PreviewAttachment,
     type ResourceFamily,
 } from './types';
 
@@ -57,8 +58,8 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
-const attach = (environmentId: number, kind: DatastoreKind, source: DatastoreSource = 'standard', name: string | null = null) => {
-    router.post(route('datastores.store', environmentId), { kind, source, name }, { preserveScroll: true });
+const attach = (storeUrl: string, kind: DatastoreKind, source: DatastoreSource = 'standard', name: string | null = null) => {
+    router.post(storeUrl, { kind, source, name }, { preserveScroll: true });
 };
 
 /** What the sheet says about each source. The backend gives the names, so no provider name appears here. */
@@ -125,7 +126,7 @@ const namedTexts: Record<
 };
 
 /** The texts of a database or a bucket, or null for a key-value store, which has no name. */
-export const namedTextsFor = (attachment: Attachment) => (attachment.family === 'key_value' ? null : namedTexts[attachment.family]);
+export const namedTextsFor = (resource: { family: ResourceFamily }) => (resource.family === 'key_value' ? null : namedTexts[resource.family]);
 
 type OfferGroup = { source: DatastoreSource; heading: string; offers: Offer[]; refusal: string | null };
 
@@ -160,11 +161,24 @@ function CopyLine({ text }: { text: string }) {
     );
 }
 
-/** What the backend registry offers to this environment and this user, by source. The menu holds no list of its own. */
-export function AddResourceMenu({ environmentId, datastores, children }: { environmentId: number; datastores: Datastores; children: ReactNode }) {
+/**
+ * What the backend registry offers to this environment and this user, by source. The menu holds no list of its own.
+ * On the preview template, `storeUrl` adds to the list of the template, and no resource starts.
+ */
+export function AddResourceMenu({
+    environmentId,
+    storeUrl,
+    datastores,
+    children,
+}: {
+    environmentId: number;
+    storeUrl: string;
+    datastores: Datastores;
+    children: ReactNode;
+}) {
     const [choice, setChoice] = useState<Offer | null>(null);
 
-    const pick = (offer: Offer) => (needsDialog(offer) ? setChoice(offer) : attach(environmentId, offer.kind, offer.source));
+    const pick = (offer: Offer) => (needsDialog(offer) ? setChoice(offer) : attach(storeUrl, offer.kind, offer.source));
 
     return (
         <>
@@ -203,7 +217,7 @@ export function AddResourceMenu({ environmentId, datastores, children }: { envir
 
             <Dialog open={choice !== null} onOpenChange={(next) => !next && setChoice(null)}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
-                    {choice && <AddResourceForm environmentId={environmentId} offer={choice} onClose={() => setChoice(null)} />}
+                    {choice && <AddResourceForm storeUrl={storeUrl} offer={choice} onClose={() => setChoice(null)} />}
                 </DialogContent>
             </Dialog>
         </>
@@ -410,7 +424,7 @@ export function ResourceSheet({
                             <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => attach(environmentId, attachment.kind, attachment.source, attachment.name)}
+                                onClick={() => attach(route('datastores.store', environmentId), attachment.kind, attachment.source, attachment.name)}
                             >
                                 Try again
                             </Button>
@@ -579,5 +593,78 @@ export function ResourceSheet({
                 </DialogContent>
             </Dialog>
         </>
+    );
+}
+
+/** One entry of the list of the preview template. Nothing runs for it until a preview opens. */
+export function PreviewAttachmentSheet({
+    open,
+    onClose,
+    attachment,
+    environmentId,
+    clusterName,
+    canUpdate,
+}: {
+    open: boolean;
+    onClose: () => void;
+    attachment: PreviewAttachment | undefined;
+    environmentId: number;
+    clusterName: string;
+    canUpdate: boolean;
+}) {
+    const errors = usePage().props.errors as Record<string, string>;
+    const [busy, setBusy] = useState(false);
+
+    if (!attachment) {
+        return null;
+    }
+
+    const named = namedTextsFor(attachment);
+
+    const remove = () => {
+        router.delete(route('preview-attachments.destroy', environmentId), {
+            data: { kind: attachment.kind, name: attachment.name },
+            preserveScroll: true,
+            onStart: () => setBusy(true),
+            onSuccess: () => onClose(),
+            onFinish: () => setBusy(false),
+        });
+    };
+
+    return (
+        <EditorSheet
+            open={open}
+            onClose={onClose}
+            title={attachment.name ? `${attachment.name} (${attachment.label})` : attachment.label}
+            description={`Each new preview gets its own empty ${attachment.label} in the cluster ${clusterName}. The template gets none, because it never deploys.`}
+        >
+            {named && attachment.name !== null && (
+                <section className="space-y-2">
+                    <h3 className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                        {named.heading}
+                        <code className="bg-muted truncate rounded px-1.5 py-0.5 font-mono text-xs">{attachment.name}</code>
+                        {attachment.is_default && <Badge variant="outline">Default</Badge>}
+                    </h3>
+                    <p className="text-muted-foreground text-sm">{attachment.is_default ? named.isDefault : named.noConfigLine}</p>
+                </section>
+            )}
+
+            <section className="space-y-2 border-t pt-5">
+                <h3 className="text-sm font-medium">Remove</h3>
+                <InputError message={errors.detach} />
+                {canUpdate ? (
+                    <>
+                        <p className="text-muted-foreground text-sm">
+                            New previews do not get it. A preview that runs keeps it until its pull request closes.
+                        </p>
+                        <Button variant="secondary" size="sm" disabled={busy} onClick={remove}>
+                            Remove {attachment.label}
+                        </Button>
+                    </>
+                ) : (
+                    <p className="text-muted-foreground text-sm">Only an admin or an owner can change the resources of a protected environment.</p>
+                )}
+            </section>
+        </EditorSheet>
     );
 }

@@ -8,7 +8,6 @@ use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Actions\AttachDatastore;
-use App\Domains\Datastores\Actions\SetDefaultAttachment;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreSource;
 use App\Domains\Datastores\Jobs\ProvisionDatastoreAttachment;
@@ -26,6 +25,7 @@ use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
 use App\Domains\Members\Models\User;
+use App\Domains\Previews\Actions\AddPreviewAttachment;
 use App\Domains\Routing\Jobs\CheckDomain;
 use App\Domains\Routing\Jobs\SyncCaddy;
 use App\Domains\Routing\Models\Domain;
@@ -67,7 +67,7 @@ class PreviewLifecycleTest extends TestCase
             'cluster_id' => $cluster->id,
         ]);
         app(SetEnvVar::class)->execute($this->environment('production'), $owner, 'STRIPE_SECRET', 'sk_live_production', true, EnvVarAvailability::RUNTIME);
-        app(AttachDatastore::class)->execute($this->environment('production'), $owner, DatastoreKind::VALKEY);
+        app(AddPreviewAttachment::class)->execute($this->environment('preview-template'), $owner, DatastoreKind::VALKEY);
 
         $template = $this->environment('preview-template');
         $template->update(['health_path' => '/health', 'deploy_commands' => ['php artisan migrate --force', 'php artisan db:seed --force'], 'sleep_after_minutes' => 30]);
@@ -121,13 +121,10 @@ class PreviewLifecycleTest extends TestCase
 
         $attachments = $preview->datastoreAttachments()->with('datastore')->orderBy('id')->get();
         $this->assertSame(
-            [['mysql', "env_{$preview->id}", "env_{$preview->id}"], ['valkey', null, null]],
-            $attachments->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->database_name, $a->username])->all(),
+            [['mysql', 'standard', "env_{$preview->id}", "env_{$preview->id}"], ['valkey', 'standard', null, null]],
+            $attachments->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->datastore->source->value, $a->database_name, $a->username])->all(),
         );
-        $this->assertSame(
-            $this->environment('production')->datastoreAttachments()->orderBy('id')->pluck('datastore_id')->all(),
-            $attachments->pluck('datastore_id')->all(),
-        );
+        $this->assertSame(0, $this->environment('preview-template')->datastoreAttachments()->count());
         $this->assertSame("env_{$preview->id}", $preview->envVars()->where('key', 'DB_DATABASE')->sole()->value);
 
         $this->assertSame(['pr-12-shop.203.0.113.10.sslip.io'], $preview->domains()->pluck('hostname')->all());
@@ -177,12 +174,47 @@ class PreviewLifecycleTest extends TestCase
         $this->assertStringNotContainsString(substr($appKey, 7), $audit);
     }
 
-    public function test_a_preview_copies_the_database_names_and_the_default_of_production(): void
+    public function test_a_preview_gets_the_resources_of_the_template_list_and_not_those_of_production(): void
     {
         $production = $this->environment('production');
-        $owner = User::factory()->owner()->create();
-        $reports = app(AttachDatastore::class)->execute($production, $owner, DatastoreKind::POSTGRES, name: 'reports');
-        app(SetDefaultAttachment::class)->execute($reports, $owner);
+        $managed = Datastore::factory()->create(['cluster_id' => $production->application->cluster_id, 'kind' => DatastoreKind::POSTGRES, 'source' => DatastoreSource::MANAGED]);
+        DatastoreAttachment::factory()->create(['datastore_id' => $managed->id, 'environment_id' => $production->id, 'name' => 'reports', 'is_default' => false]);
+        app(AttachDatastore::class)->execute($production, User::factory()->owner()->create(), DatastoreKind::RUSTFS);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+
+        $this->assertSame(
+            [['mysql', 'standard', 'main', true], ['valkey', 'standard', null, false]],
+            $this->environment('pr-12')->datastoreAttachments()->with('datastore')->orderBy('id')->get()
+                ->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->datastore->source->value, $a->name, $a->is_default])->all(),
+        );
+    }
+
+    public function test_a_preview_gets_the_resources_of_the_template_list_when_production_has_none(): void
+    {
+        DatastoreAttachment::query()->where('environment_id', $this->environment('production')->id)->delete();
+        app(AddPreviewAttachment::class)->execute($this->environment('preview-template'), User::factory()->owner()->create(), DatastoreKind::RUSTFS, 'uploads');
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+
+        $preview = $this->environment('pr-12');
+        $this->assertSame(
+            [['mysql', 'main', true], ['rustfs', 'uploads', true], ['valkey', null, false]],
+            $preview->datastoreAttachments()->with('datastore')->orderBy('id')->get()
+                ->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->name, $a->is_default])->all(),
+        );
+        $this->assertSame("env_{$preview->id}", $preview->envVars()->where('key', 'DB_DATABASE')->sole()->value);
+        $this->assertSame(0, $this->environment('production')->datastoreAttachments()->count());
+    }
+
+    public function test_a_preview_copies_the_names_and_the_defaults_of_the_template_list(): void
+    {
+        // The migration copies the list from production, where the default can be a later database.
+        $this->environment('preview-template')->update(['preview_attachments' => [
+            ['kind' => 'mysql', 'name' => 'main', 'is_default' => false],
+            ['kind' => 'valkey', 'name' => null, 'is_default' => false],
+            ['kind' => 'postgres', 'name' => 'reports', 'is_default' => true],
+        ]]);
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
 
@@ -197,24 +229,6 @@ class PreviewLifecycleTest extends TestCase
             [$preview->envVars()->where('key', 'DB_CONNECTION')->sole()->value, $preview->envVars()->where('key', 'DB_DATABASE')->sole()->value],
         );
         $this->assertStringEndsWith(":3306/env_{$preview->id}", $preview->envVars()->where('key', 'MAIN_DB_URL')->sole()->value);
-    }
-
-    public function test_a_preview_gets_a_local_database_for_a_managed_database_of_production(): void
-    {
-        $production = $this->environment('production');
-        $managed = Datastore::factory()->create(['cluster_id' => $production->application->cluster_id, 'kind' => DatastoreKind::POSTGRES, 'source' => DatastoreSource::MANAGED]);
-        DatastoreAttachment::factory()->create(['datastore_id' => $managed->id, 'environment_id' => $production->id, 'name' => 'reports', 'is_default' => false]);
-
-        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
-
-        $preview = $this->environment('pr-12');
-        $this->assertSame(
-            [['postgres', 'reports', DatastoreSource::STANDARD]],
-            $preview->datastoreAttachments()->with('datastore')->get()
-                ->filter(fn (DatastoreAttachment $a) => $a->datastore->kind === DatastoreKind::POSTGRES)
-                ->map(fn (DatastoreAttachment $a) => [$a->datastore->kind->value, $a->name, $a->datastore->source])->values()->all(),
-        );
-        $this->assertNotSame($managed->id, $preview->datastoreAttachments()->where('name', 'reports')->sole()->datastore_id);
     }
 
     public function test_an_address_pattern_gives_each_preview_its_address_and_its_url_value(): void

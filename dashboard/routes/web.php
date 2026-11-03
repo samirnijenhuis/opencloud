@@ -17,6 +17,7 @@ use App\Http\Controllers\EnvTextController;
 use App\Http\Controllers\EnvVarController;
 use App\Http\Controllers\InviteAcceptController;
 use App\Http\Controllers\LiveStatusController;
+use App\Http\Controllers\PreviewAttachmentController;
 use App\Http\Controllers\PreviewPullRequestController;
 use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\ProcessController;
@@ -65,6 +66,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/pull-requests', [PreviewPullRequestController::class, 'index'])->name('environments.pull-requests');
     Route::post('environments/{environment}/pull-requests/{number}/preview', [PreviewPullRequestController::class, 'deploy'])->whereNumber('number')->name('environments.pull-requests.deploy');
+    Route::post('environments/{environment}/preview-attachments', [PreviewAttachmentController::class, 'store'])->name('preview-attachments.store');
+    Route::delete('environments/{environment}/preview-attachments', [PreviewAttachmentController::class, 'destroy'])->name('preview-attachments.destroy');
 
     Route::get('environments/{environment}/commands', [EnvironmentController::class, 'commands'])->name('environments.commands');
     Route::get('environments/{environment}/command-runs', [CommandRunController::class, 'index'])->name('environments.command-runs');

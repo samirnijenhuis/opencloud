@@ -7,14 +7,23 @@ import { EditorSheet } from '@/components/environment/editor-sheet';
 import { PreviewsSheet } from '@/components/environment/previews-sheet';
 import { ProcessSheet, scheduleWords } from '@/components/environment/process-sheet';
 import { previewStates, useRepositoryAccess } from '@/components/environment/repository-sheet';
-import { AddResourceMenu, namedTextsFor, ResourceSheet, statusLabels, statusTones } from '@/components/environment/resource-sheet';
+import {
+    AddResourceMenu,
+    namedTextsFor,
+    PreviewAttachmentSheet,
+    ResourceSheet,
+    statusLabels,
+    statusTones,
+} from '@/components/environment/resource-sheet';
 import {
     type Attachment,
     type CanvasProps,
     type Capacity,
     type Domain,
     type LiveStatus,
+    type PreviewAttachment,
     type PreviewTemplateSettings,
+    type ResourceFamily,
     type Resources,
     type Sheet,
 } from '@/components/environment/types';
@@ -335,9 +344,28 @@ function CapacityBar({ clusterName, capacity, requests }: { clusterName: string;
     );
 }
 
+/** The name and the default of a database or a bucket. A key-value store has no name. */
+function NameRow({ resource }: { resource: { family: ResourceFamily; name: string | null; is_default: boolean } }) {
+    const named = namedTextsFor(resource);
+
+    if (!named || !resource.name) return null;
+
+    return (
+        <Row label={named.heading}>
+            <span className="inline-flex max-w-full items-center gap-1.5">
+                <code className="truncate font-mono text-xs">{resource.name}</code>
+                {resource.is_default && (
+                    <Badge variant="outline" className="px-1.5 py-0 font-medium">
+                        Default
+                    </Badge>
+                )}
+            </span>
+        </Row>
+    );
+}
+
 function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: () => void }) {
     const lastBackup = attachment.backups?.find((backup) => backup.status === 'done');
-    const named = namedTextsFor(attachment);
 
     return (
         <Block
@@ -346,21 +374,26 @@ function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: 
             aside={<Status tone={statusTones[attachment.status]}>{statusLabels[attachment.status]}</Status>}
             onOpen={onOpen}
         >
-            {named && attachment.name && (
-                <Row label={named.heading}>
-                    <span className="inline-flex max-w-full items-center gap-1.5">
-                        <code className="truncate font-mono text-xs">{attachment.name}</code>
-                        {attachment.is_default && (
-                            <Badge variant="outline" className="px-1.5 py-0 font-medium">
-                                Default
-                            </Badge>
-                        )}
-                    </span>
-                </Row>
-            )}
+            <NameRow resource={attachment} />
             <Row label="Runs on">{attachment.runs_on}</Row>
             <Row label="Env values">{attachment.env_keys.length}</Row>
             {attachment.backups && <Row label="Last backup">{lastBackup ? timeAgo(lastBackup.created_at) : 'None yet'}</Row>}
+        </Block>
+    );
+}
+
+const previewAttachmentKey = (attachment: PreviewAttachment) => `${attachment.kind}:${attachment.name ?? ''}`;
+
+/** One entry of the list of the preview template. Nothing runs for it on the template. */
+function PreviewAttachmentCard({ attachment, onOpen }: { attachment: PreviewAttachment; onOpen: () => void }) {
+    return (
+        <Block
+            icon={resourceIcons[attachment.kind]}
+            title={attachment.label}
+            aside={<span className="text-muted-foreground">Each preview</span>}
+            onOpen={onOpen}
+        >
+            <NameRow resource={attachment} />
         </Block>
     );
 }
@@ -391,8 +424,10 @@ export default function EnvironmentShow(props: CanvasProps) {
     const [certTone, certText] = certificatesState(domains);
     const cloudflareCount = domains.filter((domain) => domain.dns_mode === 'cloudflare').length;
     const statusUnknown = hasPods && status?.state === 'unknown';
+    // The template keeps a list of what each new preview gets, so its menu adds to that list and starts no resource.
+    const storeUrl = previews ? route('preview-attachments.store', environment.id) : route('datastores.store', environment.id);
     const addResource = can.update && (
-        <AddResourceMenu environmentId={environment.id} datastores={datastores}>
+        <AddResourceMenu environmentId={environment.id} storeUrl={storeUrl} datastores={datastores}>
             <Button variant="ghost" size="sm">
                 <Plus /> Resource
             </Button>
@@ -502,15 +537,26 @@ export default function EnvironmentShow(props: CanvasProps) {
                         )}
                     </Group>
 
-                    <Group column="resources" label="Resources" className="border-transparent bg-transparent">
+                    <Group
+                        column="resources"
+                        label={previews ? 'Resources of each preview' : 'Resources'}
+                        className="border-transparent bg-transparent"
+                    >
+                        {previews?.attachments.map((attachment) => (
+                            <PreviewAttachmentCard
+                                key={previewAttachmentKey(attachment)}
+                                attachment={attachment}
+                                onOpen={() => show({ kind: 'preview-attachment', key: previewAttachmentKey(attachment) })}
+                            />
+                        ))}
                         {datastores.attachments.map((attachment) => (
                             <ResourceCard key={attachment.id} attachment={attachment} onOpen={() => show({ kind: 'resource', id: attachment.id })} />
                         ))}
-                        {datastores.attachments.length === 0 && (
+                        {datastores.attachments.length === 0 && !previews?.attachments.length && (
                             <p className="text-muted-foreground px-1.5 text-sm">No database, cache, or storage yet.</p>
                         )}
                         {can.update && (
-                            <AddResourceMenu environmentId={environment.id} datastores={datastores}>
+                            <AddResourceMenu environmentId={environment.id} storeUrl={storeUrl} datastores={datastores}>
                                 <button
                                     type="button"
                                     className="bg-card/60 hover:bg-card text-muted-foreground hover:text-foreground focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-left text-sm outline-none focus-visible:ring-2"
@@ -639,6 +685,20 @@ export default function EnvironmentShow(props: CanvasProps) {
                 canRestore={can.restore}
                 canManageCredentials={can.manage_credentials}
             />
+            {previews && (
+                <PreviewAttachmentSheet
+                    open={open && sheet.kind === 'preview-attachment'}
+                    onClose={close}
+                    attachment={
+                        sheet.kind === 'preview-attachment'
+                            ? previews.attachments.find((attachment) => previewAttachmentKey(attachment) === sheet.key)
+                            : undefined
+                    }
+                    environmentId={environment.id}
+                    clusterName={cluster.name}
+                    canUpdate={can.update}
+                />
+            )}
         </EnvironmentLayout>
     );
 }

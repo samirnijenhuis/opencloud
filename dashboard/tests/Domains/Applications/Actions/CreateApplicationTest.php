@@ -83,13 +83,18 @@ class CreateApplicationTest extends TestCase
         );
         Queue::assertPushed(ProvisionDatastoreAttachment::class, fn (ProvisionDatastoreAttachment $job) => $job->attachment->is($attachment));
 
+        $template = $application->environments()->where('name', 'preview-template')->sole();
+        $this->assertSame([['kind' => 'mysql', 'name' => 'main', 'is_default' => true]], $template->preview_attachments);
+        $this->assertSame(0, $template->datastoreAttachments()->count());
+        Queue::assertPushed(ProvisionDatastoreAttachment::class, 1);
+
         $this->assertSame(0, Deployment::query()->count());
         Queue::assertNotPushed(RunDeployment::class);
 
         $this->assertSame(
             [
                 'application.created', 'process.added', 'process.added', 'process.added', 'process.added',
-                'env_var.created', 'datastore.attached',
+                'env_var.created', 'datastore.attached', 'preview_template.attachment_added',
             ],
             AuditEvent::orderBy('id')->pluck('action')->all(),
         );
@@ -159,6 +164,7 @@ class CreateApplicationTest extends TestCase
         $this->assertSame([0, 0], $environments->map(fn (Environment $e) => $e->envVars()->count())->all());
         $this->assertSame([[], []], $environments->map(fn (Environment $e) => self::processes($e))->all());
         $this->assertSame(0, $environments->sum(fn (Environment $e) => $e->datastoreAttachments()->count()));
+        $this->assertSame([[], []], $environments->map(fn (Environment $e) => $e->preview_attachments)->all());
         $this->assertSame(0, Deployment::query()->count());
     }
 
