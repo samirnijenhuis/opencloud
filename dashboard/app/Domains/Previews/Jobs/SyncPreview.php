@@ -57,7 +57,7 @@ class SyncPreview implements ShouldQueue
         }
 
         foreach ($opens as $application) {
-            $open->execute($application, $this->pullRequest);
+            $open->execute($application, null, $this->pullRequest);
         }
     }
 }

@@ -52,7 +52,7 @@ class DeployPullRequest
 
         AuditEvent::record($by, 'preview.deploy_requested', $application, ['pr_number' => $number, 'commit_sha' => $pullRequest['head_sha']]);
 
-        $this->openPreview->execute($application, new PullRequestEvent(
+        $this->openPreview->execute($application, $by, new PullRequestEvent(
             PullRequestAction::OPENED,
             $repository,
             $number,

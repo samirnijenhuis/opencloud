@@ -9,6 +9,7 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Datastores\Jobs\ProvisionDatastoreAttachment;
 use App\Domains\Deployments\Jobs\RunDeployment;
+use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
@@ -63,7 +64,10 @@ class DeployPullRequestTest extends TestCase
 
         $preview = $this->application->environments()->where('kind', EnvironmentKind::PREVIEW)->sole();
         $this->assertSame(['pr-12', 12, 'feature/12'], [$preview->name, $preview->pr_number, $preview->branch]);
-        $this->assertSame([self::HEAD_SHA, self::HEAD_SHA], $preview->deployments()->pluck('commit_sha')->all());
+        $this->assertSame(
+            [[self::HEAD_SHA, $this->developer->id], [self::HEAD_SHA, $this->developer->id]],
+            $preview->deployments()->orderBy('id')->get(['commit_sha', 'triggered_by'])->map(fn (Deployment $deployment) => [$deployment->commit_sha, $deployment->triggered_by])->all(),
+        );
         Queue::assertPushedOn('builds', RunDeployment::class);
         $this->assertSame(
             array_fill(0, 2, [$this->developer->id, $this->application->id, ['pr_number' => 12, 'commit_sha' => self::HEAD_SHA]]),

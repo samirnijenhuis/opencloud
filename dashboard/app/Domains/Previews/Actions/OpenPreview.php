@@ -16,6 +16,7 @@ use App\Domains\Environments\Models\EnvVar;
 use App\Domains\GitHub\Enums\PullRequestAction;
 use App\Domains\GitHub\GitHubClient;
 use App\Domains\GitHub\PullRequestEvent;
+use App\Domains\Members\Models\User;
 use App\Domains\Previews\PreviewHostname;
 use App\Domains\Previews\PreviewRules;
 use App\Domains\Routing\Jobs\CheckDomain;
@@ -38,8 +39,11 @@ class OpenPreview
         private PreviewHostname $previewHostname,
     ) {}
 
-    /** @return Environment|null null when the application gets no preview for this pull request */
-    public function execute(Application $application, PullRequestEvent $pullRequest): ?Environment
+    /**
+     * @param  User|null  $by  the user who deploys the pull request by hand, or null for a pull request event
+     * @return Environment|null null when the application gets no preview for this pull request
+     */
+    public function execute(Application $application, ?User $by, PullRequestEvent $pullRequest): ?Environment
     {
         $skipped = match (true) {
             ! $application->previews_enabled => 'previews_disabled',
@@ -57,7 +61,7 @@ class OpenPreview
             ?? $this->create($application, $pullRequest);
 
         if ($preview !== null) {
-            $this->startDeployment->execute($preview, null, $pullRequest->headSha);
+            $this->startDeployment->execute($preview, $by, $pullRequest->headSha);
         }
 
         return $preview;
