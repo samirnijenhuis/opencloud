@@ -34,6 +34,7 @@ Use these names everywhere: in PHP, in the UI, in Kubernetes labels, and in docs
 | Bucket name | The name of one bucket attachment, for example `main` or `uploads`. A Laravel app uses it as the name of a disk. | |
 | Default bucket | The one bucket attachment of an environment that sets the `AWS_*` values without a prefix. | |
 | Primary domain | The one domain of an environment that sets `APP_URL`, the Host header of the readiness probe, and the Visit site link. | |
+| `Tool` | A dev tool that a preview runs next to its app, on a hostname of its own: Mailpit or phpMyAdmin. The enum is `App\Domains\Environments\Enums\Tool`, and each case holds every fact of its tool. | `Process`, because the user does not set the command of a tool. |
 | Repository access | How opencloud reads the repository of an application now (`RepositoryRead`), and whether the GitHub App reaches it (`AppReach`). `RepositoryProbe` derives it on each read, and no column stores it. The Repository sheet of an environment shows it. | `ReadPath` for the read state, because `ReadPath` is only the remote that `Git::withRemote()` picks and has no failure states. |
 | `Cluster` | A Kubernetes cluster that runs environments and datastores. | |
 | `ProviderCredential` | An API key for a cloud provider or Cloudflare. | |
@@ -163,7 +164,7 @@ Each environment runs `web` and a list of other processes. Web is special, becau
 | Column | Meaning |
 |---|---|
 | `environment_id` | The environment. The row goes when the environment goes. |
-| `name` | 1 to 30 lowercase letters, digits, and dashes. It starts and ends with a letter or a digit. It is unique in the environment. `web`, `deploy`, and `command` are reserved. |
+| `name` | 1 to 30 lowercase letters, digits, and dashes. It starts and ends with a letter or a digit. It is unique in the environment. `web`, `deploy`, `command`, and the name of each tool (`mailpit`, `phpmyadmin`) are reserved. `Process::reservedNames()` lists them. A process with the name of a tool would be the Deployment of the tool too, and the apply would merge the two. |
 | `kind` | `long_running` or `scheduled`. `App\Domains\Environments\Enums\ProcessKind` casts it. |
 | `command` | A normal command line, for example `php artisan horizon`. |
 | `schedule` | A cron expression with five fields, or a shortcut such as `@daily`, for a scheduled process. Null for a long-running process. |
@@ -378,6 +379,16 @@ The three parts do this work:
 - `OpenPreview` skips the pull request when previews are off, or when it comes from a fork. A fork never gets a preview. At the limit of the application, it comments on the pull request and creates nothing. A new preview is the environment `pr-<number>`. It copies the settings, the processes, and the `user` env values of the preview template, and web runs one instance. The settings include the sleep minutes, and a new preview template starts with 15. In each copied value, it fills in the placeholders `{pr_number}`, `{branch}`, and `{url}`. `{url}` is `https://<hostname of the preview>`, or an empty text when the preview has no domain. The template keeps the placeholders. A preview copies the values only when opencloud creates it, so a change to the env values of one preview stays after each push. It gets its own `APP_KEY` when the template has none. For each entry of the list of the template, it attaches a new resource of the kind. The resources of production do not count, so a preview gets its resources also when production has none. Each attachment is a standard one, because a preview never creates a paid cloud resource and never shares the data of production. Each MySQL or Postgres database and each bucket keeps its name. The default comes first, so it is also the default of the preview. `OpenPreview::execute()` takes `?User $by` and gives it to `StartDeployment`. `SyncPreview` passes null, and `DeployPullRequest` passes the user who clicked. Its domain comes from `PreviewHostname::for()`. `applications.preview_domain` is a hostname pattern with `{pr_number}` once, in the first label, for example `pr-{pr_number}.previews.example.com`. One wildcard record then covers all previews, and `UpdatePreviewSettingsRequest` refuses any other pattern. Without a pattern the domain is `pr-<number>-<application slug>.<ingress ip>.sslip.io`. `PreviewHostname::PR_NUMBER` holds the placeholder text, and `OpenPreview` uses it for the env placeholder too. Then it deploys the head commit.
 - `ClosePreview` waits while a deployment of the preview builds or rolls out. Then it deletes the namespace and calls `DetachDatastore::destroy()` for each attachment. It deletes the environment and its records, and it syncs Caddy.
 - `DeploymentObserver` queues `PostPreviewComment` when a preview deployment moves to `live`. The job creates one comment with the preview URL and keeps its id in `pr_comment_id`. Later deployments update that comment. A failed call only writes a warning to the log.
+
+### Preview tools
+
+A preview can run dev tools next to its app, each on a hostname of its own: Mailpit catches the mail that the app sends, and phpMyAdmin opens the preview database. The JSON column `applications.preview_tools` holds the tools that each new preview gets, and `environments.tools` holds the tools of one environment. Both are lists of `Tool` values with the cast `AsEnumCollection`, and both are `[]` by default. A permanent environment and the preview template keep `[]`.
+
+`Environment::runningTools()` is the one rule of which tools run, and each reader calls it. Mailpit always runs. phpMyAdmin runs only when the environment has a default database of the kind MySQL, because it opens that database (`Tool::runsIn()`).
+
+The hostname of a tool comes from the address pattern of the previews. `PreviewHostname::toolPattern()` puts the word of the tool and a dash in place of the text before `{pr_number}` in the first label: `mail` for Mailpit and `database` for phpMyAdmin. So `pr-{pr_number}.staging.example.com` gives `mail-{pr_number}.staging.example.com`, `{pr_number}.previews.example.com` gives `mail-{pr_number}.previews.example.com`, and the free address `pr-{pr_number}-shop.<ip>.sslip.io` gives `mail-{pr_number}-shop.<ip>.sslip.io`. The wildcard record of the previews covers the tool hostnames too. `PreviewHostname::forTool()` fills in the number.
+
+The tools of one environment share one basic auth login, `ToolLogin::for()`. The user name is `opencloud`. The password is the first 24 characters of an HMAC of `tools:<environment id>` with the app key, so no column stores it, and it ends with the environment. `ToolLogin::hash()` gives the bcrypt hash with a salt from a second HMAC, so each call gives the same hash.
 
 ## Commands
 

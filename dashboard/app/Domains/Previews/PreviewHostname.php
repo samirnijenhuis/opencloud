@@ -3,6 +3,7 @@
 namespace App\Domains\Previews;
 
 use App\Domains\Applications\Models\Application;
+use App\Domains\Environments\Enums\Tool;
 use Illuminate\Support\Str;
 
 class PreviewHostname
@@ -30,6 +31,24 @@ class PreviewHostname
     public function for(Application $application, int $number): ?string
     {
         $pattern = $this->pattern($application);
+
+        return $pattern === null ? null : str_replace(self::PR_NUMBER, (string) $number, $pattern);
+    }
+
+    /**
+     * The pattern of a tool: the word of the tool takes the place of the text before the number, so the wildcard
+     * record of the previews covers the tools too. pr-{pr_number}.previews.example.com gives mail-{pr_number}.previews.example.com.
+     */
+    public function toolPattern(Application $application, Tool $tool): ?string
+    {
+        $pattern = $this->pattern($application);
+
+        return $pattern === null ? null : $tool->hostnamePrefix().'-'.strstr($pattern, self::PR_NUMBER);
+    }
+
+    public function forTool(Application $application, int $number, Tool $tool): ?string
+    {
+        $pattern = $this->toolPattern($application, $tool);
 
         return $pattern === null ? null : str_replace(self::PR_NUMBER, (string) $number, $pattern);
     }

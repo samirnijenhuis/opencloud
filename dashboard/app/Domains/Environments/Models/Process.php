@@ -4,6 +4,7 @@ namespace App\Domains\Environments\Models;
 
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Enums\Tool;
 use Closure;
 use Cron\CronExpression;
 use Database\Factories\ProcessFactory;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -33,8 +35,6 @@ class Process extends Model
     /** The Jobs of one-off commands carry this process label. */
     public const COMMAND = 'command';
 
-    public const RESERVED = [self::WEB, self::DEPLOY, self::COMMAND];
-
     public const MAX_INSTANCES = 20;
 
     /** A name is a Kubernetes container name and label value, so it starts and ends with a letter or a digit. */
@@ -56,6 +56,17 @@ class Process extends Model
         ];
     }
 
+    /**
+     * A tool is a Deployment with its own name in the namespace of the environment. A process with the same name
+     * would be the same Deployment, and the apply would merge the two.
+     *
+     * @return list<string>
+     */
+    public static function reservedNames(): array
+    {
+        return [self::WEB, self::DEPLOY, self::COMMAND, ...array_column(Tool::cases(), 'value')];
+    }
+
     /** @return BelongsTo<Environment, $this> */
     public function environment(): BelongsTo
     {
@@ -70,7 +81,7 @@ class Process extends Model
     public static function rules(string $prefix = ''): array
     {
         return [
-            "{$prefix}name" => ['required', 'string', 'regex:'.self::NAME, Rule::notIn(self::RESERVED)],
+            "{$prefix}name" => ['required', 'string', 'regex:'.self::NAME, Rule::notIn(self::reservedNames())],
             "{$prefix}kind" => ['required', Rule::enum(ProcessKind::class)],
             "{$prefix}command" => ['required', 'string', 'max:1000'],
             "{$prefix}schedule" => [self::onlyFor(ProcessKind::SCHEDULED, $prefix), 'required', 'string', 'max:100', self::cron(...)],
@@ -102,7 +113,7 @@ class Process extends Model
         return [
             "{$prefix}name.required" => 'Enter a name for the process.',
             "{$prefix}name.regex" => 'Use 1 to 30 lowercase letters, digits, and dashes. Start and end with a letter or a digit.',
-            "{$prefix}name.not_in" => 'Opencloud uses the names web, deploy, and command. Use a different name.',
+            "{$prefix}name.not_in" => 'Opencloud uses the names '.Arr::join(self::reservedNames(), ', ', ', and ').'. Use a different name.',
             "{$prefix}kind.required" => 'Choose long-running or scheduled.',
             "{$prefix}kind.enum" => 'Choose long-running or scheduled.',
             "{$prefix}command.required" => 'Enter the command that starts the process.',
