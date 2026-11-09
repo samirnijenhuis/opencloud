@@ -7,11 +7,15 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\EnvironmentManifests;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\ToolLogin;
+use App\Domains\Previews\PreviewHostname;
 use App\Domains\Routing\Enums\DnsMode;
 use App\Domains\Routing\Enums\DnsStatus;
 use App\Domains\Routing\Models\DashboardDomain;
 use App\Domains\Routing\Models\Domain;
 use Illuminate\Database\Eloquent\Builder;
+use stdClass;
 
 /**
  * The full Caddy JSON config of one cluster. build() is pure. forCluster() reads the routes from the database.
@@ -26,7 +30,7 @@ final readonly class CaddyConfig
     /** The dashboard path that gets each request whose app does not answer. The hostname of the request follows it. */
     public const WAKE_PATH = '/_opencloud/wake/';
 
-    public function __construct(private string $tlsIssuer, private ?string $acmeEmail) {}
+    public function __construct(private string $tlsIssuer, private ?string $acmeEmail, private PreviewHostname $previewHostname = new PreviewHostname) {}
 
     public static function fromConfig(): self
     {
@@ -37,7 +41,7 @@ final readonly class CaddyConfig
     public function forCluster(Cluster $cluster): array
     {
         $domains = Domain::query()
-            ->with('environment')
+            ->with(['environment.application.cluster', 'environment.datastoreAttachments.datastore'])
             ->whereIn('dns_status', array_filter(DnsStatus::cases(), fn (DnsStatus $status) => $status->routable()))
             ->whereHas('environment', fn (Builder $environment) => $environment
                 ->whereHas('application', fn (Builder $application) => $application->where('cluster_id', $cluster->id))
@@ -49,6 +53,25 @@ final readonly class CaddyConfig
                 $domain->hostname => "web.{$domain->environment->kubeNamespace()}.svc.cluster.local:".EnvironmentManifests::SERVICE_PORT,
             ])
             ->all();
+        $accounts = [];
+
+        // A tool route comes only with a routable domain of its preview, so Caddy asks for a certificate only when the DNS works.
+        foreach ($domains->pluck('environment')->unique('id') as $environment) {
+            $tools = $this->toolRoutes($environment);
+
+            if ($tools === []) {
+                continue;
+            }
+
+            // One bcrypt hash takes about 50 ms, so the tools of one environment share it.
+            $login = ToolLogin::for($environment);
+            $account = ['username' => $login->username, 'password' => $login->hash()];
+
+            foreach ($tools as $hostname => $upstream) {
+                $routes[$hostname] = $upstream;
+                $accounts[$hostname] = $account;
+            }
+        }
 
         // The dashboard host is a route like an app host. Caddy then gets its certificate and redirects HTTP to HTTPS.
         if ($cluster->kind === ClusterKind::LOCAL && ($dashboard = DashboardDomain::verified()) !== null) {
@@ -58,7 +81,24 @@ final readonly class CaddyConfig
         $cloudflareToken = ProviderCredential::query()->where('provider', 'cloudflare')->first()?->token;
         $cloudflareHosts = $domains->where('dns_mode', DnsMode::CLOUDFLARE)->pluck('hostname')->all();
 
-        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts, self::wakeUpstream($cluster));
+        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts, self::wakeUpstream($cluster), $accounts);
+    }
+
+    /** @return array<string, string> hostname => upstream address, for each tool of the environment that runs */
+    private function toolRoutes(Environment $environment): array
+    {
+        $routes = [];
+
+        foreach ($environment->runningTools() as $tool) {
+            $hostname = $this->previewHostname->forTool($environment->application, $environment->pr_number, $tool);
+
+            // Without a pattern and an ingress IP a tool has no hostname, but a domain behind the Cloudflare proxy still routes.
+            if ($hostname !== null) {
+                $routes[$hostname] = "{$tool->value}.{$environment->kubeNamespace()}.svc.cluster.local:{$tool->port()}";
+            }
+        }
+
+        return $routes;
     }
 
     /**
@@ -80,9 +120,10 @@ final readonly class CaddyConfig
      * @param  array<string, string>  $routes  hostname => upstream address
      * @param  list<string>  $cloudflareHosts  hostnames that get their certificate with the Cloudflare DNS challenge
      * @param  string|null  $wakeUpstream  the address of the dashboard for a request whose app does not answer
+     * @param  array<string, array{username: string, password: string}>  $accounts  hostname => the basic auth account in front of it, with the bcrypt hash as the password
      * @return array<string, mixed>
      */
-    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = [], ?string $wakeUpstream = null): array
+    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = [], ?string $wakeUpstream = null, array $accounts = []): array
     {
         ksort($routes, SORT_STRING);
         $servers = [];
@@ -94,7 +135,10 @@ final readonly class CaddyConfig
         $servers[self::APP_SERVER] = [
             'listen' => [':443'],
             'routes' => array_map(
-                fn (string $hostname, string $upstream) => ['match' => [['host' => [$hostname]]], 'handle' => [self::proxy($upstream)]],
+                fn (string $hostname, string $upstream) => ['match' => [['host' => [$hostname]]], 'handle' => [
+                    ...(isset($accounts[$hostname]) ? [self::basicAuth($accounts[$hostname])] : []),
+                    self::proxy($upstream),
+                ]],
                 array_keys($routes),
                 array_values($routes),
             ),
@@ -147,6 +191,17 @@ final readonly class CaddyConfig
         }
 
         return ['module' => 'acme', ...($this->acmeEmail ? ['email' => $this->acmeEmail] : [])];
+    }
+
+    /**
+     * The hash cache keeps Caddy from running bcrypt on each request.
+     *
+     * @param  array{username: string, password: string}  $account
+     * @return array<string, mixed>
+     */
+    private static function basicAuth(array $account): array
+    {
+        return ['handler' => 'authentication', 'providers' => ['http_basic' => ['accounts' => [$account], 'hash_cache' => new stdClass]]];
     }
 
     /** @return array<string, mixed> */
