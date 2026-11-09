@@ -513,7 +513,7 @@ class EnvironmentManifestsTest extends TestCase
         return new EnvironmentManifests($environment);
     }
 
-    /** The password is encrypted, and this test runs without the app, so the cluster has none. */
+    /** The manifests only ask whether the cluster has a registry, so the cluster needs no password. */
     private function clusterWithRegistry(): Cluster
     {
         return new Cluster([
