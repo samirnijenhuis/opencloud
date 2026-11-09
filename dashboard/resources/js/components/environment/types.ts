@@ -118,9 +118,9 @@ export type ToolValue = 'mailpit' | 'phpmyadmin';
 /** One tool that a preview can get, with the address pattern of its tool hostname, or null without an ingress address. */
 export type ToolOption = { value: ToolValue; label: string; address: string | null };
 
-/** The tools that run for a preview, behind one basic auth login. The url is null when the preview has no address. */
+/** The tools that run for a preview and have a hostname, behind one basic auth login. */
 export type PreviewTools = {
-    links: { value: ToolValue; label: string; url: string | null }[];
+    links: { value: ToolValue; label: string; url: string }[];
     login: { username: string; password: string };
 };
 

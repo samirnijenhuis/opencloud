@@ -90,9 +90,10 @@ final readonly class CaddyConfig
         $routes = [];
 
         foreach ($environment->runningTools() as $tool) {
-            $hostname = $this->previewHostname->forTool($environment->application, $environment->pr_number, $tool);
+            $hostname = $this->previewHostname->forSide($environment->application, $environment->pr_number, $tool->hostnamePrefix());
 
-            // Without a pattern and an ingress IP a tool has no hostname, but a domain behind the Cloudflare proxy still routes.
+            // A tool can have no hostname while its preview routes: without a pattern and an ingress IP behind the Cloudflare
+            // proxy, or with a first label of more than 63 characters.
             if ($hostname !== null) {
                 $routes[$hostname] = "{$tool->value}.{$environment->kubeNamespace()}.svc.cluster.local:{$tool->port()}";
             }

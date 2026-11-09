@@ -216,6 +216,11 @@ class PreviewSettingsTest extends TestCase
 
         $production = $this->application->environments()->where('name', 'production')->sole();
         $this->get("/environments/{$production->id}")->assertInertia(fn (Assert $page) => $page->where('tools', null));
+
+        // Without a pattern and an ingress IP, Mailpit has no hostname and no route, so the page has no link to it.
+        $this->application->update(['preview_domain' => null]);
+        $this->application->cluster->update(['ingress_ip' => null]);
+        $this->get("/environments/{$preview->id}")->assertInertia(fn (Assert $page) => $page->where('tools', null));
     }
 
     public function test_a_save_that_changes_nothing_records_nothing(): void

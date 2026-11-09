@@ -114,7 +114,7 @@ class EnvironmentController extends Controller
                 'tools' => array_map(fn (Tool $tool) => [
                     'value' => $tool,
                     'label' => $tool->label(),
-                    'address' => $previewHostname->toolPattern($environment->application, $tool),
+                    'address' => $previewHostname->sidePattern($environment->application, $tool->hostnamePrefix()),
                 ], Tool::cases()),
                 // What each new preview gets. The template itself gets nothing.
                 'attachments' => array_map(function (array $entry) {
@@ -223,26 +223,28 @@ class EnvironmentController extends Controller
      * The tools that run for a preview, and the login in front of them. Each role may change a preview, and a developer
      * can read each env value of an unprotected environment through a command, so each viewer sees the password.
      *
-     * @return array{links: list<array{value: Tool, label: string, url: ?string}>, login: array{username: string, password: string}}|null
+     * @return array{links: list<array{value: Tool, label: string, url: string}>, login: array{username: string, password: string}}|null
      */
     private function tools(Environment $environment, PreviewHostname $previewHostname): ?array
     {
-        $running = $environment->runningTools();
+        $links = [];
 
-        if ($running === []) {
+        foreach ($environment->runningTools() as $tool) {
+            $hostname = $previewHostname->forSide($environment->application, $environment->pr_number, $tool->hostnamePrefix());
+
+            // A tool without a hostname has no route in Caddy, so the page gives it no link.
+            if ($hostname !== null) {
+                $links[] = ['value' => $tool, 'label' => $tool->label(), 'url' => "https://{$hostname}"];
+            }
+        }
+
+        if ($links === []) {
             return null;
         }
 
         $login = ToolLogin::for($environment);
 
-        return [
-            'links' => array_map(function (Tool $tool) use ($environment, $previewHostname) {
-                $hostname = $previewHostname->forTool($environment->application, $environment->pr_number, $tool);
-
-                return ['value' => $tool, 'label' => $tool->label(), 'url' => $hostname === null ? null : "https://{$hostname}"];
-            }, $running),
-            'login' => ['username' => $login->username, 'password' => $login->password],
-        ];
+        return ['links' => $links, 'login' => ['username' => $login->username, 'password' => $login->password]];
     }
 
     /** @return array<string, mixed> */

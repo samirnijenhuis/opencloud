@@ -4,7 +4,6 @@ namespace Tests\Domains\Previews;
 
 use App\Domains\Applications\Models\Application;
 use App\Domains\Clusters\Models\Cluster;
-use App\Domains\Environments\Enums\Tool;
 use App\Domains\Previews\PreviewHostname;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -47,18 +46,26 @@ class PreviewHostnameTest extends TestCase
 
         $this->assertNull((new PreviewHostname)->pattern($application));
         $this->assertNull((new PreviewHostname)->for($application, 12));
-        $this->assertNull((new PreviewHostname)->toolPattern($application, Tool::MAILPIT));
-        $this->assertNull((new PreviewHostname)->forTool($application, 12, Tool::MAILPIT));
+        $this->assertNull((new PreviewHostname)->sidePattern($application, 'mail'));
+        $this->assertNull((new PreviewHostname)->forSide($application, 12, 'mail'));
     }
 
-    public function test_a_tool_hostname_puts_the_word_of_the_tool_in_place_of_the_text_before_the_number(): void
+    public function test_a_side_hostname_puts_the_prefix_in_place_of_the_text_before_the_number(): void
     {
         $hostnames = new PreviewHostname;
 
-        $this->assertSame('mail-{pr_number}.staging.hlpbnk.io', $hostnames->toolPattern($this->application('pr-{pr_number}.staging.hlpbnk.io'), Tool::MAILPIT));
-        $this->assertSame('database-12.staging.hlpbnk.io', $hostnames->forTool($this->application('pr-{pr_number}.staging.hlpbnk.io'), 12, Tool::PHPMYADMIN));
-        $this->assertSame('mail-{pr_number}.previews.example.com', $hostnames->toolPattern($this->application('{pr_number}.previews.example.com'), Tool::MAILPIT));
-        $this->assertSame('mail-{pr_number}-shop.203.0.113.10.sslip.io', $hostnames->toolPattern($this->application(null), Tool::MAILPIT));
-        $this->assertSame('mail-7-shop.203.0.113.10.sslip.io', $hostnames->forTool($this->application(null), 7, Tool::MAILPIT));
+        $this->assertSame('mail-{pr_number}.staging.hlpbnk.io', $hostnames->sidePattern($this->application('pr-{pr_number}.staging.hlpbnk.io'), 'mail'));
+        $this->assertSame('database-12.staging.hlpbnk.io', $hostnames->forSide($this->application('pr-{pr_number}.staging.hlpbnk.io'), 12, 'database'));
+        $this->assertSame('mail-{pr_number}.previews.example.com', $hostnames->sidePattern($this->application('{pr_number}.previews.example.com'), 'mail'));
+        $this->assertSame('mail-{pr_number}-shop.203.0.113.10.sslip.io', $hostnames->sidePattern($this->application(null), 'mail'));
+        $this->assertSame('mail-7-shop.203.0.113.10.sslip.io', $hostnames->forSide($this->application(null), 7, 'mail'));
+    }
+
+    public function test_a_side_hostname_with_a_first_label_longer_than_63_characters_has_no_hostname(): void
+    {
+        $application = $this->application(null, name: str_repeat('a', 50));
+
+        $this->assertSame('mail-12345-'.str_repeat('a', 50).'.203.0.113.10.sslip.io', (new PreviewHostname)->forSide($application, 12345, 'mail'));
+        $this->assertNull((new PreviewHostname)->forSide($application, 12345, 'database'));
     }
 }

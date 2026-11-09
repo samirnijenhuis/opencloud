@@ -3,7 +3,6 @@
 namespace App\Domains\Previews;
 
 use App\Domains\Applications\Models\Application;
-use App\Domains\Environments\Enums\Tool;
 use Illuminate\Support\Str;
 
 class PreviewHostname
@@ -36,20 +35,23 @@ class PreviewHostname
     }
 
     /**
-     * The pattern of a tool: the word of the tool takes the place of the text before the number, so the wildcard
-     * record of the previews covers the tools too. pr-{pr_number}.previews.example.com gives mail-{pr_number}.previews.example.com.
+     * The pattern of a hostname next to the app of a preview: the prefix takes the place of the text before the number in
+     * the first label, so the wildcard record of the previews covers it too. pr-{pr_number}.previews.example.com and the
+     * prefix mail give mail-{pr_number}.previews.example.com.
      */
-    public function toolPattern(Application $application, Tool $tool): ?string
+    public function sidePattern(Application $application, string $prefix): ?string
     {
         $pattern = $this->pattern($application);
 
-        return $pattern === null ? null : $tool->hostnamePrefix().'-'.strstr($pattern, self::PR_NUMBER);
+        return $pattern === null ? null : $prefix.'-'.strstr($pattern, self::PR_NUMBER);
     }
 
-    public function forTool(Application $application, int $number, Tool $tool): ?string
+    /** Null without a pattern, and when the first label is longer than the 63 characters that DNS allows. */
+    public function forSide(Application $application, int $number, string $prefix): ?string
     {
-        $pattern = $this->toolPattern($application, $tool);
+        $pattern = $this->sidePattern($application, $prefix);
+        $hostname = $pattern === null ? null : str_replace(self::PR_NUMBER, (string) $number, $pattern);
 
-        return $pattern === null ? null : str_replace(self::PR_NUMBER, (string) $number, $pattern);
+        return $hostname === null || strlen(strstr($hostname, '.', true)) > 63 ? null : $hostname;
     }
 }

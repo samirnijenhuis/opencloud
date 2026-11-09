@@ -152,20 +152,16 @@ function ToolsBlock({ tools, onOpen }: { tools: PreviewTools; onOpen: () => void
                 <Row
                     key={tool.value}
                     label={
-                        tool.url ? (
-                            <a
-                                href={tool.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                title={hostnameOf(tool.url)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-foreground focus-visible:ring-ring rounded-sm outline-none hover:underline focus-visible:ring-2"
-                            >
-                                {hostnameOf(tool.url)}
-                            </a>
-                        ) : (
-                            'No address'
-                        )
+                        <a
+                            href={tool.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={hostnameOf(tool.url)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-foreground focus-visible:ring-ring rounded-sm outline-none hover:underline focus-visible:ring-2"
+                        >
+                            {hostnameOf(tool.url)}
+                        </a>
                     }
                 >
                     {tool.label}
@@ -190,13 +186,9 @@ function ToolsSheet({ open, onClose, tools }: { open: boolean; onClose: () => vo
                 {tools.links.map((tool) => (
                     <li key={tool.value} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2">
                         <span>{tool.label}</span>
-                        {tool.url ? (
-                            <a href={tool.url} target="_blank" rel="noreferrer" className="min-w-0 font-mono break-all hover:underline">
-                                {hostnameOf(tool.url)}
-                            </a>
-                        ) : (
-                            <span className="text-muted-foreground">No address</span>
-                        )}
+                        <a href={tool.url} target="_blank" rel="noreferrer" className="min-w-0 font-mono break-all hover:underline">
+                            {hostnameOf(tool.url)}
+                        </a>
                     </li>
                 ))}
             </ul>
