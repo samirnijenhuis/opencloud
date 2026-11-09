@@ -142,7 +142,7 @@ function groupBySource(offers: Offer[]): OfferGroup[] {
     });
 }
 
-function CopyLine({ text }: { text: string }) {
+export function CopyLine({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
 
     const copy = async () => {

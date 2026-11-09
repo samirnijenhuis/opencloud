@@ -9,7 +9,9 @@ use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\Tool;
 use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\ToolLogin;
 use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -23,6 +25,8 @@ class PreviewSettingsTest extends TestCase
     private const PLACEMENT = 'Put {pr_number} once in the first part of the address, for example pr-{pr_number}.previews.example.com.';
 
     private const HOST = 'Enter an address like pr-{pr_number}.previews.example.com.';
+
+    private const TOOL_ADDRESS = 'Start the address with a different word than mail- or database-. The preview tools use those addresses.';
 
     private Application $application;
 
@@ -65,6 +69,11 @@ class PreviewSettingsTest extends TestCase
                 'preview_labels' => ['preview'],
                 'ingress_ip' => '203.0.113.10',
                 'max_previews' => 5,
+                'preview_tools' => [],
+                'tools' => [
+                    ['value' => 'mailpit', 'label' => 'Mailpit', 'address' => 'mail-{pr_number}.previews.example.com'],
+                    ['value' => 'phpmyadmin', 'label' => 'phpMyAdmin', 'address' => 'database-{pr_number}.previews.example.com'],
+                ],
                 'attachments' => [],
             ]));
 
@@ -161,6 +170,54 @@ class PreviewSettingsTest extends TestCase
         $this->assertSame(0, AuditEvent::count());
     }
 
+    public function test_an_admin_chooses_the_tools_of_each_preview_and_the_same_choice_records_nothing_again(): void
+    {
+        $this->actingAs(User::factory()->admin()->create())
+            ->patch("/applications/{$this->application->id}/previews", ['preview_tools' => ['phpmyadmin', 'mailpit']])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame([Tool::MAILPIT, Tool::PHPMYADMIN], $this->application->fresh()->preview_tools->all());
+        $this->assertSame(['changes' => ['preview_tools' => ['from' => [], 'to' => ['mailpit', 'phpmyadmin']]]], AuditEvent::sole()->context);
+        $this->get("/environments/{$this->template->id}")->assertInertia(fn (Assert $page) => $page->where('previews.preview_tools', ['mailpit', 'phpmyadmin']));
+
+        $this->patch("/applications/{$this->application->id}/previews", ['preview_tools' => ['mailpit', 'phpmyadmin']])->assertSessionHasNoErrors();
+        $this->assertSame(1, AuditEvent::count());
+
+        $this->patch("/applications/{$this->application->id}/previews", ['preview_tools' => []])->assertSessionHasNoErrors();
+        $this->assertSame([], $this->application->fresh()->preview_tools->all());
+    }
+
+    public function test_an_unknown_or_repeated_tool_is_refused(): void
+    {
+        foreach ([['adminer'], ['mailpit', 'mailpit'], 'mailpit'] as $tools) {
+            $this->actingAs(User::factory()->admin()->create())
+                ->patch("/applications/{$this->application->id}/previews", ['preview_tools' => $tools])
+                ->assertSessionHasErrors();
+        }
+
+        $this->patch("/applications/{$this->application->id}/previews", ['preview_tools' => ['adminer']])
+            ->assertSessionHasErrors(['preview_tools.0' => 'Choose only the tools in the list.']);
+        $this->assertSame([], $this->application->fresh()->preview_tools->all());
+        $this->assertSame(0, AuditEvent::count());
+    }
+
+    public function test_a_preview_canvas_shows_its_running_tools_and_their_login_and_production_shows_none(): void
+    {
+        $this->application->update(['preview_domain' => 'pr-{pr_number}.previews.example.com']);
+        // phpMyAdmin does not run, because the preview has no default MySQL database.
+        $preview = $this->application->environments()->where('name', 'pr-12')->sole();
+        $preview->update(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]]);
+        $this->actingAs(User::factory()->create());
+
+        $this->get("/environments/{$preview->id}")->assertInertia(fn (Assert $page) => $page->where('tools', [
+            'links' => [['value' => 'mailpit', 'label' => 'Mailpit', 'url' => 'https://mail-12.previews.example.com']],
+            'login' => ['username' => 'opencloud', 'password' => ToolLogin::for($preview)->password],
+        ]));
+
+        $production = $this->application->environments()->where('name', 'production')->sole();
+        $this->get("/environments/{$production->id}")->assertInertia(fn (Assert $page) => $page->where('tools', null));
+    }
+
     public function test_a_save_that_changes_nothing_records_nothing(): void
     {
         $this->actingAs(User::factory()->admin()->create())
@@ -179,6 +236,8 @@ class PreviewSettingsTest extends TestCase
             'placeholder after the first dot' => ['pr.{pr_number}.example.com', self::PLACEMENT],
             'not a host name' => ['pr-{pr_number}.not a domain', self::HOST],
             'no domain part' => ['pr-{pr_number}', self::HOST],
+            'the address of mailpit' => ['mail-{pr_number}.previews.example.com', self::TOOL_ADDRESS],
+            'the address of phpmyadmin' => ['database-{pr_number}.previews.example.com', self::TOOL_ADDRESS],
         ];
     }
 

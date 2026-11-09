@@ -21,6 +21,7 @@ use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Enums\Tool;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -102,7 +103,7 @@ class PreviewLifecycleTest extends TestCase
             ])->all(),
         );
         $this->assertSame(
-            ['pr_number' => 12, 'branch' => 'feature/login', 'processes' => ['scheduler', 'horizon']],
+            ['pr_number' => 12, 'branch' => 'feature/login', 'processes' => ['scheduler', 'horizon'], 'tools' => []],
             AuditEvent::where('action', 'preview.created')->sole()->context,
         );
 
@@ -241,6 +242,22 @@ class PreviewLifecycleTest extends TestCase
         $preview = $this->environment('pr-12');
         $this->assertSame(['pr-12.previews.example.com'], $preview->domains()->pluck('hostname')->all());
         $this->assertSame('https://pr-12.previews.example.com/', $preview->envVars()->where('key', 'PREVIEW_LINK')->sole()->value);
+    }
+
+    public function test_a_new_preview_takes_the_tools_of_the_template_and_keeps_them_after_the_setting_changes(): void
+    {
+        $this->application->update(['preview_tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]]);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+
+        $this->assertSame([Tool::MAILPIT, Tool::PHPMYADMIN], $this->environment('pr-12')->tools->all());
+        $this->assertSame(['mailpit', 'phpmyadmin'], AuditEvent::where('action', 'preview.created')->sole()->context['tools']);
+        $this->assertSame([], $this->environment('preview-template')->tools->all());
+
+        $this->application->update(['preview_tools' => []]);
+        $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-2')->assertStatus(202);
+
+        $this->assertSame([Tool::MAILPIT, Tool::PHPMYADMIN], $this->environment('pr-12')->tools->all());
     }
 
     public function test_without_an_address_pattern_a_preview_keeps_the_free_address(): void

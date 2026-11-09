@@ -113,6 +113,17 @@ export type PreviewAttachment = {
 
 export type Compute = { size: Size; min_instances: number; max_instances: number; cpu_target: number; health_path: string };
 
+export type ToolValue = 'mailpit' | 'phpmyadmin';
+
+/** One tool that a preview can get, with the address pattern of its tool hostname, or null without an ingress address. */
+export type ToolOption = { value: ToolValue; label: string; address: string | null };
+
+/** The tools that run for a preview, behind one basic auth login. The url is null when the preview has no address. */
+export type PreviewTools = {
+    links: { value: ToolValue; label: string; url: string | null }[];
+    login: { username: string; password: string };
+};
+
 /** What each new preview copies from the preview template. Only the template canvas has it. */
 export type PreviewTemplateSettings = {
     previews_enabled: boolean;
@@ -123,6 +134,9 @@ export type PreviewTemplateSettings = {
     preview_labels: string[];
     ingress_ip: string | null;
     max_previews: number;
+    /** The tools that each new preview gets, in the order of `tools`. */
+    preview_tools: ToolValue[];
+    tools: ToolOption[];
     attachments: PreviewAttachment[];
 };
 
@@ -138,6 +152,8 @@ export type CanvasProps = EnvironmentPageProps & {
     datastores: Datastores;
     deployments: Deployment[];
     previews: PreviewTemplateSettings | null;
+    /** Only a preview with running tools has them. */
+    tools: PreviewTools | null;
 };
 
 export type Resources = { cpu_millicores: number; memory_mib: number };
@@ -180,6 +196,7 @@ export type Sheet =
     | { kind: 'https' }
     | { kind: 'domains'; adding: boolean }
     | { kind: 'previews' }
+    | { kind: 'tools' }
     | { kind: 'app'; tab: AppTab }
     | { kind: 'process'; id: number | null; tab: AppTab }
     | { kind: 'resource'; id: number }

@@ -9,6 +9,7 @@ import { ProcessSheet, scheduleWords } from '@/components/environment/process-sh
 import { previewStates, useRepositoryAccess } from '@/components/environment/repository-sheet';
 import {
     AddResourceMenu,
+    CopyLine,
     namedTextsFor,
     PreviewAttachmentSheet,
     ResourceSheet,
@@ -23,6 +24,7 @@ import {
     type LiveStatus,
     type PreviewAttachment,
     type PreviewTemplateSettings,
+    type PreviewTools,
     type ResourceFamily,
     type Resources,
     type Sheet,
@@ -30,6 +32,7 @@ import {
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { useDeploymentPoll } from '@/hooks/use-deployment-poll';
 import { usePoll } from '@/hooks/use-poll';
 import EnvironmentLayout from '@/layouts/environment-layout';
@@ -49,6 +52,7 @@ import {
     Server,
     ShieldCheck,
     SquareTerminal,
+    Wrench,
     Zap,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -128,7 +132,83 @@ function PreviewsBlock({ previews, onOpen }: { previews: PreviewTemplateSettings
                 {delivery !== 'on' ? <Status tone={tone}>{state}</Status> : labels === '' ? 'Each pull request' : `With label ${labels}`}
             </Row>
             <Row label="Limit">{previewLimitText(previews.max_previews)}</Row>
+            <Row label="Tools">
+                {previews.tools
+                    .filter((tool) => previews.preview_tools.includes(tool.value))
+                    .map((tool) => tool.label)
+                    .join(', ') || 'None'}
+            </Row>
         </Block>
+    );
+}
+
+const hostnameOf = (url: string) => url.replace(/^https:\/\//, '');
+
+/** The tools of a preview with a link to each, and the login that each tool asks for. */
+function ToolsBlock({ tools, onOpen }: { tools: PreviewTools; onOpen: () => void }) {
+    return (
+        <Block icon={Wrench} title="Tools" onOpen={onOpen}>
+            {tools.links.map((tool) => (
+                <Row
+                    key={tool.value}
+                    label={
+                        tool.url ? (
+                            <a
+                                href={tool.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={hostnameOf(tool.url)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-foreground focus-visible:ring-ring rounded-sm outline-none hover:underline focus-visible:ring-2"
+                            >
+                                {hostnameOf(tool.url)}
+                            </a>
+                        ) : (
+                            'No address'
+                        )
+                    }
+                >
+                    {tool.label}
+                </Row>
+            ))}
+            <Row label="Login">
+                <code className="font-mono text-xs">{tools.login.username}</code>
+            </Row>
+        </Block>
+    );
+}
+
+function ToolsSheet({ open, onClose, tools }: { open: boolean; onClose: () => void; tools: PreviewTools }) {
+    return (
+        <EditorSheet
+            open={open}
+            onClose={onClose}
+            title="Tools"
+            description="Each tool of this preview asks for this login. The password ends with the preview."
+        >
+            <ul className="divide-y rounded-lg border text-sm">
+                {tools.links.map((tool) => (
+                    <li key={tool.value} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2">
+                        <span>{tool.label}</span>
+                        {tool.url ? (
+                            <a href={tool.url} target="_blank" rel="noreferrer" className="min-w-0 font-mono break-all hover:underline">
+                                {hostnameOf(tool.url)}
+                            </a>
+                        ) : (
+                            <span className="text-muted-foreground">No address</span>
+                        )}
+                    </li>
+                ))}
+            </ul>
+            <div className="grid gap-2">
+                <Label>User name</Label>
+                <CopyLine text={tools.login.username} />
+            </div>
+            <div className="grid gap-2">
+                <Label>Password</Label>
+                <CopyLine text={tools.login.password} />
+            </div>
+        </EditorSheet>
     );
 }
 
@@ -399,7 +479,7 @@ function PreviewAttachmentCard({ attachment, onOpen }: { attachment: PreviewAtta
 }
 
 export default function EnvironmentShow(props: CanvasProps) {
-    const { environment, cluster, compute, sizes, processes, domains, datastores, deployments, previews, can } = props;
+    const { environment, cluster, compute, sizes, processes, domains, datastores, deployments, previews, tools, can } = props;
     const [sheet, setSheet] = useState<Sheet>({ kind: 'app', tab: 'general' });
     const [open, setOpen] = useState(false);
     const hasPods = environment.kind !== 'preview_template';
@@ -485,6 +565,7 @@ export default function EnvironmentShow(props: CanvasProps) {
                                     })}
                                     {can.manage_domains && <AddButton onClick={() => show({ kind: 'domains', adding: true })}>Add domain</AddButton>}
                                 </Block>
+                                {tools && <ToolsBlock tools={tools} onOpen={() => show({ kind: 'tools' })} />}
                             </>
                         )}
                     </Group>
@@ -650,6 +731,7 @@ export default function EnvironmentShow(props: CanvasProps) {
                     canManage={can.manage_domains}
                 />
             )}
+            {tools && <ToolsSheet open={open && sheet.kind === 'tools'} onClose={close} tools={tools} />}
             <AppSheet
                 open={open && sheet.kind === 'app'}
                 onClose={close}

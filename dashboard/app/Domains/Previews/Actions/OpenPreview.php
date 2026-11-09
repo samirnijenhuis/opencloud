@@ -95,6 +95,7 @@ class OpenPreview
                 'is_protected' => false,
                 'min_instances' => 1,
                 'max_instances' => 1,
+                'tools' => $application->preview_tools,
             ]);
 
             foreach ($template->processes as $process) {
@@ -105,6 +106,7 @@ class OpenPreview
                 'pr_number' => $pullRequest->number,
                 'branch' => $pullRequest->headRef,
                 'processes' => $template->processes->pluck('name')->all(),
+                'tools' => $application->preview_tools->pluck('value')->all(),
             ]);
 
             $hostname = $this->previewHostname->for($application, $pullRequest->number);

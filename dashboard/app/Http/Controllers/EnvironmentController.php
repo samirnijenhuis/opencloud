@@ -27,9 +27,11 @@ use App\Domains\Environments\DotenvText;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Enums\Tool;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\ToolLogin;
 use App\Domains\Members\Enums\Ability;
 use App\Domains\Members\Enums\Role;
 use App\Domains\Previews\PreviewHostname;
@@ -108,6 +110,12 @@ class EnvironmentController extends Controller
                 'preview_labels' => $environment->application->preview_labels,
                 'ingress_ip' => $cluster->ingress_ip,
                 'max_previews' => $environment->application->max_previews,
+                'preview_tools' => $environment->application->preview_tools,
+                'tools' => array_map(fn (Tool $tool) => [
+                    'value' => $tool,
+                    'label' => $tool->label(),
+                    'address' => $previewHostname->toolPattern($environment->application, $tool),
+                ], Tool::cases()),
                 // What each new preview gets. The template itself gets nothing.
                 'attachments' => array_map(function (array $entry) {
                     $kind = DatastoreKind::from($entry['kind']);
@@ -115,6 +123,7 @@ class EnvironmentController extends Controller
                     return [...$entry, 'family' => $kind->family(), 'label' => self::label($kind, DatastoreSource::STANDARD, Provisioners::for($kind, DatastoreSource::STANDARD)->capabilities())];
                 }, $environment->preview_attachments),
             ] : null,
+            'tools' => $this->tools($environment, $previewHostname),
             'compute' => $environment->only(['size', 'min_instances', 'max_instances', 'cpu_target', 'health_path']),
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,
@@ -208,6 +217,32 @@ class EnvironmentController extends Controller
         $deleteEnvironment->execute($environment, $request->user());
 
         return to_route('applications.show', $environment->application_id);
+    }
+
+    /**
+     * The tools that run for a preview, and the login in front of them. Each role may change a preview, and a developer
+     * can read each env value of an unprotected environment through a command, so each viewer sees the password.
+     *
+     * @return array{links: list<array{value: Tool, label: string, url: ?string}>, login: array{username: string, password: string}}|null
+     */
+    private function tools(Environment $environment, PreviewHostname $previewHostname): ?array
+    {
+        $running = $environment->runningTools();
+
+        if ($running === []) {
+            return null;
+        }
+
+        $login = ToolLogin::for($environment);
+
+        return [
+            'links' => array_map(function (Tool $tool) use ($environment, $previewHostname) {
+                $hostname = $previewHostname->forTool($environment->application, $environment->pr_number, $tool);
+
+                return ['value' => $tool, 'label' => $tool->label(), 'url' => $hostname === null ? null : "https://{$hostname}"];
+            }, $running),
+            'login' => ['username' => $login->username, 'password' => $login->password],
+        ];
     }
 
     /** @return array<string, mixed> */
