@@ -12,6 +12,7 @@ use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
 use App\Support\Kube\FakeKubectl;
 use App\Support\Kube\KubectlResult;
+use App\Support\Kube\Labels;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuildsEnvironments;
 use Tests\TestCase;
@@ -32,12 +33,14 @@ class ScaleEnvironmentTest extends TestCase
         parent::setUp();
 
         $this->kubectl = FakeKubectl::install();
-        // Web autoscales from 2 to 4 pods. The worker has a fixed count. The Deployment "old" belongs to a removed process.
+        // Web autoscales from 2 to 4 pods. The worker has a fixed count. The Deployment "old" belongs to a removed process,
+        // and the Deployment "mailpit" to a tool.
         $this->environment = $this->makeEnvironment(attributes: ['min_instances' => 2, 'max_instances' => 4, 'cpu_target' => 60, 'sleep_after_minutes' => 15]);
         Process::factory()->for($this->environment)->create(['name' => 'worker', 'min_instances' => 3, 'max_instances' => 3]);
         Process::factory()->for($this->environment)->scheduled()->create(['name' => 'cleanup']);
         $this->kubectl->respond('get deployments', new KubectlResult(0, json_encode(['items' => [
-            ['metadata' => ['name' => 'web']], ['metadata' => ['name' => 'worker']], ['metadata' => ['name' => 'old']],
+            ...array_map(fn (string $name) => ['metadata' => ['name' => $name, 'labels' => [Labels::PROCESS => $name]]], ['web', 'worker', 'old']),
+            ['metadata' => ['name' => 'mailpit', 'labels' => [Labels::TOOL => 'mailpit']]],
         ]])));
         $this->kubectl->respond('get cronjobs', new KubectlResult(0, json_encode(['items' => [['metadata' => ['name' => 'cleanup']]]])));
 
@@ -91,6 +94,17 @@ class ScaleEnvironmentTest extends TestCase
             ['HorizontalPodAutoscaler', 'web', 2, 4, 60],
             [$autoscaler['kind'], $autoscaler['metadata']['name'], $autoscaler['spec']['minReplicas'], $autoscaler['spec']['maxReplicas'], $autoscaler['spec']['metrics'][0]['resource']['target']['averageUtilization']],
         );
+    }
+
+    public function test_a_tool_keeps_running_while_the_environment_sleeps_and_after_it_wakes(): void
+    {
+        $this->environment->forceFill(['slept_at' => now()])->save();
+        ScaleEnvironment::dispatch($this->environment);
+        $this->environment->forceFill(['slept_at' => null])->save();
+        ScaleEnvironment::dispatch($this->environment);
+
+        $this->assertSame(['--replicas=0', '--replicas=2'], array_map(fn (array $call) => $call['args'][2], $this->kubectl->callsStartingWith('scale deployment/web ')));
+        $this->assertSame([], $this->kubectl->callsStartingWith('scale deployment/mailpit'));
     }
 
     private function attachment(DatastoreKind $kind, DatastoreSource $source): DatastoreAttachment

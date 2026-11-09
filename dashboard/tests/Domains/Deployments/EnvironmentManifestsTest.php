@@ -7,16 +7,20 @@ use App\Domains\Applications\Models\Application;
 use App\Domains\Clusters\ClusterRegistry;
 use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\EnvironmentManifests;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Enums\Tool;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
 use App\Domains\Routing\Models\Domain;
 use Illuminate\Database\Eloquent\Collection;
-use PHPUnit\Framework\TestCase;
 use stdClass;
+use Tests\TestCase;
 
 class EnvironmentManifestsTest extends TestCase
 {
@@ -320,6 +324,7 @@ class EnvironmentManifestsTest extends TestCase
             'deployment' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (web,worker,horizon)',
             'cronjob' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (scheduler)',
             'horizontalpodautoscaler' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (horizon)',
+            'deployment,service,secret' => 'opencloud.dev/environment=7,opencloud.dev/tool',
         ], $manifests->strays());
     }
 
@@ -336,7 +341,77 @@ class EnvironmentManifestsTest extends TestCase
             'deployment' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (web)',
             'cronjob' => 'opencloud.dev/environment=7,opencloud.dev/process',
             'horizontalpodautoscaler' => 'opencloud.dev/environment=7,opencloud.dev/process,opencloud.dev/process notin (web)',
+            'deployment,service,secret' => 'opencloud.dev/environment=7,opencloud.dev/tool',
         ], $manifests->strays());
+    }
+
+    public function test_each_running_tool_gets_a_secret_a_deployment_and_a_service_and_the_selector_finds_the_tools_that_stopped(): void
+    {
+        $labels = ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/tool' => 'mailpit'];
+        $manifests = $this->manifests(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]], attachments: [self::mysql(isDefault: true)]);
+        $tools = $manifests->tools();
+
+        $this->assertSame([
+            [
+                'apiVersion' => 'v1',
+                'kind' => 'Secret',
+                'metadata' => ['name' => 'mailpit', 'namespace' => 'oc-env-7', 'labels' => $labels],
+                'type' => 'Opaque',
+                'data' => ['MP_SMTP_AUTH_ACCEPT_ANY' => 'MQ==', 'MP_SMTP_AUTH_ALLOW_INSECURE' => 'MQ=='],
+            ],
+            [
+                'apiVersion' => 'apps/v1',
+                'kind' => 'Deployment',
+                'metadata' => ['name' => 'mailpit', 'namespace' => 'oc-env-7', 'labels' => $labels],
+                'spec' => [
+                    'replicas' => 1,
+                    'selector' => ['matchLabels' => $labels],
+                    'template' => [
+                        'metadata' => ['labels' => $labels],
+                        'spec' => ['containers' => [[
+                            'name' => 'mailpit',
+                            'image' => 'axllent/mailpit:v1.32.0',
+                            'ports' => [['name' => 'http', 'containerPort' => 8025], ['name' => 'smtp', 'containerPort' => 1025]],
+                            'envFrom' => [['secretRef' => ['name' => 'mailpit']]],
+                            'resources' => ['requests' => ['cpu' => '50m', 'memory' => '64Mi'], 'limits' => ['cpu' => '50m', 'memory' => '64Mi']],
+                        ]]],
+                    ],
+                ],
+            ],
+            [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => ['name' => 'mailpit', 'namespace' => 'oc-env-7', 'labels' => $labels],
+                'spec' => [
+                    'selector' => $labels,
+                    'ports' => [['name' => 'http', 'port' => 8025, 'targetPort' => 'http'], ['name' => 'smtp', 'port' => 1025, 'targetPort' => 'smtp']],
+                ],
+            ],
+        ], array_slice($tools, 0, 3));
+
+        [$secret, $deployment, $service] = array_slice($tools, 3);
+        $this->assertSame([['Secret', 'phpmyadmin'], ['Deployment', 'phpmyadmin'], ['Service', 'phpmyadmin']], [
+            [$secret['kind'], $secret['metadata']['name']], [$deployment['kind'], $deployment['metadata']['name']], [$service['kind'], $service['metadata']['name']],
+        ]);
+        $this->assertSame(
+            ['PMA_HOST' => 'mysql-3.oc-datastores.svc.cluster.local', 'PMA_PORT' => '3306', 'PMA_USER' => 'env_7', 'PMA_PASSWORD' => 's3cr3t'],
+            array_map(base64_decode(...), $secret['data']),
+        );
+        $container = $deployment['spec']['template']['spec']['containers'][0];
+        $this->assertSame(
+            ['phpmyadmin:5.2.3-apache', [['name' => 'http', 'containerPort' => 80]], ['cpu' => '100m', 'memory' => '128Mi'], ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/tool' => 'phpmyadmin']],
+            [$container['image'], $container['ports'], $container['resources']['limits'], $service['spec']['selector']],
+        );
+        $this->assertSame([['name' => 'http', 'port' => 80, 'targetPort' => 'http']], $service['spec']['ports']);
+        $this->assertSame('opencloud.dev/environment=7,opencloud.dev/tool,opencloud.dev/tool notin (mailpit,phpmyadmin)', $manifests->strays()['deployment,service,secret']);
+    }
+
+    public function test_phpmyadmin_stops_without_a_default_mysql_database_and_the_selector_finds_its_objects(): void
+    {
+        $manifests = $this->manifests(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]], attachments: [self::mysql(isDefault: false)]);
+
+        $this->assertSame(['mailpit', 'mailpit', 'mailpit'], array_map(fn (array $m) => $m['metadata']['name'], $manifests->tools()));
+        $this->assertSame('opencloud.dev/environment=7,opencloud.dev/tool,opencloud.dev/tool notin (mailpit)', $manifests->strays()['deployment,service,secret']);
     }
 
     public function test_a_dockerfile_app_runs_its_own_processes(): void
@@ -419,8 +494,9 @@ class EnvironmentManifestsTest extends TestCase
      * @param  array<string, mixed>  $attributes
      * @param  list<Process>  $processes
      * @param  list<Domain>  $domains
+     * @param  list<DatastoreAttachment>  $attachments
      */
-    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::LARAVEL, int $port = 8080, ?Cluster $cluster = null, array $processes = [], array $domains = []): EnvironmentManifests
+    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::LARAVEL, int $port = 8080, ?Cluster $cluster = null, array $processes = [], array $domains = [], array $attachments = []): EnvironmentManifests
     {
         $application = new Application(['type' => $type, 'port' => $port]);
         $application->id = 3;
@@ -432,6 +508,7 @@ class EnvironmentManifestsTest extends TestCase
         $environment->setRelation('application', $application);
         $environment->setRelation('processes', new Collection($processes));
         $environment->setRelation('domains', new Collection($domains));
+        $environment->setRelation('datastoreAttachments', new Collection($attachments));
 
         return new EnvironmentManifests($environment);
     }
@@ -466,6 +543,21 @@ class EnvironmentManifestsTest extends TestCase
     private static function scheduler(array $attributes = []): Process
     {
         return new Process(['name' => 'scheduler', 'kind' => ProcessKind::SCHEDULED, 'command' => 'php artisan schedule:run', 'schedule' => '* * * * *', 'size' => Size::S, ...$attributes]);
+    }
+
+    private static function mysql(bool $isDefault): DatastoreAttachment
+    {
+        $attachment = new DatastoreAttachment([
+            'name' => $isDefault ? 'main' : 'reports',
+            'is_default' => $isDefault,
+            'host' => 'mysql-3.oc-datastores.svc.cluster.local',
+            'port' => 3306,
+            'database_name' => 'env_7',
+            'username' => 'env_7',
+            'password' => 's3cr3t',
+        ]);
+
+        return $attachment->setRelation('datastore', new Datastore(['kind' => DatastoreKind::MYSQL]));
     }
 
     private function deployment(): Deployment

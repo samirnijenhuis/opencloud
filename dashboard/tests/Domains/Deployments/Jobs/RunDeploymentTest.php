@@ -16,6 +16,7 @@ use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\ProcessKind;
+use App\Domains\Environments\Enums\Tool;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -111,6 +112,10 @@ class RunDeploymentTest extends TestCase
             ],
             [
                 'delete', 'horizontalpodautoscaler', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process",
+                "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
+            ],
+            [
+                'delete', 'deployment,service,secret', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/tool",
                 "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
             ],
             ['get', 'pods', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process in (web,worker),opencloud.dev/deployment!={$this->new->id}", "--namespace={$namespace}", '-o', 'name'],
@@ -250,7 +255,7 @@ class RunDeploymentTest extends TestCase
         $this->assertSame([[
             'delete', 'deployment', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/process,opencloud.dev/process notin (web,horizon)",
             "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
-        ]], array_column($this->kubectl->callsStartingWith('delete deployment'), 'args'));
+        ]], array_column($this->kubectl->callsStartingWith('delete deployment '), 'args'));
 
         $horizon = collect($this->kubectl->appliedManifests())->firstWhere('metadata.name', 'horizon');
         $this->assertSame(
@@ -285,7 +290,28 @@ class RunDeploymentTest extends TestCase
             ['delete', 'deployment', "--selector={$environment},opencloud.dev/process,opencloud.dev/process notin (web,scheduler)", "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
             ['delete', 'cronjob', "--selector={$environment},opencloud.dev/process,opencloud.dev/process notin (worker)", "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
             ['delete', 'horizontalpodautoscaler', "--selector={$environment},opencloud.dev/process", "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
+            ['delete', 'deployment,service,secret', "--selector={$environment},opencloud.dev/tool", "--namespace={$namespace}", '--ignore-not-found', '--wait=false'],
         ], array_values(array_filter(array_column($this->kubectl->callsStartingWith('delete'), 'args'), fn (array $args) => $args[1] !== 'secret')));
+    }
+
+    public function test_the_tools_apply_with_the_workloads_without_a_rollout_wait_and_a_tool_that_stopped_is_deleted(): void
+    {
+        // phpMyAdmin stopped, because the preview has no default MySQL database.
+        $this->environment->update(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]]);
+
+        RunDeployment::dispatchSync($this->new);
+
+        $namespace = "oc-env-{$this->environment->id}";
+        $this->assertSame(DeploymentStatus::LIVE, $this->new->fresh()->status);
+        $this->assertSame(
+            [['Deployment', 'web'], ['Deployment', 'worker'], ['Service', 'web'], ['Secret', 'mailpit'], ['Deployment', 'mailpit'], ['Service', 'mailpit']],
+            array_map(fn (array $m) => [$m['kind'], $m['metadata']['name']], json_decode($this->kubectl->callsStartingWith('apply ')[2]['stdin'], true)['items']),
+        );
+        $this->assertSame(['deployment/web', 'deployment/worker'], array_map(fn (array $call) => $call['args'][2], $this->kubectl->callsStartingWith('rollout status')));
+        $this->assertSame([[
+            'delete', 'deployment,service,secret', "--selector=opencloud.dev/environment={$this->environment->id},opencloud.dev/tool,opencloud.dev/tool notin (mailpit)",
+            "--namespace={$namespace}", '--ignore-not-found', '--wait=false',
+        ]], array_column($this->kubectl->callsStartingWith('delete deployment,service,secret'), 'args'));
     }
 
     public function test_the_laravel_scheduler_that_moved_from_a_cronjob_to_schedule_work_runs_as_a_deployment_on_the_next_deploy(): void

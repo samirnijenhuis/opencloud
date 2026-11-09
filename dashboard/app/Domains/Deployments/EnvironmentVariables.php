@@ -4,6 +4,7 @@ namespace App\Domains\Deployments;
 
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Enums\Tool;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Routing\PrimaryDomain;
 
@@ -51,6 +52,11 @@ final class EnvironmentVariables
         // The manifests of the deploy read the same loaded relation, so APP_URL and the Host header of the probe agree.
         $domains = $environment->domains->sortBy('id');
 
-        return $application->type->systemEnv($application->port, PrimaryDomain::of($domains)?->hostname, $domains->pluck('hostname')->values()->all());
+        $env = $application->type->systemEnv($application->port, PrimaryDomain::of($domains)?->hostname, $domains->pluck('hostname')->values()->all());
+
+        // The app reaches the Service of Mailpit in its own namespace by the name of the tool.
+        return in_array(Tool::MAILPIT, $environment->runningTools(), true)
+            ? [...$env, ...$application->type->mailEnv(Tool::MAILPIT->value, Tool::SMTP_PORT)]
+            : $env;
     }
 }

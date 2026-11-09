@@ -7,6 +7,7 @@ use App\Domains\Applications\Models\Application;
 use App\Domains\Deployments\EnvironmentVariables;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
+use App\Domains\Environments\Enums\Tool;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Routing\Models\Domain;
@@ -110,6 +111,43 @@ class EnvironmentVariablesTest extends TestCase
         $this->envVar($environment, 'PORT', '4000', EnvVarSource::USER);
 
         $this->assertSame(['PORT' => '4000'], EnvironmentVariables::runtime($environment));
+    }
+
+    /** @return array<string, array{ApplicationType, int, array<string, string>}> */
+    public static function mailPresets(): array
+    {
+        $laravel = ['MAIL_HOST' => 'mailpit', 'MAIL_MAILER' => 'smtp', 'MAIL_PORT' => '1025'];
+        $smtp = ['SMTP_HOST' => 'mailpit', 'SMTP_PORT' => '1025'];
+
+        return [
+            'laravel' => [ApplicationType::LARAVEL, 8080, ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'LOG_CHANNEL' => 'stderr', ...$laravel]],
+            'node' => [ApplicationType::NODE, 3000, ['NODE_ENV' => 'production', 'PORT' => '3000', ...$smtp]],
+            'ruby' => [ApplicationType::RUBY, 3000, ['PORT' => '3000', 'RACK_ENV' => 'production', 'RAILS_ENV' => 'production', 'RAILS_LOG_TO_STDOUT' => '1', 'RAILS_SERVE_STATIC_FILES' => '1', ...$smtp]],
+            'python' => [ApplicationType::PYTHON, 8000, ['DEBUG' => 'false', 'EMAIL_HOST' => 'mailpit', 'EMAIL_PORT' => '1025', 'PORT' => '8000', 'PYTHONUNBUFFERED' => '1']],
+            'static' => [ApplicationType::STATIC, 8080, ['PORT' => '8080', ...$smtp]],
+            'dockerfile' => [ApplicationType::DOCKERFILE, 3000, [...$laravel, 'PORT' => '3000', ...$smtp]],
+        ];
+    }
+
+    /** @param  array<string, string>  $expected */
+    #[DataProvider('mailPresets')]
+    public function test_with_mailpit_each_preset_sends_its_mail_to_mailpit_under_its_own_names(ApplicationType $type, int $port, array $expected): void
+    {
+        $application = Application::factory()->create(['type' => $type, 'port' => $port]);
+        $environment = Environment::factory()->for($application)->create(['tools' => [Tool::MAILPIT]]);
+
+        $this->assertSame($expected, EnvironmentVariables::runtime($environment));
+    }
+
+    public function test_a_mail_value_of_the_user_beats_mailpit(): void
+    {
+        $environment = Environment::factory()->create(['tools' => [Tool::MAILPIT]]);
+        $this->envVar($environment, 'MAIL_MAILER', 'log', EnvVarSource::USER);
+
+        $this->assertSame(
+            ['APP_DEBUG' => 'false', 'APP_ENV' => 'production', 'LOG_CHANNEL' => 'stderr', 'MAIL_HOST' => 'mailpit', 'MAIL_MAILER' => 'log', 'MAIL_PORT' => '1025'],
+            EnvironmentVariables::runtime($environment),
+        );
     }
 
     public function test_values_of_other_environments_stay_out(): void

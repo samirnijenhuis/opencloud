@@ -142,6 +142,25 @@ enum ApplicationType: string
     }
 
     /**
+     * The env values that send the mail of the app to Mailpit. As in systemEnv(), the preset decides the names, and a
+     * Dockerfile app gets both sets.
+     *
+     * @return array<string, string>
+     */
+    public function mailEnv(string $host, int $port): array
+    {
+        $laravel = ['MAIL_MAILER' => 'smtp', 'MAIL_HOST' => $host, 'MAIL_PORT' => (string) $port];
+        $smtp = ['SMTP_HOST' => $host, 'SMTP_PORT' => (string) $port];
+
+        return match ($this) {
+            self::LARAVEL => $laravel,
+            self::PYTHON => ['EMAIL_HOST' => $host, 'EMAIL_PORT' => (string) $port],
+            self::NODE, self::RUBY, self::STATIC => $smtp,
+            self::DOCKERFILE => [...$laravel, ...$smtp],
+        };
+    }
+
+    /**
      * The secrets that a new environment gets when the user gives none. Production keeps its values to itself, so a
      * preview gets its own.
      *
