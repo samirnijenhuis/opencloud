@@ -6,8 +6,10 @@ use App\Domains\Clusters\ClusterRegistry;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Routing\PrimaryDomain;
 use App\Support\Kube\Labels;
 use Illuminate\Support\Collection;
@@ -60,27 +62,87 @@ final readonly class EnvironmentManifests
     }
 
     /**
+     * The Secret, the Deployment, and the Service of each tool that runs, each with the name of the tool. The tools
+     * pull from Docker Hub, so they need no pull secret. The Secret holds the env, because the env of phpMyAdmin holds
+     * the database password.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function tools(): array
+    {
+        return array_merge(...array_map(fn (Tool $tool) => $this->tool($tool->kind), $this->environment->runningTools()));
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function tool(ToolKind $tool): array
+    {
+        $labels = [...Labels::environment($this->environment), Labels::TOOL => $tool->value];
+        $ports = $tool->ports();
+        $resources = $tool->resources();
+
+        return [
+            [
+                'apiVersion' => 'v1',
+                'kind' => 'Secret',
+                'metadata' => $this->metadata($tool->value, $labels),
+                'type' => 'Opaque',
+                'data' => array_map(base64_encode(...), $tool->env($this->environment)),
+            ],
+            [
+                'apiVersion' => 'apps/v1',
+                'kind' => 'Deployment',
+                'metadata' => $this->metadata($tool->value, $labels),
+                'spec' => [
+                    'replicas' => 1,
+                    'selector' => ['matchLabels' => $labels],
+                    'template' => [
+                        'metadata' => ['labels' => $labels],
+                        'spec' => ['containers' => [[
+                            'name' => $tool->value,
+                            'image' => $tool->image(),
+                            'ports' => array_map(fn (string $name, int $port) => ['name' => $name, 'containerPort' => $port], array_keys($ports), $ports),
+                            'envFrom' => [['secretRef' => ['name' => $tool->value]]],
+                            'resources' => ['requests' => $resources, 'limits' => $resources],
+                        ]]],
+                    ],
+                ],
+            ],
+            [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => $this->metadata($tool->value, $labels),
+                'spec' => [
+                    'selector' => $labels,
+                    'ports' => array_map(fn (string $name, int $port) => ['name' => $name, 'port' => $port, 'targetPort' => $name], array_keys($ports), $ports),
+                ],
+            ],
+        ];
+    }
+
+    /**
      * Selects the objects of each kind that no process uses now, for example the Deployment of a process that became
      * scheduled, or the autoscaler of a process with a fixed count. Server-side apply never removes objects, and the
      * dashboard keeps no record of a removed process, so each selector matches each name that the kind does not keep.
+     * The objects of a tool that does not run now go the same way.
      *
-     * @return array<string, string> the label selector for each Kubernetes kind
+     * @return array<string, string> the label selector for each Kubernetes kind, or for a list of kinds
      */
     public function strays(): array
     {
         return [
-            'deployment' => $this->selectorExcept($this->environment->longRunningNames()),
-            'cronjob' => $this->selectorExcept($this->scheduled()->pluck('name')->all()),
-            'horizontalpodautoscaler' => $this->selectorExcept(array_map(fn (array $autoscaler) => $autoscaler['metadata']['name'], $this->autoscalers())),
+            'deployment' => $this->selectorExcept(Labels::PROCESS, $this->environment->longRunningNames()),
+            'cronjob' => $this->selectorExcept(Labels::PROCESS, $this->scheduled()->pluck('name')->all()),
+            'horizontalpodautoscaler' => $this->selectorExcept(Labels::PROCESS, array_map(fn (array $autoscaler) => $autoscaler['metadata']['name'], $this->autoscalers())),
+            'deployment,service,secret' => $this->selectorExcept(Labels::TOOL, array_map(fn (Tool $tool) => $tool->kind->value, $this->environment->runningTools())),
         ];
     }
 
     /** @param  list<string>  $keep */
-    private function selectorExcept(array $keep): string
+    private function selectorExcept(string $label, array $keep): string
     {
-        $selector = Labels::ENVIRONMENT.'='.$this->environment->id.','.Labels::PROCESS;
+        $selector = Labels::ENVIRONMENT.'='.$this->environment->id.','.$label;
 
-        return $keep === [] ? $selector : $selector.','.Labels::PROCESS.' notin ('.implode(',', $keep).')';
+        return $keep === [] ? $selector : $selector.','.$label.' notin ('.implode(',', $keep).')';
     }
 
     /** @return Collection<int, Process> */

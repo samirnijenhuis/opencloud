@@ -10,6 +10,7 @@ use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -158,6 +159,18 @@ class PreviewSettingsTest extends TestCase
         }
 
         $this->assertSame(5, $this->application->fresh()->max_previews);
+        $this->assertSame(0, AuditEvent::count());
+    }
+
+    public function test_a_pattern_that_a_tool_of_each_preview_uses_is_refused(): void
+    {
+        Tool::factory()->for($this->template)->create(['hostname' => 'mail-{pr_number}.previews.example.com']);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->patch("/applications/{$this->application->id}/previews", ['preview_domain' => 'mail-{pr_number}.previews.example.com'])
+            ->assertSessionHasErrors(['preview_domain' => 'A tool of each preview uses this address. Use a different address.']);
+
+        $this->assertNull($this->application->fresh()->preview_domain);
         $this->assertSame(0, AuditEvent::count());
     }
 

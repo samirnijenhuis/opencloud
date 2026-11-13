@@ -21,9 +21,12 @@ use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Enums\ToolKind;
+use App\Domains\Environments\Jobs\DeleteLogLines;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Members\Models\User;
 use App\Domains\Previews\Actions\AddPreviewAttachment;
 use App\Domains\Routing\Jobs\CheckDomain;
@@ -55,7 +58,7 @@ class PreviewLifecycleTest extends TestCase
     {
         parent::setUp();
 
-        Queue::fake([RunDeployment::class, ProvisionDatastoreAttachment::class, CheckDomain::class, SyncCaddy::class]);
+        Queue::fake([RunDeployment::class, ProvisionDatastoreAttachment::class, CheckDomain::class, SyncCaddy::class, DeleteLogLines::class]);
         $this->kubectl = FakeKubectl::install();
         FakeProcesses::install()->lsRemote = str_repeat('a', 40)."\trefs/heads/main\n";
         $owner = User::factory()->owner()->create();
@@ -102,7 +105,7 @@ class PreviewLifecycleTest extends TestCase
             ])->all(),
         );
         $this->assertSame(
-            ['pr_number' => 12, 'branch' => 'feature/login', 'processes' => ['scheduler', 'horizon']],
+            ['pr_number' => 12, 'branch' => 'feature/login', 'processes' => ['scheduler', 'horizon'], 'tools' => []],
             AuditEvent::where('action', 'preview.created')->sole()->context,
         );
 
@@ -162,6 +165,7 @@ class PreviewLifecycleTest extends TestCase
             Deployment::where('environment_id', $preview->id)->count(),
         ]);
         Queue::assertPushed(SyncCaddy::class, 1);
+        Queue::assertPushed(DeleteLogLines::class, fn (DeleteLogLines $job) => $job->namespace === "oc-env-{$preview->id}");
 
         $this->assertSame([
             'preview.created', 'preview.env_copied', 'datastore.attached', 'datastore.attached', 'domain.added', 'deployment.started',
@@ -241,6 +245,25 @@ class PreviewLifecycleTest extends TestCase
         $preview = $this->environment('pr-12');
         $this->assertSame(['pr-12.previews.example.com'], $preview->domains()->pluck('hostname')->all());
         $this->assertSame('https://pr-12.previews.example.com/', $preview->envVars()->where('key', 'PREVIEW_LINK')->sole()->value);
+    }
+
+    public function test_a_new_preview_gets_a_copy_of_each_tool_of_the_template_with_its_number_and_keeps_it(): void
+    {
+        $template = $this->environment('preview-template');
+        Tool::factory()->for($template)->create(['kind' => ToolKind::MAILPIT, 'hostname' => 'mail-{pr_number}.staging.hlpbnk.io']);
+        Tool::factory()->for($template)->create(['kind' => ToolKind::PHPMYADMIN, 'hostname' => 'db-{pr_number}-shop.staging.hlpbnk.io']);
+
+        $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
+
+        $copies = [['mailpit', 'mail-12.staging.hlpbnk.io'], ['phpmyadmin', 'db-12-shop.staging.hlpbnk.io']];
+        $this->assertSame($copies, $this->toolRows($this->environment('pr-12')));
+        $this->assertSame(['mailpit', 'phpmyadmin'], AuditEvent::where('action', 'preview.created')->sole()->context['tools']);
+        $this->assertSame([['mailpit', 'mail-{pr_number}.staging.hlpbnk.io'], ['phpmyadmin', 'db-{pr_number}-shop.staging.hlpbnk.io']], $this->toolRows($template));
+
+        $template->tools()->delete();
+        $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-2')->assertStatus(202);
+
+        $this->assertSame($copies, $this->toolRows($this->environment('pr-12')));
     }
 
     public function test_without_an_address_pattern_a_preview_keeps_the_free_address(): void
@@ -438,6 +461,12 @@ class PreviewLifecycleTest extends TestCase
     private function environment(string $name): Environment
     {
         return $this->application->environments()->where('name', $name)->sole();
+    }
+
+    /** @return list<array{string, string}> the kind and the hostname of each tool */
+    private function toolRows(Environment $environment): array
+    {
+        return $environment->tools()->get()->map(fn (Tool $tool) => [$tool->kind->value, $tool->hostname])->all();
     }
 
     /**

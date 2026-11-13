@@ -15,6 +15,7 @@ use App\Domains\Environments\Models\CommandRun;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\GitHub\Models\GithubApp;
 use App\Domains\Members\Models\Invite;
 use App\Domains\Members\Models\User;
@@ -60,6 +61,7 @@ class AppServiceProvider extends ServiceProvider
             'invite' => Invite::class,
             'process' => Process::class,
             'provider_credential' => ProviderCredential::class,
+            'tool' => Tool::class,
             'user' => User::class,
         ]);
     }

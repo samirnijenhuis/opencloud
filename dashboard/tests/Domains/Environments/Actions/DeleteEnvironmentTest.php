@@ -20,6 +20,7 @@ use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Actions\CreateEnvironment;
 use App\Domains\Environments\Actions\DeleteEnvironment;
+use App\Domains\Environments\Jobs\DeleteLogLines;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -51,7 +52,7 @@ class DeleteEnvironmentTest extends TestCase
     {
         parent::setUp();
 
-        Queue::fake([RunDeployment::class, ProvisionDatastoreAttachment::class, CheckDomain::class, SyncCaddy::class, TearDownManagedDatabase::class]);
+        Queue::fake([RunDeployment::class, ProvisionDatastoreAttachment::class, CheckDomain::class, SyncCaddy::class, TearDownManagedDatabase::class, DeleteLogLines::class]);
         $this->kubectl = FakeKubectl::install();
         FakeProcesses::install()->lsRemote = str_repeat('a', 40)."\trefs/heads/main\n";
         $this->admin = User::factory()->admin()->create();
@@ -97,6 +98,7 @@ class DeleteEnvironmentTest extends TestCase
         ]);
         $this->assertSame($productionAttachments, $production->datastoreAttachments()->orderBy('id')->get(['id', 'database_name'])->toArray());
         Queue::assertPushed(SyncCaddy::class);
+        Queue::assertPushed(DeleteLogLines::class, fn (DeleteLogLines $job) => $job->namespace === "oc-env-{$id}");
 
         $this->assertSame(
             ['domain.removed', 'domain.removed', 'datastore.destroyed', 'datastore.destroyed', 'environment.deleted'],
@@ -146,6 +148,7 @@ class DeleteEnvironmentTest extends TestCase
 
         // The second delete does not start a second destroy.
         Queue::assertPushed(TearDownManagedDatabase::class, 1);
+        Queue::assertNotPushed(DeleteLogLines::class);
         $this->assertSame([DatastoreStatus::DESTROYING], $this->staging->datastoreAttachments()->with('datastore')->get()->pluck('datastore.status')->all());
         $this->assertSame(0, $this->staging->domains()->count());
 
@@ -156,6 +159,7 @@ class DeleteEnvironmentTest extends TestCase
 
         $this->assertNull(Environment::find($this->staging->id));
         $this->assertCount(3, $this->kubectl->callsStartingWith('delete namespace'));
+        Queue::assertPushed(DeleteLogLines::class, 1);
     }
 
     public function test_a_namespace_that_kubectl_cannot_delete_keeps_the_environment_and_its_data(): void

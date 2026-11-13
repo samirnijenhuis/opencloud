@@ -13,6 +13,8 @@ final class Labels
 
     public const PROCESS = 'opencloud.dev/process';
 
+    public const TOOL = 'opencloud.dev/tool';
+
     public const DEPLOYMENT = 'opencloud.dev/deployment';
 
     public const DATASTORE = 'opencloud.dev/datastore';

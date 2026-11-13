@@ -15,6 +15,7 @@ import {
     statusLabels,
     statusTones,
 } from '@/components/environment/resource-sheet';
+import { ToolSheet } from '@/components/environment/tool-sheet';
 import {
     type Attachment,
     type CanvasProps,
@@ -26,6 +27,8 @@ import {
     type ResourceFamily,
     type Resources,
     type Sheet,
+    type Tool,
+    type ToolLogin,
 } from '@/components/environment/types';
 import { domainState, VisitSite } from '@/components/environment/visit-site';
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
@@ -38,10 +41,27 @@ import { duration, memoryText, previewLimitText, previewWildcard, shortSha, size
 import { kindLabels as clusterKindLabels } from '@/pages/clusters/cluster-status';
 import { type Process, type Size, type SizeOption } from '@/types';
 import { Link, router } from '@inertiajs/react';
-import { Boxes, CalendarClock, Database, GitPullRequest, Globe, HardDrive, Plus, Server, ShieldCheck, SquareTerminal, Zap } from 'lucide-react';
+import {
+    Boxes,
+    CalendarClock,
+    Database,
+    GitPullRequest,
+    Globe,
+    HardDrive,
+    Mail,
+    Plus,
+    Server,
+    ShieldCheck,
+    SquareTerminal,
+    Table2,
+    Wrench,
+    Zap,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const resourceIcons = { mysql: Database, postgres: Database, valkey: Zap, rustfs: HardDrive } as const;
+
+const toolIcons = { mailpit: Mail, phpmyadmin: Table2 } as const;
 
 const issuerLabels = { acme: "Let's Encrypt", internal: 'Local CA' } as const;
 
@@ -328,6 +348,38 @@ function ResourceCard({ attachment, onOpen }: { attachment: Attachment; onOpen: 
     );
 }
 
+/** One tool on the canvas. On the template, the address is a pattern for each new preview, so it has no link. */
+function ToolCard({ tool, login, onOpen }: { tool: Tool; login: ToolLogin | null; onOpen: () => void }) {
+    return (
+        <Block icon={toolIcons[tool.kind]} title={tool.label} onOpen={onOpen}>
+            <Row label="Address">
+                {tool.url ? (
+                    <a
+                        href={tool.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={tool.hostname}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-foreground focus-visible:ring-ring rounded-sm outline-none hover:underline focus-visible:ring-2"
+                    >
+                        {tool.hostname}
+                    </a>
+                ) : (
+                    <code className="font-mono text-xs" title={tool.hostname}>
+                        {tool.hostname}
+                    </code>
+                )}
+            </Row>
+            {login && (
+                <Row label="Login">
+                    <code className="font-mono text-xs">{login.username}</code>
+                </Row>
+            )}
+            {!tool.runs && tool.requirement && <p className="text-muted-foreground px-3 py-1.5 text-xs">{tool.requirement}</p>}
+        </Block>
+    );
+}
+
 const previewAttachmentKey = (attachment: PreviewAttachment) => `${attachment.kind}:${attachment.name ?? ''}`;
 
 /** One entry of the list of the preview template. Nothing runs for it on the template. */
@@ -345,10 +397,12 @@ function PreviewAttachmentCard({ attachment, onOpen }: { attachment: PreviewAtta
 }
 
 export default function EnvironmentShow(props: CanvasProps) {
-    const { environment, cluster, compute, sizes, processes, domains, datastores, deployments, previews, can } = props;
+    const { environment, cluster, compute, sizes, processes, domains, datastores, deployments, previews, tools, tool_kinds, tool_login, can } = props;
     const [sheet, setSheet] = useState<Sheet>({ kind: 'app', tab: 'general' });
     const [open, setOpen] = useState(false);
     const hasPods = environment.kind !== 'preview_template';
+    const hasTools = environment.kind !== 'permanent';
+    const canAddTool = can.update && hasTools && tool_kinds.length > 0;
     const [status] = usePoll<LiveStatus>(hasPods ? route('environments.status', environment.id) : null, 10_000);
     const [capacity] = usePoll<Capacity>(route('clusters.capacity', cluster.id), 30_000);
     useDeploymentPoll(isRunning(environment.status), ['deployments', 'environment'], 10_000);
@@ -488,37 +542,63 @@ export default function EnvironmentShow(props: CanvasProps) {
                         )}
                     </Group>
 
-                    <Group
-                        column="resources"
-                        label={previews ? 'Resources of each preview' : 'Resources'}
-                        className="border-transparent bg-transparent"
-                    >
-                        {previews?.attachments.map((attachment) => (
-                            <PreviewAttachmentCard
-                                key={previewAttachmentKey(attachment)}
-                                attachment={attachment}
-                                onOpen={() => show({ kind: 'preview-attachment', key: previewAttachmentKey(attachment) })}
-                            />
-                        ))}
-                        {datastores.attachments.map((attachment) => (
-                            <ResourceCard key={attachment.id} attachment={attachment} onOpen={() => show({ kind: 'resource', id: attachment.id })} />
-                        ))}
-                        {datastores.attachments.length === 0 && !previews?.attachments.length && (
-                            <p className="text-muted-foreground px-1.5 text-sm">No database, cache, or storage yet.</p>
+                    <div className="space-y-6">
+                        <Group
+                            column="resources"
+                            label={previews ? 'Resources of each preview' : 'Resources'}
+                            className="border-transparent bg-transparent"
+                        >
+                            {previews?.attachments.map((attachment) => (
+                                <PreviewAttachmentCard
+                                    key={previewAttachmentKey(attachment)}
+                                    attachment={attachment}
+                                    onOpen={() => show({ kind: 'preview-attachment', key: previewAttachmentKey(attachment) })}
+                                />
+                            ))}
+                            {datastores.attachments.map((attachment) => (
+                                <ResourceCard
+                                    key={attachment.id}
+                                    attachment={attachment}
+                                    onOpen={() => show({ kind: 'resource', id: attachment.id })}
+                                />
+                            ))}
+                            {datastores.attachments.length === 0 && !previews?.attachments.length && (
+                                <p className="text-muted-foreground px-1.5 text-sm">No database, cache, or storage yet.</p>
+                            )}
+                            {can.update && (
+                                <AddResourceMenu environmentId={environment.id} storeUrl={storeUrl} datastores={datastores}>
+                                    <button
+                                        type="button"
+                                        className="bg-card/60 hover:bg-card text-muted-foreground hover:text-foreground focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-left text-sm outline-none focus-visible:ring-2"
+                                    >
+                                        <Boxes className="size-4" />
+                                        Add resource
+                                        <span className="ml-auto text-xs">Database, cache, storage</span>
+                                    </button>
+                                </AddResourceMenu>
+                            )}
+                        </Group>
+
+                        {hasTools && (
+                            <Group column="tools" label={previews ? 'Tools of each preview' : 'Tools'} className="border-transparent bg-transparent">
+                                {tools.map((tool) => (
+                                    <ToolCard key={tool.id} tool={tool} login={tool_login} onOpen={() => show({ kind: 'tool', id: tool.id })} />
+                                ))}
+                                {tools.length === 0 && <p className="text-muted-foreground px-1.5 text-sm">No tool yet.</p>}
+                                {canAddTool && (
+                                    <button
+                                        type="button"
+                                        onClick={() => show({ kind: 'tool', id: null })}
+                                        className="bg-card/60 hover:bg-card text-muted-foreground hover:text-foreground focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-left text-sm outline-none focus-visible:ring-2"
+                                    >
+                                        <Wrench className="size-4" />
+                                        Add tool
+                                        <span className="ml-auto text-xs">{tool_kinds.map((kind) => kind.label).join(', ')}</span>
+                                    </button>
+                                )}
+                            </Group>
                         )}
-                        {can.update && (
-                            <AddResourceMenu environmentId={environment.id} storeUrl={storeUrl} datastores={datastores}>
-                                <button
-                                    type="button"
-                                    className="bg-card/60 hover:bg-card text-muted-foreground hover:text-foreground focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-left text-sm outline-none focus-visible:ring-2"
-                                >
-                                    <Boxes className="size-4" />
-                                    Add resource
-                                    <span className="ml-auto text-xs">Database, cache, storage</span>
-                                </button>
-                            </AddResourceMenu>
-                        )}
-                    </Group>
+                    </div>
                 </div>
 
                 {(can.manage_domains || can.update) && (
@@ -531,6 +611,11 @@ export default function EnvironmentShow(props: CanvasProps) {
                         {can.update && (
                             <Button variant="ghost" size="sm" onClick={() => show({ kind: 'process', id: null, tab: 'general' })}>
                                 <Plus /> Process
+                            </Button>
+                        )}
+                        {canAddTool && (
+                            <Button variant="ghost" size="sm" onClick={() => show({ kind: 'tool', id: null })}>
+                                <Plus /> Tool
                             </Button>
                         )}
                         {addResource}
@@ -594,6 +679,18 @@ export default function EnvironmentShow(props: CanvasProps) {
                     applicationId={props.application.id}
                     previews={previews}
                     canManage={can.manage_domains}
+                />
+            )}
+            {hasTools && (
+                <ToolSheet
+                    open={open && sheet.kind === 'tool'}
+                    onClose={close}
+                    environmentId={environment.id}
+                    template={environment.kind === 'preview_template'}
+                    tool={sheet.kind === 'tool' && sheet.id !== null ? tools.find((tool) => tool.id === sheet.id) : undefined}
+                    kinds={tool_kinds}
+                    login={tool_login}
+                    canUpdate={can.update}
                 />
             )}
             <AppSheet

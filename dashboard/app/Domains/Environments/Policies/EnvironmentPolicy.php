@@ -32,6 +32,11 @@ class EnvironmentPolicy
         return $user->role->allows(Ability::DEPLOY);
     }
 
+    public function readLogs(User $user, Environment $environment): bool
+    {
+        return $user->role->allows(Ability::READ_LOGS);
+    }
+
     /**
      * Only a permanent environment can go, production too.
      * A preview goes with its pull request, and the preview template goes with its application.

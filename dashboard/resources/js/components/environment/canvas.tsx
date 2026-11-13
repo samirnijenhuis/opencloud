@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { createContext, type ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
 
-export type CanvasColumn = 'network' | 'cluster' | 'resources';
+export type CanvasColumn = 'network' | 'cluster' | 'resources' | 'tools';
 
 /** A node is a block. An edge is a pair of node ids: the block at the left end and the block at the right end. */
 export type CanvasNode = { id: string; column: CanvasColumn; target: boolean };
@@ -9,7 +9,8 @@ export type CanvasEdge = readonly [from: string, to: string];
 
 /**
  * Each network block reaches the HTTP target of the cluster. Each block of the cluster reaches each resource.
- * A new block needs no registration: it joins by its column.
+ * A new block needs no registration: it joins by its column. A tool joins nothing, because a rule by column would
+ * draw links that do not exist, for example from Mailpit to MySQL.
  */
 export function canvasEdges(nodes: CanvasNode[]): CanvasEdge[] {
     const column = (name: CanvasColumn) => nodes.filter((node) => node.column === name);

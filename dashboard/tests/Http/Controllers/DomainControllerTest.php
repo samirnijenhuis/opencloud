@@ -2,6 +2,7 @@
 
 namespace Tests\Http\Controllers;
 
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Actions\AddDomain;
 use App\Domains\Routing\Actions\RemoveDomain;
@@ -90,6 +91,18 @@ class DomainControllerTest extends TestCase
         }
 
         $this->assertSame(1, Domain::count());
+    }
+
+    public function test_a_domain_cannot_take_the_hostname_of_a_preview_tool(): void
+    {
+        $environment = $this->makeEnvironment();
+        Tool::factory()->create(['hostname' => 'mail-12.previews.example.com']);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post("/environments/{$environment->id}/domains", ['hostname' => 'mail-12.previews.example.com'])
+            ->assertSessionHasErrors(['hostname' => 'This domain is already in use.']);
+
+        $this->assertSame(0, Domain::count());
     }
 
     public function test_check_again_dispatches_the_check_job_for_that_domain(): void

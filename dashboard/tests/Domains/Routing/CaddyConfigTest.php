@@ -2,11 +2,29 @@
 
 namespace Tests\Domains\Routing;
 
+use App\Domains\Applications\Models\Application;
+use App\Domains\Clusters\Enums\ClusterKind;
+use App\Domains\Clusters\Models\Cluster;
+use App\Domains\Datastores\Enums\DatastoreKind;
+use App\Domains\Datastores\Models\Datastore;
+use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\ToolKind;
+use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\Tool;
+use App\Domains\Environments\ToolLogin;
 use App\Domains\Routing\CaddyConfig;
-use PHPUnit\Framework\TestCase;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Models\Domain;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class CaddyConfigTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_the_local_cluster_serves_the_dashboard_and_sorted_app_routes_with_the_internal_issuer(): void
     {
         $config = (new CaddyConfig('internal', null))->build(true, [
@@ -88,10 +106,98 @@ class CaddyConfigTest extends TestCase
         $this->assertSame([['issuers' => [['module' => 'acme']]]], $config['apps']['tls']['automation']['policies']);
     }
 
+    public function test_a_route_with_an_account_checks_the_basic_auth_login_before_the_proxy(): void
+    {
+        $config = (new CaddyConfig('internal', null))->build(
+            false,
+            ['mail-12.example.com' => 'mailpit.oc-env-7.svc.cluster.local:8025', 'pr-12.example.com' => 'web.oc-env-7.svc.cluster.local:8080'],
+            accounts: ['mail-12.example.com' => ['username' => 'opencloud', 'password' => '$2y$10$hash']],
+        );
+
+        $this->assertSame(
+            '[{"match":[{"host":["mail-12.example.com"]}],"handle":['.
+            '{"handler":"authentication","providers":{"http_basic":{"accounts":[{"username":"opencloud","password":"$2y$10$hash"}],"hash_cache":{}}}},'.
+            '{"handler":"reverse_proxy","upstreams":[{"dial":"mailpit.oc-env-7.svc.cluster.local:8025"}],"load_balancing":{"try_duration":"5s"}}]},'.
+            '{"match":[{"host":["pr-12.example.com"]}],"handle":[{"handler":"reverse_proxy","upstreams":[{"dial":"web.oc-env-7.svc.cluster.local:8080"}],"load_balancing":{"try_duration":"5s"}}]}]',
+            json_encode($config['apps']['http']['servers']['apps']['routes'], JSON_UNESCAPED_SLASHES),
+        );
+    }
+
+    public function test_a_preview_with_mailpit_and_phpmyadmin_gets_one_route_for_each_tool_on_its_stored_hostname_behind_its_login(): void
+    {
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::CONNECTED]);
+        $preview = $this->preview($cluster, defaultMysql: true);
+        // A second domain of the same preview gives no second set of tool routes.
+        $this->routableDomain($preview, 'shop-12.example.org');
+
+        $config = (new CaddyConfig('internal', null))->forCluster($cluster);
+        $routes = collect($config['apps']['http']['servers']['apps']['routes'])->keyBy(fn (array $route) => $route['match'][0]['host'][0]);
+        $namespace = "oc-env-{$preview->id}";
+
+        $this->assertSame(['database-12.staging.hlpbnk.io', 'inbox-12.staging.hlpbnk.io', 'pr-12.staging.hlpbnk.io', 'shop-12.example.org'], $routes->keys()->all());
+        $this->assertSame(
+            [["phpmyadmin.{$namespace}.svc.cluster.local:80"], ["mailpit.{$namespace}.svc.cluster.local:8025"]],
+            [array_column($routes['database-12.staging.hlpbnk.io']['handle'][1]['upstreams'], 'dial'), array_column($routes['inbox-12.staging.hlpbnk.io']['handle'][1]['upstreams'], 'dial')],
+        );
+
+        $login = ToolLogin::for($preview);
+        foreach (['database-12.staging.hlpbnk.io', 'inbox-12.staging.hlpbnk.io'] as $hostname) {
+            $auth = $routes[$hostname]['handle'][0];
+            $account = $auth['providers']['http_basic']['accounts'][0];
+            $this->assertSame(['authentication', 'opencloud', '{}'], [$auth['handler'], $account['username'], json_encode($auth['providers']['http_basic']['hash_cache'])]);
+            $this->assertTrue(password_verify($login->password, $account['password']));
+        }
+        $this->assertSame(['reverse_proxy'], array_column($routes['pr-12.staging.hlpbnk.io']['handle'], 'handler'));
+        $this->assertSame(json_encode($config), json_encode((new CaddyConfig('internal', null))->forCluster($cluster)), 'Caddy reloads only a config that changed.');
+    }
+
+    public function test_a_preview_without_a_default_mysql_database_gets_no_phpmyadmin_route(): void
+    {
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::CONNECTED]);
+        $this->preview($cluster, defaultMysql: false);
+
+        $hosts = array_map(fn (array $route) => $route['match'][0]['host'][0], (new CaddyConfig('internal', null))->forCluster($cluster)['apps']['http']['servers']['apps']['routes']);
+
+        $this->assertSame(['inbox-12.staging.hlpbnk.io', 'pr-12.staging.hlpbnk.io'], $hosts);
+    }
+
+    public function test_a_preview_whose_domain_is_not_routable_gets_no_tool_route(): void
+    {
+        $cluster = Cluster::factory()->create(['kind' => ClusterKind::CONNECTED]);
+        $preview = $this->preview($cluster, defaultMysql: true);
+        $preview->domains()->update(['dns_status' => DnsStatus::MISSING]);
+
+        $this->assertSame([], (new CaddyConfig('internal', null))->forCluster($cluster)['apps']['http']['servers']['apps']['routes']);
+    }
+
     public function test_the_internal_issuer_never_uses_the_dns_challenge(): void
     {
         $config = (new CaddyConfig('internal', null))->build(false, ['a.example.com' => 'x:1'], 'cf-token', ['a.example.com']);
 
         $this->assertSame([['issuers' => [['module' => 'internal']]]], $config['apps']['tls']['automation']['policies']);
+    }
+
+    /** Preview 12 with Mailpit and phpMyAdmin on their own hostnames, a live deployment, and a routable domain. */
+    private function preview(Cluster $cluster, bool $defaultMysql): Environment
+    {
+        $application = Application::factory()->for($cluster)->create(['preview_domain' => 'pr-{pr_number}.staging.hlpbnk.io']);
+        $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
+        Tool::factory()->for($preview)->create(['kind' => ToolKind::MAILPIT, 'hostname' => 'inbox-12.staging.hlpbnk.io']);
+        Tool::factory()->for($preview)->create(['kind' => ToolKind::PHPMYADMIN, 'hostname' => 'database-12.staging.hlpbnk.io']);
+        Deployment::factory()->for($preview)->create(['status' => DeploymentStatus::LIVE]);
+        $this->routableDomain($preview, 'pr-12.staging.hlpbnk.io');
+        DatastoreAttachment::factory()->for(Datastore::factory()->for($cluster)->create(['kind' => DatastoreKind::MYSQL]))->for($preview)->create([
+            'name' => $defaultMysql ? 'main' : 'reports',
+            'is_default' => $defaultMysql,
+            'host' => 'mysql-1.oc-datastores.svc.cluster.local',
+            'port' => 3306,
+        ]);
+
+        return $preview;
+    }
+
+    private function routableDomain(Environment $environment, string $hostname): void
+    {
+        Domain::factory()->for($environment)->create(['hostname' => $hostname, 'dns_status' => DnsStatus::OK]);
     }
 }

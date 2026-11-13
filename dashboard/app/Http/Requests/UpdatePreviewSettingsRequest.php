@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Domains\Previews\PreviewHostname;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdatePreviewSettingsRequest extends FormRequest
 {
@@ -32,17 +33,23 @@ class UpdatePreviewSettingsRequest extends FormRequest
     {
         return [
             'previews_enabled' => ['sometimes', 'boolean'],
-            'preview_domain' => ['sometimes', 'nullable', 'string', 'max:200', function (string $attribute, mixed $value, Closure $fail) {
-                // One wildcard record covers one label, so the number sits in the first label.
-                if (substr_count($value, PreviewHostname::PR_NUMBER) !== 1 || ! str_contains(explode('.', $value)[0], PreviewHostname::PR_NUMBER)) {
-                    $fail(self::PLACEMENT);
-                } elseif (! preg_match(StoreApplicationRequest::HOSTNAME, str_replace(PreviewHostname::PR_NUMBER, '999999', $value))) {
-                    $fail(self::HOST);
-                }
-            }],
+            'preview_domain' => ['sometimes', 'nullable', 'string', 'max:200', self::pattern(...), Rule::unique('tools', 'hostname')],
             'preview_labels' => ['sometimes', 'nullable', 'string', 'max:500'],
             'max_previews' => ['sometimes', 'integer', 'min:0', 'max:1000'],
         ];
+    }
+
+    /**
+     * The rule of a hostname pattern: the preview address, and the address of each tool on the preview template.
+     * One wildcard record covers one label, so the number sits in the first label.
+     */
+    public static function pattern(string $attribute, mixed $value, Closure $fail): void
+    {
+        if (substr_count($value, PreviewHostname::PR_NUMBER) !== 1 || ! str_contains(explode('.', $value)[0], PreviewHostname::PR_NUMBER)) {
+            $fail(self::PLACEMENT);
+        } elseif (! preg_match(StoreApplicationRequest::HOSTNAME, str_replace(PreviewHostname::PR_NUMBER, '999999', $value))) {
+            $fail(self::HOST);
+        }
     }
 
     /** @return array<string, string> */
@@ -50,6 +57,8 @@ class UpdatePreviewSettingsRequest extends FormRequest
     {
         return [
             'preview_domain.max' => self::HOST,
+            // A preview and a tool with one hostname would share one route in Caddy, so one of the two would be hidden.
+            'preview_domain.unique' => 'A tool of each preview uses this address. Use a different address.',
             'preview_labels.max' => 'Keep the labels to 500 characters or fewer.',
             'max_previews.*' => 'Enter a number from 0 to 1000. 0 means no limit.',
         ];

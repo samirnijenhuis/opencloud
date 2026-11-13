@@ -33,4 +33,25 @@ class PreviewHostname
 
         return $pattern === null ? null : str_replace(self::PR_NUMBER, (string) $number, $pattern);
     }
+
+    /**
+     * The pattern of a hostname next to the app of a preview: the prefix takes the place of the text before the number in
+     * the first label, so the wildcard record of the previews covers it too. pr-{pr_number}.previews.example.com and the
+     * prefix mail give mail-{pr_number}.previews.example.com.
+     */
+    public function sidePattern(Application $application, string $prefix): ?string
+    {
+        $pattern = $this->pattern($application);
+
+        return $pattern === null ? null : $prefix.'-'.strstr($pattern, self::PR_NUMBER);
+    }
+
+    /** Null without a pattern, and when the first label is longer than the 63 characters that DNS allows. */
+    public function forSide(Application $application, int $number, string $prefix): ?string
+    {
+        $pattern = $this->sidePattern($application, $prefix);
+        $hostname = $pattern === null ? null : str_replace(self::PR_NUMBER, (string) $number, $pattern);
+
+        return $hostname === null || strlen(strstr($hostname, '.', true)) > 63 ? null : $hostname;
+    }
 }

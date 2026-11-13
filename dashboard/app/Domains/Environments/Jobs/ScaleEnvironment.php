@@ -67,7 +67,10 @@ class ScaleEnvironment implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
         $minimum = $manifests->minimumReplicas();
 
-        foreach ($kubectl->get('deployments', namespace: $namespace, selector: $selector)['items'] ?? [] as $deployment) {
+        // The tools keep running while the environment sleeps, so the caught mail and the database page stay.
+        $processes = array_filter($kubectl->get('deployments', namespace: $namespace, selector: $selector)['items'] ?? [], fn (array $deployment) => isset($deployment['metadata']['labels'][Labels::PROCESS]));
+
+        foreach ($processes as $deployment) {
             // The Deployment of a removed process stays at zero until the next deploy deletes it.
             $replicas = $asleep ? 0 : ($minimum[$deployment['metadata']['name']] ?? 0);
             $kubectl->run(['scale', "deployment/{$deployment['metadata']['name']}", "--replicas={$replicas}", "--namespace={$namespace}"])->throw();
