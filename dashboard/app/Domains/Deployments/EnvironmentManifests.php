@@ -9,6 +9,7 @@ use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Routing\PrimaryDomain;
 use App\Support\Kube\Labels;
 use Illuminate\Support\Collection;
@@ -69,7 +70,7 @@ final readonly class EnvironmentManifests
      */
     public function tools(): array
     {
-        return array_merge(...array_map($this->tool(...), $this->environment->runningTools()));
+        return array_merge(...array_map(fn (Tool $tool) => $this->tool($tool->kind), $this->environment->runningTools()));
     }
 
     /** @return list<array<string, mixed>> */
@@ -132,7 +133,7 @@ final readonly class EnvironmentManifests
             'deployment' => $this->selectorExcept(Labels::PROCESS, $this->environment->longRunningNames()),
             'cronjob' => $this->selectorExcept(Labels::PROCESS, $this->scheduled()->pluck('name')->all()),
             'horizontalpodautoscaler' => $this->selectorExcept(Labels::PROCESS, array_map(fn (array $autoscaler) => $autoscaler['metadata']['name'], $this->autoscalers())),
-            'deployment,service,secret' => $this->selectorExcept(Labels::TOOL, array_column($this->environment->runningTools(), 'value')),
+            'deployment,service,secret' => $this->selectorExcept(Labels::TOOL, array_map(fn (Tool $tool) => $tool->kind->value, $this->environment->runningTools())),
         ];
     }
 

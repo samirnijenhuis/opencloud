@@ -132,12 +132,6 @@ function PreviewsBlock({ previews, onOpen }: { previews: PreviewTemplateSettings
                 {delivery !== 'on' ? <Status tone={tone}>{state}</Status> : labels === '' ? 'Each pull request' : `With label ${labels}`}
             </Row>
             <Row label="Limit">{previewLimitText(previews.max_previews)}</Row>
-            <Row label="Tools">
-                {previews.tools
-                    .filter((tool) => previews.preview_tools.includes(tool.value))
-                    .map((tool) => tool.label)
-                    .join(', ') || 'None'}
-            </Row>
         </Block>
     );
 }

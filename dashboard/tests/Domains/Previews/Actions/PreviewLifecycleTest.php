@@ -25,6 +25,7 @@ use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Members\Models\User;
 use App\Domains\Previews\Actions\AddPreviewAttachment;
 use App\Domains\Routing\Jobs\CheckDomain;
@@ -244,20 +245,23 @@ class PreviewLifecycleTest extends TestCase
         $this->assertSame('https://pr-12.previews.example.com/', $preview->envVars()->where('key', 'PREVIEW_LINK')->sole()->value);
     }
 
-    public function test_a_new_preview_takes_the_tools_of_the_template_and_keeps_them_after_the_setting_changes(): void
+    public function test_a_new_preview_gets_a_copy_of_each_tool_of_the_template_with_its_number_and_keeps_it(): void
     {
-        $this->application->update(['preview_tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]]);
+        $template = $this->environment('preview-template');
+        Tool::factory()->for($template)->create(['kind' => ToolKind::MAILPIT, 'hostname' => 'mail-{pr_number}.staging.hlpbnk.io']);
+        Tool::factory()->for($template)->create(['kind' => ToolKind::PHPMYADMIN, 'hostname' => 'db-{pr_number}-shop.staging.hlpbnk.io']);
 
         $this->postWebhook('pull_request', $this->pullRequest('opened', self::OPENED_SHA), delivery: 'd-1')->assertStatus(202);
 
-        $this->assertSame([ToolKind::MAILPIT, ToolKind::PHPMYADMIN], $this->environment('pr-12')->tools->all());
+        $copies = [['mailpit', 'mail-12.staging.hlpbnk.io'], ['phpmyadmin', 'db-12-shop.staging.hlpbnk.io']];
+        $this->assertSame($copies, $this->toolRows($this->environment('pr-12')));
         $this->assertSame(['mailpit', 'phpmyadmin'], AuditEvent::where('action', 'preview.created')->sole()->context['tools']);
-        $this->assertSame([], $this->environment('preview-template')->tools->all());
+        $this->assertSame([['mailpit', 'mail-{pr_number}.staging.hlpbnk.io'], ['phpmyadmin', 'db-{pr_number}-shop.staging.hlpbnk.io']], $this->toolRows($template));
 
-        $this->application->update(['preview_tools' => []]);
+        $template->tools()->delete();
         $this->postWebhook('pull_request', $this->pullRequest('synchronize', self::PUSHED_SHA), delivery: 'd-2')->assertStatus(202);
 
-        $this->assertSame([ToolKind::MAILPIT, ToolKind::PHPMYADMIN], $this->environment('pr-12')->tools->all());
+        $this->assertSame($copies, $this->toolRows($this->environment('pr-12')));
     }
 
     public function test_without_an_address_pattern_a_preview_keeps_the_free_address(): void
@@ -455,6 +459,12 @@ class PreviewLifecycleTest extends TestCase
     private function environment(string $name): Environment
     {
         return $this->application->environments()->where('name', $name)->sole();
+    }
+
+    /** @return list<array{string, string}> the kind and the hostname of each tool */
+    private function toolRows(Environment $environment): array
+    {
+        return $environment->tools()->get()->map(fn (Tool $tool) => [$tool->kind->value, $tool->hostname])->all();
     }
 
     /**

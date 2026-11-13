@@ -1,7 +1,6 @@
 import InputError from '@/components/input-error';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { previewWildcard } from '@/lib/format';
@@ -9,7 +8,7 @@ import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 import { EditorSheet } from './editor-sheet';
 import { previewSentence, useRepositoryAccess } from './repository-sheet';
-import { type PreviewTemplateSettings, type ToolValue } from './types';
+import { type PreviewTemplateSettings } from './types';
 
 export function PreviewsSheet({
     open,
@@ -28,16 +27,9 @@ export function PreviewsSheet({
         preview_domain: previews.preview_domain ?? '',
         preview_labels: previews.preview_labels.join(', '),
         max_previews: previews.max_previews,
-        preview_tools: previews.preview_tools,
     };
     const form = useForm(saved);
     const { data, setData, errors } = form;
-    // The list keeps the order of the tools, so a choice that the user takes back leaves the form clean.
-    const toggleTool = (value: ToolValue, on: boolean) =>
-        setData(
-            'preview_tools',
-            previews.tools.map((tool) => tool.value).filter((each) => (each === value ? on : data.preview_tools.includes(each))),
-        );
     const wildcard = previewWildcard(data.preview_domain);
     const { access } = useRepositoryAccess();
 
@@ -127,29 +119,6 @@ export function PreviewsSheet({
                         />
                         <p className="text-muted-foreground text-sm">0 means no limit.</p>
                         <InputError message={errors.max_previews} />
-                    </div>
-
-                    <div className="grid gap-2">
-                        <span className="text-sm leading-none font-medium">Tools of each preview</span>
-                        {previews.tools.map((tool) => (
-                            <Label key={tool.value} className="flex min-w-0 items-center gap-2 font-normal">
-                                <Checkbox
-                                    checked={data.preview_tools.includes(tool.value)}
-                                    onCheckedChange={(checked) => toggleTool(tool.value, checked === true)}
-                                />
-                                {tool.label}
-                                {tool.address && (
-                                    <code className="text-muted-foreground ml-auto truncate font-mono text-xs" title={tool.address}>
-                                        {tool.address}
-                                    </code>
-                                )}
-                            </Label>
-                        ))}
-                        <p className="text-muted-foreground text-sm">
-                            Each new preview gets these tools behind a password. phpMyAdmin opens the default database when it is MySQL. A MAIL_ value
-                            of this template still wins over Mailpit.
-                        </p>
-                        <InputError message={errors.preview_tools} />
                     </div>
                 </fieldset>
             </form>

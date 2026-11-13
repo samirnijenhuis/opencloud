@@ -7,9 +7,7 @@ use App\Domains\Clusters\Enums\ClusterKind;
 use App\Domains\Clusters\Models\Cluster;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\EnvironmentManifests;
-use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\ToolLogin;
-use App\Domains\Previews\PreviewHostname;
 use App\Domains\Routing\Enums\DnsMode;
 use App\Domains\Routing\Enums\DnsStatus;
 use App\Domains\Routing\Models\DashboardDomain;
@@ -30,7 +28,7 @@ final readonly class CaddyConfig
     /** The dashboard path that gets each request whose app does not answer. The hostname of the request follows it. */
     public const WAKE_PATH = '/_opencloud/wake/';
 
-    public function __construct(private string $tlsIssuer, private ?string $acmeEmail, private PreviewHostname $previewHostname = new PreviewHostname) {}
+    public function __construct(private string $tlsIssuer, private ?string $acmeEmail) {}
 
     public static function fromConfig(): self
     {
@@ -41,7 +39,7 @@ final readonly class CaddyConfig
     public function forCluster(Cluster $cluster): array
     {
         $domains = Domain::query()
-            ->with(['environment.application.cluster', 'environment.datastoreAttachments.datastore'])
+            ->with(['environment.tools', 'environment.datastoreAttachments.datastore'])
             ->whereIn('dns_status', array_filter(DnsStatus::cases(), fn (DnsStatus $status) => $status->routable()))
             ->whereHas('environment', fn (Builder $environment) => $environment
                 ->whereHas('application', fn (Builder $application) => $application->where('cluster_id', $cluster->id))
@@ -57,7 +55,7 @@ final readonly class CaddyConfig
 
         // A tool route comes only with a routable domain of its preview, so Caddy asks for a certificate only when the DNS works.
         foreach ($domains->pluck('environment')->unique('id') as $environment) {
-            $tools = $this->toolRoutes($environment);
+            $tools = $environment->runningTools();
 
             if ($tools === []) {
                 continue;
@@ -67,9 +65,9 @@ final readonly class CaddyConfig
             $login = ToolLogin::for($environment);
             $account = ['username' => $login->username, 'password' => $login->hash()];
 
-            foreach ($tools as $hostname => $upstream) {
-                $routes[$hostname] = $upstream;
-                $accounts[$hostname] = $account;
+            foreach ($tools as $tool) {
+                $routes[$tool->hostname] = "{$tool->kind->value}.{$environment->kubeNamespace()}.svc.cluster.local:{$tool->kind->port()}";
+                $accounts[$tool->hostname] = $account;
             }
         }
 
@@ -82,24 +80,6 @@ final readonly class CaddyConfig
         $cloudflareHosts = $domains->where('dns_mode', DnsMode::CLOUDFLARE)->pluck('hostname')->all();
 
         return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts, self::wakeUpstream($cluster), $accounts);
-    }
-
-    /** @return array<string, string> hostname => upstream address, for each tool of the environment that runs */
-    private function toolRoutes(Environment $environment): array
-    {
-        $routes = [];
-
-        foreach ($environment->runningTools() as $tool) {
-            $hostname = $this->previewHostname->forSide($environment->application, $environment->pr_number, $tool->hostnamePrefix());
-
-            // A tool can have no hostname while its preview routes: without a pattern and an ingress IP behind the Cloudflare
-            // proxy, or with a first label of more than 63 characters.
-            if ($hostname !== null) {
-                $routes[$hostname] = "{$tool->value}.{$environment->kubeNamespace()}.svc.cluster.local:{$tool->port()}";
-            }
-        }
-
-        return $routes;
     }
 
     /**

@@ -17,6 +17,7 @@ use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Routing\Models\Domain;
 use Illuminate\Database\Eloquent\Collection;
 use stdClass;
@@ -348,7 +349,7 @@ class EnvironmentManifestsTest extends TestCase
     public function test_each_running_tool_gets_a_secret_a_deployment_and_a_service_and_the_selector_finds_the_tools_that_stopped(): void
     {
         $labels = ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/tool' => 'mailpit'];
-        $manifests = $this->manifests(['tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]], attachments: [self::mysql(isDefault: true)]);
+        $manifests = $this->manifests(tools: [ToolKind::MAILPIT, ToolKind::PHPMYADMIN], attachments: [self::mysql(isDefault: true)]);
         $tools = $manifests->tools();
 
         $this->assertSame([
@@ -408,7 +409,7 @@ class EnvironmentManifestsTest extends TestCase
 
     public function test_phpmyadmin_stops_without_a_default_mysql_database_and_the_selector_finds_its_objects(): void
     {
-        $manifests = $this->manifests(['tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]], attachments: [self::mysql(isDefault: false)]);
+        $manifests = $this->manifests(tools: [ToolKind::MAILPIT, ToolKind::PHPMYADMIN], attachments: [self::mysql(isDefault: false)]);
 
         $this->assertSame(['mailpit', 'mailpit', 'mailpit'], array_map(fn (array $m) => $m['metadata']['name'], $manifests->tools()));
         $this->assertSame('opencloud.dev/environment=7,opencloud.dev/tool,opencloud.dev/tool notin (mailpit)', $manifests->strays()['deployment,service,secret']);
@@ -495,8 +496,9 @@ class EnvironmentManifestsTest extends TestCase
      * @param  list<Process>  $processes
      * @param  list<Domain>  $domains
      * @param  list<DatastoreAttachment>  $attachments
+     * @param  list<ToolKind>  $tools
      */
-    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::LARAVEL, int $port = 8080, ?Cluster $cluster = null, array $processes = [], array $domains = [], array $attachments = []): EnvironmentManifests
+    private function manifests(array $attributes = [], ApplicationType $type = ApplicationType::LARAVEL, int $port = 8080, ?Cluster $cluster = null, array $processes = [], array $domains = [], array $attachments = [], array $tools = []): EnvironmentManifests
     {
         $application = new Application(['type' => $type, 'port' => $port]);
         $application->id = 3;
@@ -509,6 +511,7 @@ class EnvironmentManifestsTest extends TestCase
         $environment->setRelation('processes', new Collection($processes));
         $environment->setRelation('domains', new Collection($domains));
         $environment->setRelation('datastoreAttachments', new Collection($attachments));
+        $environment->setRelation('tools', new Collection(array_map(fn (ToolKind $kind) => new Tool(['kind' => $kind, 'hostname' => "{$kind->hostnamePrefix()}-12.example.com"]), $tools)));
 
         return new EnvironmentManifests($environment);
     }

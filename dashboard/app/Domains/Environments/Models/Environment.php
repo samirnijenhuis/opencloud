@@ -9,13 +9,11 @@ use App\Domains\Environments\Enums\EnvironmentColor;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
-use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Policies\EnvironmentPolicy;
 use App\Domains\Routing\Models\Domain;
 use Database\Factories\EnvironmentFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
-use Illuminate\Database\Eloquent\Casts\AsEnumCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -50,7 +48,6 @@ class Environment extends Model
         'pr_comment_id',
         'sleep_after_minutes',
         'preview_attachments',
-        'tools',
     ];
 
     protected $hidden = ['deploy_hook_token'];
@@ -66,7 +63,6 @@ class Environment extends Model
         'deploy_commands' => '[]',
         'health_path' => '/up',
         'preview_attachments' => '[]',
-        'tools' => '[]',
     ];
 
     protected static function booted(): void
@@ -97,7 +93,6 @@ class Environment extends Model
             'slept_at' => 'datetime',
             'woke_at' => 'datetime',
             'preview_attachments' => 'array',
-            'tools' => AsEnumCollection::of(ToolKind::class),
         ];
     }
 
@@ -128,14 +123,14 @@ class Environment extends Model
     }
 
     /**
-     * The tools of the environment that run now. A preview takes the tools of its template when opencloud creates it,
-     * and each other environment has none.
+     * The tools of the environment that run now. A preview gets a copy of the tools of its template when opencloud
+     * creates it, and a permanent environment has none.
      *
-     * @return list<ToolKind>
+     * @return list<Tool>
      */
     public function runningTools(): array
     {
-        return $this->tools->filter(fn (ToolKind $tool) => $tool->runsIn($this))->values()->all();
+        return $this->tools->filter(fn (Tool $tool) => $tool->kind->runsIn($this))->values()->all();
     }
 
     /** @return BelongsTo<Application, $this> */
@@ -178,5 +173,11 @@ class Environment extends Model
     public function processes(): HasMany
     {
         return $this->hasMany(Process::class)->orderBy('id');
+    }
+
+    /** @return HasMany<Tool, $this> the tools of a preview or of the preview template, in the order they were added */
+    public function tools(): HasMany
+    {
+        return $this->hasMany(Tool::class)->orderBy('id');
     }
 }

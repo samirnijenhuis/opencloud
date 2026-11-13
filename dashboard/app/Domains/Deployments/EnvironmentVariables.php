@@ -55,7 +55,7 @@ final class EnvironmentVariables
         $env = $application->type->systemEnv($application->port, PrimaryDomain::of($domains)?->hostname, $domains->pluck('hostname')->values()->all());
 
         // The app reaches the Service of Mailpit in its own namespace by the name of the tool.
-        return in_array(ToolKind::MAILPIT, $environment->runningTools(), true)
+        return collect($environment->runningTools())->contains('kind', ToolKind::MAILPIT)
             ? [...$env, ...$application->type->mailEnv(ToolKind::MAILPIT->value, ToolKind::SMTP_PORT)]
             : $env;
     }

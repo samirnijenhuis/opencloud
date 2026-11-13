@@ -31,6 +31,7 @@ use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Environments\ToolLogin;
 use App\Domains\Members\Enums\Ability;
 use App\Domains\Members\Enums\Role;
@@ -110,12 +111,6 @@ class EnvironmentController extends Controller
                 'preview_labels' => $environment->application->preview_labels,
                 'ingress_ip' => $cluster->ingress_ip,
                 'max_previews' => $environment->application->max_previews,
-                'preview_tools' => $environment->application->preview_tools,
-                'tools' => array_map(fn (ToolKind $tool) => [
-                    'value' => $tool,
-                    'label' => $tool->label(),
-                    'address' => $previewHostname->sidePattern($environment->application, $tool->hostnamePrefix()),
-                ], ToolKind::cases()),
                 // What each new preview gets. The template itself gets nothing.
                 'attachments' => array_map(function (array $entry) {
                     $kind = DatastoreKind::from($entry['kind']);
@@ -123,7 +118,7 @@ class EnvironmentController extends Controller
                     return [...$entry, 'family' => $kind->family(), 'label' => self::label($kind, DatastoreSource::STANDARD, Provisioners::for($kind, DatastoreSource::STANDARD)->capabilities())];
                 }, $environment->preview_attachments),
             ] : null,
-            'tools' => $this->tools($environment, $previewHostname),
+            'tools' => $this->tools($environment),
             'compute' => $environment->only(['size', 'min_instances', 'max_instances', 'cpu_target', 'health_path']),
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,
@@ -225,18 +220,14 @@ class EnvironmentController extends Controller
      *
      * @return array{links: list<array{value: ToolKind, label: string, url: string}>, login: array{username: string, password: string}}|null
      */
-    private function tools(Environment $environment, PreviewHostname $previewHostname): ?array
+    private function tools(Environment $environment): ?array
     {
-        $links = [];
-
-        foreach ($environment->runningTools() as $tool) {
-            $hostname = $previewHostname->forSide($environment->application, $environment->pr_number, $tool->hostnamePrefix());
-
-            // A tool without a hostname has no route in Caddy, so the page gives it no link.
-            if ($hostname !== null) {
-                $links[] = ['value' => $tool, 'label' => $tool->label(), 'url' => "https://{$hostname}"];
-            }
+        // The tools of the preview template are patterns for each new preview, and no link reaches them.
+        if ($environment->kind !== EnvironmentKind::PREVIEW) {
+            return null;
         }
+
+        $links = array_map(fn (Tool $tool) => ['value' => $tool->kind, 'label' => $tool->kind->label(), 'url' => "https://{$tool->hostname}"], $environment->runningTools());
 
         if ($links === []) {
             return null;

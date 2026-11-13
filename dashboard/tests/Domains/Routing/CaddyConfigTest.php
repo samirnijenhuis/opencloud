@@ -13,6 +13,7 @@ use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\Environments\ToolLogin;
 use App\Domains\Routing\CaddyConfig;
 use App\Domains\Routing\Enums\DnsStatus;
@@ -122,7 +123,7 @@ class CaddyConfigTest extends TestCase
         );
     }
 
-    public function test_a_preview_with_mailpit_and_phpmyadmin_gets_one_route_for_each_tool_behind_its_login(): void
+    public function test_a_preview_with_mailpit_and_phpmyadmin_gets_one_route_for_each_tool_on_its_stored_hostname_behind_its_login(): void
     {
         $cluster = Cluster::factory()->create(['kind' => ClusterKind::CONNECTED]);
         $preview = $this->preview($cluster, defaultMysql: true);
@@ -133,14 +134,14 @@ class CaddyConfigTest extends TestCase
         $routes = collect($config['apps']['http']['servers']['apps']['routes'])->keyBy(fn (array $route) => $route['match'][0]['host'][0]);
         $namespace = "oc-env-{$preview->id}";
 
-        $this->assertSame(['database-12.staging.hlpbnk.io', 'mail-12.staging.hlpbnk.io', 'pr-12.staging.hlpbnk.io', 'shop-12.example.org'], $routes->keys()->all());
+        $this->assertSame(['database-12.staging.hlpbnk.io', 'inbox-12.staging.hlpbnk.io', 'pr-12.staging.hlpbnk.io', 'shop-12.example.org'], $routes->keys()->all());
         $this->assertSame(
             [["phpmyadmin.{$namespace}.svc.cluster.local:80"], ["mailpit.{$namespace}.svc.cluster.local:8025"]],
-            [array_column($routes['database-12.staging.hlpbnk.io']['handle'][1]['upstreams'], 'dial'), array_column($routes['mail-12.staging.hlpbnk.io']['handle'][1]['upstreams'], 'dial')],
+            [array_column($routes['database-12.staging.hlpbnk.io']['handle'][1]['upstreams'], 'dial'), array_column($routes['inbox-12.staging.hlpbnk.io']['handle'][1]['upstreams'], 'dial')],
         );
 
         $login = ToolLogin::for($preview);
-        foreach (['database-12.staging.hlpbnk.io', 'mail-12.staging.hlpbnk.io'] as $hostname) {
+        foreach (['database-12.staging.hlpbnk.io', 'inbox-12.staging.hlpbnk.io'] as $hostname) {
             $auth = $routes[$hostname]['handle'][0];
             $account = $auth['providers']['http_basic']['accounts'][0];
             $this->assertSame(['authentication', 'opencloud', '{}'], [$auth['handler'], $account['username'], json_encode($auth['providers']['http_basic']['hash_cache'])]);
@@ -157,7 +158,7 @@ class CaddyConfigTest extends TestCase
 
         $hosts = array_map(fn (array $route) => $route['match'][0]['host'][0], (new CaddyConfig('internal', null))->forCluster($cluster)['apps']['http']['servers']['apps']['routes']);
 
-        $this->assertSame(['mail-12.staging.hlpbnk.io', 'pr-12.staging.hlpbnk.io'], $hosts);
+        $this->assertSame(['inbox-12.staging.hlpbnk.io', 'pr-12.staging.hlpbnk.io'], $hosts);
     }
 
     public function test_a_preview_whose_domain_is_not_routable_gets_no_tool_route(): void
@@ -176,13 +177,13 @@ class CaddyConfigTest extends TestCase
         $this->assertSame([['issuers' => [['module' => 'internal']]]], $config['apps']['tls']['automation']['policies']);
     }
 
-    /** Preview 12 with Mailpit and phpMyAdmin, a live deployment, and a routable domain from the pattern of the application. */
+    /** Preview 12 with Mailpit and phpMyAdmin on their own hostnames, a live deployment, and a routable domain. */
     private function preview(Cluster $cluster, bool $defaultMysql): Environment
     {
         $application = Application::factory()->for($cluster)->create(['preview_domain' => 'pr-{pr_number}.staging.hlpbnk.io']);
-        $preview = Environment::factory()->for($application)->create([
-            'name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12, 'tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN],
-        ]);
+        $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
+        Tool::factory()->for($preview)->create(['kind' => ToolKind::MAILPIT, 'hostname' => 'inbox-12.staging.hlpbnk.io']);
+        Tool::factory()->for($preview)->create(['kind' => ToolKind::PHPMYADMIN, 'hostname' => 'database-12.staging.hlpbnk.io']);
         Deployment::factory()->for($preview)->create(['status' => DeploymentStatus::LIVE]);
         $this->routableDomain($preview, 'pr-12.staging.hlpbnk.io');
         DatastoreAttachment::factory()->for(Datastore::factory()->for($cluster)->create(['kind' => DatastoreKind::MYSQL]))->for($preview)->create([

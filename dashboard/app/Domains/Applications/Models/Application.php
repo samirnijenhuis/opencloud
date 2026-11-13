@@ -5,13 +5,11 @@ namespace App\Domains\Applications\Models;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Policies\ApplicationPolicy;
 use App\Domains\Clusters\Models\Cluster;
-use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\GitHub\RepositoryName;
 use Database\Factories\ApplicationFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
-use Illuminate\Database\Eloquent\Casts\AsEnumCollection;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,7 +22,7 @@ class Application extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'preview_domain', 'preview_labels', 'max_previews', 'preview_tools', 'deploy_private_key', 'deploy_public_key'];
+    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'preview_domain', 'preview_labels', 'max_previews', 'deploy_private_key', 'deploy_public_key'];
 
     protected $hidden = ['deploy_private_key'];
 
@@ -33,7 +31,6 @@ class Application extends Model
         'previews_enabled' => true,
         'preview_labels' => '[]',
         'max_previews' => 5,
-        'preview_tools' => '[]',
     ];
 
     protected function casts(): array
@@ -44,7 +41,6 @@ class Application extends Model
             'previews_enabled' => 'boolean',
             'preview_labels' => 'array',
             'max_previews' => 'integer',
-            'preview_tools' => AsEnumCollection::of(ToolKind::class),
             'deploy_private_key' => 'encrypted',
         ];
     }

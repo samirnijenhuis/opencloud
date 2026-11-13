@@ -2,11 +2,9 @@
 
 namespace App\Http\Requests;
 
-use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Previews\PreviewHostname;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
 class UpdatePreviewSettingsRequest extends FormRequest
@@ -41,22 +39,11 @@ class UpdatePreviewSettingsRequest extends FormRequest
                     $fail(self::PLACEMENT);
                 } elseif (! preg_match(StoreApplicationRequest::HOSTNAME, str_replace(PreviewHostname::PR_NUMBER, '999999', $value))) {
                     $fail(self::HOST);
-                } elseif (in_array(strstr($value, PreviewHostname::PR_NUMBER, before_needle: true), self::toolPrefixes(), true)) {
-                    // The preview and its tool would have the same hostname, and Caddy keeps one route for each hostname.
-                    $fail('Start the address with a different word than '.Arr::join(self::toolPrefixes(), ', ', ' or ').'. The preview tools use those addresses.');
                 }
-            }],
+            }, Rule::unique('tools', 'hostname')],
             'preview_labels' => ['sometimes', 'nullable', 'string', 'max:500'],
             'max_previews' => ['sometimes', 'integer', 'min:0', 'max:1000'],
-            'preview_tools' => ['sometimes', 'array'],
-            'preview_tools.*' => [Rule::enum(ToolKind::class), 'distinct'],
         ];
-    }
-
-    /** @return list<string> the start of the address of each tool, for example mail- */
-    private static function toolPrefixes(): array
-    {
-        return array_map(fn (ToolKind $tool) => $tool->hostnamePrefix().'-', ToolKind::cases());
     }
 
     /** @return array<string, string> */
@@ -64,18 +51,18 @@ class UpdatePreviewSettingsRequest extends FormRequest
     {
         return [
             'preview_domain.max' => self::HOST,
+            // A preview and a tool with one hostname would share one route in Caddy, so one of the two would be hidden.
+            'preview_domain.unique' => 'A tool of each preview uses this address. Use a different address.',
             'preview_labels.max' => 'Keep the labels to 500 characters or fewer.',
             'max_previews.*' => 'Enter a number from 0 to 1000. 0 means no limit.',
-            'preview_tools.*' => 'Choose only the tools in the list.',
         ];
     }
 
     /**
-     * The row switch sends only the switch. The template sheet sends the address, the labels, the limit, and the tools.
-     * The sheet sends the labels as one text with commas between them. The tools keep the order of the enum, so the
-     * same choice always stores the same value.
+     * The row switch sends only the switch. The template sheet sends the address, the labels, and the limit.
+     * The sheet sends the labels as one text with commas between them.
      *
-     * @return array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>, max_previews?: int, preview_tools?: list<ToolKind>}
+     * @return array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>, max_previews?: int}
      */
     public function settings(): array
     {
@@ -90,9 +77,6 @@ class UpdatePreviewSettingsRequest extends FormRequest
                 ->reject(fn (string $label) => $label === '')
                 ->values()
                 ->all();
-        }
-        if (array_key_exists('preview_tools', $settings)) {
-            $settings['preview_tools'] = array_values(array_filter(ToolKind::cases(), fn (ToolKind $tool) => in_array($tool->value, $settings['preview_tools'], true)));
         }
 
         return $settings;

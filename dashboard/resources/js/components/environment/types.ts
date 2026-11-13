@@ -115,10 +115,7 @@ export type Compute = { size: Size; min_instances: number; max_instances: number
 
 export type ToolValue = 'mailpit' | 'phpmyadmin';
 
-/** One tool that a preview can get, with the address pattern of its tool hostname, or null without an ingress address. */
-export type ToolOption = { value: ToolValue; label: string; address: string | null };
-
-/** The tools that run for a preview and have a hostname, behind one basic auth login. */
+/** The tools that run for a preview, behind one basic auth login. */
 export type PreviewTools = {
     links: { value: ToolValue; label: string; url: string }[];
     login: { username: string; password: string };
@@ -134,9 +131,6 @@ export type PreviewTemplateSettings = {
     preview_labels: string[];
     ingress_ip: string | null;
     max_previews: number;
-    /** The tools that each new preview gets, in the order of `tools`. */
-    preview_tools: ToolValue[];
-    tools: ToolOption[];
     attachments: PreviewAttachment[];
 };
 
