@@ -33,17 +33,23 @@ class UpdatePreviewSettingsRequest extends FormRequest
     {
         return [
             'previews_enabled' => ['sometimes', 'boolean'],
-            'preview_domain' => ['sometimes', 'nullable', 'string', 'max:200', function (string $attribute, mixed $value, Closure $fail) {
-                // One wildcard record covers one label, so the number sits in the first label.
-                if (substr_count($value, PreviewHostname::PR_NUMBER) !== 1 || ! str_contains(explode('.', $value)[0], PreviewHostname::PR_NUMBER)) {
-                    $fail(self::PLACEMENT);
-                } elseif (! preg_match(StoreApplicationRequest::HOSTNAME, str_replace(PreviewHostname::PR_NUMBER, '999999', $value))) {
-                    $fail(self::HOST);
-                }
-            }, Rule::unique('tools', 'hostname')],
+            'preview_domain' => ['sometimes', 'nullable', 'string', 'max:200', self::pattern(...), Rule::unique('tools', 'hostname')],
             'preview_labels' => ['sometimes', 'nullable', 'string', 'max:500'],
             'max_previews' => ['sometimes', 'integer', 'min:0', 'max:1000'],
         ];
+    }
+
+    /**
+     * The rule of a hostname pattern: the preview address, and the address of each tool on the preview template.
+     * One wildcard record covers one label, so the number sits in the first label.
+     */
+    public static function pattern(string $attribute, mixed $value, Closure $fail): void
+    {
+        if (substr_count($value, PreviewHostname::PR_NUMBER) !== 1 || ! str_contains(explode('.', $value)[0], PreviewHostname::PR_NUMBER)) {
+            $fail(self::PLACEMENT);
+        } elseif (! preg_match(StoreApplicationRequest::HOSTNAME, str_replace(PreviewHostname::PR_NUMBER, '999999', $value))) {
+            $fail(self::HOST);
+        }
     }
 
     /** @return array<string, string> */
