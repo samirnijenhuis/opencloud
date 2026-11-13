@@ -27,6 +27,14 @@ class ClearLogsTest extends TestCase
         $this->assertEquals(now(), $environment->fresh()->logs_cleared_at);
         $event = AuditEvent::sole();
         $this->assertSame(['environment.logs_cleared', $user->id, 'environment', $environment->id, []], [$event->action, $event->user_id, $event->subject_type, $event->subject_id, $event->context]);
-        Queue::assertPushed(DeleteLogLines::class, fn (DeleteLogLines $job) => $job->environment->is($environment));
+        Queue::assertPushed(DeleteLogLines::class, function (DeleteLogLines $job) use ($environment) {
+            $this->assertTrue($job->cluster->is($environment->application->cluster));
+            $this->assertSame(
+                ["oc-env-{$environment->id}", $environment->created_at->toRfc3339String(), now()->toRfc3339String(), null],
+                [$job->namespace, $job->from->toRfc3339String(), $job->to->toRfc3339String(), $job->delay],
+            );
+
+            return true;
+        });
     }
 }

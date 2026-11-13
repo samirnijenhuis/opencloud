@@ -37,6 +37,7 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - Loki and Fluent Bit read their config file only when they start. A change of `LOKI_CONFIG` or `FLUENT_BIT_CONFIG` changes only the ConfigMap, so restart the pods, or change the pod template in the same change.
 - Loki stores the unmasked lines. `ReadLogs` masks each line when it reads it, with the secret values of now. A line from before a change of a secret value can show the old value. `ReadLogs` also drops each masked line that no longer holds the search text, and it counts `truncated` after that filter, so a search cannot confirm a secret.
 - `ReadLogs` starts each range at `environments.logs_cleared_at` at the earliest. A line from before the last clear stays on the disk of Loki for about 26 hours after the clear, but the Logs tab does not show it. Loki itself drops the lines of a delete request from its queries only after up to 5 minutes.
+- `DeleteEnvironment` and `ClosePreview` queue `DeleteLogLines` with a delay of 1 minute. It deletes each line of the namespace from the creation of the environment to 1 minute after the delete. A new place that deletes an environment needs `DeleteLogLines::dispatchForDeleted()` too, or its lines stay in Loki for 7 days.
 
 ## Secrets and the audit log
 

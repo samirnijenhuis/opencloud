@@ -6,6 +6,7 @@ use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Enums\DeploymentStatus;
+use App\Domains\Environments\Jobs\DeleteLogLines;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Actions\RemoveDomain;
@@ -14,7 +15,7 @@ use App\Support\Kube\KubectlException;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Removes an environment that a user added: its namespace, its domains, the data of its resources, and its records.
+ * Removes an environment that a user added: its namespace, its domains, the data of its resources, its records, and its logs.
  * Each step converges, so a delete after a failed one finishes the job.
  */
 class DeleteEnvironment
@@ -59,6 +60,7 @@ class DeleteEnvironment
 
         // The env values, the processes, the deployments, and the command runs go with the environment through the foreign keys.
         $environment->delete();
+        DeleteLogLines::dispatchForDeleted($environment);
 
         AuditEvent::record($by, 'environment.deleted', $application, [
             'environment_id' => $environment->id,

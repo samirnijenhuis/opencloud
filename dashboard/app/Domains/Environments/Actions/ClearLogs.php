@@ -18,7 +18,8 @@ class ClearLogs
         $environment->update(['logs_cleared_at' => now()]);
 
         AuditEvent::record($by, 'environment.logs_cleared', $environment);
-        DeleteLogLines::dispatch($environment)->afterCommit();
+        // No line of the namespace is older than the environment.
+        DeleteLogLines::dispatch($environment->application->cluster, $environment->kubeNamespace(), $environment->created_at, $environment->logs_cleared_at)->afterCommit();
 
         return $environment;
     }
