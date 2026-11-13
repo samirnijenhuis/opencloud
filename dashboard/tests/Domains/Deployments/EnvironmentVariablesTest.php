@@ -7,7 +7,7 @@ use App\Domains\Applications\Models\Application;
 use App\Domains\Deployments\EnvironmentVariables;
 use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Routing\Models\Domain;
@@ -134,14 +134,14 @@ class EnvironmentVariablesTest extends TestCase
     public function test_with_mailpit_each_preset_sends_its_mail_to_mailpit_under_its_own_names(ApplicationType $type, int $port, array $expected): void
     {
         $application = Application::factory()->create(['type' => $type, 'port' => $port]);
-        $environment = Environment::factory()->for($application)->create(['tools' => [Tool::MAILPIT]]);
+        $environment = Environment::factory()->for($application)->create(['tools' => [ToolKind::MAILPIT]]);
 
         $this->assertSame($expected, EnvironmentVariables::runtime($environment));
     }
 
     public function test_a_mail_value_of_the_user_beats_mailpit(): void
     {
-        $environment = Environment::factory()->create(['tools' => [Tool::MAILPIT]]);
+        $environment = Environment::factory()->create(['tools' => [ToolKind::MAILPIT]]);
         $this->envVar($environment, 'MAIL_MAILER', 'log', EnvVarSource::USER);
 
         $this->assertSame(

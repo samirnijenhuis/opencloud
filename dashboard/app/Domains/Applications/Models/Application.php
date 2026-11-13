@@ -5,7 +5,7 @@ namespace App\Domains\Applications\Models;
 use App\Domains\Applications\Enums\ApplicationType;
 use App\Domains\Applications\Policies\ApplicationPolicy;
 use App\Domains\Clusters\Models\Cluster;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\GitHub\RepositoryName;
 use Database\Factories\ApplicationFactory;
@@ -44,7 +44,7 @@ class Application extends Model
             'previews_enabled' => 'boolean',
             'preview_labels' => 'array',
             'max_previews' => 'integer',
-            'preview_tools' => AsEnumCollection::of(Tool::class),
+            'preview_tools' => AsEnumCollection::of(ToolKind::class),
             'deploy_private_key' => 'encrypted',
         ];
     }

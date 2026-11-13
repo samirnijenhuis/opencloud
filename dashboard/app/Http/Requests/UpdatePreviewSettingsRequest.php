@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Previews\PreviewHostname;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
@@ -49,14 +49,14 @@ class UpdatePreviewSettingsRequest extends FormRequest
             'preview_labels' => ['sometimes', 'nullable', 'string', 'max:500'],
             'max_previews' => ['sometimes', 'integer', 'min:0', 'max:1000'],
             'preview_tools' => ['sometimes', 'array'],
-            'preview_tools.*' => [Rule::enum(Tool::class), 'distinct'],
+            'preview_tools.*' => [Rule::enum(ToolKind::class), 'distinct'],
         ];
     }
 
     /** @return list<string> the start of the address of each tool, for example mail- */
     private static function toolPrefixes(): array
     {
-        return array_map(fn (Tool $tool) => $tool->hostnamePrefix().'-', Tool::cases());
+        return array_map(fn (ToolKind $tool) => $tool->hostnamePrefix().'-', ToolKind::cases());
     }
 
     /** @return array<string, string> */
@@ -75,7 +75,7 @@ class UpdatePreviewSettingsRequest extends FormRequest
      * The sheet sends the labels as one text with commas between them. The tools keep the order of the enum, so the
      * same choice always stores the same value.
      *
-     * @return array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>, max_previews?: int, preview_tools?: list<Tool>}
+     * @return array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>, max_previews?: int, preview_tools?: list<ToolKind>}
      */
     public function settings(): array
     {
@@ -92,7 +92,7 @@ class UpdatePreviewSettingsRequest extends FormRequest
                 ->all();
         }
         if (array_key_exists('preview_tools', $settings)) {
-            $settings['preview_tools'] = array_values(array_filter(Tool::cases(), fn (Tool $tool) => in_array($tool->value, $settings['preview_tools'], true)));
+            $settings['preview_tools'] = array_values(array_filter(ToolKind::cases(), fn (ToolKind $tool) => in_array($tool->value, $settings['preview_tools'], true)));
         }
 
         return $settings;

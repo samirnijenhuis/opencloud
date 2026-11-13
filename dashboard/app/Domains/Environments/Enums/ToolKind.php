@@ -11,7 +11,7 @@ use App\Domains\Environments\Models\Environment;
  * A dev tool that a preview runs next to its app, on a hostname of its own. Each case holds every fact of its tool, so
  * a new tool is one new case.
  */
-enum Tool: string
+enum ToolKind: string
 {
     case MAILPIT = 'mailpit';
     case PHPMYADMIN = 'phpmyadmin';

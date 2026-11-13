@@ -11,7 +11,7 @@ use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvironmentKind;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\ToolLogin;
 use App\Domains\Routing\CaddyConfig;
@@ -181,7 +181,7 @@ class CaddyConfigTest extends TestCase
     {
         $application = Application::factory()->for($cluster)->create(['preview_domain' => 'pr-{pr_number}.staging.hlpbnk.io']);
         $preview = Environment::factory()->for($application)->create([
-            'name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12, 'tools' => [Tool::MAILPIT, Tool::PHPMYADMIN],
+            'name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12, 'tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN],
         ]);
         Deployment::factory()->for($preview)->create(['status' => DeploymentStatus::LIVE]);
         $this->routableDomain($preview, 'pr-12.staging.hlpbnk.io');

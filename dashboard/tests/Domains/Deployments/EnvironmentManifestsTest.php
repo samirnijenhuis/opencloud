@@ -14,7 +14,7 @@ use App\Domains\Deployments\EnvironmentManifests;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
 use App\Domains\Routing\Models\Domain;
@@ -348,7 +348,7 @@ class EnvironmentManifestsTest extends TestCase
     public function test_each_running_tool_gets_a_secret_a_deployment_and_a_service_and_the_selector_finds_the_tools_that_stopped(): void
     {
         $labels = ['opencloud.dev/application' => '3', 'opencloud.dev/environment' => '7', 'opencloud.dev/tool' => 'mailpit'];
-        $manifests = $this->manifests(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]], attachments: [self::mysql(isDefault: true)]);
+        $manifests = $this->manifests(['tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]], attachments: [self::mysql(isDefault: true)]);
         $tools = $manifests->tools();
 
         $this->assertSame([
@@ -408,7 +408,7 @@ class EnvironmentManifestsTest extends TestCase
 
     public function test_phpmyadmin_stops_without_a_default_mysql_database_and_the_selector_finds_its_objects(): void
     {
-        $manifests = $this->manifests(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]], attachments: [self::mysql(isDefault: false)]);
+        $manifests = $this->manifests(['tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]], attachments: [self::mysql(isDefault: false)]);
 
         $this->assertSame(['mailpit', 'mailpit', 'mailpit'], array_map(fn (array $m) => $m['metadata']['name'], $manifests->tools()));
         $this->assertSame('opencloud.dev/environment=7,opencloud.dev/tool,opencloud.dev/tool notin (mailpit)', $manifests->strays()['deployment,service,secret']);

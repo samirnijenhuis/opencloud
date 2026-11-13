@@ -4,7 +4,7 @@ namespace App\Domains\Environments\Models;
 
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use Closure;
 use Cron\CronExpression;
 use Database\Factories\ProcessFactory;
@@ -64,7 +64,7 @@ class Process extends Model
      */
     public static function reservedNames(): array
     {
-        return [self::WEB, self::DEPLOY, self::COMMAND, ...array_column(Tool::cases(), 'value')];
+        return [self::WEB, self::DEPLOY, self::COMMAND, ...array_column(ToolKind::cases(), 'value')];
     }
 
     /** @return BelongsTo<Environment, $this> */

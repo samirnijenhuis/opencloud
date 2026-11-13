@@ -6,7 +6,7 @@ use App\Domains\Clusters\ClusterRegistry;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
 use App\Domains\Routing\PrimaryDomain;
@@ -73,7 +73,7 @@ final readonly class EnvironmentManifests
     }
 
     /** @return list<array<string, mixed>> */
-    private function tool(Tool $tool): array
+    private function tool(ToolKind $tool): array
     {
         $labels = [...Labels::environment($this->environment), Labels::TOOL => $tool->value];
         $ports = $tool->ports();

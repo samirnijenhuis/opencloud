@@ -9,7 +9,7 @@ use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Enums\EnvironmentKind;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\ToolLogin;
 use App\Domains\Members\Models\User;
@@ -176,7 +176,7 @@ class PreviewSettingsTest extends TestCase
             ->patch("/applications/{$this->application->id}/previews", ['preview_tools' => ['phpmyadmin', 'mailpit']])
             ->assertSessionHasNoErrors();
 
-        $this->assertSame([Tool::MAILPIT, Tool::PHPMYADMIN], $this->application->fresh()->preview_tools->all());
+        $this->assertSame([ToolKind::MAILPIT, ToolKind::PHPMYADMIN], $this->application->fresh()->preview_tools->all());
         $this->assertSame(['changes' => ['preview_tools' => ['from' => [], 'to' => ['mailpit', 'phpmyadmin']]]], AuditEvent::sole()->context);
         $this->get("/environments/{$this->template->id}")->assertInertia(fn (Assert $page) => $page->where('previews.preview_tools', ['mailpit', 'phpmyadmin']));
 
@@ -206,7 +206,7 @@ class PreviewSettingsTest extends TestCase
         $this->application->update(['preview_domain' => 'pr-{pr_number}.previews.example.com']);
         // phpMyAdmin does not run, because the preview has no default MySQL database.
         $preview = $this->application->environments()->where('name', 'pr-12')->sole();
-        $preview->update(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]]);
+        $preview->update(['tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]]);
         $this->actingAs(User::factory()->create());
 
         $this->get("/environments/{$preview->id}")->assertInertia(fn (Assert $page) => $page->where('tools', [

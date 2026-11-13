@@ -4,7 +4,7 @@ namespace App\Domains\Previews\Actions;
 
 use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Members\Models\User;
 
 class UpdatePreviewSettings
@@ -13,7 +13,7 @@ class UpdatePreviewSettings
      * Stores only the settings in the array. The settings apply to the next pull request event.
      * Previews that run keep their domain and their tools until their pull request closes.
      *
-     * @param  array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>, max_previews?: int, preview_tools?: list<Tool>}  $settings
+     * @param  array{previews_enabled?: bool, preview_domain?: ?string, preview_labels?: list<string>, max_previews?: int, preview_tools?: list<ToolKind>}  $settings
      */
     public function execute(Application $application, User $by, array $settings): void
     {

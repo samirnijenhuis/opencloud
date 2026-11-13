@@ -16,7 +16,7 @@ use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\ProcessKind;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -297,7 +297,7 @@ class RunDeploymentTest extends TestCase
     public function test_the_tools_apply_with_the_workloads_without_a_rollout_wait_and_a_tool_that_stopped_is_deleted(): void
     {
         // phpMyAdmin stopped, because the preview has no default MySQL database.
-        $this->environment->update(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]]);
+        $this->environment->update(['tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]]);
 
         RunDeployment::dispatchSync($this->new);
 

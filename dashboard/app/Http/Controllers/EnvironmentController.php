@@ -27,7 +27,7 @@ use App\Domains\Environments\DotenvText;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -111,11 +111,11 @@ class EnvironmentController extends Controller
                 'ingress_ip' => $cluster->ingress_ip,
                 'max_previews' => $environment->application->max_previews,
                 'preview_tools' => $environment->application->preview_tools,
-                'tools' => array_map(fn (Tool $tool) => [
+                'tools' => array_map(fn (ToolKind $tool) => [
                     'value' => $tool,
                     'label' => $tool->label(),
                     'address' => $previewHostname->sidePattern($environment->application, $tool->hostnamePrefix()),
-                ], Tool::cases()),
+                ], ToolKind::cases()),
                 // What each new preview gets. The template itself gets nothing.
                 'attachments' => array_map(function (array $entry) {
                     $kind = DatastoreKind::from($entry['kind']);
@@ -223,7 +223,7 @@ class EnvironmentController extends Controller
      * The tools that run for a preview, and the login in front of them. Each role may change a preview, and a developer
      * can read each env value of an unprotected environment through a command, so each viewer sees the password.
      *
-     * @return array{links: list<array{value: Tool, label: string, url: string}>, login: array{username: string, password: string}}|null
+     * @return array{links: list<array{value: ToolKind, label: string, url: string}>, login: array{username: string, password: string}}|null
      */
     private function tools(Environment $environment, PreviewHostname $previewHostname): ?array
     {

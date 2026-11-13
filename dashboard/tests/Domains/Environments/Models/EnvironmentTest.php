@@ -5,7 +5,7 @@ namespace Tests\Domains\Environments\Models;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -16,16 +16,16 @@ class EnvironmentTest extends TestCase
 
     public function test_mailpit_always_runs_and_phpmyadmin_runs_only_with_a_default_mysql_database(): void
     {
-        $environment = Environment::factory()->create(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]]);
-        $this->assertSame([Tool::MAILPIT], $environment->runningTools());
+        $environment = Environment::factory()->create(['tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]]);
+        $this->assertSame([ToolKind::MAILPIT], $environment->runningTools());
 
         $this->attach($environment, DatastoreKind::POSTGRES, 'main', isDefault: true);
         $this->attach($environment, DatastoreKind::MYSQL, 'reports', isDefault: false);
-        $this->assertSame([Tool::MAILPIT], $environment->fresh()->runningTools());
+        $this->assertSame([ToolKind::MAILPIT], $environment->fresh()->runningTools());
 
-        $other = Environment::factory()->for($environment->application)->create(['tools' => [Tool::MAILPIT, Tool::PHPMYADMIN]]);
+        $other = Environment::factory()->for($environment->application)->create(['tools' => [ToolKind::MAILPIT, ToolKind::PHPMYADMIN]]);
         $this->attach($other, DatastoreKind::MYSQL, 'main', isDefault: true);
-        $this->assertSame([Tool::MAILPIT, Tool::PHPMYADMIN], $other->runningTools());
+        $this->assertSame([ToolKind::MAILPIT, ToolKind::PHPMYADMIN], $other->runningTools());
     }
 
     public function test_an_environment_without_tools_runs_none_also_with_a_default_mysql_database(): void

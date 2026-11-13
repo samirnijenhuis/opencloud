@@ -9,7 +9,7 @@ use App\Domains\Environments\Enums\EnvironmentColor;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
-use App\Domains\Environments\Enums\Tool;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Policies\EnvironmentPolicy;
 use App\Domains\Routing\Models\Domain;
 use Database\Factories\EnvironmentFactory;
@@ -97,7 +97,7 @@ class Environment extends Model
             'slept_at' => 'datetime',
             'woke_at' => 'datetime',
             'preview_attachments' => 'array',
-            'tools' => AsEnumCollection::of(Tool::class),
+            'tools' => AsEnumCollection::of(ToolKind::class),
         ];
     }
 
@@ -131,11 +131,11 @@ class Environment extends Model
      * The tools of the environment that run now. A preview takes the tools of its template when opencloud creates it,
      * and each other environment has none.
      *
-     * @return list<Tool>
+     * @return list<ToolKind>
      */
     public function runningTools(): array
     {
-        return $this->tools->filter(fn (Tool $tool) => $tool->runsIn($this))->values()->all();
+        return $this->tools->filter(fn (ToolKind $tool) => $tool->runsIn($this))->values()->all();
     }
 
     /** @return BelongsTo<Application, $this> */
