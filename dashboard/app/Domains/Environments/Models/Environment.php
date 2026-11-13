@@ -48,6 +48,7 @@ class Environment extends Model
         'pr_comment_id',
         'sleep_after_minutes',
         'preview_attachments',
+        'logs_cleared_at',
     ];
 
     protected $hidden = ['deploy_hook_token'];
@@ -93,6 +94,7 @@ class Environment extends Model
             'slept_at' => 'datetime',
             'woke_at' => 'datetime',
             'preview_attachments' => 'array',
+            'logs_cleared_at' => 'datetime',
         ];
     }
 

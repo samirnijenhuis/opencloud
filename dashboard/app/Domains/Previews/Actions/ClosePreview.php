@@ -7,12 +7,13 @@ use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Jobs\DeleteLogLines;
 use App\Domains\Routing\Jobs\SyncCaddy;
 use App\Support\Kube\Kubectl;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Removes the preview of a closed pull request: its namespace, its data, its domains, and its records.
+ * Removes the preview of a closed pull request: its namespace, its data, its domains, its records, and its logs.
  * Each step converges, so a run after a crash finishes the job.
  */
 class ClosePreview
@@ -46,6 +47,7 @@ class ClosePreview
 
             // The env values, deployments, and domains go with the environment through the foreign keys.
             $preview->delete();
+            DeleteLogLines::dispatchForDeleted($preview);
 
             AuditEvent::record(null, 'preview.destroyed', $application, [
                 'environment_id' => $preview->id,
