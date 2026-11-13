@@ -172,7 +172,7 @@ class EnvironmentController extends Controller
             'envText' => $dotenv->format(
                 $environment->envVars()->where('source', EnvVarSource::USER)->where('is_secret', false)->orderBy('key')->pluck('value', 'key')->all(),
             ),
-            // Only a plain user value goes to the browser. A secret and a datastore value never do.
+            // Each user gets the plain values. Only a user who reads secrets, an owner or an admin, gets the secret values.
             'envVars' => $environment->envVars()->with('datastoreAttachment.datastore')->orderBy('key')->get()->map(fn (EnvVar $envVar) => [
                 'id' => $envVar->id,
                 'key' => $envVar->key,
@@ -180,7 +180,7 @@ class EnvironmentController extends Controller
                 'is_secret' => $envVar->is_secret,
                 'available_at' => $envVar->available_at,
                 'resource' => $envVar->datastoreAttachment === null ? null : $this->resourceName($envVar->datastoreAttachment),
-                'value' => $envVar->source === EnvVarSource::USER && ! $envVar->is_secret ? $envVar->value : null,
+                'value' => ! $envVar->is_secret || $request->user()->role->allows(Ability::READ_SECRETS) ? $envVar->value : null,
             ]),
         ]);
     }

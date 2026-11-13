@@ -27,7 +27,7 @@ class SetEnvVar
         $keepsSecret = $value === null && $envVar->exists && $envVar->is_secret;
 
         if ($keepsSecret && ! $isSecret) {
-            // Nobody can read a saved secret, so it cannot turn into a plain value that the dashboard shows.
+            // A developer cannot read a saved secret, so a kept secret cannot turn into a plain value that the developer then reads.
             throw new InvalidArgumentException("Give {$key} a new value to make it a plain value.");
         }
 

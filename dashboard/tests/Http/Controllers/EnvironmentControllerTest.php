@@ -9,8 +9,10 @@ use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
 use App\Domains\Environments\Enums\EnvironmentColor;
 use App\Domains\Environments\Enums\EnvironmentKind;
+use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Enums\DnsStatus;
 use App\Domains\Routing\Jobs\CheckDomain;
@@ -176,6 +178,52 @@ class EnvironmentControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('environments/settings')
                 ->where('settings', ['branch' => 'main', 'auto_deploy' => true, 'build_command' => null, 'deploy_commands' => ['php artisan migrate --force'], 'sleep_after_minutes' => null]));
+    }
+
+    public function test_an_owner_and_an_admin_read_each_env_value_on_the_settings_page(): void
+    {
+        $environment = $this->environmentWithEnvValues();
+
+        foreach ([User::factory()->owner()->create(), User::factory()->admin()->create()] as $user) {
+            $this->actingAs($user)->get("/environments/{$environment->id}/settings")
+                ->assertInertia(fn (Assert $page) => $page
+                    ->has('envVars', 4)
+                    ->where('envVars.0.value', 'production')
+                    ->where('envVars.1.value', 'mysql.internal')
+                    ->where('envVars.2.value', 'datastore-password-123')
+                    ->where('envVars.3.value', 'sk_live_TOP_SECRET_VALUE'));
+        }
+    }
+
+    public function test_a_developer_reads_only_the_plain_env_values_on_the_settings_page(): void
+    {
+        $environment = $this->environmentWithEnvValues();
+
+        $response = $this->actingAs(User::factory()->create())->get("/environments/{$environment->id}/settings")->assertOk();
+
+        $this->assertStringNotContainsString('sk_live_TOP_SECRET_VALUE', $response->getContent());
+        $this->assertStringNotContainsString('datastore-password-123', $response->getContent());
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('environments/settings')
+            ->has('envVars', 4)
+            ->where('envVars.0', ['id' => $environment->envVars()->where('key', 'APP_ENV')->value('id'), 'key' => 'APP_ENV', 'source' => 'user', 'is_secret' => false, 'available_at' => 'runtime', 'resource' => null, 'value' => 'production'])
+            ->where('envVars.1.key', 'DB_HOST')
+            ->where('envVars.1.value', 'mysql.internal')
+            ->where('envVars.2.key', 'DB_PASSWORD')
+            ->where('envVars.2.value', null)
+            ->where('envVars.3.key', 'STRIPE_SECRET')
+            ->where('envVars.3.value', null));
+    }
+
+    private function environmentWithEnvValues(): Environment
+    {
+        $environment = $this->makeEnvironment();
+        EnvVar::factory()->for($environment)->create(['key' => 'APP_ENV', 'value' => 'production']);
+        EnvVar::factory()->for($environment)->create(['key' => 'STRIPE_SECRET', 'value' => 'sk_live_TOP_SECRET_VALUE', 'is_secret' => true]);
+        EnvVar::factory()->for($environment)->create(['key' => 'DB_PASSWORD', 'value' => 'datastore-password-123', 'source' => EnvVarSource::DATASTORE, 'is_secret' => true]);
+        EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'value' => 'mysql.internal', 'source' => EnvVarSource::DATASTORE]);
+
+        return $environment;
     }
 
     public function test_a_developer_cannot_change_a_protected_environment(): void

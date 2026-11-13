@@ -22,33 +22,6 @@ class EnvVarControllerTest extends TestCase
 {
     use BuildsEnvironments, RefreshDatabase;
 
-    public function test_the_page_never_contains_a_secret_value_or_a_datastore_value(): void
-    {
-        $environment = $this->makeEnvironment();
-        EnvVar::factory()->for($environment)->create(['key' => 'APP_ENV', 'value' => 'production']);
-        EnvVar::factory()->for($environment)->create(['key' => 'STRIPE_SECRET', 'value' => 'sk_live_TOP_SECRET_VALUE', 'is_secret' => true]);
-        EnvVar::factory()->for($environment)->create(['key' => 'DB_PASSWORD', 'value' => 'datastore-password-123', 'source' => EnvVarSource::DATASTORE, 'is_secret' => true]);
-        EnvVar::factory()->for($environment)->create(['key' => 'DB_HOST', 'value' => 'mysql.internal', 'source' => EnvVarSource::DATASTORE]);
-
-        $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/settings")->assertOk();
-
-        $raw = $response->getContent();
-        $this->assertStringNotContainsString('sk_live_TOP_SECRET_VALUE', $raw);
-        $this->assertStringNotContainsString('datastore-password-123', $raw);
-        $this->assertStringNotContainsString('mysql.internal', $raw);
-        $this->assertStringContainsString('production', $raw);
-
-        $response->assertInertia(fn (Assert $page) => $page
-            ->component('environments/settings')
-            ->has('envVars', 4)
-            ->where('envVars.0', ['id' => $environment->envVars()->where('key', 'APP_ENV')->value('id'), 'key' => 'APP_ENV', 'source' => 'user', 'is_secret' => false, 'available_at' => 'runtime', 'resource' => null, 'value' => 'production'])
-            ->where('envVars.3.key', 'STRIPE_SECRET')
-            ->where('envVars.3.value', null)
-            ->where('envVars.3.is_secret', true)
-            ->where('envVars.1.source', 'datastore')
-            ->where('envVars.1.value', null));
-    }
-
     public function test_a_resource_value_names_the_resource_that_owns_it(): void
     {
         $environment = $this->makeEnvironment();
@@ -73,12 +46,12 @@ class EnvVarControllerTest extends TestCase
             ->where('envVars.2.resource', 'Valkey'));
     }
 
-    public function test_the_inertia_json_response_never_contains_the_secret_either(): void
+    public function test_the_inertia_json_response_of_a_developer_never_contains_the_secret(): void
     {
         $environment = $this->makeEnvironment();
         EnvVar::factory()->for($environment)->create(['key' => 'STRIPE_SECRET', 'value' => 'sk_live_TOP_SECRET_VALUE', 'is_secret' => true]);
 
-        $response = $this->actingAs(User::factory()->owner()->create())
+        $response = $this->actingAs(User::factory()->create())
             ->get("/environments/{$environment->id}/settings", ['X-Inertia' => 'true', 'X-Inertia-Version' => $this->inertiaVersion()])
             ->assertOk();
 
@@ -194,8 +167,6 @@ class EnvVarControllerTest extends TestCase
         $response = $this->actingAs(User::factory()->owner()->create())->get("/environments/{$environment->id}/settings");
 
         $response->assertInertia(fn (Assert $page) => $page->where('envText', "A_KEY=one\nB_KEY='two words'\n"));
-        $this->assertStringNotContainsString('sk_live_TOP_SECRET_VALUE', $response->getContent());
-        $this->assertStringNotContainsString('mysql.internal', $response->getContent());
     }
 
     public function test_the_text_route_saves_the_whole_text_once(): void

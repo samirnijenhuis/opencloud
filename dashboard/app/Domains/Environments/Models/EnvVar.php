@@ -37,7 +37,7 @@ class EnvVar extends Model
     }
 
     /**
-     * Nobody reads a saved secret in the dashboard, so a secret serializes without its value.
+     * A secret serializes without its value. Only the settings page sends a secret value, and only to an owner or an admin.
      *
      * @return array<string, mixed>
      */

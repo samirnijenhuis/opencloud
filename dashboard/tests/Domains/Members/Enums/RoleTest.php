@@ -21,6 +21,7 @@ class RoleTest extends TestCase
             'owner changes unprotected environment' => [Role::OWNER, Ability::CHANGE_UNPROTECTED_ENVIRONMENT, true],
             'owner deploys' => [Role::OWNER, Ability::DEPLOY, true],
             'owner reads logs' => [Role::OWNER, Ability::READ_LOGS, true],
+            'owner reads secrets' => [Role::OWNER, Ability::READ_SECRETS, true],
 
             'admin manages credentials' => [Role::ADMIN, Ability::MANAGE_CREDENTIALS, false],
             'admin manages members' => [Role::ADMIN, Ability::MANAGE_MEMBERS, false],
@@ -30,6 +31,7 @@ class RoleTest extends TestCase
             'admin changes unprotected environment' => [Role::ADMIN, Ability::CHANGE_UNPROTECTED_ENVIRONMENT, true],
             'admin deploys' => [Role::ADMIN, Ability::DEPLOY, true],
             'admin reads logs' => [Role::ADMIN, Ability::READ_LOGS, true],
+            'admin reads secrets' => [Role::ADMIN, Ability::READ_SECRETS, true],
 
             'developer manages credentials' => [Role::DEVELOPER, Ability::MANAGE_CREDENTIALS, false],
             'developer manages members' => [Role::DEVELOPER, Ability::MANAGE_MEMBERS, false],
@@ -39,6 +41,7 @@ class RoleTest extends TestCase
             'developer changes unprotected environment' => [Role::DEVELOPER, Ability::CHANGE_UNPROTECTED_ENVIRONMENT, true],
             'developer deploys' => [Role::DEVELOPER, Ability::DEPLOY, true],
             'developer reads logs' => [Role::DEVELOPER, Ability::READ_LOGS, true],
+            'developer reads secrets' => [Role::DEVELOPER, Ability::READ_SECRETS, false],
         ];
     }
 

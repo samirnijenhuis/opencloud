@@ -15,4 +15,6 @@ enum Ability
     case CHANGE_UNPROTECTED_ENVIRONMENT;
     case DEPLOY;
     case READ_LOGS;
+    /** Reads the saved secret env values in the dashboard. */
+    case READ_SECRETS;
 }
