@@ -7,6 +7,8 @@ use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Jobs\RunDeployment;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Members\Models\User;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\Models\Domain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
@@ -42,6 +44,33 @@ class DeploymentControllerTest extends TestCase
                 ->where('deployments.0.triggered_by', 'Dev')
                 ->where('deployments.1.triggered_by', null)
                 ->missing('deployments.0.log'));
+    }
+
+    public function test_the_deployment_pages_send_the_primary_domain_for_the_visit_site_button(): void
+    {
+        $environment = $this->makeEnvironment();
+        $deployment = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::LIVE]);
+        Domain::factory()->for($environment)->create(['hostname' => 'shop.203.0.113.10.sslip.io', 'generated' => true, 'dns_status' => DnsStatus::OK, 'certificate_status' => 'issued']);
+        Domain::factory()->for($environment)->create(['hostname' => 'shop.example.com', 'is_primary' => true, 'dns_status' => DnsStatus::OK, 'certificate_status' => 'issued']);
+        $user = User::factory()->create();
+        $primary = ['hostname' => 'shop.example.com', 'dns_status' => 'ok', 'certificate_status' => 'issued'];
+
+        $this->actingAs($user)->get("/environments/{$environment->id}/deployments")
+            ->assertInertia(fn (Assert $page) => $page->where('primary_domain', $primary));
+        $this->actingAs($user)->get("/deployments/{$deployment->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('primary_domain', $primary));
+    }
+
+    public function test_the_deployment_pages_send_no_primary_domain_without_a_domain(): void
+    {
+        $environment = $this->makeEnvironment();
+        $deployment = Deployment::factory()->for($environment)->create(['status' => DeploymentStatus::LIVE]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get("/environments/{$environment->id}/deployments")
+            ->assertInertia(fn (Assert $page) => $page->where('primary_domain', null));
+        $this->actingAs($user)->get("/deployments/{$deployment->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('primary_domain', null));
     }
 
     public function test_a_deployment_page_has_the_steps_and_the_warning(): void
@@ -97,20 +126,9 @@ class DeploymentControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('steps', []));
     }
 
-    public function test_a_developer_cannot_deploy_a_protected_environment(): void
+    public function test_a_developer_deploys_production_and_lands_on_the_deployment(): void
     {
-        Queue::fake();
-        $environment = $this->makeEnvironment(true);
-
-        $this->actingAs(User::factory()->create())->post("/environments/{$environment->id}/deployments")->assertForbidden();
-
-        Queue::assertNothingPushed();
-        $this->assertSame(0, Deployment::count());
-    }
-
-    public function test_a_developer_deploys_an_unprotected_environment_and_lands_on_the_deployment(): void
-    {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment();
         $developer = User::factory()->create();
         $deployment = Deployment::factory()->for($environment)->create();
 
@@ -127,7 +145,7 @@ class DeploymentControllerTest extends TestCase
     {
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
-        $environment = $this->makeEnvironment(true);
+        $environment = $this->makeEnvironment();
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->post("/environments/{$environment->id}/deployments")->assertRedirect();
@@ -141,7 +159,7 @@ class DeploymentControllerTest extends TestCase
     {
         Queue::fake();
         FakeProcesses::install()->lsRemote = '';
-        $environment = $this->makeEnvironment(false);
+        $environment = $this->makeEnvironment();
 
         $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")
             ->assertRedirect('/back')
@@ -155,7 +173,7 @@ class DeploymentControllerTest extends TestCase
     {
         Queue::fake();
         FakeProcesses::install()->lsRemoteError = "fatal: repository 'https://github.com/acme/shop.git/' not found\n";
-        $environment = $this->makeEnvironment(false);
+        $environment = $this->makeEnvironment();
 
         $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")
             ->assertRedirect('/back')
@@ -168,7 +186,7 @@ class DeploymentControllerTest extends TestCase
     {
         Queue::fake();
         Process::fake(['*' => Process::result(errorOutput: "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n", exitCode: 128)]);
-        $environment = $this->makeEnvironment(false);
+        $environment = $this->makeEnvironment();
         $environment->application->update(['deploy_private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----\n"]);
 
         $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")

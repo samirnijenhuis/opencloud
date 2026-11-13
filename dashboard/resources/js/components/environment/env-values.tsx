@@ -5,8 +5,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { type Availability } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/react';
+import { Eye, EyeOff } from 'lucide-react';
 import { FormEventHandler, useEffect, useState } from 'react';
 import { EnvTextEditor } from './env-text-editor';
 
@@ -88,6 +90,40 @@ export function EnvValues({
     );
 }
 
+/** The page gets no secret value for a user who cannot read secrets, so the value can be null. */
+function EnvValue({ envVar }: { envVar: EnvVar }) {
+    const [shown, setShown] = useState(false);
+
+    if (envVar.value === null) {
+        return envVar.source === 'datastore' ? (
+            <span className="text-muted-foreground">Set by {envVar.resource ?? 'a resource'}. Read only.</span>
+        ) : (
+            <Badge variant="secondary">Secret, set</Badge>
+        );
+    }
+
+    return (
+        <div className="space-y-1">
+            <div className="flex items-center gap-1">
+                <code className="font-mono break-all">{envVar.is_secret && !shown ? '••••••••' : envVar.value}</code>
+                {envVar.is_secret && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 shrink-0"
+                        aria-label={shown ? `Hide ${envVar.key}` : `Show ${envVar.key}`}
+                        onClick={() => setShown(!shown)}
+                    >
+                        {shown ? <EyeOff /> : <Eye />}
+                    </Button>
+                )}
+            </div>
+            {envVar.source === 'datastore' && <p className="text-muted-foreground text-xs">Set by {envVar.resource ?? 'a resource'}</p>}
+        </div>
+    );
+}
+
 function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number; envVars: EnvVar[]; canUpdate: boolean }) {
     const form = useForm<{ key: string; value: string; is_secret: boolean; available_at: Availability }>({
         key: '',
@@ -104,7 +140,7 @@ function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number
     };
 
     const replace = (envVar: EnvVar) => {
-        form.setData({ key: envVar.key, value: '', is_secret: envVar.is_secret, available_at: envVar.available_at });
+        form.setData({ key: envVar.key, value: envVar.value ?? '', is_secret: envVar.is_secret, available_at: envVar.available_at });
         document.getElementById('env-key')?.focus();
     };
 
@@ -115,6 +151,9 @@ function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number
     };
 
     const existing = envVars.find((envVar) => envVar.source === 'user' && envVar.key === data.key);
+    const typedKey = data.key.trim();
+    const keyCounts = new Map<string, number>();
+    envVars.forEach((envVar) => keyCounts.set(envVar.key, (keyCounts.get(envVar.key) ?? 0) + 1));
 
     return (
         <div className="space-y-4">
@@ -133,23 +172,27 @@ function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number
                         </thead>
                         <tbody className="divide-y">
                             {envVars.map((envVar) => (
-                                <tr key={envVar.id}>
-                                    <td className="p-3 font-mono">{envVar.key}</td>
-                                    <td className="p-3">
-                                        {envVar.source === 'datastore' ? (
-                                            <span className="text-muted-foreground">Set by {envVar.resource ?? 'a resource'}. Read only.</span>
-                                        ) : envVar.is_secret ? (
-                                            <Badge variant="secondary">Secret, set</Badge>
-                                        ) : (
-                                            <code className="font-mono break-all">{envVar.value}</code>
+                                <tr key={envVar.id} className={cn(envVar.key === typedKey && 'bg-amber-50 dark:bg-amber-950/30')}>
+                                    <td className="p-3 font-mono">
+                                        {envVar.key}
+                                        {(keyCounts.get(envVar.key) ?? 0) > 1 && (
+                                            <Badge
+                                                className="ml-2 border-transparent bg-amber-100 font-sans text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                                                title="A resource and a user value both set this key. The app gets the user value."
+                                            >
+                                                Duplicate
+                                            </Badge>
                                         )}
+                                    </td>
+                                    <td className="p-3">
+                                        <EnvValue envVar={envVar} />
                                     </td>
                                     <td className="text-muted-foreground p-3">{availabilityLabels[envVar.available_at]}</td>
                                     <td className="p-3 text-right whitespace-nowrap">
                                         {envVar.source === 'user' && canUpdate && (
                                             <>
                                                 <Button variant="ghost" size="sm" onClick={() => replace(envVar)}>
-                                                    {envVar.is_secret ? 'Replace' : 'Edit'}
+                                                    {envVar.is_secret && envVar.value === null ? 'Replace' : 'Edit'}
                                                 </Button>
                                                 <Button variant="ghost" size="sm" onClick={() => remove(envVar)}>
                                                     Delete
@@ -165,7 +208,7 @@ function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number
             )}
             {!errors.key && <InputError message={pageErrors.key} />}
 
-            {canUpdate ? (
+            {canUpdate && (
                 <form onSubmit={submit} className="space-y-4 rounded-lg border p-4">
                     <h3 className="text-sm font-medium">{existing ? `Replace ${existing.key}` : 'Add or replace a value'}</h3>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -197,7 +240,7 @@ function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number
                     <div className="flex flex-wrap items-center gap-6">
                         <Label className="flex items-center gap-2 font-normal">
                             <Checkbox checked={data.is_secret} onCheckedChange={(checked) => setData('is_secret', checked === true)} />
-                            Secret. Nobody can read it after you save it.
+                            Secret. Only an owner or an admin can read it.
                         </Label>
                         <div className="flex items-center gap-2">
                             <Label htmlFor="env-available">Available at</Label>
@@ -217,8 +260,6 @@ function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number
                     </div>
                     <Button disabled={processing || data.key.trim() === ''}>Save value</Button>
                 </form>
-            ) : (
-                <p className="text-muted-foreground text-sm">Only an admin or an owner can change the values of a protected environment.</p>
             )}
         </div>
     );

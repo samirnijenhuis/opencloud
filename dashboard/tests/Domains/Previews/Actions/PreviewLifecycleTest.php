@@ -92,8 +92,8 @@ class PreviewLifecycleTest extends TestCase
 
         $preview = $this->environment('pr-12');
         $this->assertSame(
-            [EnvironmentKind::PREVIEW, 12, 'feature/login', false, 's', 1, 1, '/health', ['php artisan migrate --force', 'php artisan db:seed --force'], 30],
-            [$preview->kind, $preview->pr_number, $preview->branch, $preview->is_protected, $preview->size->value, $preview->min_instances, $preview->max_instances, $preview->health_path, $preview->deploy_commands, $preview->sleep_after_minutes],
+            [EnvironmentKind::PREVIEW, 12, 'feature/login', 's', 1, 1, '/health', ['php artisan migrate --force', 'php artisan db:seed --force'], 30],
+            [$preview->kind, $preview->pr_number, $preview->branch, $preview->size->value, $preview->min_instances, $preview->max_instances, $preview->health_path, $preview->deploy_commands, $preview->sleep_after_minutes],
         );
         $this->assertSame(
             [

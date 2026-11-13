@@ -138,7 +138,6 @@ class ApplicationController extends Controller
                     'id' => $environment->id,
                     'name' => $environment->name,
                     'kind' => $environment->kind,
-                    'is_protected' => $environment->is_protected,
                     'branch' => $environment->branch,
                     'pr_number' => $environment->pr_number,
                     'pr_url' => $githubRepository && $environment->pr_number ? "https://github.com/{$githubRepository}/pull/{$environment->pr_number}" : null,

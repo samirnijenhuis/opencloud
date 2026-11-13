@@ -37,7 +37,6 @@ trait PresentsEnvironment
                 'id' => $environment->id,
                 'name' => $environment->name,
                 'kind' => $environment->kind,
-                'is_protected' => $environment->is_protected,
                 'color' => $environment->color,
                 'branch' => $environment->branch,
                 'auto_deploy' => $environment->auto_deploy,

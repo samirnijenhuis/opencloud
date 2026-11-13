@@ -89,15 +89,15 @@ class CreateEnvironmentTest extends TestCase
         $staging = app(CreateEnvironment::class)->execute($this->application, $this->admin, 'staging', 'staging', $production);
 
         $this->assertSame(
-            [EnvironmentKind::PERMANENT, 'staging', false, true, null, 'l', 2, 4, 60, '/up', ['php artisan migrate --force']],
-            [$staging->kind, $staging->branch, $staging->is_protected, $staging->auto_deploy, $staging->pr_number, $staging->size->value, $staging->min_instances, $staging->max_instances, $staging->cpu_target, $staging->health_path, $staging->deploy_commands],
+            [EnvironmentKind::PERMANENT, 'staging', true, null, 'l', 2, 4, 60, '/up', ['php artisan migrate --force']],
+            [$staging->kind, $staging->branch, $staging->auto_deploy, $staging->pr_number, $staging->size->value, $staging->min_instances, $staging->max_instances, $staging->cpu_target, $staging->health_path, $staging->deploy_commands],
         );
         $this->assertSame(
             [['worker', 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600'], ['scheduler', 'php artisan schedule:work']],
             $staging->processes->map(fn (Process $p) => [$p->name, $p->command])->all(),
         );
 
-        // A developer can read the values of staging, so the secrets of production stay there. APP_KEY is new.
+        // Each secret belongs to one environment, so the secrets of production stay there. APP_KEY is new.
         $env = $this->userEnv($staging);
         $this->assertSame(['APP_KEY', 'MAIL_MAILER'], array_column($env, 0));
         $this->assertSame(['MAIL_MAILER', 'smtp', false, 'runtime'], $env[1]);

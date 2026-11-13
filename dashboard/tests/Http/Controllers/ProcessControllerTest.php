@@ -41,22 +41,22 @@ class ProcessControllerTest extends TestCase
             ]));
     }
 
-    public function test_a_developer_adds_a_process_to_an_unprotected_environment_but_not_to_a_protected_one(): void
+    public function test_a_developer_adds_a_process_to_production_and_to_staging(): void
     {
-        $production = $this->makeEnvironment(true, 'production');
-        $staging = $this->makeEnvironment(false, 'staging');
+        $production = $this->makeEnvironment('production');
+        $staging = $this->makeEnvironment('staging');
         $developer = User::factory()->create();
 
-        $this->actingAs($developer)->post("/environments/{$production->id}/processes", self::HORIZON)->assertForbidden();
+        $this->actingAs($developer)->from('/back')->post("/environments/{$production->id}/processes", self::HORIZON)->assertRedirect('/back');
         $this->actingAs($developer)->from('/back')->post("/environments/{$staging->id}/processes", self::HORIZON)->assertRedirect('/back');
 
-        $this->assertSame([[$staging->id, ...array_values(self::HORIZON)]], $this->rows());
-        $this->assertSame(['process.added', $developer->id], [AuditEvent::sole()->action, AuditEvent::sole()->user_id]);
+        $this->assertSame([[$production->id, ...array_values(self::HORIZON)], [$staging->id, ...array_values(self::HORIZON)]], $this->rows());
+        $this->assertSame([['process.added', $developer->id], ['process.added', $developer->id]], AuditEvent::orderBy('id')->get()->map(fn (AuditEvent $event) => [$event->action, $event->user_id])->all());
     }
 
     public function test_a_scheduled_process_needs_a_valid_schedule_and_ignores_the_instances_that_the_sheet_sends(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment('staging');
         $developer = User::factory()->create();
         $scheduler = [
             'name' => 'scheduler', 'kind' => 'scheduled', 'command' => 'php artisan schedule:run', 'schedule' => '0 0 L * *',
@@ -75,7 +75,7 @@ class ProcessControllerTest extends TestCase
 
     public function test_a_bad_process_comes_back_with_plain_messages(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment('staging');
         Process::factory()->for($environment)->create();
         $developer = User::factory()->create();
 
@@ -92,24 +92,20 @@ class ProcessControllerTest extends TestCase
         $this->assertSame(['worker'], $environment->processes()->pluck('name')->all());
     }
 
-    public function test_an_admin_changes_and_removes_a_process_of_a_protected_environment(): void
+    public function test_a_developer_changes_and_removes_a_process_of_production(): void
     {
-        $environment = $this->makeEnvironment(true);
+        $environment = $this->makeEnvironment();
         $worker = Process::factory()->for($environment)->create();
-        $admin = User::factory()->admin()->create();
+        $developer = User::factory()->create();
         $change = [...self::HORIZON, 'name' => 'worker', 'command' => 'php artisan queue:work --queue=high'];
 
-        $this->actingAs(User::factory()->create())->patch("/processes/{$worker->id}", $change)->assertForbidden();
-        $this->actingAs(User::factory()->create())->delete("/processes/{$worker->id}")->assertForbidden();
-        $this->assertSame('php artisan queue:work', $worker->fresh()->command);
-
-        $this->actingAs($admin)->patch("/processes/{$worker->id}", $change)->assertRedirect();
+        $this->actingAs($developer)->patch("/processes/{$worker->id}", $change)->assertRedirect();
         $this->assertSame(
             [ProcessKind::LONG_RUNNING, 'php artisan queue:work --queue=high', Size::M, 2, 4, 60],
             array_values($worker->fresh()->only(['kind', 'command', 'size', 'min_instances', 'max_instances', 'cpu_target'])),
         );
 
-        $this->actingAs($admin)->delete("/processes/{$worker->id}")->assertRedirect();
+        $this->actingAs($developer)->delete("/processes/{$worker->id}")->assertRedirect();
         $this->assertSame(0, Process::count());
         $this->assertSame(['process.updated', 'process.removed'], AuditEvent::orderBy('id')->pluck('action')->all());
     }

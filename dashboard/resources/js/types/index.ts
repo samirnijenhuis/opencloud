@@ -116,7 +116,6 @@ export interface EnvironmentPageProps {
         name: string;
         kind: EnvironmentKind;
         color: EnvironmentColor;
-        is_protected: boolean;
         branch: string | null;
         auto_deploy: boolean;
         status: DeploymentStatus | null;

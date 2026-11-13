@@ -14,8 +14,6 @@ const tabFields: Record<AppTab, (keyof Compute)[]> = {
     autoscaling: ['min_instances', 'max_instances', 'cpu_target'],
 };
 
-const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
-
 export function AppSheet({
     open,
     onClose,
@@ -91,8 +89,6 @@ export function AppSheet({
                 </NextDeployFooter>
             }
         >
-            {locked && <p className="text-muted-foreground text-sm">{LOCKED_REASON}</p>}
-
             <form id="app-settings" onSubmit={save}>
                 <fieldset disabled={locked} className="space-y-6">
                     {tab === 'general' && (

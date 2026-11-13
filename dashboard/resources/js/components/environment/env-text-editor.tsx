@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
 import { Lock } from 'lucide-react';
 import { FormEventHandler, useEffect, useMemo, useRef } from 'react';
+import { duplicateLines } from './env-text-duplicates';
 import { type EnvVar } from './env-values';
 
 const kindClasses: Record<DotenvTokenKind, string> = {
@@ -18,17 +19,18 @@ const kindClasses: Record<DotenvTokenKind, string> = {
     invalid: 'text-destructive underline decoration-wavy',
 };
 
+const FAILED = 'text-destructive font-semibold';
+const DUPLICATE = 'font-semibold text-amber-700 dark:text-amber-400';
+const DUPLICATE_KEY = 'underline decoration-amber-500 decoration-wavy';
+
 const LINE_HEIGHT = 20;
 const BOTTOM_PADDING = 16;
 // The pre and the textarea share every property that changes where a character sits.
 const textLayout = 'm-0 box-border w-full px-3 pt-0 pb-4 font-mono text-sm leading-5 whitespace-pre';
 
-function lineNumber(number: number, failed: boolean) {
+function lineNumber(number: number, mark: string | null) {
     return (
-        <div
-            key={number}
-            className={cn('h-5 pr-3 text-right text-xs leading-5 select-none', failed ? 'text-destructive font-semibold' : 'text-muted-foreground')}
-        >
+        <div key={number} className={cn('h-5 pr-3 text-right text-xs leading-5 select-none', mark ?? 'text-muted-foreground')}>
             {number}
         </div>
     );
@@ -49,10 +51,22 @@ export function EnvTextEditor({
     const form = useForm<{ text: string }>({ text: envText });
     const { data, setData, errors, processing } = form;
     const locked = envVars.filter((envVar) => envVar.source === 'datastore' || envVar.is_secret);
-    const tokens = useMemo(() => tokenizeDotenv(data.text), [data.text]);
+    const tokens = useMemo(() => {
+        let line = 1;
+
+        return tokenizeDotenv(data.text).map((token) => {
+            const tokenLine = line;
+            line += token.text === '\n' ? 1 : 0;
+
+            return { ...token, line: tokenLine };
+        });
+    }, [data.text]);
     const highlight = useRef<HTMLPreElement>(null);
     const messages = errors.text === undefined ? [] : errors.text.split('\n');
     const failedLines = new Set(messages.map((message) => Number(/^Line (\d+)/.exec(message)?.[1])));
+    const duplicates = duplicateLines(locked, data.text);
+    const liveMessages = [...duplicates.values()].filter((message): message is string => message !== null && !messages.includes(message));
+    const lineMark = (line: number) => (failedLines.has(line) ? FAILED : duplicates.has(line) ? DUPLICATE : null);
     const lineCount = data.text.split('\n').length;
 
     useEffect(() => {
@@ -71,14 +85,7 @@ export function EnvTextEditor({
             <div className="border-input bg-background focus-within:ring-ring rounded-md border py-2 focus-within:ring-2 focus-within:ring-offset-2">
                 {locked.map((envVar, index) => (
                     <div key={envVar.id} className="bg-muted/50 text-muted-foreground flex h-5 items-center font-mono text-sm leading-5">
-                        <div
-                            className={cn(
-                                'w-12 shrink-0 pr-3 text-right text-xs select-none',
-                                failedLines.has(index + 1) && 'text-destructive font-semibold',
-                            )}
-                        >
-                            {index + 1}
-                        </div>
+                        <div className={cn('w-12 shrink-0 pr-3 text-right text-xs select-none', lineMark(index + 1))}>{index + 1}</div>
                         <Lock className="mr-2 size-3 shrink-0" aria-hidden="true" />
                         <span className="font-medium">{envVar.key}</span>
                         <span className="ml-3 truncate italic">
@@ -89,14 +96,18 @@ export function EnvTextEditor({
                 ))}
                 <div className="flex">
                     <div className="w-12 shrink-0">
-                        {Array.from({ length: lineCount }, (_, index) =>
-                            lineNumber(locked.length + index + 1, failedLines.has(locked.length + index + 1)),
-                        )}
+                        {Array.from({ length: lineCount }, (_, index) => lineNumber(locked.length + index + 1, lineMark(locked.length + index + 1)))}
                     </div>
                     <div className="relative min-w-0 flex-1">
                         <pre ref={highlight} aria-hidden="true" className={cn(textLayout, 'pointer-events-none absolute inset-0 overflow-hidden')}>
                             {tokens.map((token, index) => (
-                                <span key={index} className={kindClasses[token.kind]}>
+                                <span
+                                    key={index}
+                                    className={cn(
+                                        kindClasses[token.kind],
+                                        token.kind === 'key' && duplicates.has(locked.length + token.line) && DUPLICATE_KEY,
+                                    )}
+                                >
                                     {token.text}
                                 </span>
                             ))}
@@ -133,12 +144,15 @@ export function EnvTextEditor({
                     ))}
                 </ul>
             )}
-            <p className="text-muted-foreground text-sm">Opencloud does not save comments. Add a secret in the table.</p>
-            {canUpdate ? (
-                <Button disabled={processing}>Save values</Button>
-            ) : (
-                <p className="text-muted-foreground text-sm">Only an admin or an owner can change the values of a protected environment.</p>
+            {liveMessages.length > 0 && (
+                <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-400">
+                    {liveMessages.map((message) => (
+                        <li key={message}>{message}</li>
+                    ))}
+                </ul>
             )}
+            <p className="text-muted-foreground text-sm">Opencloud does not save comments. Add a secret in the table.</p>
+            {canUpdate && <Button disabled={processing}>Save values</Button>}
         </form>
     );
 }

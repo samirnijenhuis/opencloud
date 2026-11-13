@@ -31,8 +31,6 @@ const sections = [
     { id: 'environment-values', title: 'Environment values' },
 ] as const;
 
-const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
-
 /** The minutes that sleep starts with when the user turns it on. A new preview starts with the same value. */
 const SLEEP_AFTER_MINUTES = 15;
 
@@ -194,13 +192,6 @@ function GeneralForm({ environment, settings, locked }: { environment: Props['en
                     </div>
                 </Field>
             </fieldset>
-            <Field label="Protection" description="A protected environment keeps its secrets from developers.">
-                <p className="text-sm">
-                    {environment.is_protected
-                        ? 'Protected. Only an admin or an owner can change or deploy it.'
-                        : 'Not protected. Each member can change and deploy it.'}
-                </p>
-            </Field>
             {!locked && (
                 <div className="flex items-center justify-end gap-3 p-4">
                     {form.recentlySuccessful && <span className="text-muted-foreground text-sm">Saved.</span>}
@@ -291,8 +282,6 @@ export default function EnvironmentSettings(props: Props) {
                 </nav>
 
                 <div className="min-w-0 space-y-12">
-                    {locked && <p className="text-muted-foreground text-sm">{LOCKED_REASON}</p>}
-
                     <Section id="general" title="General" description="What this environment deploys and how it looks in the dashboard.">
                         <GeneralForm environment={environment} settings={settings} locked={locked} />
                     </Section>

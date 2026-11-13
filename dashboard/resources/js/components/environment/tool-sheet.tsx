@@ -13,8 +13,6 @@ import { type Tool, type ToolKind, type ToolKindOption, type ToolLogin } from '.
 /** The kind is null only while no kind is left to add, and then the sheet does not open in add mode. */
 type ToolForm = { kind: ToolKind | null; hostname: string };
 
-const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
-
 const DNS_HINT = 'Point a DNS record for this address at the cluster. The wildcard record of the previews covers an address in the same domain.';
 
 const kindHelp: Record<ToolKind, string> = {
@@ -122,8 +120,6 @@ export function ToolSheet({
                     </>
                 }
             >
-                {locked && <p className="text-muted-foreground text-sm">{LOCKED_REASON}</p>}
-
                 <form id="tool-settings" onSubmit={save}>
                     <fieldset disabled={locked} className="space-y-6">
                         {!tool && (

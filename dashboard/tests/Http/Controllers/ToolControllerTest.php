@@ -104,21 +104,6 @@ class ToolControllerTest extends TestCase
         $this->assertSame(0, AuditEvent::count());
     }
 
-    public function test_a_developer_cannot_change_the_tools_of_a_protected_template(): void
-    {
-        $this->template->update(['is_protected' => true]);
-        $tool = Tool::factory()->for($this->template)->create(['hostname' => 'mail-{pr_number}.previews.example.com']);
-        $this->actingAs(User::factory()->create());
-
-        $this->post("/environments/{$this->template->id}/tools", ['kind' => 'phpmyadmin', 'hostname' => 'database-{pr_number}.previews.example.com'])->assertForbidden();
-        $this->patch("/tools/{$tool->id}", ['hostname' => 'inbox-{pr_number}.previews.example.com'])->assertForbidden();
-        $this->delete("/tools/{$tool->id}")->assertForbidden();
-
-        $this->assertSame([[ToolKind::MAILPIT, 'mail-{pr_number}.previews.example.com']], Tool::all()->map(fn (Tool $each) => [$each->kind, $each->hostname])->all());
-        $this->assertSame(0, AuditEvent::count());
-        Queue::assertNothingPushed();
-    }
-
     /** @return array<string, array{string, string, string}> the environment, the hostname, and the message */
     public static function refusedHostnames(): array
     {

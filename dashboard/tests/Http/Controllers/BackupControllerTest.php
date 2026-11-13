@@ -77,24 +77,18 @@ class BackupControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('datastores.attachments.0.restore.status', 'running')->where('datastores.polling', true)->where('can.restore', true));
     }
 
-    public function test_a_developer_cannot_back_up_or_restore_in_a_protected_environment(): void
+    public function test_a_developer_backs_up_production_but_cannot_restore_it(): void
     {
         $backup = $this->backup();
-        $this->mock(BackupNow::class)->shouldNotReceive('execute');
-        $this->mock(RestoreBackup::class)->shouldNotReceive('execute');
         $developer = User::factory()->create();
-
-        $this->actingAs($developer)->post("/datastore-attachments/{$this->attachment->id}/backups")->assertForbidden();
-        $this->actingAs($developer)->post("/backups/{$backup->id}/restore", ['confirm' => true])->assertForbidden();
-    }
-
-    public function test_a_developer_cannot_restore_even_in_an_unprotected_environment(): void
-    {
-        $this->attachment->environment->update(['is_protected' => false]);
-        $backup = $this->backup();
+        $this->mock(BackupNow::class)
+            ->shouldReceive('execute')
+            ->once()
+            ->withArgs(fn (DatastoreAttachment $given, User $by) => $given->is($this->attachment) && $by->is($developer));
         $this->mock(RestoreBackup::class)->shouldNotReceive('execute');
 
-        $this->actingAs(User::factory()->create())->post("/backups/{$backup->id}/restore", ['confirm' => true])->assertForbidden();
+        $this->actingAs($developer)->post("/datastore-attachments/{$this->attachment->id}/backups")->assertRedirect();
+        $this->actingAs($developer)->post("/backups/{$backup->id}/restore", ['confirm' => true])->assertForbidden();
     }
 
     public function test_owner_and_admin_start_a_backup_through_the_action(): void

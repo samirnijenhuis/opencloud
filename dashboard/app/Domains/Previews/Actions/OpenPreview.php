@@ -93,7 +93,6 @@ class OpenPreview
                 'kind' => EnvironmentKind::PREVIEW,
                 'pr_number' => $pullRequest->number,
                 'branch' => $pullRequest->headRef,
-                'is_protected' => false,
                 'min_instances' => 1,
                 'max_instances' => 1,
             ]);

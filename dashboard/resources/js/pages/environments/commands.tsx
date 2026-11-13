@@ -152,7 +152,7 @@ export default function EnvironmentCommands(props: Props) {
 
     return (
         <EnvironmentLayout page={props} tab="commands" title="Commands">
-            {can.update ? (
+            {can.update && (
                 <RunForm
                     environmentId={environment.id}
                     onStarted={(run) => {
@@ -160,8 +160,6 @@ export default function EnvironmentCommands(props: Props) {
                         refresh();
                     }}
                 />
-            ) : (
-                <p className="text-muted-foreground text-sm">Only an admin or an owner can run commands on a protected environment.</p>
             )}
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">

@@ -42,13 +42,13 @@ class EnvironmentColorTest extends TestCase
         );
     }
 
-    public function test_only_users_who_may_change_the_environment_set_its_color(): void
+    public function test_each_member_sets_the_color_of_every_environment(): void
     {
         $production = $this->makeEnvironment();
-        $staging = Environment::factory()->for($production->application)->create(['name' => 'staging', 'is_protected' => false]);
+        $staging = Environment::factory()->for($production->application)->create(['name' => 'staging']);
         $developer = User::factory()->create();
 
-        $this->actingAs($developer)->patch("/environments/{$production->id}/color", ['color' => 'red'])->assertForbidden();
+        $this->actingAs($developer)->patch("/environments/{$production->id}/color", ['color' => 'red'])->assertRedirect();
         $this->actingAs($developer)->patch("/environments/{$staging->id}/color", ['color' => 'sky'])->assertRedirect();
         $this->actingAs(User::factory()->admin()->create())->patch("/environments/{$production->id}/color", ['color' => 'green'])->assertRedirect();
         $this->actingAs($developer)->patch("/environments/{$staging->id}/color", ['color' => 'pink'])->assertSessionHasErrors('color');

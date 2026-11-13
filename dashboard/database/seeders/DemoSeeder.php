@@ -52,7 +52,7 @@ class DemoSeeder extends Seeder
         $shop = Application::create(['name' => 'shop', 'repository' => 'https://github.com/acme/shop.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::LARAVEL]);
         $docs = Application::create(['name' => 'docs-site', 'repository' => 'https://github.com/acme/docs-site.git', 'cluster_id' => $cluster->id, 'type' => ApplicationType::NODE, 'port' => 3000]);
 
-        $production = $this->environment($shop, 'production', EnvironmentKind::PERMANENT, protected: true, attributes: [
+        $production = $this->environment($shop, 'production', EnvironmentKind::PERMANENT, attributes: [
             'size' => Size::M,
             'min_instances' => 2,
             'max_instances' => 5,
@@ -60,7 +60,7 @@ class DemoSeeder extends Seeder
         ]);
         $staging = $this->environment($shop, 'staging', EnvironmentKind::PERMANENT);
         $preview = $this->environment($shop, 'pr-12', EnvironmentKind::PREVIEW, attributes: ['pr_number' => 12, 'branch' => 'feature/checkout']);
-        $docsProduction = $this->environment($docs, 'production', EnvironmentKind::PERMANENT, protected: true, attributes: [
+        $docsProduction = $this->environment($docs, 'production', EnvironmentKind::PERMANENT, attributes: [
             'deploy_commands' => [],
             'health_path' => '/',
         ]);
@@ -82,12 +82,11 @@ class DemoSeeder extends Seeder
     }
 
     /** @param  array<string, mixed>  $attributes */
-    private function environment(Application $application, string $name, EnvironmentKind $kind, bool $protected = false, array $attributes = []): Environment
+    private function environment(Application $application, string $name, EnvironmentKind $kind, array $attributes = []): Environment
     {
         $environment = $application->environments()->create([
             'name' => $name,
             'kind' => $kind,
-            'is_protected' => $protected,
             'branch' => 'main',
             ...$attributes,
         ]);

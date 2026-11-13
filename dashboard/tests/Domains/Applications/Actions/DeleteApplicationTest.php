@@ -64,7 +64,7 @@ class DeleteApplicationTest extends TestCase
         $this->template = $this->application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->sole();
         app(AttachDatastore::class)->execute($this->production, $this->admin, DatastoreKind::VALKEY);
         $this->staging = app(CreateEnvironment::class)->execute($this->application, $this->admin, 'staging', 'staging', $this->production);
-        $this->preview = Environment::factory()->for($this->application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12, 'is_protected' => false]);
+        $this->preview = Environment::factory()->for($this->application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
         Domain::factory()->for($this->preview)->create(['hostname' => 'pr-12.example.com']);
 
         foreach ([$this->production, $this->staging, $this->preview] as $environment) {

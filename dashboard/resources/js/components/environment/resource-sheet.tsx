@@ -356,7 +356,7 @@ export function ResourceSheet({
     const sameFamily = datastores.attachments.filter((each) => each.family === attachment.family);
     const currentDefault = sameFamily.find((each) => each.is_default);
     const keepsTheDefault = named !== null && attachment.is_default && sameFamily.some((each) => each.id !== attachment.id && each.name !== null);
-    const canDetach = canUpdate && !keepsTheDefault && attachment.server.status !== 'destroying' && attachment.detach_refusal === null;
+    const canDetach = !keepsTheDefault && attachment.server.status !== 'destroying' && attachment.detach_refusal === null;
 
     const makeDefault = () => {
         router.post(
@@ -513,26 +513,24 @@ export function ResourceSheet({
                     />
                 )}
 
-                <section className="space-y-2 border-t pt-5">
-                    <h3 className="text-sm font-medium">{text.verb}</h3>
-                    <InputError message={errors.detach} />
-                    {canDetach ? (
-                        <>
-                            <p className="text-muted-foreground text-sm">{text.detach(attachment)}</p>
-                            <Button variant="destructive" size="sm" onClick={() => setDetaching(true)}>
-                                {text.verb} {attachment.label}
-                            </Button>
-                        </>
-                    ) : (
-                        <p className="text-muted-foreground text-sm">
-                            {!canUpdate
-                                ? 'Only an admin or an owner can change the resources of a protected environment.'
-                                : keepsTheDefault
-                                  ? named.keepsTheDefault
-                                  : (attachment.detach_refusal ?? 'OpenTofu destroys it now.')}
-                        </p>
-                    )}
-                </section>
+                {canUpdate && (
+                    <section className="space-y-2 border-t pt-5">
+                        <h3 className="text-sm font-medium">{text.verb}</h3>
+                        <InputError message={errors.detach} />
+                        {canDetach ? (
+                            <>
+                                <p className="text-muted-foreground text-sm">{text.detach(attachment)}</p>
+                                <Button variant="destructive" size="sm" onClick={() => setDetaching(true)}>
+                                    {text.verb} {attachment.label}
+                                </Button>
+                            </>
+                        ) : (
+                            <p className="text-muted-foreground text-sm">
+                                {keepsTheDefault ? named.keepsTheDefault : (attachment.detach_refusal ?? 'OpenTofu destroys it now.')}
+                            </p>
+                        )}
+                    </section>
+                )}
             </EditorSheet>
 
             <Dialog open={detaching} onOpenChange={setDetaching}>
@@ -649,22 +647,18 @@ export function PreviewAttachmentSheet({
                 </section>
             )}
 
-            <section className="space-y-2 border-t pt-5">
-                <h3 className="text-sm font-medium">Remove</h3>
-                <InputError message={errors.detach} />
-                {canUpdate ? (
-                    <>
-                        <p className="text-muted-foreground text-sm">
-                            New previews do not get it. A preview that runs keeps it until its pull request closes.
-                        </p>
-                        <Button variant="secondary" size="sm" disabled={busy} onClick={remove}>
-                            Remove {attachment.label}
-                        </Button>
-                    </>
-                ) : (
-                    <p className="text-muted-foreground text-sm">Only an admin or an owner can change the resources of a protected environment.</p>
-                )}
-            </section>
+            {canUpdate && (
+                <section className="space-y-2 border-t pt-5">
+                    <h3 className="text-sm font-medium">Remove</h3>
+                    <InputError message={errors.detach} />
+                    <p className="text-muted-foreground text-sm">
+                        New previews do not get it. A preview that runs keeps it until its pull request closes.
+                    </p>
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={remove}>
+                        Remove {attachment.label}
+                    </Button>
+                </section>
+            )}
         </EditorSheet>
     );
 }

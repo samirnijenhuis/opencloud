@@ -11,8 +11,10 @@ enum Ability
     case UPGRADE_OPENCLOUD;
     /** Applications, datastores, and domains. */
     case MANAGE_APPLICATIONS;
-    case CHANGE_PROTECTED_ENVIRONMENT;
-    case CHANGE_UNPROTECTED_ENVIRONMENT;
+    /** The settings, processes, resources, env values, and one-off commands of an environment. */
+    case CHANGE_ENVIRONMENT;
     case DEPLOY;
     case READ_LOGS;
+    /** Reads the saved secret env values in the dashboard. */
+    case READ_SECRETS;
 }

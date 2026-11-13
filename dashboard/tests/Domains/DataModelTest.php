@@ -45,7 +45,6 @@ class DataModelTest extends TestCase
         $this->assertSame('/up', $environment->health_path);
         $this->assertSame([], $environment->deploy_commands);
         $this->assertTrue($environment->auto_deploy);
-        $this->assertFalse($environment->is_protected);
     }
 
     public function test_a_new_user_is_a_developer(): void

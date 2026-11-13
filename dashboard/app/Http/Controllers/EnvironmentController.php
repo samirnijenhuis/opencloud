@@ -99,7 +99,7 @@ class EnvironmentController extends Controller
             ...$props,
             'can' => [
                 ...$props['can'],
-                'restore' => $role->allows(Ability::CHANGE_PROTECTED_ENVIRONMENT),
+                'restore' => $role->allows(Ability::MANAGE_APPLICATIONS),
                 'manage_credentials' => $role->allows(Ability::MANAGE_CREDENTIALS),
             ],
             'cluster' => ['id' => $cluster->id, 'name' => $cluster->name, 'kind' => $cluster->kind, 'ingress_ip' => $cluster->ingress_ip],
@@ -176,7 +176,7 @@ class EnvironmentController extends Controller
             'envText' => $dotenv->format(
                 $environment->envVars()->where('source', EnvVarSource::USER)->where('is_secret', false)->orderBy('key')->pluck('value', 'key')->all(),
             ),
-            // Only a plain user value goes to the browser. A secret and a datastore value never do.
+            // Each user gets the plain values. Only a user who reads secrets, an owner or an admin, gets the secret values.
             'envVars' => $environment->envVars()->with('datastoreAttachment.datastore')->orderBy('key')->get()->map(fn (EnvVar $envVar) => [
                 'id' => $envVar->id,
                 'key' => $envVar->key,
@@ -184,7 +184,7 @@ class EnvironmentController extends Controller
                 'is_secret' => $envVar->is_secret,
                 'available_at' => $envVar->available_at,
                 'resource' => $envVar->datastoreAttachment === null ? null : $this->resourceName($envVar->datastoreAttachment),
-                'value' => $envVar->source === EnvVarSource::USER && ! $envVar->is_secret ? $envVar->value : null,
+                'value' => ! $envVar->is_secret || $request->user()->role->allows(Ability::READ_SECRETS) ? $envVar->value : null,
             ]),
         ]);
     }
@@ -216,8 +216,8 @@ class EnvironmentController extends Controller
 
     /**
      * The tools of a preview or of the preview template, each kind that it can still add with the hostname that the sheet
-     * offers, and on a preview the login in front of the tools. Each role may change a preview, and a developer can read
-     * each env value of an unprotected environment through a command, so each viewer sees the password.
+     * offers, and on a preview the login in front of the tools. Each role may change a preview and read its env values
+     * through a command, so each viewer sees the password.
      *
      * @return array{tools: list<array<string, mixed>>, tool_kinds: list<array<string, mixed>>, tool_login: array{username: string, password: string}|null}
      */

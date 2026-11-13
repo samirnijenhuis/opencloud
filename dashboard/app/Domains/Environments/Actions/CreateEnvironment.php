@@ -62,7 +62,6 @@ class CreateEnvironment
                 'name' => $name,
                 'kind' => EnvironmentKind::PERMANENT,
                 'branch' => $branch,
-                'is_protected' => false,
             ]);
 
             foreach ($from->processes as $process) {
@@ -91,16 +90,15 @@ class CreateEnvironment
     }
 
     /**
-     * Copies the user values of $from after the resources exist. A protected environment keeps its secrets, because a
-     * developer can read each value of an environment that is not protected through a command. A user value wins over a
-     * resource value, so a copied DB_HOST of production would point the new environment at the data of production.
-     * The preset generates each secret that the copy lacks.
+     * Copies the user values of $from after the resources exist. Each secret belongs to one environment, so a copy of
+     * production gets none of its secrets. A user value wins over a resource value, so a copied DB_HOST of production
+     * would point the new environment at the data of production. The preset generates each secret that the copy lacks.
      */
     private function copyEnv(Application $application, User $by, Environment $from, Environment $environment): void
     {
         $resourceKeys = $environment->envVars()->where('source', EnvVarSource::DATASTORE)->pluck('key')->all();
         [$copied, $leftOut] = $from->envVars()->where('source', EnvVarSource::USER)->orderBy('key')->get()
-            ->partition(fn (EnvVar $var) => ! ($from->is_protected && $var->is_secret) && ! in_array($var->key, $resourceKeys, true));
+            ->partition(fn (EnvVar $var) => ! ($from->kind === EnvironmentKind::PERMANENT && $var->is_secret) && ! in_array($var->key, $resourceKeys, true));
 
         foreach ($copied as $var) {
             $environment->envVars()->create($var->only(['key', 'value', 'is_secret', 'available_at', 'source']));

@@ -43,7 +43,7 @@ class DomainControllerTest extends TestCase
     public function test_a_developer_sees_the_domains_but_cannot_change_them(): void
     {
         Queue::fake();
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment('staging');
         $domain = Domain::factory()->for($environment)->create();
         $developer = User::factory()->create();
 

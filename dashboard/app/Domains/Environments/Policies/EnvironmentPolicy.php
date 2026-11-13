@@ -24,19 +24,12 @@ class EnvironmentPolicy
      */
     public function update(User $user, Environment $environment): bool
     {
-        return $user->role->allows($environment->is_protected
-            ? Ability::CHANGE_PROTECTED_ENVIRONMENT
-            : Ability::CHANGE_UNPROTECTED_ENVIRONMENT);
+        return $user->role->allows(Ability::CHANGE_ENVIRONMENT);
     }
 
-    /**
-     * A developer can deploy previews and staging, but production deploys need someone trusted with production secrets.
-     */
     public function deploy(User $user, Environment $environment): bool
     {
-        return $user->role->allows($environment->is_protected
-            ? Ability::CHANGE_PROTECTED_ENVIRONMENT
-            : Ability::DEPLOY);
+        return $user->role->allows(Ability::DEPLOY);
     }
 
     public function readLogs(User $user, Environment $environment): bool
@@ -45,17 +38,13 @@ class EnvironmentPolicy
     }
 
     /**
-     * Only a permanent environment can go, production too. A protected one needs someone trusted with production.
+     * Only a permanent environment can go, production too.
      * A preview goes with its pull request, and the preview template goes with its application.
      */
     public function delete(User $user, Environment $environment): bool
     {
         if ($environment->kind !== EnvironmentKind::PERMANENT) {
             return false;
-        }
-
-        if ($environment->is_protected) {
-            return $user->role->allows(Ability::CHANGE_PROTECTED_ENVIRONMENT);
         }
 
         return $user->role->allows(Ability::MANAGE_APPLICATIONS);

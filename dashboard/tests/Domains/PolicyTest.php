@@ -17,36 +17,36 @@ class PolicyTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @return array<string, array{Role, bool, bool}> */
+    /** @return array<string, array{Role, string}> */
     public static function environmentUpdates(): array
     {
         return [
-            'owner, protected' => [Role::OWNER, true, true],
-            'owner, unprotected' => [Role::OWNER, false, true],
-            'admin, protected' => [Role::ADMIN, true, true],
-            'admin, unprotected' => [Role::ADMIN, false, true],
-            'developer, protected' => [Role::DEVELOPER, true, false],
-            'developer, unprotected' => [Role::DEVELOPER, false, true],
+            'owner, production' => [Role::OWNER, 'production'],
+            'owner, staging' => [Role::OWNER, 'staging'],
+            'admin, production' => [Role::ADMIN, 'production'],
+            'admin, staging' => [Role::ADMIN, 'staging'],
+            'developer, production' => [Role::DEVELOPER, 'production'],
+            'developer, staging' => [Role::DEVELOPER, 'staging'],
         ];
     }
 
     #[DataProvider('environmentUpdates')]
-    public function test_only_owners_and_admins_change_or_deploy_a_protected_environment(Role $role, bool $protected, bool $expected): void
+    public function test_each_role_changes_and_deploys_every_environment_production_too(Role $role, string $name): void
     {
         $user = User::factory()->create(['role' => $role]);
-        $environment = Environment::factory()->create(['is_protected' => $protected]);
+        $environment = Environment::factory()->create(['name' => $name]);
 
-        $this->assertSame($expected, $user->can('update', $environment));
-        $this->assertSame($expected, $user->can('deploy', $environment));
+        $this->assertTrue($user->can('update', $environment));
+        $this->assertTrue($user->can('deploy', $environment));
     }
 
     /** @return array<string, array{Role, array<string, bool>}> */
     public static function environmentDeletes(): array
     {
         return [
-            'owner' => [Role::OWNER, ['protected production' => true, 'unprotected environment' => true, 'preview' => false, 'preview template' => false]],
-            'admin' => [Role::ADMIN, ['protected production' => true, 'unprotected environment' => true, 'preview' => false, 'preview template' => false]],
-            'developer' => [Role::DEVELOPER, ['protected production' => false, 'unprotected environment' => false, 'preview' => false, 'preview template' => false]],
+            'owner' => [Role::OWNER, ['production' => true, 'staging' => true, 'preview' => false, 'preview template' => false]],
+            'admin' => [Role::ADMIN, ['production' => true, 'staging' => true, 'preview' => false, 'preview template' => false]],
+            'developer' => [Role::DEVELOPER, ['production' => false, 'staging' => false, 'preview' => false, 'preview template' => false]],
         ];
     }
 
@@ -59,10 +59,10 @@ class PolicyTest extends TestCase
         $environment = fn (array $attributes) => Environment::factory()->for($application)->create($attributes);
 
         $this->assertSame($expected, [
-            'protected production' => $user->can('delete', $environment(['name' => 'production', 'kind' => EnvironmentKind::PERMANENT, 'is_protected' => true])),
-            'unprotected environment' => $user->can('delete', $environment(['name' => 'staging', 'kind' => EnvironmentKind::PERMANENT, 'is_protected' => false])),
-            'preview' => $user->can('delete', $environment(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12, 'is_protected' => false])),
-            'preview template' => $user->can('delete', $environment(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'is_protected' => false])),
+            'production' => $user->can('delete', $environment(['name' => 'production', 'kind' => EnvironmentKind::PERMANENT])),
+            'staging' => $user->can('delete', $environment(['name' => 'staging', 'kind' => EnvironmentKind::PERMANENT])),
+            'preview' => $user->can('delete', $environment(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12])),
+            'preview template' => $user->can('delete', $environment(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE])),
         ]);
     }
 

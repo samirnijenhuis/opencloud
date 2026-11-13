@@ -19,7 +19,7 @@ class SetPrimaryDomainTest extends TestCase
         $environment = $this->makeEnvironment();
         Domain::factory()->for($environment)->create(['hostname' => 'shop.example.com', 'is_primary' => true]);
         $new = Domain::factory()->for($environment)->create(['hostname' => 'www.shop.example.com']);
-        Domain::factory()->for($this->makeEnvironment(false, 'staging'))->create(['hostname' => 'staging.example.com', 'is_primary' => true]);
+        Domain::factory()->for($this->makeEnvironment('staging'))->create(['hostname' => 'staging.example.com', 'is_primary' => true]);
         $admin = User::factory()->admin()->create();
 
         app(SetPrimaryDomain::class)->execute($new, $admin);

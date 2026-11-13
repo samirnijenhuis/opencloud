@@ -15,8 +15,8 @@ enum Role: string
             Ability::MANAGE_MEMBERS,
             Ability::UPGRADE_OPENCLOUD => [self::OWNER],
             Ability::MANAGE_APPLICATIONS,
-            Ability::CHANGE_PROTECTED_ENVIRONMENT => [self::OWNER, self::ADMIN],
-            Ability::CHANGE_UNPROTECTED_ENVIRONMENT,
+            Ability::READ_SECRETS => [self::OWNER, self::ADMIN],
+            Ability::CHANGE_ENVIRONMENT,
             Ability::DEPLOY,
             Ability::READ_LOGS => [self::OWNER, self::ADMIN, self::DEVELOPER],
         };

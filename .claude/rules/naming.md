@@ -33,5 +33,5 @@ These opencloud names are easy to mix up:
 ## Names that match reality
 
 - A name must fit every use of the thing. A variable that holds the result of `->update()` is a bool. A class that only dispatches a job does not carry the name of the work that the job does.
-- A state says what happened: `superseded`, `timed_out`. A flag says its effect: `is_protected`, `auto_deploy`, `exclusive`. A field says which record or relation it reads: `triggered_by`, `datastore_attachment_id`.
+- A state says what happened: `superseded`, `timed_out`. A flag says its effect: `is_secret`, `auto_deploy`, `exclusive`. A field says which record or relation it reads: `triggered_by`, `datastore_attachment_id`.
 - Return the end result, not parts that each caller must combine. `Provisioners::notOffered()` returns the message that the menu shows, or null. `DefaultDomain::hostname()` returns the full hostname.

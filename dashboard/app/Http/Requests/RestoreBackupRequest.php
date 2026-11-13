@@ -10,7 +10,7 @@ class RestoreBackupRequest extends FormRequest
     /** A restore replaces data, so it needs an owner or an admin in every environment. */
     public function authorize(): bool
     {
-        return $this->user()->role->allows(Ability::CHANGE_PROTECTED_ENVIRONMENT);
+        return $this->user()->role->allows(Ability::MANAGE_APPLICATIONS);
     }
 
     /** @return array<string, mixed> */
