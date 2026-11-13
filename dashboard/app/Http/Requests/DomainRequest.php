@@ -32,7 +32,7 @@ class DomainRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'hostname' => ['required', 'string', 'regex:'.StoreApplicationRequest::HOSTNAME, 'unique:domains,hostname', 'unique:dashboard_domains,hostname'],
+            'hostname' => ['required', 'string', 'regex:'.StoreApplicationRequest::HOSTNAME, 'unique:domains,hostname', 'unique:dashboard_domains,hostname', 'unique:tools,hostname'],
             'manage_dns' => ['sometimes', 'boolean'],
             'proxied' => ['sometimes', 'boolean'],
         ];
