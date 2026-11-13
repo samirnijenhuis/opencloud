@@ -64,6 +64,8 @@ class ToolControllerTest extends TestCase
             ['tool.updated', ['environment_id' => $this->template->id, 'kind' => 'mailpit', 'from' => 'mail-{pr_number}.previews.example.com', 'to' => 'inbox-{pr_number}.previews.example.com']],
             ['tool.removed', ['kind' => 'mailpit', 'hostname' => 'inbox-{pr_number}.previews.example.com']],
         ], AuditEvent::orderBy('id')->get()->map(fn (AuditEvent $event) => [$event->action, $event->context])->all());
+        // The template routes nothing, so its tools need no Caddy sync.
+        Queue::assertNothingPushed();
     }
 
     public function test_on_a_live_preview_a_new_tool_waits_for_the_next_deploy_and_a_change_syncs_caddy(): void
