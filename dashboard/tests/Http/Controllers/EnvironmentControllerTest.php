@@ -10,7 +10,10 @@ use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
 use App\Domains\Environments\Enums\EnvironmentColor;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
+use App\Domains\Environments\Models\Tool;
+use App\Domains\Environments\ToolLogin;
 use App\Domains\Members\Models\User;
 use App\Domains\Routing\Enums\DnsStatus;
 use App\Domains\Routing\Jobs\CheckDomain;
@@ -77,6 +80,41 @@ class EnvironmentControllerTest extends TestCase
                 ->where('deployments.2.status', 'live')
                 ->has('deployments', 3)
                 ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false, 'restore' => false, 'manage_credentials' => false]));
+    }
+
+    public function test_the_template_canvas_shows_each_tool_and_each_kind_that_it_can_still_add(): void
+    {
+        $production = $this->makeEnvironment();
+        $production->application->update(['preview_domain' => 'pr-{pr_number}.previews.example.com']);
+        $template = Environment::factory()->for($production->application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
+        // Each new preview gets no default MySQL database, so phpMyAdmin would not run.
+        $phpMyAdmin = Tool::factory()->for($template)->create(['kind' => ToolKind::PHPMYADMIN, 'hostname' => 'database-{pr_number}.previews.example.com']);
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$template->id}")->assertInertia(fn (Assert $page) => $page
+            ->where('tools', [[
+                'id' => $phpMyAdmin->id, 'kind' => 'phpmyadmin', 'label' => 'phpMyAdmin', 'hostname' => 'database-{pr_number}.previews.example.com',
+                'runs' => false, 'requirement' => 'Needs a default MySQL database', 'url' => null,
+            ]])
+            ->where('tool_kinds', [['value' => 'mailpit', 'label' => 'Mailpit', 'description' => 'Catches the mail of the app', 'hostname' => 'mail-{pr_number}.previews.example.com']])
+            ->where('tool_login', null));
+
+        $this->get("/environments/{$production->id}")->assertInertia(fn (Assert $page) => $page->where('tools', [])->where('tool_kinds', [])->where('tool_login', null));
+    }
+
+    public function test_a_preview_canvas_shows_each_tool_with_its_link_and_the_login_in_front_of_the_tools(): void
+    {
+        $production = $this->makeEnvironment();
+        $production->application->update(['preview_domain' => 'pr-{pr_number}.previews.example.com']);
+        $preview = Environment::factory()->for($production->application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'pr_number' => 12]);
+        $mailpit = Tool::factory()->for($preview)->create(['kind' => ToolKind::MAILPIT, 'hostname' => 'inbox-12.previews.example.com']);
+
+        $this->actingAs(User::factory()->create())->get("/environments/{$preview->id}")->assertInertia(fn (Assert $page) => $page
+            ->where('tools', [[
+                'id' => $mailpit->id, 'kind' => 'mailpit', 'label' => 'Mailpit', 'hostname' => 'inbox-12.previews.example.com',
+                'runs' => true, 'requirement' => null, 'url' => 'https://inbox-12.previews.example.com',
+            ]])
+            ->where('tool_kinds', [['value' => 'phpmyadmin', 'label' => 'phpMyAdmin', 'description' => 'Opens the default MySQL database', 'hostname' => 'database-12.previews.example.com']])
+            ->where('tool_login', ['username' => 'opencloud', 'password' => ToolLogin::for($preview)->password]));
     }
 
     public function test_the_commands_page_tells_who_may_run_and_read_commands(): void

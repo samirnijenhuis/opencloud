@@ -124,6 +124,17 @@ class Environment extends Model
         return [Process::WEB, ...$this->processes->where('kind', ProcessKind::LONG_RUNNING)->pluck('name')];
     }
 
+    /**
+     * The tools of the environment that run now. A preview gets a copy of the tools of its template when opencloud
+     * creates it, and a permanent environment has none. On the preview template, the tools that each new preview runs.
+     *
+     * @return list<Tool>
+     */
+    public function runningTools(): array
+    {
+        return $this->tools->filter(fn (Tool $tool) => $tool->kind->runsIn($this))->values()->all();
+    }
+
     /** @return BelongsTo<Application, $this> */
     public function application(): BelongsTo
     {
@@ -164,5 +175,11 @@ class Environment extends Model
     public function processes(): HasMany
     {
         return $this->hasMany(Process::class)->orderBy('id');
+    }
+
+    /** @return HasMany<Tool, $this> the tools of a preview or of the preview template, in the order they were added */
+    public function tools(): HasMany
+    {
+        return $this->hasMany(Tool::class)->orderBy('id');
     }
 }

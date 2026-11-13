@@ -101,7 +101,7 @@ class ProcessActionsTest extends TestCase
     public static function refusals(): array
     {
         $name = ['name' => ['Use 1 to 30 lowercase letters, digits, and dashes. Start and end with a letter or a digit.']];
-        $reserved = ['name' => ['Opencloud uses the names web, deploy, and command. Use a different name.']];
+        $reserved = ['name' => ['Opencloud uses the names web, deploy, command, mailpit, and phpmyadmin. Use a different name.']];
         $cron = ['schedule' => ['Enter a cron schedule with five fields, for example */5 * * * * for each five minutes. Kubernetes does not accept L, W, or #.']];
 
         return [
@@ -111,6 +111,7 @@ class ProcessActionsTest extends TestCase
             'web' => [['web', 'php artisan serve', self::LONG, null, 1, 1, 70], $reserved],
             'deploy' => [['deploy', 'php artisan migrate', self::LONG, null, 1, 1, 70], $reserved],
             'command' => [['command', 'php artisan tinker', self::LONG, null, 1, 1, 70], $reserved],
+            'mailpit' => [['mailpit', 'mailpit', self::LONG, null, 1, 1, 70], $reserved],
             'taken name' => [['worker', 'php artisan queue:work', self::LONG, null, 1, 1, 70], ['name' => ['This environment already has a process with the name worker.']]],
             'blank command' => [['reverb', '   ', self::LONG, null, 1, 1, 70], ['command' => ['Enter the command that starts the process.']]],
             'no instances' => [['reverb', 'php artisan reverb:start', self::LONG, null, 0, 1, 70], ['min_instances' => ['Use 1 to 20 instances.']]],

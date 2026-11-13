@@ -23,6 +23,7 @@ use App\Http\Controllers\PreviewSettingsController;
 use App\Http\Controllers\ProcessController;
 use App\Http\Controllers\RepositoryAccessController;
 use App\Http\Controllers\SetupController;
+use App\Http\Controllers\ToolController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard')->name('home');
@@ -91,6 +92,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('environments/{environment}/processes', [ProcessController::class, 'store'])->name('processes.store');
     Route::patch('processes/{process}', [ProcessController::class, 'update'])->name('processes.update');
     Route::delete('processes/{process}', [ProcessController::class, 'destroy'])->name('processes.destroy');
+    Route::post('environments/{environment}/tools', [ToolController::class, 'store'])->name('tools.store');
+    Route::patch('tools/{tool}', [ToolController::class, 'update'])->name('tools.update');
+    Route::delete('tools/{tool}', [ToolController::class, 'destroy'])->name('tools.destroy');
 
     Route::patch('environments/{environment}/color', [EnvironmentColorController::class, 'update'])->name('environments.color.update');
 

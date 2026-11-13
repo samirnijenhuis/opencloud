@@ -13,6 +13,7 @@ use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
+use App\Domains\Environments\Models\Tool;
 use App\Domains\GitHub\Enums\PullRequestAction;
 use App\Domains\GitHub\GitHubClient;
 use App\Domains\GitHub\PullRequestEvent;
@@ -29,7 +30,7 @@ use Throwable;
  */
 class OpenPreview
 {
-    /** The settings that a preview takes from the preview template, next to its processes. Web always runs one instance. */
+    /** The settings that a preview takes from the preview template, next to its processes and its tools. Web always runs one instance. */
     private const TEMPLATE_SETTINGS = ['size', 'cpu_target', 'build_command', 'deploy_commands', 'health_path', 'sleep_after_minutes'];
 
     public function __construct(
@@ -101,10 +102,15 @@ class OpenPreview
                 $preview->processes()->create($process->only(['name', 'kind', 'command', 'schedule', 'size', 'min_instances', 'max_instances', 'cpu_target']));
             }
 
+            foreach ($template->tools as $tool) {
+                $preview->tools()->create(['kind' => $tool->kind, 'hostname' => str_replace(PreviewHostname::PR_NUMBER, (string) $pullRequest->number, $tool->hostname)]);
+            }
+
             AuditEvent::record(null, 'preview.created', $preview, [
                 'pr_number' => $pullRequest->number,
                 'branch' => $pullRequest->headRef,
                 'processes' => $template->processes->pluck('name')->all(),
+                'tools' => $template->tools->map(fn (Tool $tool) => $tool->kind->value)->all(),
             ]);
 
             $hostname = $this->previewHostname->for($application, $pullRequest->number);

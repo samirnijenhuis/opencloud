@@ -113,6 +113,28 @@ export type PreviewAttachment = {
 
 export type Compute = { size: Size; min_instances: number; max_instances: number; cpu_target: number; health_path: string };
 
+export type ToolKind = 'mailpit' | 'phpmyadmin';
+
+/** One dev tool of a preview or of the preview template. On the template, the hostname is a pattern with {pr_number}. */
+export type Tool = {
+    id: number;
+    kind: ToolKind;
+    label: string;
+    hostname: string;
+    /** On the template: whether it runs in each new preview. */
+    runs: boolean;
+    /** What the node says when the tool does not run. */
+    requirement: string | null;
+    /** Only a preview has a link. */
+    url: string | null;
+};
+
+/** A kind that the environment can still add, with the hostname that the sheet offers, or null without a preview address. */
+export type ToolKindOption = { value: ToolKind; label: string; description: string; hostname: string | null };
+
+/** The basic auth login in front of the tools of a preview. */
+export type ToolLogin = { username: string; password: string };
+
 /** What each new preview copies from the preview template. Only the template canvas has it. */
 export type PreviewTemplateSettings = {
     previews_enabled: boolean;
@@ -138,6 +160,11 @@ export type CanvasProps = EnvironmentPageProps & {
     datastores: Datastores;
     deployments: Deployment[];
     previews: PreviewTemplateSettings | null;
+    /** Empty for a permanent environment, which gets no tools. */
+    tools: Tool[];
+    tool_kinds: ToolKindOption[];
+    /** Only a preview with tools has a login. */
+    tool_login: ToolLogin | null;
 };
 
 export type Resources = { cpu_millicores: number; memory_mib: number };
@@ -175,11 +202,12 @@ export type Capacity = {
 
 export type AppTab = 'general' | 'autoscaling';
 
-/** The open side sheet. Only one is open at a time. A process sheet without an id adds a new process. */
+/** The open side sheet. Only one is open at a time. A process sheet or a tool sheet without an id adds a new one. */
 export type Sheet =
     | { kind: 'https' }
     | { kind: 'domains'; adding: boolean }
     | { kind: 'previews' }
+    | { kind: 'tool'; id: number | null }
     | { kind: 'app'; tab: AppTab }
     | { kind: 'process'; id: number | null; tab: AppTab }
     | { kind: 'resource'; id: number }

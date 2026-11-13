@@ -27,9 +27,12 @@ use App\Domains\Environments\DotenvText;
 use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
+use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Environments\Models\Tool;
+use App\Domains\Environments\ToolLogin;
 use App\Domains\Members\Enums\Ability;
 use App\Domains\Members\Enums\Role;
 use App\Domains\Previews\PreviewHostname;
@@ -115,6 +118,7 @@ class EnvironmentController extends Controller
                     return [...$entry, 'family' => $kind->family(), 'label' => self::label($kind, DatastoreSource::STANDARD, Provisioners::for($kind, DatastoreSource::STANDARD)->capabilities())];
                 }, $environment->preview_attachments),
             ] : null,
+            ...$this->toolProps($environment, $previewHostname),
             'compute' => $environment->only(['size', 'min_instances', 'max_instances', 'cpu_target', 'health_path']),
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,
@@ -208,6 +212,48 @@ class EnvironmentController extends Controller
         $deleteEnvironment->execute($environment, $request->user());
 
         return to_route('applications.show', $environment->application_id);
+    }
+
+    /**
+     * The tools of a preview or of the preview template, each kind that it can still add with the hostname that the sheet
+     * offers, and on a preview the login in front of the tools. Each role may change a preview, and a developer can read
+     * each env value of an unprotected environment through a command, so each viewer sees the password.
+     *
+     * @return array{tools: list<array<string, mixed>>, tool_kinds: list<array<string, mixed>>, tool_login: array{username: string, password: string}|null}
+     */
+    private function toolProps(Environment $environment, PreviewHostname $previewHostname): array
+    {
+        if ($environment->kind === EnvironmentKind::PERMANENT) {
+            return ['tools' => [], 'tool_kinds' => [], 'tool_login' => null];
+        }
+
+        $preview = $environment->kind === EnvironmentKind::PREVIEW;
+        $login = $preview && $environment->tools->isNotEmpty() ? ToolLogin::for($environment) : null;
+
+        return [
+            'tools' => $environment->tools->map(fn (Tool $tool) => [
+                'id' => $tool->id,
+                'kind' => $tool->kind,
+                'label' => $tool->kind->label(),
+                'hostname' => $tool->hostname,
+                'runs' => $tool->kind->runsIn($environment),
+                'requirement' => $tool->kind->requirement(),
+                'url' => $preview ? "https://{$tool->hostname}" : null,
+            ])->all(),
+            'tool_kinds' => collect(ToolKind::cases())
+                ->reject(fn (ToolKind $kind) => $environment->tools->contains('kind', $kind))
+                ->map(fn (ToolKind $kind) => [
+                    'value' => $kind,
+                    'label' => $kind->label(),
+                    'description' => $kind->description(),
+                    'hostname' => $preview
+                        ? $previewHostname->forSide($environment->application, $environment->pr_number, $kind->hostnamePrefix())
+                        : $previewHostname->sidePattern($environment->application, $kind->hostnamePrefix()),
+                ])
+                ->values()
+                ->all(),
+            'tool_login' => $login === null ? null : ['username' => $login->username, 'password' => $login->password],
+        ];
     }
 
     /** @return array<string, mixed> */

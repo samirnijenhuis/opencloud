@@ -121,7 +121,8 @@ class RunDeployment implements ShouldQueue
 
         $log->step(DeploymentStep::UPDATING_STACK);
         $log->write('Starting the new version.');
-        $kubectl->apply($manifests->workloads($deployment));
+        // The rollout wait covers only web and the processes, so a tool that does not start does not fail the deploy.
+        $kubectl->apply([...$manifests->workloads($deployment), ...$manifests->tools()]);
         $this->waitForRollout($kubectl, $environment, $log);
 
         // A CronJob has no rollout to undo, so it changes only after the new pods are ready. A failed deployment keeps the old schedule.
