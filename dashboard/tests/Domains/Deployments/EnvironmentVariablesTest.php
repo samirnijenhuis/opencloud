@@ -82,6 +82,19 @@ class EnvironmentVariablesTest extends TestCase
         $this->assertSame($expected, EnvironmentVariables::runtime($environment));
     }
 
+    public function test_the_primary_domain_sets_app_url_and_allowed_hosts_keeps_every_domain(): void
+    {
+        $application = Application::factory()->create(['type' => ApplicationType::PYTHON, 'port' => 8000]);
+        $environment = Environment::factory()->for($application)->create();
+        Domain::factory()->for($environment)->create(['hostname' => 'api.example.com']);
+        Domain::factory()->for($environment)->create(['hostname' => 'www.example.com', 'is_primary' => true]);
+
+        $this->assertSame(
+            ['ALLOWED_HOSTS' => 'api.example.com,www.example.com', 'APP_URL' => 'https://www.example.com', 'DEBUG' => 'false', 'PORT' => '8000', 'PYTHONUNBUFFERED' => '1'],
+            EnvironmentVariables::runtime($environment),
+        );
+    }
+
     public function test_a_python_app_without_a_domain_gets_no_url_and_no_allowed_hosts(): void
     {
         $application = Application::factory()->create(['type' => ApplicationType::PYTHON, 'port' => 8000]);

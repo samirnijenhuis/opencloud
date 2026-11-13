@@ -6,6 +6,8 @@ export type Domain = {
     hostname: string;
     /** The free sslip.io address that opencloud adds by itself. */
     generated: boolean;
+    /** The one domain that sets APP_URL and the Visit site link. */
+    primary: boolean;
     dns_status: DnsStatus;
     dns_mode: 'manual' | 'cloudflare';
     dns_found: string[];
@@ -99,7 +101,30 @@ export type Datastores = {
     polling: boolean;
 };
 
+/** One resource that each new preview gets from the preview template. The template itself gets none. */
+export type PreviewAttachment = {
+    kind: DatastoreKind;
+    family: ResourceFamily;
+    /** The name of a database or a bucket, or null for a key-value store. */
+    name: string | null;
+    is_default: boolean;
+    label: string;
+};
+
 export type Compute = { size: Size; min_instances: number; max_instances: number; cpu_target: number; health_path: string };
+
+/** What each new preview copies from the preview template. Only the template canvas has it. */
+export type PreviewTemplateSettings = {
+    previews_enabled: boolean;
+    /** The pattern each preview gets, or null without an ingress address. */
+    address: string | null;
+    /** The pattern that the owner set, or null for the free sslip.io address. */
+    preview_domain: string | null;
+    preview_labels: string[];
+    ingress_ip: string | null;
+    max_previews: number;
+    attachments: PreviewAttachment[];
+};
 
 export type CanvasProps = EnvironmentPageProps & {
     can: EnvironmentPageProps['can'] & { restore: boolean; manage_credentials: boolean };
@@ -112,6 +137,7 @@ export type CanvasProps = EnvironmentPageProps & {
     cloudflare_zones: string[];
     datastores: Datastores;
     deployments: Deployment[];
+    previews: PreviewTemplateSettings | null;
 };
 
 export type Resources = { cpu_millicores: number; memory_mib: number };
@@ -153,6 +179,8 @@ export type AppTab = 'general' | 'autoscaling';
 export type Sheet =
     | { kind: 'https' }
     | { kind: 'domains'; adding: boolean }
+    | { kind: 'previews' }
     | { kind: 'app'; tab: AppTab }
     | { kind: 'process'; id: number | null; tab: AppTab }
-    | { kind: 'resource'; id: number };
+    | { kind: 'resource'; id: number }
+    | { kind: 'preview-attachment'; key: string };

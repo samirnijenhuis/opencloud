@@ -35,15 +35,15 @@ class DefaultDomainTest extends TestCase
         $this->cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local', 'ingress_ip' => '203.0.113.10']);
     }
 
-    public function test_a_new_application_gets_its_free_domain_after_the_domains_it_asks_for(): void
+    public function test_a_new_application_gets_its_free_domain_on_production_only(): void
     {
         $owner = User::factory()->owner()->create();
 
-        $application = $this->create('My Shop', ['domains' => ['shop.example.com']], $owner);
+        $application = $this->create('My Shop', [], $owner);
 
         $production = $application->environments()->where('name', 'production')->sole();
         $this->assertSame(
-            [['shop.example.com', false], ['my-shop-production.203.0.113.10.sslip.io', true]],
+            [['my-shop-production.203.0.113.10.sslip.io', true]],
             $production->domains()->orderBy('id')->get()->map(fn (Domain $domain) => [$domain->hostname, $domain->generated])->all(),
         );
         Queue::assertPushed(CheckDomain::class, fn (CheckDomain $job) => $job->domain->hostname === 'my-shop-production.203.0.113.10.sslip.io');
@@ -53,7 +53,7 @@ class DefaultDomainTest extends TestCase
         );
         $this->assertSame(0, $application->environments()->where('kind', EnvironmentKind::PREVIEW_TEMPLATE)->sole()->domains()->count());
         $this->actingAs($owner)->get("/environments/{$production->id}")
-            ->assertInertia(fn (Assert $page) => $page->where('domains.0.generated', false)->where('domains.1.generated', true));
+            ->assertInertia(fn (Assert $page) => $page->where('domains.0.generated', true)->has('domains', 1));
     }
 
     public function test_a_second_application_with_the_same_name_gets_its_id_in_the_name(): void
@@ -109,7 +109,6 @@ class DefaultDomainTest extends TestCase
             'name' => $name,
             'repository' => 'acme/'.strtolower($name),
             'cluster_id' => $this->cluster->id,
-            'database' => 'none',
             ...$data,
         ]);
     }

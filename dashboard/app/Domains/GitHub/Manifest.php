@@ -26,8 +26,8 @@ final class Manifest
             'default_permissions' => [
                 'contents' => 'read',
                 'metadata' => 'read',
+                // The preview comment uses the issue comment API, which GitHub allows with write on Issues or on Pull requests.
                 'pull_requests' => 'write',
-                'issues' => 'write',
             ],
             'default_events' => ['push', 'pull_request'],
         ];

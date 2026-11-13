@@ -9,6 +9,7 @@ use App\Domains\Datastores\Capabilities;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Jobs\FailStuckDeployments;
+use App\Domains\Environments\Jobs\SleepIdleEnvironments;
 use App\Domains\Routing\Jobs\CheckCertificates;
 use App\Domains\Routing\Jobs\SyncCaddy;
 use App\Domains\Upgrades\Jobs\CheckLatestRelease;
@@ -28,6 +29,8 @@ Schedule::call(fn () => Cluster::query()->where('status', ClusterStatus::READY)-
 Schedule::job(new FailStuckDeployments)->everyMinute();
 
 Schedule::job(new CheckCertificates)->everyMinute();
+
+Schedule::job(new SleepIdleEnvironments)->everyMinute();
 
 Schedule::job(new CheckLatestRelease)->daily();
 

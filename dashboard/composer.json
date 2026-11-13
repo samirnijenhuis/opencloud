@@ -1,13 +1,13 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/react-starter-kit",
+    "name": "samirnijenhuis/opencloud",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "The dashboard, the API, and the queue worker of opencloud.",
     "keywords": [
         "laravel",
         "framework"
     ],
-    "license": "MIT",
+    "license": "Apache-2.0",
     "require": {
         "php": "^8.2",
         "composer/semver": "^3.4",

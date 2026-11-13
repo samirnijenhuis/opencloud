@@ -88,15 +88,16 @@ class Cell:
     def fill(self, text):
         return None if text is None else text.replace('{cell}', self.id)
 
-    def create_database(self):
-        # A fixture without database_in_create_form gets its database on the second deploy, so the matrix also proves Add resource.
-        if not self.fixture.get('database_in_create_form'):
+    def first_deploy_database(self):
+        """The SQL database kind that the app has when the user starts the first deploy, or 'none'."""
+        # A fixture without database_before_first_deploy gets its database on the second deploy, so the matrix also proves Add resource.
+        if not self.fixture.get('database_before_first_deploy'):
             return 'none'
         return {'mysql': 'mysql', 'mysqlpostgres': 'mysql', 'postgres': 'postgres'}.get(self.db, 'none')
 
     def db_step(self):
         """The step from which the app has its SQL database."""
-        added_later = not self.fixture.get('database_in_create_form') and self.db in ('mysql', 'postgres', 'mysqlpostgres')
+        added_later = not self.fixture.get('database_before_first_deploy') and self.db in ('mysql', 'postgres', 'mysqlpostgres')
         return 2 if added_later else 1
 
     def expected_cache(self, step):
@@ -264,30 +265,32 @@ class CellRun:
             'cluster_id': self.cluster_id,
             'type': fixture['type'],
             'port': fixture.get('port'),
-            'size': 'xs',
-            'min_instances': 1,
-            'max_instances': 1,
-            'cpu_target': 70,
-            'build_command': cell.fill(cell.pick('build_command')),
-            'deploy_commands': [cell.fill(c) for c in cell.pick('deploy_commands') or []],
-            'processes': [],
-            'database': cell.create_database(),
             'deploy_private_key': FIXTURES_KEY.read_text(),
-            'env': [
-                *({'key': k, 'value': cell.fill(v), 'is_secret': False, 'available_at': 'runtime'} for k, v in env.items()),
-                {'key': 'VERIFY_SECRET', 'value': self.secret, 'is_secret': True, 'available_at': 'runtime'},
-                {'key': 'VERIFY_BUILD', 'value': cell.id, 'is_secret': False, 'available_at': 'build'},
-            ],
         }
-        self.save('config.json', {**body, 'deploy_private_key': '<key>', 'env': [{**e, 'value': '<secret>'} if e['is_secret'] else e for e in body['env']]})
+        settings = {
+            **({'build_command': cell.fill(cell.pick('build_command'))} if cell.pick('build_command') else {}),
+            'deploy_commands': [cell.fill(c) for c in cell.pick('deploy_commands') or []],
+        }
+        env_values = [
+            *({'key': k, 'value': cell.fill(v), 'is_secret': False, 'available_at': 'runtime'} for k, v in env.items()),
+            {'key': 'VERIFY_SECRET', 'value': self.secret, 'is_secret': True, 'available_at': 'runtime'},
+            {'key': 'VERIFY_BUILD', 'value': cell.id, 'is_secret': False, 'available_at': 'build'},
+        ]
+        self.save('config.json', {
+            **body, 'deploy_private_key': '<key>', 'settings': settings, 'database': cell.first_deploy_database(),
+            'env': [{**e, 'value': '<secret>'} if e['is_secret'] else e for e in env_values],
+        })
 
         status, location, _ = self.dash.request('POST', '/applications', body)
         created = re.search(r'/environments/(\d+)$', location or '')
         if not self.check('the form creates the application', status == 302 and created, f'{status} {location}'):
             return
         self.env_id = int(created.group(1))
-        first = self.dash.props(f'/environments/{self.env_id}/deployments')['deployments'][0]['id']
-        if not self.deployed(1, first, timeout=2400):
+        if not self.configure(settings, env_values):
+            return
+        status, location, _ = self.dash.request('POST', f'/environments/{self.env_id}/deployments')
+        first = re.search(r'/deployments/(\d+)$', location or '')
+        if not self.check('Deploy starts the first deployment', first, f'{status} {location}') or not self.deployed(1, first.group(1), timeout=2400):
             return
         domains = self.dash.props(f'/environments/{self.env_id}')['domains']
         host = next((d['hostname'] for d in domains if d['generated']), None)
@@ -319,6 +322,50 @@ class CellRun:
         settings = self.dash.request('GET', f'/environments/{self.env_id}/settings')[2]
         self.check('the settings page never shows the secret value', self.secret not in settings)
         self.save('canvas.json', self.dash.props(f'/environments/{self.env_id}'))
+
+    def configure(self, settings, env_values):
+        """Does what a user does on the canvas and the settings page between Create and the first Deploy."""
+        canvas = self.dash.props(f'/environments/{self.env_id}')
+        for process in canvas['processes']:
+            status, _, _ = self.dash.request('DELETE', f"/processes/{process['id']}")
+            self.check(f"the process {process['name']} is removed", status == 302, status)
+
+        status, _, _ = self.dash.request('PATCH', f'/environments/{self.env_id}/settings', settings)
+        errors = self.dash.props(f'/environments/{self.env_id}').get('errors', {})
+        if not self.check('the settings save the build command and the deploy commands', status == 302 and not errors, errors or status):
+            return False
+
+        # The datastores come before the env values. A datastore sets its own env names, and the env form refuses those names.
+        if not self.converge_database():
+            return False
+
+        for value in env_values:
+            status, _, _ = self.dash.request('POST', f'/environments/{self.env_id}/env', value)
+            errors = self.dash.props(f'/environments/{self.env_id}').get('errors', {})
+            if not self.check(f"the env value {value['key']} is saved", status == 302 and not errors, errors or status):
+                return False
+        return True
+
+    def attachments(self):
+        return self.dash.props(f'/environments/{self.env_id}')['datastores']['attachments']
+
+    def converge_database(self):
+        """Ends with the SQL database that the cell has before its first deploy. The preset gives a Laravel app MySQL."""
+        wanted = self.cell.first_deploy_database()
+        for attachment in self.attachments():
+            if attachment['family'] == 'database' and attachment['kind'] != wanted:
+                if not self.detach(attachment):
+                    return False
+        if wanted == 'none':
+            return True
+        if any(a['kind'] == wanted for a in self.attachments()):
+            return self.wait_ready(wanted)
+        return self.attach(wanted)
+
+    def detach(self, attachment):
+        status, _, _ = self.dash.request('DELETE', f"/datastore-attachments/{attachment['id']}")
+        errors = self.dash.props(f'/environments/{self.env_id}').get('errors', {})
+        return self.check(f"the preset {attachment['kind']} database is removed", status == 302 and not errors, errors or status)
 
     def deployed(self, step, deployment_id, timeout=900):
         status, seconds = self.dash.wait_deployment(deployment_id, timeout)
@@ -354,15 +401,18 @@ class CellRun:
         label = f'{kind} {name}' if name else kind
         status, _, _ = self.dash.request('POST', f'/environments/{self.env_id}/datastores', {'kind': kind, **({'name': name} if name else {})})
         errors = self.dash.props(f'/environments/{self.env_id}').get('errors', {})
-        self.check(f'Add resource attaches {label}', status == 302 and not errors, errors or status)
+        attached = self.check(f'Add resource attaches {label}', status == 302 and not errors, errors or status)
+        return self.wait_ready(kind, name) and attached
+
+    def wait_ready(self, kind, name=None):
+        label = f'{kind} {name}' if name else kind
         start, state = time.time(), None
         while time.time() - start < 300:
-            attachments = self.dash.props(f'/environments/{self.env_id}')['datastores']['attachments']
-            state = next((a['status'] for a in attachments if a['kind'] == kind and (name is None or a['name'] == name)), None)
+            state = next((a['status'] for a in self.attachments() if a['kind'] == kind and (name is None or a['name'] == name)), None)
             if state in ('ready', 'failed'):
                 break
             time.sleep(5)
-        self.check(f'{label} becomes ready', state == 'ready', f'{state} after {round(time.time() - start)}s')
+        return self.check(f'{label} becomes ready', state == 'ready', f'{state} after {round(time.time() - start)}s')
 
     def verify_step(self, step):
         cell, fixture = self.cell, self.cell.fixture

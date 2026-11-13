@@ -137,10 +137,24 @@ class DeploymentControllerTest extends TestCase
         Queue::assertPushed(RunDeployment::class);
     }
 
-    public function test_a_missing_branch_comes_back_as_an_error(): void
+    public function test_a_missing_branch_comes_back_as_the_step_that_fixes_it(): void
     {
         Queue::fake();
         FakeProcesses::install()->lsRemote = '';
+        $environment = $this->makeEnvironment(false);
+
+        $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")
+            ->assertRedirect('/back')
+            ->assertSessionHasErrors(['deploy' => 'The branch main does not exist. Change the branch in Settings.']);
+
+        $this->assertSame(0, Deployment::count());
+        Queue::assertNothingPushed();
+    }
+
+    public function test_a_repository_that_git_cannot_read_comes_back_as_an_error(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemoteError = "fatal: repository 'https://github.com/acme/shop.git/' not found\n";
         $environment = $this->makeEnvironment(false);
 
         $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")

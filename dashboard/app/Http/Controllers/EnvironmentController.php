@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domains\Applications\Models\Application;
 use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Backups\Enums\BackupStatus;
 use App\Domains\Backups\Models\Backup;
@@ -19,8 +20,11 @@ use App\Domains\Datastores\ExternalField;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Datastores\Provisioners;
 use App\Domains\Deployments\Models\Deployment;
+use App\Domains\Environments\Actions\CreateEnvironment;
+use App\Domains\Environments\Actions\DeleteEnvironment;
 use App\Domains\Environments\Actions\UpdateEnvironmentSettings;
 use App\Domains\Environments\DotenvText;
+use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
@@ -28,10 +32,14 @@ use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
 use App\Domains\Members\Enums\Ability;
 use App\Domains\Members\Enums\Role;
+use App\Domains\Previews\PreviewHostname;
 use App\Domains\Routing\CloudflareDns;
 use App\Domains\Routing\Models\Domain;
+use App\Domains\Routing\PrimaryDomain;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use App\Http\Requests\AttachDatastoreRequest;
+use App\Http\Requests\CreateEnvironmentRequest;
+use App\Http\Requests\DeleteEnvironmentRequest;
 use App\Http\Requests\UpdateEnvironmentSettingsRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -74,13 +82,15 @@ class EnvironmentController extends Controller
     ];
 
     /** The canvas: the network, the app, and the resources of one environment, each with the data its sheet edits. */
-    public function show(Request $request, Environment $environment): Response
+    public function show(Request $request, Environment $environment, PreviewHostname $previewHostname): Response
     {
         Gate::authorize('view', $environment);
 
         $props = $this->environmentProps($environment, $request->user());
         $role = $request->user()->role;
         $cluster = $environment->application->cluster;
+        $domains = $environment->domains()->orderBy('id')->get();
+        $primary = PrimaryDomain::of($domains);
 
         return Inertia::render('environments/show', [
             ...$props,
@@ -91,6 +101,20 @@ class EnvironmentController extends Controller
             ],
             'cluster' => ['id' => $cluster->id, 'name' => $cluster->name, 'kind' => $cluster->kind, 'ingress_ip' => $cluster->ingress_ip],
             'tls_issuer' => config('opencloud.tls_issuer'),
+            'previews' => $environment->kind === EnvironmentKind::PREVIEW_TEMPLATE ? [
+                'previews_enabled' => $environment->application->previews_enabled,
+                'address' => $previewHostname->pattern($environment->application),
+                'preview_domain' => $environment->application->preview_domain,
+                'preview_labels' => $environment->application->preview_labels,
+                'ingress_ip' => $cluster->ingress_ip,
+                'max_previews' => $environment->application->max_previews,
+                // What each new preview gets. The template itself gets nothing.
+                'attachments' => array_map(function (array $entry) {
+                    $kind = DatastoreKind::from($entry['kind']);
+
+                    return [...$entry, 'family' => $kind->family(), 'label' => self::label($kind, DatastoreSource::STANDARD, Provisioners::for($kind, DatastoreSource::STANDARD)->capabilities())];
+                }, $environment->preview_attachments),
+            ] : null,
             'compute' => $environment->only(['size', 'min_instances', 'max_instances', 'cpu_target', 'health_path']),
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,
@@ -100,10 +124,11 @@ class EnvironmentController extends Controller
             'processes' => $environment->processes->map(fn (Process $process) => $process->only([
                 'id', 'name', 'kind', 'command', 'schedule', 'size', 'min_instances', 'max_instances', 'cpu_target',
             ])),
-            'domains' => $environment->domains()->orderBy('id')->get()->map(fn (Domain $domain) => [
+            'domains' => $domains->map(fn (Domain $domain) => [
                 'id' => $domain->id,
                 'hostname' => $domain->hostname,
                 'generated' => $domain->generated,
+                'primary' => $domain->is($primary),
                 'dns_status' => $domain->dns_status,
                 'dns_mode' => $domain->dns_mode,
                 'dns_found' => $domain->dns_found ?? [],
@@ -141,7 +166,9 @@ class EnvironmentController extends Controller
                 'auto_deploy' => $environment->auto_deploy,
                 'build_command' => $environment->build_command,
                 'deploy_commands' => $environment->deploy_commands,
+                'sleep_after_minutes' => $environment->sleep_after_minutes,
             ],
+            'canDelete' => $request->user()->can('delete', $environment),
             'envText' => $dotenv->format(
                 $environment->envVars()->where('source', EnvVarSource::USER)->where('is_secret', false)->orderBy('key')->pluck('value', 'key')->all(),
             ),
@@ -169,15 +196,34 @@ class EnvironmentController extends Controller
         return back();
     }
 
+    public function store(CreateEnvironmentRequest $request, Application $application, CreateEnvironment $createEnvironment): RedirectResponse
+    {
+        $environment = $createEnvironment->execute($application, $request->user(), $request->validated('name'), $request->validated('branch'), $request->copyFrom());
+
+        return to_route('environments.show', $environment);
+    }
+
+    public function destroy(DeleteEnvironmentRequest $request, Environment $environment, DeleteEnvironment $deleteEnvironment): RedirectResponse
+    {
+        $deleteEnvironment->execute($environment, $request->user());
+
+        return to_route('applications.show', $environment->application_id);
+    }
+
     /** @return array<string, mixed> */
     private function datastores(Environment $environment, Role $role): array
     {
         $attachments = $environment->datastoreAttachments()->with(['datastore.cluster', 'envVars'])->orderBy('id')->get();
         $rows = $attachments->map(fn (DatastoreAttachment $attachment) => $this->presentAttachment($attachment, $role));
+        // The add menu of the template adds to its list, so the list decides what it still offers. Its old attachments do not count.
+        $template = $environment->kind === EnvironmentKind::PREVIEW_TEMPLATE;
+        $taken = $template
+            ? collect($environment->preview_attachments)->map(fn (array $entry) => ['family' => DatastoreKind::from($entry['kind'])->family(), 'name' => $entry['name']])
+            : $attachments->map(fn (DatastoreAttachment $attachment) => ['family' => $attachment->family, 'name' => $attachment->name]);
 
         return [
             'attachments' => $rows,
-            'offers' => $this->offers($environment->application->cluster, $role, $attachments),
+            'offers' => $this->offers($environment->application->cluster, $role, $taken, standardOnly: $template),
             'has_backup_target' => BackupTarget::query()->exists(),
             'polling' => $rows->contains(fn (array $row) => in_array($row['status'], [DatastoreStatus::PENDING, DatastoreStatus::PROVISIONING], true)
                 || $row['server']['status'] === DatastoreStatus::DESTROYING
@@ -190,12 +236,12 @@ class EnvironmentController extends Controller
      * Each kind and source of the registry that the environment can still add, with the reason when this user cannot
      * add it here. The add menu shows exactly this list, so a new arm of the registry needs no change in the dashboard.
      *
-     * @param  Collection<int, DatastoreAttachment>  $attachments
+     * @param  Collection<int, array{family: ResourceFamily, name: ?string}>  $taken  the resources that the environment has
+     * @param  bool  $standardOnly  for the list of the preview template, because each preview gets a standard resource
      * @return list<array<string, mixed>>
      */
-    private function offers(Cluster $cluster, Role $role, Collection $attachments): array
+    private function offers(Cluster $cluster, Role $role, Collection $taken, bool $standardOnly): array
     {
-        $taken = $attachments->map(fn (DatastoreAttachment $attachment) => $attachment->datastore->kind->family());
         $provider = self::providerName($cluster);
         $offered = [];
         $offers = [];
@@ -204,7 +250,11 @@ class EnvironmentController extends Controller
             $family = $kind->family();
 
             // An environment has one key-value store, and as many databases and buckets as it needs.
-            if (! $family->isNamed() && $taken->contains($family)) {
+            if (! $family->isNamed() && $taken->contains('family', $family)) {
+                continue;
+            }
+
+            if ($standardOnly && $source !== DatastoreSource::STANDARD) {
                 continue;
             }
 
@@ -215,7 +265,7 @@ class EnvironmentController extends Controller
                 'kind' => $kind,
                 'source' => $source,
                 'family' => $family,
-                'name_field' => $family->isNamed() ? self::nameField($family, $attachments) : null,
+                'name_field' => $family->isNamed() ? self::nameField($family, $taken) : null,
                 'label' => self::label($kind, $source, $capabilities),
                 'description' => self::PURPOSES[$family->value],
                 'group' => match ($source) {
@@ -243,13 +293,13 @@ class EnvironmentController extends Controller
     /**
      * The first database or bucket of an environment is the default, so its dialog starts with the name "main".
      *
-     * @param  Collection<int, DatastoreAttachment>  $attachments
+     * @param  Collection<int, array{family: ResourceFamily, name: ?string}>  $taken
      * @return array{label: string, placeholder: string, value: string, description: string}
      */
-    private static function nameField(ResourceFamily $family, Collection $attachments): array
+    private static function nameField(ResourceFamily $family, Collection $taken): array
     {
         $texts = self::NAME_FIELDS[$family->value];
-        $first = ! $attachments->contains(fn (DatastoreAttachment $attachment) => $attachment->family === $family && $attachment->name !== null);
+        $first = ! $taken->contains(fn (array $resource) => $resource['family'] === $family && $resource['name'] !== null);
 
         return [
             'label' => $texts['label'],

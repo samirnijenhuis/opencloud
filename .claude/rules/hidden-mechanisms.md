@@ -23,6 +23,8 @@ This file lists behavior that you cannot see at the call site. Check it before y
 - `Kubectl::for()` gets `KubectlFactory` from the container (`app/Support/Kube/Kubectl.php:13-16`). `FakeKubectl::install()` binds itself in its place (`app/Support/Kube/FakeKubectl.php:21-27`), so each later `Kubectl::for()` in the test returns the fake.
 - `Kubectl` runs `kubectl` with Symfony Process (`app/Support/Kube/Kubectl.php:136-138`). `Process::fake()` does not catch a `kubectl` call.
 - `RunDeployment` deletes each Deployment, CronJob, and HorizontalPodAutoscaler in the environment namespace with an `opencloud.dev/process` label that no process of the environment uses as that kind (`EnvironmentManifests::strays()`). A Deployment, a CronJob, or an autoscaler that you add by hand with that label goes away on the next deploy.
+- `StartDeployment` calls `WakeEnvironment` (`app/Domains/Deployments/Actions/StartDeployment.php`). A deploy of a sleeping environment wakes it at the start.
+- `ScaleEnvironment` deletes the autoscalers, scales each Deployment of the environment to 0, and suspends its CronJobs while the environment sleeps (`app/Domains/Environments/Jobs/ScaleEnvironment.php`). It scales a standard Valkey of the environment in `oc-datastores` too. A Deployment that you scale by hand goes back to its minimum on the next wake.
 - After a deployment goes live, `RunDeployment::pruneEnvSecrets()` keeps the live env Secret and the two newest, and deletes the others (`app/Domains/Deployments/Jobs/RunDeployment.php:272-289`).
 
 ## Application logs
@@ -52,21 +54,26 @@ This file lists behavior that you cannot see at the call site. Check it before y
   - `sync-caddy` dispatches `SyncCaddy` for each ready cluster every five minutes. A change to the Caddy config reaches each ready cluster within five minutes, also without a dispatch.
   - `FailStuckDeployments` runs every minute. It fails a deployment in `building` or `deploying` that had no update for 70 minutes (`app/Domains/Deployments/Jobs/FailStuckDeployments.php:19`, `:24-25`).
   - `CheckCertificates` runs every minute.
+  - `SleepIdleEnvironments` runs every minute. It reads the Caddy request counters of each cluster with an environment that can sleep, writes `last_request_at`, and puts each idle environment to sleep (`app/Domains/Environments/Jobs/SleepIdleEnvironments.php`).
   - `CheckLatestRelease` runs once a day.
   - `nightly-backups` runs at 03:00. It dispatches `BackupDatastore` and `CopyBuckets` for each datastore that has the capability, and `BackupDashboard`.
 
 ## Requests and pages
 
+- Caddy sends each 502 of an app to the dashboard route `wake`, `/_opencloud/wake/<hostname>` (`app/Domains/Routing/CaddyConfig.php`, `routes/webhooks.php`). So the dashboard answers a visitor of an app that does not answer: with the Starting page while the environment wakes, and else with a plain 502.
 - `routes/webhooks.php` loads as the `api` group with an empty prefix (`bootstrap/app.php:13-14`). Its routes have no session, no cookies, and no CSRF check. A webhook route in `routes/web.php` gets a 419.
 - `trustProxies(at: '*')` trusts the forwarded scheme, host, and client address from each sender (`bootstrap/app.php:20`). `$request->ip()` returns the forwarded address.
-- `dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`). A hand-written `back()->withInput()` flashes every field, so `ApplicationController::store()` leaves out `deploy_private_key` itself.
+- `dontFlash(['kubeconfig', 'registry_password', 'deploy_private_key'])` keeps those fields out of the session after a failed validation (`bootstrap/app.php:28`). A hand-written `back()->withInput()` flashes every field. `CreateApplication` refuses a refused key or an unreadable repository with a `ValidationException`, so `dontFlash` alone keeps the pasted key out of the session.
 - `HandleInertiaRequests::share()` sends each page `auth.user`, three `can` flags, and, for a signed-in user, the version and the newer release for the owner (`app/Http/Middleware/HandleInertiaRequests.php:40-62`). `auth.user` is the whole `User` model without its `$hidden` fields.
+- Inertia merges the page props over the shared props at the top level only (`array_merge` in `ResponseFactory::render()`). `PresentsEnvironment::environmentProps()` sends its own `can` key (`app/Http/Controllers/Concerns/PresentsEnvironment.php:49`). So on each environment page the page `can` replaces the shared `can`, and `can.manage_credentials` is missing unless the controller adds it. `EnvironmentController::show()` adds it back (`app/Http/Controllers/EnvironmentController.php:100`). The Repository sheet reads `can_manage_credentials` from `environments.repository-access` instead.
 - `GitHubWebhookController` stores each `X-GitHub-Delivery` id for one day with `Cache::add()` (`app/Http/Controllers/GitHubWebhookController.php:30-34`). A repeated id answers 200 and queues nothing.
 
 ## Caches
 
 - `LiveStatus` keeps each answer for 10 seconds, for each environment and each cluster (`app/Domains/Environments/LiveStatus.php:21`, `:39`, `:57`).
+- `RepositoryProbe` keeps each answer for 10 seconds (`app/Domains/Applications/RepositoryProbe.php:23`). The key holds the repository, a hash of the deploy key, and the branch, so a new key or a new branch reads again at once. A key that the user adds on GitHub shows as accepted within 10 seconds.
 - `GitHubClient` keeps the installation token, encrypted, until one minute before it expires (`app/Domains/GitHub/GitHubClient.php:88`).
+- `SleepIdleEnvironments` keeps the last Caddy request counts of each cluster in `caddy-request-counts-<cluster id>` without an end. A lost entry counts each hostname with requests as active once.
 - `CheckLatestRelease` keeps the tag of the latest release for three days (`app/Domains/Upgrades/Jobs/CheckLatestRelease.php:33`).
 
 ## The SQLite database

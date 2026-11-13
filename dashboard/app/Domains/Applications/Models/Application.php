@@ -22,14 +22,15 @@ class Application extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'allow_forks', 'preview_domain', 'deploy_private_key', 'deploy_public_key'];
+    protected $fillable = ['name', 'repository', 'cluster_id', 'type', 'port', 'previews_enabled', 'preview_domain', 'preview_labels', 'max_previews', 'deploy_private_key', 'deploy_public_key'];
 
     protected $hidden = ['deploy_private_key'];
 
     protected $attributes = [
         'port' => 8080,
         'previews_enabled' => true,
-        'allow_forks' => false,
+        'preview_labels' => '[]',
+        'max_previews' => 5,
     ];
 
     protected function casts(): array
@@ -38,7 +39,8 @@ class Application extends Model
             'type' => ApplicationType::class,
             'port' => 'integer',
             'previews_enabled' => 'boolean',
-            'allow_forks' => 'boolean',
+            'preview_labels' => 'array',
+            'max_previews' => 'integer',
             'deploy_private_key' => 'encrypted',
         ];
     }

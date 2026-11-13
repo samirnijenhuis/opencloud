@@ -7,6 +7,7 @@ use App\Domains\Members\Models\User;
 use App\Domains\Routing\CloudflareDns;
 use App\Domains\Routing\Jobs\SyncCaddy;
 use App\Domains\Routing\Models\Domain;
+use App\Domains\Routing\PrimaryDomain;
 use Illuminate\Validation\ValidationException;
 
 class RemoveDomain
@@ -21,9 +22,10 @@ class RemoveDomain
         $this->cloudflare->remove($domain);
 
         $environment = $domain->environment;
+        $wasPrimary = $domain->is(PrimaryDomain::of($environment->domains));
         $domain->delete();
 
-        AuditEvent::record($by, 'domain.removed', $environment, ['hostname' => $domain->hostname]);
+        AuditEvent::record($by, 'domain.removed', $environment, ['hostname' => $domain->hostname, ...($wasPrimary ? ['primary' => true] : [])]);
         SyncCaddy::dispatch($environment->application->cluster)->afterCommit();
     }
 }

@@ -87,6 +87,8 @@ final class ExternalProvisioner implements Provisioner
 
     public function release(Datastore $datastore, array $attachment, bool $destroyData): void {}
 
+    public function scale(DatastoreAttachment $attachment, bool $awake): void {}
+
     public function connection(DatastoreAttachment $attachment): ?Connection
     {
         return match ($this->kind->family()) {

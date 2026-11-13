@@ -8,6 +8,7 @@ use App\Domains\Environments\Enums\ProcessKind;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Process;
+use App\Domains\Routing\PrimaryDomain;
 use App\Support\Kube\Labels;
 use Illuminate\Support\Collection;
 use stdClass;
@@ -28,6 +29,17 @@ final readonly class EnvironmentManifests
     public function autoscales(): bool
     {
         return $this->environment->max_instances > $this->environment->min_instances;
+    }
+
+    /**
+     * The pods that each Deployment starts with, also under an autoscaler. An autoscaler does nothing for a Deployment at
+     * zero pods, so the wake sets these counts before it applies the autoscalers again.
+     *
+     * @return array<string, int> the minimum instances of web and of each long-running process
+     */
+    public function minimumReplicas(): array
+    {
+        return [Process::WEB => $this->environment->min_instances, ...$this->longRunning()->pluck('min_instances', 'name')->all()];
     }
 
     /** @return list<array<string, mixed>> the Deployments of web and the long-running processes, the Service, and the autoscalers */
@@ -151,13 +163,13 @@ final readonly class EnvironmentManifests
 
     /**
      * The kubelet sends the pod address as the Host header. An app that checks the host, for example Django with
-     * ALLOWED_HOSTS, refuses it, so the probe sends the first domain of the environment.
+     * ALLOWED_HOSTS, refuses it, so the probe sends the primary domain of the environment.
      *
      * @return array{httpHeaders?: list<array{name: string, value: string}>}
      */
     private function probeHost(): array
     {
-        $hostname = $this->environment->domains->sortBy('id')->first()?->hostname;
+        $hostname = PrimaryDomain::of($this->environment->domains)?->hostname;
 
         return $hostname === null ? [] : ['httpHeaders' => [['name' => 'Host', 'value' => $hostname]]];
     }

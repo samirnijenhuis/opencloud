@@ -9,6 +9,10 @@ use App\Domains\GitHub\Enums\PullRequestAction;
  */
 final readonly class PullRequestEvent
 {
+    /**
+     * @param  list<string>  $labels  the label names of the pull request after the action
+     * @param  string|null  $changedLabel  the label that "labeled" or "unlabeled" adds or removes
+     */
     public function __construct(
         public PullRequestAction $action,
         public string $repository,
@@ -16,6 +20,8 @@ final readonly class PullRequestEvent
         public string $headRef,
         public string $headSha,
         public bool $fromFork,
+        public array $labels,
+        public ?string $changedLabel,
     ) {}
 
     /**
@@ -32,8 +38,10 @@ final readonly class PullRequestEvent
             return null;
         }
 
-        // GitHub sends no head repository when the fork is gone, so that counts as a fork too.
-        $headRepository = RepositoryName::parse((string) ($pullRequest['head']['repo']['full_name'] ?? ''));
+        // GitHub also sends the label changes of a closed pull request, and a closed pull request has no preview.
+        if ($action->changesLabels() && ($pullRequest['state'] ?? '') !== 'open') {
+            return null;
+        }
 
         return new self(
             $action,
@@ -41,7 +49,20 @@ final readonly class PullRequestEvent
             (int) $pullRequest['number'],
             (string) $pullRequest['head']['ref'],
             (string) $pullRequest['head']['sha'],
-            $headRepository !== $repository,
+            self::isFork($pullRequest, $repository),
+            array_column($pullRequest['labels'] ?? [], 'name'),
+            $payload['label']['name'] ?? null,
         );
+    }
+
+    /**
+     * GitHub sends no head repository when the fork is gone, so that counts as a fork too.
+     *
+     * @param  array<string, mixed>  $pullRequest  a pull request object of GitHub, from a webhook or from the API
+     * @param  string  $repository  "owner/name" from RepositoryName::parse()
+     */
+    public static function isFork(array $pullRequest, string $repository): bool
+    {
+        return RepositoryName::parse((string) ($pullRequest['head']['repo']['full_name'] ?? '')) !== $repository;
     }
 }

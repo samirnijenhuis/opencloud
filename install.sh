@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs opencloud on a fresh Ubuntu 24.04 server. Run it again to repair or update an install.
+# Installs opencloud on a fresh Linux server with systemd. Run it again to repair or update an install.
 set -euo pipefail
 
 K3S_VERSION=v1.36.5+k3s1
@@ -99,11 +99,13 @@ preflight() {
     [[ -d $PLATFORM_DIR && -f $SOURCE_DIR/bin/opencloud ]] ||
         fail "Cannot find platform/ and bin/opencloud next to install.sh. Run install.sh from the opencloud release folder."
 
-    local os="unknown"
-    # shellcheck source=/dev/null
-    [[ -r /etc/os-release ]] && os=$(. /etc/os-release && echo "${ID:-} ${VERSION_ID:-}")
-    if [[ $os != "ubuntu 24.04" && ${OPENCLOUD_SKIP_OS_CHECK:-0} != 1 ]]; then
-        fail "Opencloud supports Ubuntu 24.04 only. This server runs $os. Use Ubuntu 24.04, or set OPENCLOUD_SKIP_OS_CHECK=1 to try at your own risk."
+    [[ -d /run/systemd/system ]] || fail "Opencloud needs systemd, because k3s runs as a systemd service. This server does not run systemd."
+
+    # The release workflow builds the images for amd64 only. Image archives can hold another CPU, as on a Mac.
+    local arch
+    arch=$(uname -m)
+    if [[ $arch != x86_64 && (-z ${OPENCLOUD_IMAGE_ARCHIVE:-} || -z ${OPENCLOUD_CADDY_IMAGE_ARCHIVE:-}) ]]; then
+        fail "The opencloud release images are for amd64 (x86_64). This server is $arch. Use an amd64 server, or build both images for this CPU and pass them with OPENCLOUD_IMAGE_ARCHIVE and OPENCLOUD_CADDY_IMAGE_ARCHIVE."
     fi
 
     local tool

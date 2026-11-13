@@ -379,6 +379,21 @@ class EnvironmentManifestsTest extends TestCase
         );
     }
 
+    public function test_the_probe_sends_the_primary_domain_as_the_host(): void
+    {
+        $first = new Domain(['hostname' => 'shop.example.com']);
+        $first->id = 4;
+        $primary = new Domain(['hostname' => 'www.example.com', 'is_primary' => true]);
+        $primary->id = 9;
+
+        $web = $this->manifests(domains: [$first, $primary])->web($this->deployment());
+
+        $this->assertSame(
+            ['path' => '/up', 'port' => 'http', 'httpHeaders' => [['name' => 'Host', 'value' => 'www.example.com']]],
+            $web['spec']['template']['spec']['containers'][0]['readinessProbe']['httpGet'],
+        );
+    }
+
     public function test_a_single_command_replaces_the_shell_and_a_shell_construct_runs_as_it_is(): void
     {
         $this->assertSame([

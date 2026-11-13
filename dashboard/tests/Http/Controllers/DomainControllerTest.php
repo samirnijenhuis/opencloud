@@ -49,9 +49,11 @@ class DomainControllerTest extends TestCase
         $this->actingAs($developer)->get("/environments/{$environment->id}")->assertInertia(fn (Assert $page) => $page->where('can.manage_domains', false));
         $this->actingAs($developer)->post("/environments/{$environment->id}/domains", ['hostname' => 'x.example.com'])->assertForbidden();
         $this->actingAs($developer)->post("/domains/{$domain->id}/check")->assertForbidden();
+        $this->actingAs($developer)->post("/domains/{$domain->id}/primary")->assertForbidden();
         $this->actingAs($developer)->delete("/domains/{$domain->id}")->assertForbidden();
 
         $this->assertSame(1, Domain::count());
+        $this->assertFalse($domain->fresh()->is_primary);
         Queue::assertNothingPushed();
     }
 
@@ -98,6 +100,23 @@ class DomainControllerTest extends TestCase
         $this->actingAs(User::factory()->admin()->create())->post("/domains/{$domain->id}/check")->assertRedirect();
 
         Queue::assertPushed(CheckDomain::class, fn (CheckDomain $job) => $job->domain->is($domain));
+    }
+
+    public function test_an_admin_makes_a_domain_primary_and_the_page_marks_it(): void
+    {
+        $environment = $this->makeEnvironment();
+        Domain::factory()->for($environment)->create(['hostname' => 'shop.example.com']);
+        $domain = Domain::factory()->for($environment)->create(['hostname' => 'www.shop.example.com']);
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)->get("/environments/{$environment->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('domains.0.primary', true)->where('domains.1.primary', false));
+
+        $this->actingAs($admin)->post("/domains/{$domain->id}/primary")->assertRedirect();
+
+        $this->assertTrue($domain->fresh()->is_primary);
+        $this->actingAs($admin)->get("/environments/{$environment->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('domains.0.primary', false)->where('domains.1.primary', true));
     }
 
     public function test_it_removes_a_domain_through_the_action(): void

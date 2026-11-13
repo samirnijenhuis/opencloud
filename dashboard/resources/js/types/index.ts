@@ -68,9 +68,6 @@ export type SizeOption = { value: Size; cpu_millicores: number; memory_mib: numb
 /** A long-running process runs all the time as a Deployment. A scheduled process runs on its schedule as a CronJob. */
 export type ProcessKind = 'long_running' | 'scheduled';
 
-/** The values of one process in the create form. Each new process takes the size of web and 1 instance. */
-export type ProcessValues = { name: string; kind: ProcessKind; command: string; schedule: string | null };
-
 /** The preset of an application. The server stores it as the application type. */
 export type ApplicationType = 'laravel' | 'node' | 'python' | 'ruby' | 'static' | 'dockerfile';
 
@@ -123,7 +120,12 @@ export interface EnvironmentPageProps {
         branch: string | null;
         auto_deploy: boolean;
         status: DeploymentStatus | null;
+        sleep_after_minutes: number | null;
+        slept_at: string | null;
+        last_request_at: string | null;
     };
     can: { update: boolean; deploy: boolean; manage_domains: boolean };
+    /** The keys of the tabs that this kind of environment has, in order. */
+    tabs: string[];
     [key: string]: unknown;
 }

@@ -21,7 +21,7 @@ class DeleteLogLines implements ShouldQueue
     /** @var list<int> */
     public array $backoff = [5, 15, 30, 60];
 
-    /** A preview closes and deletes its environment, together with its namespace. */
+    /** ClosePreview and DeleteEnvironment delete the environment, together with its namespace. */
     public bool $deleteWhenMissingModels = true;
 
     public function __construct(public Environment $environment) {}

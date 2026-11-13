@@ -62,6 +62,9 @@ abstract class LocalProvisioner implements Provisioner
         return new Capabilities($this->noDatabase());
     }
 
+    /** A shared server serves other environments too, so it keeps running. Valkey overrides this. */
+    public function scale(DatastoreAttachment $attachment, bool $awake): void {}
+
     public function refusalOn(Cluster $cluster): ?string
     {
         return null;

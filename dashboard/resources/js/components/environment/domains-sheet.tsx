@@ -101,6 +101,8 @@ export function DomainsSheet({
 
     const check = (domain: Domain) => router.post(route('domains.check', domain.id), {}, { preserveScroll: true });
 
+    const makePrimary = (domain: Domain) => router.post(route('domains.primary', domain.id), {}, { preserveScroll: true });
+
     const remove = (domain: Domain) => {
         if (confirm(`Remove ${domain.hostname}? The site stops answering on this name.`)) {
             router.delete(route('domains.destroy', domain.id), { preserveScroll: true });
@@ -116,6 +118,12 @@ export function DomainsSheet({
         >
             {errors.domain && <p className="text-sm text-red-700 dark:text-red-400">{errors.domain}</p>}
 
+            {domains.length > 0 && (
+                <p className="text-muted-foreground text-sm">
+                    The primary domain sets APP_URL and the Visit site link. The app gets a new primary domain on the next deploy.
+                </p>
+            )}
+
             {domains.length === 0 ? (
                 <p className="text-sm">This environment has no domain yet.</p>
             ) : (
@@ -124,6 +132,7 @@ export function DomainsSheet({
                         <li key={domain.id} className="space-y-2 p-3">
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="min-w-0 font-mono text-sm font-medium break-all">{domain.hostname}</span>
+                                {domain.primary && <Badge>Primary</Badge>}
                                 {domain.generated && <Badge variant="outline">Free address</Badge>}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -140,6 +149,11 @@ export function DomainsSheet({
                                 )}
                                 {canManage && (
                                     <span className="ml-auto flex gap-1">
+                                        {!domain.primary && (
+                                            <Button variant="secondary" size="sm" onClick={() => makePrimary(domain)}>
+                                                Make primary
+                                            </Button>
+                                        )}
                                         <Button variant="secondary" size="sm" onClick={() => check(domain)}>
                                             Check again
                                         </Button>

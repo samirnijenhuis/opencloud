@@ -20,6 +20,12 @@ final readonly class CaddyConfig
 {
     public const DASHBOARD_UPSTREAM = 'dashboard.opencloud.svc.cluster.local:8080';
 
+    /** The Caddy server of the app hostnames. */
+    public const APP_SERVER = 'apps';
+
+    /** The dashboard path that gets each request whose app does not answer. The hostname of the request follows it. */
+    public const WAKE_PATH = '/_opencloud/wake/';
+
     public function __construct(private string $tlsIssuer, private ?string $acmeEmail) {}
 
     public static function fromConfig(): self
@@ -52,15 +58,31 @@ final readonly class CaddyConfig
         $cloudflareToken = ProviderCredential::query()->where('provider', 'cloudflare')->first()?->token;
         $cloudflareHosts = $domains->where('dns_mode', DnsMode::CLOUDFLARE)->pluck('hostname')->all();
 
-        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts);
+        return $this->build($cluster->kind === ClusterKind::LOCAL, $routes, $cloudflareToken, $cloudflareHosts, self::wakeUpstream($cluster));
+    }
+
+    /**
+     * Caddy on another cluster cannot resolve the dashboard Service, so it reaches the dashboard on port 8000 of the server.
+     * Without the address of the server, a request to an app that does not answer gets the plain 502 of Caddy.
+     */
+    private static function wakeUpstream(Cluster $cluster): ?string
+    {
+        if ($cluster->kind === ClusterKind::LOCAL) {
+            return self::DASHBOARD_UPSTREAM;
+        }
+
+        $server = DashboardDomain::localCluster()?->ingress_ip;
+
+        return $server === null ? null : "{$server}:8000";
     }
 
     /**
      * @param  array<string, string>  $routes  hostname => upstream address
      * @param  list<string>  $cloudflareHosts  hostnames that get their certificate with the Cloudflare DNS challenge
+     * @param  string|null  $wakeUpstream  the address of the dashboard for a request whose app does not answer
      * @return array<string, mixed>
      */
-    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = []): array
+    public function build(bool $withDashboard, array $routes, ?string $cloudflareToken = null, array $cloudflareHosts = [], ?string $wakeUpstream = null): array
     {
         ksort($routes, SORT_STRING);
         $servers = [];
@@ -69,7 +91,7 @@ final readonly class CaddyConfig
             $servers['dashboard'] = ['listen' => [':8000'], 'routes' => [['handle' => [self::proxy(self::DASHBOARD_UPSTREAM)]]]];
         }
 
-        $servers['apps'] = [
+        $servers[self::APP_SERVER] = [
             'listen' => [':443'],
             'routes' => array_map(
                 fn (string $hostname, string $upstream) => ['match' => [['host' => [$hostname]]], 'handle' => [self::proxy($upstream)]],
@@ -78,9 +100,18 @@ final readonly class CaddyConfig
             ),
         ];
 
+        // Caddy answers 502 for an app without a ready pod, for example while it sleeps. The dashboard wakes it and shows a Starting page.
+        if ($wakeUpstream !== null) {
+            $servers[self::APP_SERVER]['errors'] = ['routes' => [[
+                'match' => [['expression' => '{http.error.status_code} == 502']],
+                'handle' => [['handler' => 'rewrite', 'uri' => self::WAKE_PATH.'{http.request.host}'], self::proxy($wakeUpstream)],
+            ]]];
+        }
+
         return [
             'apps' => [
-                'http' => ['servers' => $servers],
+                // The request count of each hostname tells the dashboard which environments are idle.
+                'http' => ['metrics' => ['per_host' => true], 'servers' => $servers],
                 'tls' => ['automation' => ['policies' => $this->policies($cloudflareToken, array_values(array_intersect($cloudflareHosts, array_keys($routes))))]],
             ],
         ];

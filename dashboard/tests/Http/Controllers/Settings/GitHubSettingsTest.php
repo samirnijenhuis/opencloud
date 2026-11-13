@@ -40,7 +40,7 @@ class GitHubSettingsTest extends TestCase
             'hook_attributes' => ['url' => 'http://203.0.113.10:8000/webhooks/github', 'active' => true],
             'redirect_url' => 'http://203.0.113.10:8000/settings/github/callback',
             'public' => false,
-            'default_permissions' => ['contents' => 'read', 'metadata' => 'read', 'pull_requests' => 'write', 'issues' => 'write'],
+            'default_permissions' => ['contents' => 'read', 'metadata' => 'read', 'pull_requests' => 'write'],
             'default_events' => ['push', 'pull_request'],
         ], json_decode($props['manifest'], true));
         $this->assertSame(40, strlen($props['state']));
@@ -92,8 +92,28 @@ class GitHubSettingsTest extends TestCase
         $this->assertStringNotContainsString('whsec-from-github', $page->getContent());
         $this->assertStringNotContainsString('PRIVATE KEY', $page->getContent());
 
+        $conversionCall = Http::recorded(fn (Request $request) => str_contains($request->url(), '/app-manifests/'))->sole()[0];
+        $this->assertSame('{}', $conversionCall->body());
+
         $installationsCall = Http::recorded(fn (Request $request) => $request->url() === 'https://api.github.com/app/installations')->sole()[0];
         $this->assertStringStartsWith('Bearer ey', $installationsCall->header('Authorization')[0]);
+    }
+
+    public function test_a_refused_code_shows_the_reason_that_github_gives(): void
+    {
+        Http::fake([
+            'api.github.com/app-manifests/code-123/conversions' => Http::response([
+                'message' => 'Validation Failed',
+                'errors' => [['resource' => 'Integration', 'code' => 'custom', 'field' => 'name', 'message' => 'Name is already in use']],
+            ], 422),
+        ]);
+        $this->actingAs(User::factory()->owner()->create())->withSession(['github_manifest_state' => 'state-abc']);
+
+        $this->get('/settings/github/callback?code=code-123&state=state-abc')
+            ->assertRedirect('/settings/github')
+            ->assertSessionHasErrors(['github' => 'GitHub did not accept the code. It answered with status 422: Validation Failed. Name is already in use. Create the GitHub App again.']);
+
+        $this->assertSame(0, GithubApp::count());
     }
 
     public function test_a_callback_with_a_wrong_state_never_calls_github(): void

@@ -79,15 +79,6 @@ enum ApplicationType: string
         };
     }
 
-    /** The Laravel, Node, Python, and Ruby images run the build command after the build. A static site builds with its build script. */
-    public function usesBuildCommand(): bool
-    {
-        return match ($this) {
-            self::LARAVEL, self::NODE, self::PYTHON, self::RUBY => true,
-            self::STATIC, self::DOCKERFILE => false,
-        };
-    }
-
     /** The image runs tini as its entrypoint, so a process passes only its arguments. */
     public function imageRunsTini(): bool
     {
@@ -130,9 +121,9 @@ enum ApplicationType: string
      * @param  list<string>  $hostnames  the domains of the environment, oldest first
      * @return array<string, string>
      */
-    public function systemEnv(int $port, array $hostnames): array
+    public function systemEnv(int $port, ?string $primary, array $hostnames): array
     {
-        $url = $hostnames === [] ? [] : ['APP_URL' => "https://{$hostnames[0]}"];
+        $url = $primary === null ? [] : ['APP_URL' => "https://{$primary}"];
         $port = ['PORT' => (string) $port];
 
         return match ($this) {

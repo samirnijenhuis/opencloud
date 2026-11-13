@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domains\Builds\Exceptions\BranchNotFound;
 use App\Domains\Builds\Exceptions\DeployKeyRefused;
 use App\Domains\Deployments\Actions\StartDeployment;
 use App\Domains\Deployments\DeploymentSteps;
@@ -87,6 +88,8 @@ class DeploymentController extends Controller
             $deployment = $startDeployment->execute($environment, $request->user());
         } catch (DeployKeyRefused) {
             return back()->withErrors(['deploy' => DeployKeyRefused::STEP]);
+        } catch (BranchNotFound) {
+            return back()->withErrors(['deploy' => "The branch {$environment->branch} does not exist. Change the branch in Settings."]);
         } catch (InvalidArgumentException|RuntimeException) {
             return back()->withErrors(['deploy' => "We could not read the branch {$environment->branch}. Check the branch name in the settings."]);
         }

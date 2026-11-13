@@ -42,12 +42,19 @@ trait PresentsEnvironment
                 'branch' => $environment->branch,
                 'auto_deploy' => $environment->auto_deploy,
                 'status' => $latest?->status,
+                'sleep_after_minutes' => $environment->sleep_after_minutes,
+                'slept_at' => $environment->slept_at?->toIso8601String(),
+                'last_request_at' => $environment->last_request_at?->toIso8601String(),
             ],
             'can' => [
                 'update' => $user->can('update', $environment),
                 'deploy' => $user->can('deploy', $environment),
                 'manage_domains' => $user->can('update', $application),
             ],
+            // The preview template is only a template. It never deploys, so it has no deployments, commands, or logs.
+            'tabs' => $environment->kind === EnvironmentKind::PREVIEW_TEMPLATE
+                ? ['environment', 'pull-requests', 'settings']
+                : ['environment', 'deployments', 'commands', 'logs', 'settings'],
         ];
     }
 

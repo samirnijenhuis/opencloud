@@ -37,7 +37,7 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 
 ## Features
 
-- [Create an application](./create-application.md) covers the create form, the presets, the first deploy, and the free HTTPS address.
+- [Create an application](./create-application.md) covers the create form, the presets, the configuration before the first deploy, the first deploy, and the free HTTPS address.
 - [Datastores](./datastores.md) covers MySQL, Postgres, SQLite, Valkey, a second SQL database with a connection name, and the Laravel and generic env names.
 - [Environment values](./env-values.md) covers runtime values, build values, and write-only secrets.
 - [Build and deploy commands](./build-and-deploy-commands.md) covers the build of each preset, the build command, and deploy commands.

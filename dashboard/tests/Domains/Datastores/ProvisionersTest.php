@@ -107,6 +107,7 @@ class ProvisionersTest extends TestCase
             $provisioned = $attachment->fresh();
             $connection = $provisioner->connection($provisioned);
             $capabilities = $provisioner->capabilities();
+            $provisioner->scale($provisioned, awake: false);
             $provisioner->detach($provisioned, null, destroyData: true);
             $provisioner->release($provisioned->datastore, Arr::except($provisioned->getAttributes(), ['password']), destroyData: true);
 

@@ -1,6 +1,10 @@
 import DeployButton from '@/components/deploy-button';
 import { ColorDot } from '@/components/environment-color';
+import { Status } from '@/components/environment/block';
+import { RepositoryAccessContext, RepositorySheet } from '@/components/environment/repository-sheet';
 import { DeploymentBadge } from '@/components/status-badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -9,17 +13,22 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { usePoll } from '@/hooks/use-poll';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { applicationTypeLabels, type EnvironmentLink, type EnvironmentPageProps } from '@/types';
+import { type EnvironmentRepositoryAccess, type PushDelivery } from '@/types/repository-access';
 import { Head, Link } from '@inertiajs/react';
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react';
+import { useState } from 'react';
 
+/** Each tab that an environment can have. The page prop tabs says which of them this environment has. */
 const tabs = [
     { key: 'environment', title: 'Environment', route: 'environments.show' },
     { key: 'deployments', title: 'Deployments', route: 'environments.deployments' },
     { key: 'commands', title: 'Commands', route: 'environments.commands' },
     { key: 'logs', title: 'Logs', route: 'environments.logs' },
+    { key: 'pull-requests', title: 'Pull requests', route: 'environments.pull-requests' },
     { key: 'settings', title: 'Settings', route: 'environments.settings' },
 ] as const;
 
@@ -27,6 +36,13 @@ export type EnvironmentTab = (typeof tabs)[number]['key'];
 
 /** "https://github.com/acme/shop.git" and "acme/shop" both give "acme/shop". */
 const repositoryName = (repository: string) => repository.replace(/^https?:\/\/[^/]+\//, '').replace(/\.git$/, '');
+
+const pushTexts: Record<PushDelivery, string> = {
+    github_app: 'Deploys on push',
+    deploy_hook: 'Deploys through the deploy hook',
+    not_connected: 'Push deploys not connected',
+    off: 'Deploys by hand',
+};
 
 function SwitcherItem({ item, current, routeName }: { item: EnvironmentLink; current: number; routeName: string }) {
     return (
@@ -92,7 +108,16 @@ export default function EnvironmentLayout({
     children: React.ReactNode;
 }) {
     const { application, environment, can } = page;
-    const routeName = tabs.find((item) => item.key === tab)?.route ?? 'environments.show';
+    // The switcher lists no preview template, so the Pull requests tab of the template opens the canvas of the other environment.
+    const routeName = (tab !== 'pull-requests' && tabs.find((item) => item.key === tab)?.route) || 'environments.show';
+    const [access, refresh] = usePoll<EnvironmentRepositoryAccess>(
+        route('environments.repository-access', environment.id),
+        10_000,
+        (data) => !data.read_works,
+    );
+    const [repositoryOpen, setRepositoryOpen] = useState(false);
+    // A new deploy key always waits until the user adds it on GitHub, so a refused key is a step to do, not a failure.
+    const waitsForKey = access?.read === 'key_refused';
 
     return (
         <AppLayout
@@ -112,20 +137,22 @@ export default function EnvironmentLayout({
                     className="mx-auto flex max-w-6xl gap-6 overflow-x-auto overflow-y-hidden px-4 [scrollbar-width:none]"
                     aria-label="Environment sections"
                 >
-                    {tabs.map((item) => (
-                        <Link
-                            key={item.key}
-                            href={route(item.route, environment.id)}
-                            className={cn(
-                                '-mb-px border-b-2 py-2.5 text-sm whitespace-nowrap',
-                                item.key === tab
-                                    ? 'border-foreground text-foreground'
-                                    : 'text-muted-foreground hover:text-foreground border-transparent',
-                            )}
-                        >
-                            {item.title}
-                        </Link>
-                    ))}
+                    {tabs
+                        .filter((item) => page.tabs.includes(item.key))
+                        .map((item) => (
+                            <Link
+                                key={item.key}
+                                href={route(item.route, environment.id)}
+                                className={cn(
+                                    '-mb-px border-b-2 py-2.5 text-sm whitespace-nowrap',
+                                    item.key === tab
+                                        ? 'border-foreground text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground border-transparent',
+                                )}
+                            >
+                                {item.title}
+                            </Link>
+                        ))}
                 </nav>
             </div>
 
@@ -141,20 +168,30 @@ export default function EnvironmentLayout({
                                 <span className="text-muted-foreground flex items-center gap-2 font-normal">
                                     / <ColorDot color={environment.color} /> <span className="break-all">{environment.name}</span>
                                 </span>
-                                <DeploymentBadge status={environment.status} />
+                                {environment.kind !== 'preview_template' && <DeploymentBadge status={environment.status} />}
                             </h1>
                             <p className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
                                 <span>{applicationTypeLabels[application.type]}</span>
-                                <span className="inline-flex min-w-0 items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setRepositoryOpen(true)}
+                                    className="hover:text-foreground focus-visible:ring-ring inline-flex min-w-0 items-center gap-1 rounded-sm text-left outline-none focus-visible:ring-2"
+                                >
                                     <GitBranch className="size-3.5 shrink-0" />
                                     <span className="break-all">
                                         {repositoryName(application.repository)}
                                         {environment.branch && `:${environment.branch}`}
                                     </span>
-                                </span>
-                                {environment.kind !== 'preview_template' && (
-                                    <span>{environment.auto_deploy ? 'Deploys on push' : 'Deploys by hand'}</span>
-                                )}
+                                    <Status tone={access === null ? 'off' : access.read_works ? 'ok' : waitsForKey ? 'warn' : 'bad'}>
+                                        <span className="sr-only">{access === null ? 'Checking the repository' : access.summary}</span>
+                                    </Status>
+                                </button>
+                                {access?.push &&
+                                    (access.push === 'not_connected' ? (
+                                        <Status tone="warn">{pushTexts[access.push]}</Status>
+                                    ) : (
+                                        <span>{pushTexts[access.push]}</span>
+                                    ))}
                             </p>
                         </div>
                     </div>
@@ -165,8 +202,34 @@ export default function EnvironmentLayout({
                     </div>
                 </div>
 
-                <div className="space-y-6">{children}</div>
+                {access && !access.read_works && (
+                    <Alert
+                        variant={waitsForKey ? 'default' : 'destructive'}
+                        className={cn(
+                            'flex flex-wrap items-center justify-between gap-3 py-3',
+                            waitsForKey && 'border-amber-500/50 text-amber-700 dark:text-amber-400',
+                        )}
+                    >
+                        <AlertDescription>{access.summary}</AlertDescription>
+                        <Button variant="secondary" size="sm" onClick={() => setRepositoryOpen(true)}>
+                            {waitsForKey ? 'Show the key' : 'Show the steps'}
+                        </Button>
+                    </Alert>
+                )}
+
+                <RepositoryAccessContext.Provider value={{ access, refresh }}>
+                    <div className="space-y-6">{children}</div>
+                </RepositoryAccessContext.Provider>
             </div>
+
+            <RepositorySheet
+                open={repositoryOpen}
+                onClose={() => setRepositoryOpen(false)}
+                access={access}
+                refresh={refresh}
+                applicationId={application.id}
+                environmentId={environment.id}
+            />
         </AppLayout>
     );
 }

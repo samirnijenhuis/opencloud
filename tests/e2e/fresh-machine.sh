@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Release test. Installs opencloud on a brand-new OrbStack Ubuntu 24.04 machine and checks it from the Mac.
-# Set KEEP=1 to keep the machine after the test.
+# Release test. Installs opencloud on a brand-new OrbStack Ubuntu machine and checks it from the Mac.
+# Set KEEP=1 to keep the machine after the test. Set E2E_DISTRO to an OrbStack image, for example ubuntu:resolute or
+# debian:trixie, to test another system than ubuntu:noble.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -8,6 +9,7 @@ MACHINE=oc-e2e-$(date +%s)
 ARCH=$(docker version --format '{{.Server.Arch}}')
 # Each run gets its own tag, so a build from another checkout on this Mac cannot replace the image under test.
 VERSION=${E2E_VERSION:-e2e-$(date +%s)-$$}
+DISTRO=${E2E_DISTRO:-ubuntu:noble}
 IMAGE=ghcr.io/opencloud-dev/opencloud:$VERSION
 CADDY_IMAGE=ghcr.io/opencloud-dev/opencloud-caddy:$VERSION
 TMP_ROOT=${TMPDIR:-/tmp}
@@ -59,8 +61,8 @@ docker build --platform "linux/$ARCH" -t "$CADDY_IMAGE" "$ROOT/platform/images/c
     { tail -50 "$WORK/build-caddy.log"; exit 1; }
 docker save --platform "linux/$ARCH" -o "$WORK/caddy.tar" "$CADDY_IMAGE"
 
-echo "Creating the machine $MACHINE"
-orb create "ubuntu:noble" "$MACHINE" >/dev/null
+echo "Creating the machine $MACHINE ($DISTRO)"
+orb create "$DISTRO" "$MACHINE" >/dev/null
 trap cleanup EXIT
 IP=$(orb -m "$MACHINE" hostname -I | awk '{ print $1 }')
 

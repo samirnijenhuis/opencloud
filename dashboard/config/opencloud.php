@@ -47,8 +47,10 @@ return [
 
     /*
      * The base image of a Laravel app. "{php}" becomes the PHP minor version, for example 8.4.
+     * The FrankenPHP release is locked, so each build uses a known image. 1.13.5 ships a Brotli patched against
+     * CVE-2026-111497 (Node2Shell) and the fixes of its own security release. A newer FrankenPHP needs a change here.
      */
-    'php_base_image' => env('OPENCLOUD_PHP_BASE_IMAGE', 'dunglas/frankenphp:1-php{php}'),
+    'php_base_image' => env('OPENCLOUD_PHP_BASE_IMAGE', 'dunglas/frankenphp:1.13.5-php{php}'),
 
     /*
      * The PHP minor versions that have a base image. The build picks LaravelDockerfile::DEFAULT_PHP when composer.json
@@ -57,11 +59,6 @@ return [
     'php_versions' => ['8.2', '8.3', '8.4', '8.5'],
 
     'data_path' => env('OPENCLOUD_DATA_PATH', storage_path('opencloud')),
-
-    /*
-     * The most previews that one application runs at the same time, to protect the VPS.
-     */
-    'max_previews' => (int) env('OPENCLOUD_MAX_PREVIEWS', 5),
 
     'tofu_binary' => env('OPENCLOUD_TOFU_BINARY', 'tofu'),
 

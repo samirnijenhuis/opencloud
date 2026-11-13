@@ -68,8 +68,11 @@ function AddressField({
     );
 }
 
-/** The dialog content mounts on each open, so the form starts fresh: "main" for the first of a family, empty after. */
-export function AddResourceForm({ environmentId, offer, onClose }: { environmentId: number; offer: Offer; onClose: () => void }) {
+/**
+ * The dialog content mounts on each open, so the form starts fresh: "main" for the first of a family, empty after.
+ * It posts to the attach route of an environment, or to the list of the preview template.
+ */
+export function AddResourceForm({ storeUrl, offer, onClose }: { storeUrl: string; offer: Offer; onClose: () => void }) {
     const nameField = offer.name_field;
     const [name, setName] = useState(nameField?.value ?? '');
     const [values, setValues] = useState<Values>(() => startValues(offer.fields));
@@ -79,7 +82,7 @@ export function AddResourceForm({ environmentId, offer, onClose }: { environment
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         router.post(
-            route('datastores.store', environmentId),
+            storeUrl,
             { kind: offer.kind, source: offer.source, name: nameField ? name : null, ...values },
             {
                 preserveScroll: true,

@@ -16,13 +16,14 @@ class Domain extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['environment_id', 'hostname', 'dns_status', 'dns_mode', 'certificate_status', 'dns_found', 'dns_checked_at', 'cloudflare_zone_id', 'cloudflare_record_id', 'generated'];
+    protected $fillable = ['environment_id', 'hostname', 'dns_status', 'dns_mode', 'certificate_status', 'dns_found', 'dns_checked_at', 'cloudflare_zone_id', 'cloudflare_record_id', 'generated', 'is_primary'];
 
     protected $attributes = [
         'dns_status' => DnsStatus::PENDING->value,
         'dns_mode' => DnsMode::MANUAL->value,
         'certificate_status' => 'pending',
         'generated' => false,
+        'is_primary' => false,
     ];
 
     protected function casts(): array
@@ -33,6 +34,7 @@ class Domain extends Model
             'dns_found' => 'array',
             'dns_checked_at' => 'datetime',
             'generated' => 'boolean',
+            'is_primary' => 'boolean',
         ];
     }
 

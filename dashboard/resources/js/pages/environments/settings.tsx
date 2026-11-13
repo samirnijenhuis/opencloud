@@ -1,4 +1,5 @@
 import { environmentColors } from '@/components/environment-color';
+import { DeleteEnvironment } from '@/components/environment/delete-environment';
 import { DeployHook } from '@/components/environment/deploy-hook';
 import { EnvValues, type EnvVar } from '@/components/environment/env-values';
 import InputError from '@/components/input-error';
@@ -14,13 +15,15 @@ import { router, useForm } from '@inertiajs/react';
 import { FormEventHandler, type ReactNode, useEffect, useState } from 'react';
 
 type Settings = {
-    branch: string;
+    /** Null for the preview template. A preview deploys the branch of its pull request. */
+    branch: string | null;
     auto_deploy: boolean;
     build_command: string | null;
     deploy_commands: string[];
+    sleep_after_minutes: number | null;
 };
 
-type Props = EnvironmentPageProps & { settings: Settings; envVars: EnvVar[]; envText: string };
+type Props = EnvironmentPageProps & { settings: Settings; envVars: EnvVar[]; envText: string; canDelete: boolean };
 
 const sections = [
     { id: 'general', title: 'General' },
@@ -29,6 +32,9 @@ const sections = [
 ] as const;
 
 const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
+
+/** The minutes that sleep starts with when the user turns it on. A new preview starts with the same value. */
+const SLEEP_AFTER_MINUTES = 15;
 
 /** The active section is the last one whose heading is above a line near the top of the screen, or the last one at the end of the page. */
 function useActiveSection(): string {
@@ -89,10 +95,15 @@ function Field({ label, description, htmlFor, children }: { label: string; descr
 }
 
 function GeneralForm({ environment, settings, locked }: { environment: Props['environment']; settings: Settings; locked: boolean }) {
-    const form = useForm({ branch: settings.branch, auto_deploy: settings.auto_deploy });
+    const template = environment.kind === 'preview_template';
+    const form = useForm({ branch: settings.branch ?? '', auto_deploy: settings.auto_deploy, sleep_after_minutes: settings.sleep_after_minutes });
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        // The server refuses a branch and deploy on push for the preview template.
+        if (template) {
+            form.transform(({ sleep_after_minutes }) => ({ sleep_after_minutes }));
+        }
         form.patch(route('environments.update', environment.id), { preserveScroll: true, onSuccess: () => form.setDefaults() });
     };
 
@@ -102,19 +113,64 @@ function GeneralForm({ environment, settings, locked }: { environment: Props['en
     return (
         <form onSubmit={submit} className="divide-y rounded-lg border">
             <fieldset disabled={locked} className="divide-y">
-                <Field label="Branch" description="The Git branch that this environment deploys." htmlFor="branch">
-                    <Input id="branch" className="font-mono" value={form.data.branch} onChange={(e) => form.setData('branch', e.target.value)} />
-                    <InputError message={form.errors.branch} />
-                </Field>
-                <Field label="Deploy on push" description="Deploy each new commit on the branch." htmlFor="auto_deploy">
-                    <Label className="flex items-center gap-2 font-normal">
-                        <Checkbox
-                            id="auto_deploy"
-                            checked={form.data.auto_deploy}
-                            onCheckedChange={(checked) => form.setData('auto_deploy', checked === true)}
-                        />
-                        {form.data.auto_deploy ? 'On' : 'Off'}
-                    </Label>
+                {!template && (
+                    <>
+                        <Field label="Branch" description="The Git branch that this environment deploys." htmlFor="branch">
+                            <Input
+                                id="branch"
+                                className="font-mono"
+                                value={form.data.branch}
+                                onChange={(e) => form.setData('branch', e.target.value)}
+                            />
+                            <InputError message={form.errors.branch} />
+                        </Field>
+                        <Field label="Deploy on push" description="Deploy each new commit on the branch." htmlFor="auto_deploy">
+                            <Label className="flex items-center gap-2 font-normal">
+                                <Checkbox
+                                    id="auto_deploy"
+                                    checked={form.data.auto_deploy}
+                                    onCheckedChange={(checked) => form.setData('auto_deploy', checked === true)}
+                                />
+                                {form.data.auto_deploy ? 'On' : 'Off'}
+                            </Label>
+                        </Field>
+                    </>
+                )}
+                <Field
+                    label="Sleep when idle"
+                    description="Stop the pods after this many minutes without a request. Queue workers and scheduled tasks stop too, and a task that is due during sleep does not run later. The next request starts the pods again, and the visitor sees a Starting page for about 15 seconds."
+                    htmlFor="sleep"
+                >
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Label className="flex items-center gap-2 font-normal">
+                            <Checkbox
+                                id="sleep"
+                                checked={form.data.sleep_after_minutes !== null}
+                                onCheckedChange={(checked) =>
+                                    form.setData(
+                                        'sleep_after_minutes',
+                                        checked === true ? (settings.sleep_after_minutes ?? SLEEP_AFTER_MINUTES) : null,
+                                    )
+                                }
+                            />
+                            {form.data.sleep_after_minutes !== null ? 'On' : 'Off'}
+                        </Label>
+                        {form.data.sleep_after_minutes !== null && (
+                            <Label className="flex items-center gap-2 font-normal">
+                                <Input
+                                    id="sleep_after_minutes"
+                                    type="number"
+                                    min={5}
+                                    max={1440}
+                                    className="w-24"
+                                    value={form.data.sleep_after_minutes}
+                                    onChange={(e) => form.setData('sleep_after_minutes', Number(e.target.value))}
+                                />
+                                minutes
+                            </Label>
+                        )}
+                    </div>
+                    <InputError message={form.errors.sleep_after_minutes} />
                 </Field>
                 <Field label="Color" description="The color that tells this environment apart in the dashboard.">
                     <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Environment color">
@@ -207,7 +263,7 @@ function DeploymentsForm({ environmentId, settings, locked }: { environmentId: n
 }
 
 export default function EnvironmentSettings(props: Props) {
-    const { environment, settings, envVars, envText, can } = props;
+    const { environment, settings, envVars, envText, can, canDelete } = props;
     const locked = !can.update;
     const active = useActiveSection();
     useScrollToHash();
@@ -249,10 +305,20 @@ export default function EnvironmentSettings(props: Props) {
                     <Section
                         id="environment-values"
                         title="Environment values"
-                        description="The env values of the app. Changes apply on the next deploy."
+                        description={
+                            environment.kind === 'preview_template'
+                                ? 'Each new preview copies these values. In a value, {pr_number}, {branch}, and {url} become the pull request number, the branch, and the address of that preview.'
+                                : 'The env values of the app. Changes apply on the next deploy.'
+                        }
                     >
                         <EnvValues environmentId={environment.id} envVars={envVars} envText={envText} canUpdate={can.update} />
                     </Section>
+
+                    {canDelete && (
+                        <Section id="delete" title="Delete environment" description="Remove this environment and everything that it runs.">
+                            <DeleteEnvironment environment={environment} />
+                        </Section>
+                    )}
                 </div>
             </div>
         </EnvironmentLayout>

@@ -2,6 +2,7 @@
 
 namespace Tests\Http\Controllers;
 
+use App\Domains\Audit\Models\AuditEvent;
 use App\Domains\Backups\Models\BackupTarget;
 use App\Domains\Datastores\Actions\AttachDatastore;
 use App\Domains\Datastores\Actions\DetachDatastore;
@@ -9,6 +10,7 @@ use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\DatastoreStatus;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
@@ -172,6 +174,20 @@ class DatastoreControllerTest extends TestCase
         $environment = $this->makeEnvironment();
 
         $this->actingAs(User::factory()->owner()->create())->post("/environments/{$environment->id}/datastores", ['kind' => 'oracle'])->assertSessionHasErrors('kind');
+    }
+
+    public function test_the_preview_template_gets_no_resource_of_its_own(): void
+    {
+        Queue::fake();
+        $production = $this->makeEnvironment();
+        $template = Environment::factory()->for($production->application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
+
+        $this->actingAs(User::factory()->owner()->create())
+            ->post("/environments/{$template->id}/datastores", ['kind' => 'valkey'])
+            ->assertSessionHasErrors(['kind' => 'The preview template never deploys, so it gets no resource. Add the resource to its list, and each new preview gets it.']);
+
+        $this->assertSame([0, 0], [DatastoreAttachment::count(), AuditEvent::count()]);
+        Queue::assertNothingPushed();
     }
 
     public function test_a_second_database_without_a_name_is_refused(): void

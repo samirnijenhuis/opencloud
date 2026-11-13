@@ -85,6 +85,8 @@ These results make opencloud a failure, even if all features work.
 - Opencloud uses OpenTofu, not Terraform [C]. Terraform uses the Business Source License, which forbids embedding it in a product that competes with HashiCorp. OpenTofu uses MPL 2.0 and can encrypt its state on the client.
 - The S3-compatible storage is RustFS [S]. Opencloud pins one RustFS version [C].
 - The project is open source. Anyone can clone the repository and run their own copy [S].
+- Opencloud uses the Apache License 2.0 [S]. So a company can sell a closed, hosted copy. The Dockerfile templates use MIT No Attribution, because they go into the builds of user apps [C-new].
+- Opencloud stays clear of the Laravel trademarks, which Laravel Holdings Inc. owns [S]. It uses the name Laravel only to say what it works with, and it does not use the Laravel logo [C-new].
 
 ## How the parts fit
 
@@ -398,5 +400,4 @@ The order puts the scaffold first, then the riskiest unknown [C-new]. The implem
 ## Open items for Samir
 
 - **The name.** "Opencloud" is a working name [S]. "OpenCloud" is already the name of an active open-source project. The Heinlein Group launched it in January 2025 as a fork of ownCloud Infinite Scale. The name also goes into the image name, the install URL, the Kubernetes namespaces, and the labels. Samir must choose the final name before the first public release, because a later rename changes resources on live clusters. The code keeps the name in one constant so that the rename is cheap until then [C-new].
-- **The license of opencloud itself.** Examples are MIT, Apache 2.0, and AGPL 3.0. The license decides whether a company can sell a closed, hosted copy.
 - **The first provider for `created` clusters.** Claude leans to DigitalOcean. Its managed Kubernetes adds and removes machines automatically, so the OpenTofu module only creates a cluster and returns a kubeconfig. Hetzner is cheaper but has no managed Kubernetes, so opencloud must create the machines, install k3s, and scale the machines itself.
