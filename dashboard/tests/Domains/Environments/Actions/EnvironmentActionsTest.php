@@ -229,6 +229,24 @@ class EnvironmentActionsTest extends TestCase
         $this->assertSame(['lines' => [], 'truncated' => false], app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::now()->subHour(), CarbonImmutable::now(), 'hunter2'));
     }
 
+    public function test_read_logs_starts_the_range_at_the_last_clear_of_the_logs(): void
+    {
+        $this->environment->update(['logs_cleared_at' => '2026-10-29 09:30:00']);
+        $kubectl = FakeKubectl::install()->respond('exec', self::loki([]));
+
+        app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::parse('2026-10-29T09:00:00Z'), CarbonImmutable::parse('2026-10-29T10:00:00Z'));
+        $this->assertSame(['2026-10-29T09:30:00+00:00', '2026-10-29T10:00:00+00:00'], [self::lokiQuery($kubectl)['start'], self::lokiQuery($kubectl)['end']]);
+
+        app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::parse('2026-10-29T09:45:00Z'), CarbonImmutable::parse('2026-10-29T10:00:00Z'));
+        $this->assertSame('2026-10-29T09:45:00+00:00', self::lokiQuery($kubectl)['start']);
+
+        $this->assertSame(
+            ['lines' => [], 'truncated' => false],
+            app(ReadLogs::class)->execute($this->environment, 'web', CarbonImmutable::parse('2026-10-29T08:00:00Z'), CarbonImmutable::parse('2026-10-29T09:30:00Z')),
+        );
+        $this->assertCount(2, $kubectl->calls);
+    }
+
     /** @param  array<string, list<array{0: string, 1: string}>>  $pods  the values of one stream for each pod, as Loki gives them */
     private static function loki(array $pods): KubectlResult
     {

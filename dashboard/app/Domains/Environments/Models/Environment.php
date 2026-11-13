@@ -43,6 +43,7 @@ class Environment extends Model
         'deploy_commands',
         'health_path',
         'pr_comment_id',
+        'logs_cleared_at',
     ];
 
     protected $hidden = ['deploy_hook_token'];
@@ -82,6 +83,7 @@ class Environment extends Model
             'max_instances' => 'integer',
             'cpu_target' => 'integer',
             'deploy_commands' => 'array',
+            'logs_cleared_at' => 'datetime',
         ];
     }
 

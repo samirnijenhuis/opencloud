@@ -1,0 +1,38 @@
+<?php
+
+namespace Tests\Domains\Environments\Jobs;
+
+use App\Domains\Environments\Jobs\DeleteLogLines;
+use App\Domains\Environments\Models\Environment;
+use App\Support\Kube\FakeKubectl;
+use App\Support\Kube\KubectlException;
+use App\Support\Kube\KubectlResult;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class DeleteLogLinesTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_it_asks_loki_to_delete_the_lines_of_the_namespace_from_the_creation_of_the_environment_to_the_clear(): void
+    {
+        $kubectl = FakeKubectl::install()->respond('exec', new KubectlResult(0, ''));
+        $environment = Environment::factory()->create(['created_at' => '2026-10-01 08:00:00', 'logs_cleared_at' => '2026-10-29 10:00:00']);
+
+        DeleteLogLines::dispatchSync($environment);
+
+        $this->assertSame([
+            'exec', 'deploy/loki', '--namespace=opencloud', '--container=query', '--', 'wget', '-q', '-T', '20', '-O-', '--post-data=',
+            "http://127.0.0.1:3100/loki/api/v1/delete?query=%7Bnamespace%3D%22oc-env-{$environment->id}%22%7D&start=2026-10-01T08%3A00%3A00%2B00%3A00&end=2026-10-29T10%3A00%3A00%2B00%3A00",
+        ], $kubectl->calls[0]['args']);
+    }
+
+    public function test_a_refused_delete_fails_the_try_so_the_queue_sends_it_again(): void
+    {
+        FakeKubectl::install()->respond('exec', new KubectlResult(1, '', 'wget: server returned error: HTTP/1.1 400 Bad Request'));
+        $environment = Environment::factory()->create(['logs_cleared_at' => now()]);
+
+        $this->expectException(KubectlException::class);
+        DeleteLogLines::dispatchSync($environment);
+    }
+}

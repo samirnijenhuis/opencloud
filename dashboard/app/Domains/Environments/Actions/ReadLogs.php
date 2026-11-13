@@ -2,9 +2,8 @@
 
 namespace App\Domains\Environments\Actions;
 
-use App\Domains\Clusters\ClusterPartsManifests;
+use App\Domains\Environments\LogStore;
 use App\Domains\Environments\Models\Environment;
-use App\Support\Kube\Kubectl;
 use App\Support\Kube\KubectlException;
 use App\Support\SecretMasker;
 use Carbon\CarbonImmutable;
@@ -17,9 +16,12 @@ class ReadLogs
     /** The Logs tab shows the newest lines of the range, up to this count. */
     public const LIMIT = 1000;
 
+    public function __construct(private LogStore $logStore) {}
+
     /**
      * Asks the Loki of the cluster for the lines of one process in one range. The stream selector always names the
-     * namespace of the environment, and the search only filters lines inside that selector.
+     * namespace of the environment, and the search only filters lines inside that selector. The range starts at the
+     * last clear of the logs at the earliest, because Loki drops the cleared lines only some minutes later.
      *
      * @return array{lines: list<array{time: string, pod: string, line: string}>, truncated: bool} the lines from old to new, and whether the range holds older lines
      *
@@ -34,24 +36,22 @@ class ReadLogs
             throw new InvalidArgumentException("{$process} is not a process of this environment. Use one of: ".implode(', ', $names).'.');
         }
 
-        $query = '{namespace='.self::quote($environment->kubeNamespace()).', process='.self::quote($process).'}';
-
-        if ($search !== null) {
-            $query .= ' |~ '.self::quote('(?i)'.preg_quote($search));
+        if ($environment->logs_cleared_at?->isAfter($from)) {
+            $from = $environment->logs_cleared_at;
         }
 
-        $url = 'http://127.0.0.1:3100/loki/api/v1/query_range?'.http_build_query([
-            'query' => $query,
-            'start' => $from->toRfc3339String(),
-            'end' => $to->toRfc3339String(),
-            'limit' => self::LIMIT,
-            'direction' => 'backward',
-        ]);
+        // A custom range can end before the clear, and Loki refuses a range that ends before it starts.
+        if (! $to->isAfter($from)) {
+            return ['lines' => [], 'truncated' => false];
+        }
 
-        $streams = Kubectl::for($environment->application->cluster)
-            ->exec(ClusterPartsManifests::NAMESPACE, 'deploy/'.ClusterPartsManifests::LOKI, ['wget', '-q', '-T', '20', '-O-', $url], container: ClusterPartsManifests::LOKI_QUERY_CONTAINER, timeout: 30)
-            ->throw()
-            ->json()['data']['result'];
+        $query = '{namespace='.LogStore::quote($environment->kubeNamespace()).', process='.LogStore::quote($process).'}';
+
+        if ($search !== null) {
+            $query .= ' |~ '.LogStore::quote('(?i)'.preg_quote($search));
+        }
+
+        $streams = $this->logStore->lines($environment->application->cluster, $query, $from, $to, self::LIMIT);
 
         $masker = SecretMasker::forEnvironment($environment);
         $lines = collect($streams)
@@ -73,11 +73,5 @@ class ReadLogs
 
         // Counted after the filter, so a search that matches only inside secrets also gives no sign.
         return ['lines' => $lines, 'truncated' => count($lines) === self::LIMIT];
-    }
-
-    /** A LogQL string uses the escapes of a Go string, which JSON also uses. */
-    private static function quote(string $value): string
-    {
-        return json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 }

@@ -1,12 +1,14 @@
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import EnvironmentLayout from '@/layouts/environment-layout';
 import { type EnvironmentPageProps } from '@/types';
+import { router } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
-type Props = EnvironmentPageProps & { processes: string[] };
+type Props = EnvironmentPageProps & { processes: string[]; logs_cleared_at: string | null };
 type Line = { time: string; pod: string; line: string };
 type Result = { lines: Line[]; truncated: boolean; error: string | null };
 
@@ -36,7 +38,7 @@ const shortTime = (time: string) =>
     });
 
 export default function EnvironmentLogs(props: Props) {
-    const { environment, processes } = props;
+    const { environment, processes, logs_cleared_at: clearedAt, can } = props;
     const [process, setProcess] = useState(processes[0] ?? 'web');
     const [range, setRange] = useState('3600');
     const [customFrom, setCustomFrom] = useState('');
@@ -45,6 +47,8 @@ export default function EnvironmentLogs(props: Props) {
     const [search, setSearch] = useState('');
     const [result, setResult] = useState<Result | null>(null);
     const [problem, setProblem] = useState<string | null>(null);
+    const [confirming, setConfirming] = useState(false);
+    const [clearing, setClearing] = useState(false);
     const box = useRef<HTMLPreElement>(null);
     const following = useRef(true);
 
@@ -115,7 +119,7 @@ export default function EnvironmentLogs(props: Props) {
             active = false;
             window.clearTimeout(timer);
         };
-    }, [environment.id, process, range, customFrom, customTo, search]);
+    }, [environment.id, process, range, customFrom, customTo, search, clearedAt]);
 
     useEffect(() => {
         const element = box.current;
@@ -148,6 +152,16 @@ export default function EnvironmentLogs(props: Props) {
         setSearch(searchText.trim());
     };
 
+    const clear = () =>
+        router.delete(route('environments.logs.clear', environment.id), {
+            preserveScroll: true,
+            onStart: () => setClearing(true),
+            onFinish: () => {
+                setClearing(false);
+                setConfirming(false);
+            },
+        });
+
     const empty = search === '' ? 'There are no log lines in this range.' : 'No log line in this range has this text.';
 
     return (
@@ -158,7 +172,14 @@ export default function EnvironmentLogs(props: Props) {
                         {name}
                     </Button>
                 ))}
-                {range !== 'custom' && <span className="text-muted-foreground ml-auto text-xs">Refreshes every 5 seconds</span>}
+                <div className="ml-auto flex items-center gap-3">
+                    {range !== 'custom' && <span className="text-muted-foreground text-xs">Refreshes every 5 seconds</span>}
+                    {can.update && (
+                        <Button size="sm" variant="secondary" onClick={() => setConfirming(true)}>
+                            Clear logs
+                        </Button>
+                    )}
+                </div>
             </div>
 
             <div className="flex flex-wrap items-end gap-3">
@@ -207,6 +228,11 @@ export default function EnvironmentLogs(props: Props) {
                 </form>
             </div>
 
+            {clearedAt && (
+                <p className="text-muted-foreground text-sm">
+                    The logs were cleared at {shortTime(clearedAt)}. This tab shows only the lines after that time.
+                </p>
+            )}
             {problem && <p className="text-sm text-red-600 dark:text-red-400">{problem}</p>}
             {result?.truncated && (
                 <p className="text-muted-foreground text-sm">
@@ -233,6 +259,26 @@ export default function EnvironmentLogs(props: Props) {
                                 </div>
                             ))))}
             </pre>
+
+            <Dialog open={confirming} onOpenChange={setConfirming}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Clear the logs of this environment?</DialogTitle>
+                        <DialogDescription>
+                            From now on, the Logs tab does not show the earlier lines of each process. The log store of the cluster deletes these
+                            lines in about a day. You cannot undo this.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="secondary" onClick={() => setConfirming(false)}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" disabled={clearing} onClick={clear}>
+                            Clear logs
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </EnvironmentLayout>
     );
 }

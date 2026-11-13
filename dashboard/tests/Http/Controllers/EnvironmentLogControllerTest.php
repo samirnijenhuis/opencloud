@@ -2,12 +2,15 @@
 
 namespace Tests\Http\Controllers;
 
+use App\Domains\Audit\Models\AuditEvent;
+use App\Domains\Environments\Jobs\DeleteLogLines;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
 use App\Domains\Members\Models\User;
 use App\Support\Kube\FakeKubectl;
 use App\Support\Kube\KubectlResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\BuildsEnvironments;
 use Tests\TestCase;
@@ -80,6 +83,33 @@ class EnvironmentLogControllerTest extends TestCase
         $this->actingAs(User::factory()->create())->getJson("/environments/{$environment->id}/logs/read?process=web&from=2026-10-29T18:00:00Z&to=2026-10-29T19:00:00Z")
             ->assertOk()
             ->assertExactJson(['lines' => [], 'truncated' => false, 'error' => 'The log store of the cluster does not answer. Try again in a minute.']);
+    }
+
+    public function test_a_developer_clears_the_logs_of_an_unprotected_environment_and_the_page_shows_the_time(): void
+    {
+        Queue::fake();
+        $this->freezeSecond();
+        $environment = $this->makeEnvironment(protected: false, name: 'staging');
+        $developer = User::factory()->create();
+
+        $this->actingAs($developer)->delete("/environments/{$environment->id}/logs")->assertRedirect("/environments/{$environment->id}/logs");
+
+        $this->assertEquals(now(), $environment->fresh()->logs_cleared_at);
+        Queue::assertPushed(DeleteLogLines::class);
+        $this->actingAs($developer)->get("/environments/{$environment->id}/logs")
+            ->assertInertia(fn (Assert $page) => $page->where('logs_cleared_at', now()->toIso8601String())->where('can.update', true));
+    }
+
+    public function test_a_developer_cannot_clear_the_logs_of_a_protected_environment(): void
+    {
+        Queue::fake();
+        $environment = $this->makeEnvironment();
+
+        $this->actingAs(User::factory()->create())->delete("/environments/{$environment->id}/logs")->assertForbidden();
+
+        $this->assertNull($environment->fresh()->logs_cleared_at);
+        $this->assertSame(0, AuditEvent::count());
+        Queue::assertNothingPushed();
     }
 
     public function test_guests_get_no_logs(): void
