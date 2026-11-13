@@ -27,6 +27,7 @@ import {
     type Resources,
     type Sheet,
 } from '@/components/environment/types';
+import { domainState, VisitSite } from '@/components/environment/visit-site';
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,67 +38,12 @@ import { duration, memoryText, previewLimitText, previewWildcard, shortSha, size
 import { kindLabels as clusterKindLabels } from '@/pages/clusters/cluster-status';
 import { type Process, type Size, type SizeOption } from '@/types';
 import { Link, router } from '@inertiajs/react';
-import {
-    Boxes,
-    CalendarClock,
-    Database,
-    ExternalLink,
-    GitPullRequest,
-    Globe,
-    HardDrive,
-    Plus,
-    Server,
-    ShieldCheck,
-    SquareTerminal,
-    Zap,
-} from 'lucide-react';
+import { Boxes, CalendarClock, Database, GitPullRequest, Globe, HardDrive, Plus, Server, ShieldCheck, SquareTerminal, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const resourceIcons = { mysql: Database, postgres: Database, valkey: Zap, rustfs: HardDrive } as const;
 
 const issuerLabels = { acme: "Let's Encrypt", internal: 'Local CA' } as const;
-
-const live = (domain: Domain) => domain.dns_status === 'ok' || domain.dns_status === 'proxied';
-
-/** The one short state of a domain that fits in a block row. */
-function domainState(domain: Domain): [Tone, string] {
-    if (domain.dns_status === 'wrong') return ['bad', 'Wrong address'];
-    if (domain.dns_status === 'missing') return ['warn', 'Add A record'];
-    if (!live(domain)) return ['off', 'Checking'];
-    if (domain.certificate_status === 'failed') return ['bad', 'Certificate failed'];
-    if (domain.certificate_status !== 'issued') return ['warn', 'Issuing'];
-
-    return ['ok', 'Live'];
-}
-
-/** The header link opens the primary domain, so it opens the same address as APP_URL. */
-function VisitSite({ domains }: { domains: Domain[] }) {
-    const primary = domains.find((domain) => domain.primary);
-
-    if (!primary || domainState(primary)[0] !== 'ok') {
-        return (
-            <span
-                title={
-                    primary
-                        ? 'The primary domain is not live yet. Open Domains to see why.'
-                        : 'No domain is live yet. Add a domain, or wait for its certificate.'
-                }
-            >
-                <Button variant="outline" disabled>
-                    <ExternalLink /> Visit site
-                </Button>
-            </span>
-        );
-    }
-
-    return (
-        <Button variant="outline" asChild>
-            <a href={`https://${primary.hostname}`} target="_blank" rel="noreferrer" title={primary.hostname}>
-                <ExternalLink /> Visit site
-            </a>
-        </Button>
-    );
-}
 
 function PreviewsBlock({ previews, onOpen }: { previews: PreviewTemplateSettings; onOpen: () => void }) {
     const wildcard = previews.preview_domain ? previewWildcard(previews.preview_domain) : null;
@@ -435,7 +381,12 @@ export default function EnvironmentShow(props: CanvasProps) {
     );
 
     return (
-        <EnvironmentLayout page={props} tab="environment" title="Environment" actions={!previews && <VisitSite domains={domains} />}>
+        <EnvironmentLayout
+            page={props}
+            tab="environment"
+            title="Environment"
+            actions={!previews && <VisitSite primary={domains.find((domain) => domain.primary)} />}
+        >
             <Canvas className="@container rounded-xl border bg-neutral-50/70 bg-[radial-gradient(var(--color-neutral-300)_1px,transparent_1px)] bg-[size:14px_14px] p-4 pb-20 sm:p-6 sm:pb-20 dark:bg-neutral-950 dark:bg-[radial-gradient(var(--color-neutral-800)_1px,transparent_1px)]">
                 <div className="mx-auto grid max-w-md grid-cols-1 gap-6 @4xl:max-w-none @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)] @4xl:items-start @4xl:gap-x-7">
                     <Group column="network" label="Network" aside="Caddy">

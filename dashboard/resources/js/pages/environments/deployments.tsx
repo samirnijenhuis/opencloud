@@ -1,3 +1,5 @@
+import { type Domain } from '@/components/environment/types';
+import { VisitSite } from '@/components/environment/visit-site';
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
 import { useDeploymentPoll } from '@/hooks/use-deployment-poll';
 import EnvironmentLayout from '@/layouts/environment-layout';
@@ -5,12 +7,22 @@ import { duration, shortSha, timeAgo } from '@/lib/format';
 import { type Deployment, type EnvironmentPageProps } from '@/types';
 import { Link } from '@inertiajs/react';
 
-export default function EnvironmentDeployments(props: EnvironmentPageProps & { deployments: Deployment[] }) {
-    const { deployments, environment } = props;
+type Props = EnvironmentPageProps & {
+    deployments: Deployment[];
+    primary_domain: Pick<Domain, 'hostname' | 'dns_status' | 'certificate_status'> | null;
+};
+
+export default function EnvironmentDeployments(props: Props) {
+    const { deployments, environment, primary_domain } = props;
     useDeploymentPoll(isRunning(environment.status), ['deployments', 'environment'], 10_000);
 
     return (
-        <EnvironmentLayout page={props} tab="deployments" title="Deployments">
+        <EnvironmentLayout
+            page={props}
+            tab="deployments"
+            title="Deployments"
+            actions={environment.status === 'live' && <VisitSite primary={primary_domain} />}
+        >
             {deployments.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No deployments yet. Select Deploy to start the first one.</p>
             ) : (

@@ -9,6 +9,8 @@ use App\Domains\Deployments\DeploymentSteps;
 use App\Domains\Deployments\Enums\DeploymentStatus;
 use App\Domains\Deployments\Models\Deployment;
 use App\Domains\Environments\Models\Environment;
+use App\Domains\Routing\Enums\DnsStatus;
+use App\Domains\Routing\PrimaryDomain;
 use App\Http\Controllers\Concerns\PresentsEnvironment;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,6 +30,7 @@ class DeploymentController extends Controller
 
         return Inertia::render('environments/deployments', [
             ...$this->environmentProps($environment, $request->user()),
+            'primary_domain' => $this->primaryDomain($environment),
             'deployments' => $environment->deployments()
                 ->with('triggeredBy:id,name')
                 ->latest('id')
@@ -44,10 +47,23 @@ class DeploymentController extends Controller
 
         return Inertia::render('deployments/show', [
             ...$this->environmentProps($environment, $request->user()),
+            'primary_domain' => $this->primaryDomain($environment),
             'deployment' => $this->deploymentProps($deployment),
             'steps' => DeploymentSteps::of($deployment),
             'waiting_for' => $this->waitingFor($deployment),
         ]);
+    }
+
+    /** @return array{hostname: string, dns_status: DnsStatus, certificate_status: string}|null */
+    private function primaryDomain(Environment $environment): ?array
+    {
+        $primary = PrimaryDomain::of($environment->domains()->get());
+
+        return $primary === null ? null : [
+            'hostname' => $primary->hostname,
+            'dns_status' => $primary->dns_status,
+            'certificate_status' => $primary->certificate_status,
+        ];
     }
 
     /**

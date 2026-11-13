@@ -1,4 +1,6 @@
 import { DeploymentSteps } from '@/components/deployment-steps';
+import { type Domain } from '@/components/environment/types';
+import { VisitSite } from '@/components/environment/visit-site';
 import { DeploymentBadge, isRunning } from '@/components/status-badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useDeploymentPoll } from '@/hooks/use-deployment-poll';
@@ -9,15 +11,25 @@ import { Link } from '@inertiajs/react';
 
 type WaitingFor = { id: number; application: string; environment: string; queued_before: number };
 
-type Props = EnvironmentPageProps & { deployment: Deployment; steps: DeploymentStep[]; waiting_for: WaitingFor | null };
+type Props = EnvironmentPageProps & {
+    deployment: Deployment;
+    steps: DeploymentStep[];
+    waiting_for: WaitingFor | null;
+    primary_domain: Pick<Domain, 'hostname' | 'dns_status' | 'certificate_status'> | null;
+};
 
 export default function DeploymentShow(props: Props) {
-    const { deployment, steps, environment, waiting_for } = props;
+    const { deployment, steps, environment, waiting_for, primary_domain } = props;
     const running = isRunning(deployment.status);
     useDeploymentPoll(running, ['deployment', 'steps', 'environment', 'waiting_for']);
 
     return (
-        <EnvironmentLayout page={props} tab="deployments" title={`Deployment ${shortSha(deployment.commit_sha)}`}>
+        <EnvironmentLayout
+            page={props}
+            tab="deployments"
+            title={`Deployment ${shortSha(deployment.commit_sha)}`}
+            actions={deployment.status === 'live' && <VisitSite primary={primary_domain} />}
+        >
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
                 <DeploymentBadge status={deployment.status} />
                 <span>
