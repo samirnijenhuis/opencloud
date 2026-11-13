@@ -61,6 +61,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('environments/{environment}/logs', [EnvironmentLogController::class, 'show'])->name('environments.logs');
     Route::get('environments/{environment}/logs/read', [EnvironmentLogController::class, 'read'])->name('environments.logs.read');
+    Route::delete('environments/{environment}/logs', [EnvironmentLogController::class, 'destroy'])->name('environments.logs.clear');
 
     Route::get('environments/{environment}/status', [LiveStatusController::class, 'environment'])->name('environments.status');
     Route::get('environments/{environment}/repository-access', [RepositoryAccessController::class, 'show'])->name('environments.repository-access');

@@ -22,6 +22,7 @@ use App\Domains\Environments\Enums\EnvVarAvailability;
 use App\Domains\Environments\Enums\EnvVarSource;
 use App\Domains\Environments\Enums\Size;
 use App\Domains\Environments\Enums\ToolKind;
+use App\Domains\Environments\Jobs\DeleteLogLines;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\EnvVar;
 use App\Domains\Environments\Models\Process;
@@ -57,7 +58,7 @@ class PreviewLifecycleTest extends TestCase
     {
         parent::setUp();
 
-        Queue::fake([RunDeployment::class, ProvisionDatastoreAttachment::class, CheckDomain::class, SyncCaddy::class]);
+        Queue::fake([RunDeployment::class, ProvisionDatastoreAttachment::class, CheckDomain::class, SyncCaddy::class, DeleteLogLines::class]);
         $this->kubectl = FakeKubectl::install();
         FakeProcesses::install()->lsRemote = str_repeat('a', 40)."\trefs/heads/main\n";
         $owner = User::factory()->owner()->create();
@@ -164,6 +165,7 @@ class PreviewLifecycleTest extends TestCase
             Deployment::where('environment_id', $preview->id)->count(),
         ]);
         Queue::assertPushed(SyncCaddy::class, 1);
+        Queue::assertPushed(DeleteLogLines::class, fn (DeleteLogLines $job) => $job->namespace === "oc-env-{$preview->id}");
 
         $this->assertSame([
             'preview.created', 'preview.env_copied', 'datastore.attached', 'datastore.attached', 'domain.added', 'deployment.started',
