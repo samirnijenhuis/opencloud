@@ -152,11 +152,7 @@ export function EnvTextEditor({
                 </ul>
             )}
             <p className="text-muted-foreground text-sm">Opencloud does not save comments. Add a secret in the table.</p>
-            {canUpdate ? (
-                <Button disabled={processing}>Save values</Button>
-            ) : (
-                <p className="text-muted-foreground text-sm">Only an admin or an owner can change the values of a protected environment.</p>
-            )}
+            {canUpdate && <Button disabled={processing}>Save values</Button>}
         </form>
     );
 }

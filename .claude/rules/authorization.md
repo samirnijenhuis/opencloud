@@ -38,7 +38,7 @@ Each request that changes something follows one chain: Form Request, policy, Act
 - `App\Domains\Members\Enums\Role` has three cases: owner, admin, and developer. `Role::allows(Ability)` is the one map from roles to abilities. The `Ability` enum lists the rights.
 - Check an ability, never a role. Write `$user->role->allows(Ability::MANAGE_CREDENTIALS)`. Do not compare a `Role` case, call `in_array()` on roles, or `match` on a role.
 - Grant a new ability to the smallest set of roles that needs it. Keep a right that touches the cloud account, a credential, or the members on the owner.
-- A developer has no write right on a protected environment. A change to a protected environment, and a deploy of it, needs `CHANGE_PROTECTED_ENVIRONMENT`.
+- Every environment has the same rules, production too. A change to an environment needs `CHANGE_ENVIRONMENT`, and a deploy needs `DEPLOY`. Each role has both. Only an owner and an admin read the secret env values (`READ_SECRETS`).
 - When you add an ability, add a row for each role to `RoleTest::rights()`. `test_the_rights_table_covers_every_role_and_ability` fails until every pair has a row.
 
 ## Policies
@@ -71,6 +71,6 @@ public function update(User $user, User $member): bool
 ## Code that does not follow these rules yet
 
 - Many controllers still call `Gate::authorize()`, `abort_unless()`, or `$request->validate()`. Some Form Requests and controllers call `role->allows()` where a policy method fits.
-- `EnvironmentPolicy` picks the ability with a ternary, and `UserPolicy` chains its checks with `&&`.
+- `UserPolicy` chains its checks with `&&`.
 - `tests/Architecture/baseline.json` lists the `abort` calls, the inline validation, and the controller methods without a Form Request. No check covers `Gate::authorize()` or the policy style yet.
 - New code follows the rules above. When you change one of these methods, bring it to the rules and lower the baseline.

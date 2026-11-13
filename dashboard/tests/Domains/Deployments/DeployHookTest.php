@@ -66,7 +66,7 @@ class DeployHookTest extends TestCase
 
     public function test_the_preview_template_gets_no_hook(): void
     {
-        $template = $this->makeEnvironment(false, 'preview-template', ['kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
+        $template = $this->makeEnvironment('preview-template', ['kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'branch' => null]);
 
         $this->expectException(InvalidArgumentException::class);
 
@@ -118,26 +118,26 @@ class DeployHookTest extends TestCase
         $this->assertSame(['api', 'throttle:10,1,deploy-hook'], $middleware);
     }
 
-    public function test_only_users_who_may_change_the_environment_see_the_url_or_change_the_hook(): void
+    public function test_each_member_sees_the_url_and_changes_the_hook_of_every_environment(): void
     {
         $production = $this->makeEnvironment();
-        $staging = Environment::factory()->for($production->application)->create(['name' => 'staging', 'is_protected' => false]);
+        $staging = Environment::factory()->for($production->application)->create(['name' => 'staging']);
         app(EnableDeployHook::class)->execute($production, $this->owner);
         $developer = User::factory()->create();
 
         $this->actingAs($this->owner)->getJson("/environments/{$production->id}/deploy-hook")
             ->assertOk()->assertExactJson(['enabled' => true, 'url' => 'http://localhost'.$this->hookPath($production)]);
         $this->actingAs($developer)->getJson("/environments/{$production->id}/deploy-hook")
-            ->assertOk()->assertExactJson(['enabled' => true, 'url' => null]);
-        $this->actingAs($developer)->post("/environments/{$production->id}/deploy-hook/regenerate")->assertForbidden();
-        $this->actingAs($developer)->delete("/environments/{$production->id}/deploy-hook")->assertForbidden();
+            ->assertOk()->assertExactJson(['enabled' => true, 'url' => 'http://localhost'.$this->hookPath($production)]);
+        $this->actingAs($developer)->post("/environments/{$production->id}/deploy-hook/regenerate")->assertRedirect();
+        $this->actingAs($developer)->delete("/environments/{$production->id}/deploy-hook")->assertRedirect();
 
         $this->actingAs($developer)->post("/environments/{$staging->id}/deploy-hook")->assertRedirect();
         $this->actingAs($developer)->getJson("/environments/{$staging->id}/deploy-hook")
             ->assertOk()->assertExactJson(['enabled' => true, 'url' => 'http://localhost'.$this->hookPath($staging)]);
         $this->actingAs($developer)->delete("/environments/{$staging->id}/deploy-hook")->assertRedirect();
 
-        $this->assertSame([true, false], [$production->fresh()->deploy_hook_enabled, $staging->fresh()->deploy_hook_enabled]);
+        $this->assertSame([false, false], [$production->fresh()->deploy_hook_enabled, $staging->fresh()->deploy_hook_enabled]);
     }
 
     public function test_guests_get_nothing(): void

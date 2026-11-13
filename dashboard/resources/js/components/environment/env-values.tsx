@@ -208,7 +208,7 @@ function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number
             )}
             {!errors.key && <InputError message={pageErrors.key} />}
 
-            {canUpdate ? (
+            {canUpdate && (
                 <form onSubmit={submit} className="space-y-4 rounded-lg border p-4">
                     <h3 className="text-sm font-medium">{existing ? `Replace ${existing.key}` : 'Add or replace a value'}</h3>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -260,8 +260,6 @@ function EnvTable({ environmentId, envVars, canUpdate }: { environmentId: number
                     </div>
                     <Button disabled={processing || data.key.trim() === ''}>Save value</Button>
                 </form>
-            ) : (
-                <p className="text-muted-foreground text-sm">Only an admin or an owner can change the values of a protected environment.</p>
             )}
         </div>
     );

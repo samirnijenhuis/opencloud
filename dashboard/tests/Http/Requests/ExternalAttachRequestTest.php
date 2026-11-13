@@ -41,7 +41,7 @@ class ExternalAttachRequestTest extends TestCase
         Queue::fake();
         FakeKubectl::install();
         $cluster = Cluster::factory()->create(['kind' => ClusterKind::LOCAL, 'name' => 'local']);
-        $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create(['is_protected' => true]);
+        $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create();
         $this->owner = User::factory()->owner()->create();
     }
 
@@ -150,14 +150,14 @@ class ExternalAttachRequestTest extends TestCase
         $this->assertNotSame(' TYPED-db-secret ', $attachment->password);
     }
 
-    public function test_a_developer_brings_a_resource_only_to_an_environment_that_they_can_change(): void
+    public function test_a_developer_brings_a_resource_to_production_and_to_staging(): void
     {
         $developer = User::factory()->create();
-        $staging = Environment::factory()->for($this->environment->application)->create(['name' => 'staging', 'is_protected' => false]);
+        $staging = Environment::factory()->for($this->environment->application)->create(['name' => 'staging']);
 
-        $this->actingAs($developer)->post("/environments/{$this->environment->id}/datastores", self::DATABASE)->assertForbidden();
+        $this->actingAs($developer)->post("/environments/{$this->environment->id}/datastores", self::DATABASE)->assertRedirect()->assertSessionHasNoErrors();
         $this->actingAs($developer)->post("/environments/{$staging->id}/datastores", self::DATABASE)->assertRedirect()->assertSessionHasNoErrors();
 
-        $this->assertSame([$staging->id], DatastoreAttachment::query()->pluck('environment_id')->all());
+        $this->assertSame([$this->environment->id, $staging->id], DatastoreAttachment::query()->orderBy('id')->pluck('environment_id')->all());
     }
 }

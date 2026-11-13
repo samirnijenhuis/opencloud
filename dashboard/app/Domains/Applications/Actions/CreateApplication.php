@@ -36,7 +36,7 @@ class CreateApplication
     ) {}
 
     /**
-     * Creates the application, its protected production environment, the preview template, and the free sslip.io domain
+     * Creates the application, its production environment, the preview template, and the free sslip.io domain
      * of production. The preset in `type` gives the settings, the processes, the database, and the generated secrets.
      * Production gets the database, and the list of the template gets it for each new preview.
      * It starts no deployment. The user sets size, scaling, env values, commands, and domains on the environment, then deploys.
@@ -103,7 +103,6 @@ class CreateApplication
             $production = $application->environments()->create([
                 'name' => 'production',
                 'kind' => EnvironmentKind::PERMANENT,
-                'is_protected' => true,
                 'branch' => $branch,
                 ...$settings,
             ]);
@@ -111,7 +110,6 @@ class CreateApplication
             $template = $application->environments()->create([
                 'name' => 'preview-template',
                 'kind' => EnvironmentKind::PREVIEW_TEMPLATE,
-                'is_protected' => false,
                 'auto_deploy' => false,
                 'sleep_after_minutes' => Environment::PREVIEW_SLEEP_AFTER_MINUTES,
                 ...$settings,

@@ -72,15 +72,14 @@ class CommandRunTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_developers_run_commands_only_on_unprotected_environments(): void
+    public function test_a_developer_runs_commands_on_production_and_on_staging(): void
     {
-        $staging = Environment::factory()->for($this->production->application)->create(['name' => 'staging', 'is_protected' => false]);
+        $staging = Environment::factory()->for($this->production->application)->create(['name' => 'staging']);
         Deployment::factory()->for($staging)->create(['status' => DeploymentStatus::LIVE]);
         $developer = User::factory()->create();
 
-        $this->actingAs($developer)->post("/environments/{$this->production->id}/command-runs", ['command' => 'php artisan migrate:status'])->assertForbidden();
         $this->actingAs($developer)->post("/environments/{$staging->id}/command-runs", ['command' => 'php artisan migrate:status'])->assertRedirect();
-        $this->actingAs(User::factory()->admin()->create())->post("/environments/{$this->production->id}/command-runs", ['command' => 'php artisan about'])->assertRedirect();
+        $this->actingAs($developer)->post("/environments/{$this->production->id}/command-runs", ['command' => 'php artisan about'])->assertRedirect();
 
         $this->assertSame(
             [[$staging->id, 'php artisan migrate:status'], [$this->production->id, 'php artisan about']],

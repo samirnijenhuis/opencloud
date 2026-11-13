@@ -15,7 +15,6 @@ type EnvironmentRow = {
     id: number;
     name: string;
     kind: EnvironmentKind;
-    is_protected: boolean;
     branch: string | null;
     pr_number: number | null;
     pr_url: string | null;
@@ -97,7 +96,6 @@ export default function ApplicationShow({ application, environments, previews, c
                                     <Link href={route('environments.show', environment.id)} className="font-medium hover:underline">
                                         {environment.name}
                                     </Link>
-                                    {environment.is_protected && <Badge variant="outline">Protected</Badge>}
                                     {environment.kind === 'preview' && <Badge variant="outline">Preview</Badge>}
                                     {environment.kind === 'preview_template' && <Badge variant="outline">Preview template</Badge>}
                                 </div>

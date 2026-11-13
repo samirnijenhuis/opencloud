@@ -96,7 +96,7 @@ class EnvironmentController extends Controller
             ...$props,
             'can' => [
                 ...$props['can'],
-                'restore' => $role->allows(Ability::CHANGE_PROTECTED_ENVIRONMENT),
+                'restore' => $role->allows(Ability::MANAGE_APPLICATIONS),
                 'manage_credentials' => $role->allows(Ability::MANAGE_CREDENTIALS),
             ],
             'cluster' => ['id' => $cluster->id, 'name' => $cluster->name, 'kind' => $cluster->kind, 'ingress_ip' => $cluster->ingress_ip],

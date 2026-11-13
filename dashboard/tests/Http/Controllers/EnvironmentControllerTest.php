@@ -78,7 +78,7 @@ class EnvironmentControllerTest extends TestCase
                 ->where('deployments.1.status', 'failed')
                 ->where('deployments.2.status', 'live')
                 ->has('deployments', 3)
-                ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false, 'restore' => false, 'manage_credentials' => false]));
+                ->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => false, 'restore' => false, 'manage_credentials' => false]));
     }
 
     public function test_the_commands_page_tells_who_may_run_and_read_commands(): void
@@ -89,7 +89,7 @@ class EnvironmentControllerTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('environments/commands')
-                ->where('can', ['update' => false, 'deploy' => false, 'manage_domains' => false, 'read_logs' => true]));
+                ->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => false, 'read_logs' => true]));
         $this->actingAs(User::factory()->admin()->create())->get("/environments/{$environment->id}/commands")
             ->assertInertia(fn (Assert $page) => $page->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => true, 'read_logs' => true]));
     }
@@ -110,7 +110,7 @@ class EnvironmentControllerTest extends TestCase
         $staging = Environment::factory()->for($application)->create(['name' => 'staging', 'color' => EnvironmentColor::GREEN]);
         Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
         $preview = Environment::factory()->for($application)->create(['name' => 'pr-12', 'kind' => EnvironmentKind::PREVIEW, 'color' => EnvironmentColor::GRAY]);
-        $this->makeEnvironment(false, 'other-application');
+        $this->makeEnvironment('other-application');
 
         $this->actingAs(User::factory()->create())->get("/environments/{$staging->id}/deployments")
             ->assertInertia(fn (Assert $page) => $page
@@ -158,15 +158,34 @@ class EnvironmentControllerTest extends TestCase
         $this->assertSame(30, $template->fresh()->sleep_after_minutes);
     }
 
-    public function test_the_rights_follow_the_role_and_the_protection_of_the_environment(): void
+    public function test_the_rights_follow_the_role_and_are_the_same_on_every_environment(): void
     {
-        $protected = $this->makeEnvironment(true, 'production');
-        $open = $this->makeEnvironment(false, 'staging');
+        $production = $this->makeEnvironment('production');
+        $staging = $this->makeEnvironment('staging');
+        $developer = User::factory()->create();
 
-        $this->actingAs(User::factory()->create())->get("/environments/{$open->id}/deployments")
-            ->assertInertia(fn (Assert $page) => $page->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => false]));
-        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$protected->id}/deployments")
+        foreach ([$production, $staging] as $environment) {
+            $this->actingAs($developer)->get("/environments/{$environment->id}/deployments")
+                ->assertInertia(fn (Assert $page) => $page->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => false]));
+        }
+        $this->actingAs(User::factory()->admin()->create())->get("/environments/{$production->id}/deployments")
             ->assertInertia(fn (Assert $page) => $page->where('can', ['update' => true, 'deploy' => true, 'manage_domains' => true]));
+    }
+
+    public function test_a_developer_changes_and_deploys_production(): void
+    {
+        Queue::fake();
+        FakeProcesses::install()->lsRemote = str_repeat('e', 40)."\trefs/heads/main\n";
+        $production = $this->makeEnvironment();
+        $developer = User::factory()->create();
+
+        $this->actingAs($developer)->post("/environments/{$production->id}/env", ['key' => 'MAIL_MAILER', 'value' => 'smtp', 'available_at' => 'runtime'])->assertRedirect();
+        $this->actingAs($developer)->post("/environments/{$production->id}/deployments")->assertRedirect();
+
+        $this->assertSame([['MAIL_MAILER', 'smtp']], $production->envVars()->get()->map(fn (EnvVar $var) => [$var->key, $var->value])->all());
+        $deployment = Deployment::sole();
+        $this->assertSame([$production->id, DeploymentStatus::QUEUED, $developer->id], [$deployment->environment_id, $deployment->status, $deployment->triggered_by]);
+        Queue::assertPushed(RunDeployment::class);
     }
 
     public function test_the_settings_page_shows_the_current_settings(): void
@@ -226,19 +245,19 @@ class EnvironmentControllerTest extends TestCase
         return $environment;
     }
 
-    public function test_a_developer_cannot_change_a_protected_environment(): void
+    public function test_a_developer_saves_the_settings_of_production(): void
     {
-        $environment = $this->makeEnvironment(true);
+        $environment = $this->makeEnvironment();
 
-        $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", $this->settings())->assertForbidden();
+        $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", $this->settings())->assertSessionHasNoErrors();
 
-        $this->assertSame('main', $environment->fresh()->branch);
-        $this->assertSame(0, AuditEvent::count());
+        $this->assertSame('release', $environment->fresh()->branch);
+        $this->assertSame(1, AuditEvent::count());
     }
 
-    public function test_a_developer_can_change_an_unprotected_environment_and_the_action_gets_clean_values(): void
+    public function test_a_developer_changes_the_settings_and_the_action_gets_clean_values(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment('staging');
         $developer = User::factory()->create();
 
         $this->mock(UpdateEnvironmentSettings::class)
@@ -262,7 +281,7 @@ class EnvironmentControllerTest extends TestCase
 
     public function test_the_settings_keep_a_build_command_with_several_lines_and_drop_comment_and_empty_lines(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment('staging');
 
         $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", $this->settings([
             'build_command' => "npm run lint\n\n  # build the assets\n  npm run build  \n",
@@ -276,7 +295,7 @@ class EnvironmentControllerTest extends TestCase
 
     public function test_a_build_command_with_only_comments_clears_the_build_command(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging', ['build_command' => 'npm run build']);
+        $environment = $this->makeEnvironment('staging', ['build_command' => 'npm run build']);
 
         $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", $this->settings(['build_command' => "# nothing\n"]))
             ->assertSessionHasNoErrors();
@@ -284,9 +303,9 @@ class EnvironmentControllerTest extends TestCase
         $this->assertNull($environment->refresh()->build_command);
     }
 
-    public function test_an_admin_saves_the_settings_of_a_protected_environment(): void
+    public function test_an_admin_saves_the_settings_of_production(): void
     {
-        $environment = $this->makeEnvironment(true);
+        $environment = $this->makeEnvironment();
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->patch("/environments/{$environment->id}/settings", $this->settings())->assertRedirect();
@@ -306,7 +325,7 @@ class EnvironmentControllerTest extends TestCase
 
     public function test_the_auto_deploy_switch_sends_one_field(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment('staging');
 
         $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", ['auto_deploy' => false])->assertRedirect();
 
@@ -316,7 +335,7 @@ class EnvironmentControllerTest extends TestCase
 
     public function test_the_user_turns_sleep_on_and_off(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment('staging');
         $developer = User::factory()->create();
 
         $this->actingAs($developer)->patch("/environments/{$environment->id}/settings", ['sleep_after_minutes' => 30])->assertRedirect();
@@ -344,7 +363,7 @@ class EnvironmentControllerTest extends TestCase
 
     public function test_saving_unchanged_settings_records_nothing(): void
     {
-        $environment = $this->makeEnvironment(false);
+        $environment = $this->makeEnvironment();
 
         $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", ['auto_deploy' => true])->assertRedirect();
 
@@ -353,7 +372,7 @@ class EnvironmentControllerTest extends TestCase
 
     public function test_the_settings_are_validated(): void
     {
-        $environment = $this->makeEnvironment(false);
+        $environment = $this->makeEnvironment();
         $developer = User::factory()->create();
 
         $cases = [
@@ -379,7 +398,7 @@ class EnvironmentControllerTest extends TestCase
 
     public function test_a_minimum_above_the_stored_maximum_is_refused(): void
     {
-        $environment = $this->makeEnvironment(false, attributes: ['max_instances' => 2]);
+        $environment = $this->makeEnvironment(attributes: ['max_instances' => 2]);
 
         $this->actingAs(User::factory()->create())->patch("/environments/{$environment->id}/settings", ['min_instances' => 5])
             ->assertSessionHasErrors('max_instances');
@@ -525,7 +544,7 @@ class EnvironmentControllerTest extends TestCase
     public function test_without_production_the_new_environment_form_refuses_a_copy_of_production(): void
     {
         Queue::fake();
-        $application = $this->makeEnvironment(name: 'staging', protected: false)->application;
+        $application = $this->makeEnvironment(name: 'staging')->application;
         Environment::factory()->for($application)->create(['name' => 'preview-template', 'kind' => EnvironmentKind::PREVIEW_TEMPLATE]);
 
         $this->actingAs(User::factory()->admin()->create())

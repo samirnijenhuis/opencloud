@@ -117,7 +117,7 @@ class ApplicationControllerTest extends TestCase
     {
         $admin = User::factory()->admin()->create();
         $created = Application::factory()->for($this->makeCluster())->create();
-        $production = Environment::factory()->for($created)->create(['name' => 'production', 'is_protected' => true]);
+        $production = Environment::factory()->for($created)->create(['name' => 'production']);
 
         $this->mock(CreateApplication::class)
             ->shouldReceive('execute')

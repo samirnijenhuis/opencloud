@@ -51,15 +51,11 @@ class PreviewAttachmentControllerTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_only_a_user_who_may_change_the_template_changes_its_list_and_no_other_environment_has_one(): void
+    public function test_only_the_preview_template_has_a_list(): void
     {
-        $this->template->update(['is_protected' => true, 'preview_attachments' => [['kind' => 'valkey', 'name' => null, 'is_default' => false]]]);
-        $this->actingAs(User::factory()->create());
-
-        $this->post("/environments/{$this->template->id}/preview-attachments", ['kind' => 'mysql'])->assertForbidden();
-        $this->delete("/environments/{$this->template->id}/preview-attachments", ['kind' => 'valkey'])->assertForbidden();
-
+        $this->template->update(['preview_attachments' => [['kind' => 'valkey', 'name' => null, 'is_default' => false]]]);
         $this->actingAs(User::factory()->owner()->create());
+
         $this->post("/environments/{$this->production->id}/preview-attachments", ['kind' => 'mysql'])->assertForbidden();
         $this->delete("/environments/{$this->production->id}/preview-attachments", ['kind' => 'mysql', 'name' => 'main'])->assertForbidden();
 

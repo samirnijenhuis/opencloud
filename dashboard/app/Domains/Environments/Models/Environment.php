@@ -32,7 +32,6 @@ class Environment extends Model
         'application_id',
         'name',
         'kind',
-        'is_protected',
         'color',
         'deploy_hook_enabled',
         'branch',
@@ -53,7 +52,6 @@ class Environment extends Model
     protected $hidden = ['deploy_hook_token'];
 
     protected $attributes = [
-        'is_protected' => false,
         'deploy_hook_enabled' => false,
         'auto_deploy' => true,
         'size' => Size::S->value,
@@ -76,7 +74,6 @@ class Environment extends Model
     {
         return [
             'kind' => EnvironmentKind::class,
-            'is_protected' => 'boolean',
             'color' => EnvironmentColor::class,
             'deploy_hook_token' => 'encrypted',
             'deploy_hook_enabled' => 'boolean',

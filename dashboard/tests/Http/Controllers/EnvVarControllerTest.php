@@ -72,20 +72,21 @@ class EnvVarControllerTest extends TestCase
         return (string) app(HandleInertiaRequests::class)->version(request());
     }
 
-    public function test_a_developer_cannot_change_values_of_a_protected_environment(): void
+    public function test_a_developer_sets_and_deletes_values_of_production(): void
     {
-        $environment = $this->makeEnvironment(true);
-        $secret = EnvVar::factory()->for($environment)->create(['key' => 'A', 'value' => 'x']);
+        $environment = $this->makeEnvironment();
+        $old = EnvVar::factory()->for($environment)->create(['key' => 'A', 'value' => 'x']);
+        $developer = User::factory()->create();
 
-        $this->actingAs(User::factory()->create())->post("/environments/{$environment->id}/env", ['key' => 'B', 'value' => 'y', 'available_at' => 'runtime'])->assertForbidden();
-        $this->actingAs(User::factory()->create())->delete("/env-vars/{$secret->id}")->assertForbidden();
+        $this->actingAs($developer)->post("/environments/{$environment->id}/env", ['key' => 'B', 'value' => 'y', 'available_at' => 'runtime'])->assertRedirect();
+        $this->actingAs($developer)->delete("/env-vars/{$old->id}")->assertRedirect();
 
-        $this->assertSame(['A'], $environment->envVars()->pluck('key')->all());
+        $this->assertSame([['B', 'y']], $environment->envVars()->get()->map(fn (EnvVar $var) => [$var->key, $var->value])->all());
     }
 
-    public function test_a_developer_sets_and_deletes_values_of_an_unprotected_environment(): void
+    public function test_the_action_gets_the_typed_values_of_the_form(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment();
         $developer = User::factory()->create();
 
         $this->mock(SetEnvVar::class)
@@ -171,7 +172,7 @@ class EnvVarControllerTest extends TestCase
 
     public function test_the_text_route_saves_the_whole_text_once(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment('staging');
         EnvVar::factory()->for($environment)->create(['key' => 'OLD', 'value' => '1']);
 
         $this->actingAs(User::factory()->create())->put("/environments/{$environment->id}/env", ['text' => "NEW=2\n"])->assertRedirect();
@@ -190,15 +191,15 @@ class EnvVarControllerTest extends TestCase
         $this->assertSame(['OLD'], $environment->envVars()->pluck('key')->all());
     }
 
-    public function test_a_developer_cannot_save_the_text_of_a_protected_environment(): void
+    public function test_a_developer_saves_the_text_of_production(): void
     {
-        $environment = $this->makeEnvironment(true);
+        $environment = $this->makeEnvironment();
         EnvVar::factory()->for($environment)->create(['key' => 'OLD', 'value' => '1']);
 
-        $this->actingAs(User::factory()->create())->put("/environments/{$environment->id}/env", ['text' => ''])->assertForbidden();
+        $this->actingAs(User::factory()->create())->put("/environments/{$environment->id}/env", ['text' => 'NEW=2'])->assertSessionHasNoErrors();
 
-        $this->assertSame(['OLD'], $environment->envVars()->pluck('key')->all());
-        $this->assertSame(0, AuditEvent::count());
+        $this->assertSame(['NEW'], $environment->envVars()->pluck('key')->all());
+        $this->assertSame(['env_var.created', 'env_var.deleted'], AuditEvent::orderBy('id')->pluck('action')->all());
     }
 
     public function test_a_datastore_value_cannot_be_deleted(): void

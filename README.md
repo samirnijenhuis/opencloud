@@ -200,7 +200,7 @@ Everything runs on servers and cloud accounts that you own, with your own API ke
 **Env values**
 
 - A table view, and a Text mode: one highlighted `.env` editor with locked rows for the values that a resource sets and for secrets.
-- Secrets can never be read back, and every log masks them.
+- Only an owner or an admin can read a secret back, and every log masks it.
 
 **Git access**
 
@@ -209,7 +209,7 @@ Everything runs on servers and cloud accounts that you own, with your own API ke
 
 **Teams, backups, and operations**
 
-- The roles owner, admin, and developer, and protected environments.
+- The roles owner, admin, and developer. Every environment has the same rules, production too.
 - Nightly database dumps to the server disk or to S3, a restore button, and nightly bucket copies.
 - A full restore of a lost server from the S3 backup, and an upgrade command that rolls back on failure.
 - More clusters: connect any Kubernetes cluster with its kubeconfig, or let OpenTofu create one at DigitalOcean.

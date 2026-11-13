@@ -126,20 +126,9 @@ class DeploymentControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('steps', []));
     }
 
-    public function test_a_developer_cannot_deploy_a_protected_environment(): void
+    public function test_a_developer_deploys_production_and_lands_on_the_deployment(): void
     {
-        Queue::fake();
-        $environment = $this->makeEnvironment(true);
-
-        $this->actingAs(User::factory()->create())->post("/environments/{$environment->id}/deployments")->assertForbidden();
-
-        Queue::assertNothingPushed();
-        $this->assertSame(0, Deployment::count());
-    }
-
-    public function test_a_developer_deploys_an_unprotected_environment_and_lands_on_the_deployment(): void
-    {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment();
         $developer = User::factory()->create();
         $deployment = Deployment::factory()->for($environment)->create();
 
@@ -156,7 +145,7 @@ class DeploymentControllerTest extends TestCase
     {
         Queue::fake();
         FakeProcesses::install()->lsRemote = self::SHA."\trefs/heads/main\n";
-        $environment = $this->makeEnvironment(true);
+        $environment = $this->makeEnvironment();
         $admin = User::factory()->admin()->create();
 
         $this->actingAs($admin)->post("/environments/{$environment->id}/deployments")->assertRedirect();
@@ -170,7 +159,7 @@ class DeploymentControllerTest extends TestCase
     {
         Queue::fake();
         FakeProcesses::install()->lsRemote = '';
-        $environment = $this->makeEnvironment(false);
+        $environment = $this->makeEnvironment();
 
         $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")
             ->assertRedirect('/back')
@@ -184,7 +173,7 @@ class DeploymentControllerTest extends TestCase
     {
         Queue::fake();
         FakeProcesses::install()->lsRemoteError = "fatal: repository 'https://github.com/acme/shop.git/' not found\n";
-        $environment = $this->makeEnvironment(false);
+        $environment = $this->makeEnvironment();
 
         $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")
             ->assertRedirect('/back')
@@ -197,7 +186,7 @@ class DeploymentControllerTest extends TestCase
     {
         Queue::fake();
         Process::fake(['*' => Process::result(errorOutput: "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n", exitCode: 128)]);
-        $environment = $this->makeEnvironment(false);
+        $environment = $this->makeEnvironment();
         $environment->application->update(['deploy_private_key' => "-----BEGIN OPENSSH PRIVATE KEY-----\nkey\n-----END OPENSSH PRIVATE KEY-----\n"]);
 
         $this->actingAs(User::factory()->create())->from('/back')->post("/environments/{$environment->id}/deployments")

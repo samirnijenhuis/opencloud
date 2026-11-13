@@ -26,8 +26,6 @@ const EVERY_MINUTE = '* * * * *';
 
 const AUTOSCALING_FIELDS: (keyof ProcessForm)[] = ['min_instances', 'max_instances', 'cpu_target'];
 
-const LOCKED_REASON = 'Only an admin or an owner can change a protected environment.';
-
 const kindOptions: { value: ProcessKind; label: string; text: string }[] = [
     {
         value: 'long_running',
@@ -168,8 +166,6 @@ export function ProcessSheet({
                     </NextDeployFooter>
                 }
             >
-                {locked && <p className="text-muted-foreground text-sm">{LOCKED_REASON}</p>}
-
                 <form id="process-settings" onSubmit={save}>
                     <fieldset disabled={locked} className="space-y-6">
                         {shown === 'general' && (

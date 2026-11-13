@@ -45,7 +45,7 @@ class ManagedDatastoreControllerTest extends TestCase
             'provider_cluster_id' => 'c0ffee00-1111',
             'provider_vpc_id' => 'vpc-2222',
         ]);
-        $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create(['is_protected' => true]);
+        $this->environment = Environment::factory()->for(Application::factory()->for($cluster))->create();
     }
 
     public function test_only_the_owner_gets_the_managed_offers_on_a_digitalocean_cluster(): void

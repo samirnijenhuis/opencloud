@@ -126,20 +126,21 @@ class DatastoreControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('datastores.has_backup_target', true)->where('can.manage_credentials', false));
     }
 
-    public function test_a_developer_can_view_but_not_change_a_protected_environment(): void
+    public function test_a_developer_may_change_the_resources_of_production_and_detaches_through_the_action(): void
     {
         $environment = $this->makeEnvironment();
         $attachment = $this->attach($environment, DatastoreKind::MYSQL);
         $developer = User::factory()->create();
 
         $this->actingAs($developer)->get("/environments/{$environment->id}")->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->where('can.update', false));
+            ->assertInertia(fn (Assert $page) => $page->where('can.update', true));
 
-        $this->mock(AttachDatastore::class)->shouldNotReceive('execute');
-        $this->mock(DetachDatastore::class)->shouldNotReceive('execute');
+        $this->mock(DetachDatastore::class)
+            ->shouldReceive('execute')
+            ->once()
+            ->withArgs(fn (DatastoreAttachment $given, User $by) => $given->is($attachment) && $by->is($developer));
 
-        $this->actingAs($developer)->post("/environments/{$environment->id}/datastores", ['kind' => 'valkey'])->assertForbidden();
-        $this->actingAs($developer)->delete("/datastore-attachments/{$attachment->id}")->assertForbidden();
+        $this->actingAs($developer)->delete("/datastore-attachments/{$attachment->id}")->assertRedirect();
     }
 
     public function test_owner_and_admin_attach_through_the_action(): void
@@ -156,9 +157,9 @@ class DatastoreControllerTest extends TestCase
         }
     }
 
-    public function test_a_developer_attaches_to_an_unprotected_environment(): void
+    public function test_a_developer_attaches_to_production_through_the_action(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment();
         $developer = User::factory()->create();
 
         $this->mock(AttachDatastore::class)
@@ -220,15 +221,12 @@ class DatastoreControllerTest extends TestCase
         );
     }
 
-    public function test_make_default_needs_the_right_to_change_the_environment_and_goes_through_the_action(): void
+    public function test_make_default_moves_the_default_and_refuses_a_cache(): void
     {
         $environment = $this->makeEnvironment();
         $main = $this->attach($environment, DatastoreKind::MYSQL, attributes: ['name' => 'main', 'is_default' => true]);
         $reports = $this->attach($environment, DatastoreKind::POSTGRES, attributes: ['name' => 'reports', 'host' => 'postgres-2.oc-datastores.svc.cluster.local', 'port' => 5432]);
         $valkey = $this->attach($environment, DatastoreKind::VALKEY);
-
-        $this->actingAs(User::factory()->create())->post("/datastore-attachments/{$reports->id}/default")->assertForbidden();
-        $this->assertTrue($main->fresh()->is_default);
 
         $admin = User::factory()->admin()->create();
         $this->actingAs($admin)->post("/datastore-attachments/{$reports->id}/default")->assertRedirect()->assertSessionHasNoErrors();
@@ -239,9 +237,9 @@ class DatastoreControllerTest extends TestCase
             ->assertSessionHasErrors(['default' => 'Only a database or a bucket can be the default.']);
     }
 
-    public function test_a_developer_makes_a_database_the_default_on_an_unprotected_environment(): void
+    public function test_a_developer_makes_a_database_the_default_of_production(): void
     {
-        $environment = $this->makeEnvironment(false, 'staging');
+        $environment = $this->makeEnvironment();
         $this->attach($environment, DatastoreKind::MYSQL, attributes: ['name' => 'main', 'is_default' => true]);
         $reports = $this->attach($environment, DatastoreKind::POSTGRES, attributes: ['name' => 'reports']);
 
