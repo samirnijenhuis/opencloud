@@ -124,7 +124,7 @@ class Environment extends Model
 
     /**
      * The tools of the environment that run now. A preview gets a copy of the tools of its template when opencloud
-     * creates it, and a permanent environment has none.
+     * creates it, and a permanent environment has none. On the preview template, the tools that each new preview runs.
      *
      * @return list<Tool>
      */

@@ -8,8 +8,8 @@ use App\Domains\Datastores\SqlConnection;
 use App\Domains\Environments\Models\Environment;
 
 /**
- * A dev tool that a preview runs next to its app, on a hostname of its own. Each case holds every fact of its tool, so
- * a new tool is one new case.
+ * The kind of a dev tool that a preview runs next to its app. Each case holds every fact of its kind, so a new kind is
+ * one new case.
  */
 enum ToolKind: string
 {
@@ -27,7 +27,16 @@ enum ToolKind: string
         };
     }
 
-    /** The tool hostname of a preview starts with this word, for example mail-12.previews.example.com. */
+    /** What the tool does, in one line of the add sheet. */
+    public function description(): string
+    {
+        return match ($this) {
+            self::MAILPIT => 'Catches the mail of the app',
+            self::PHPMYADMIN => 'Opens the default MySQL database',
+        };
+    }
+
+    /** The hostname that the dashboard offers for a new tool starts with this word, for example mail-12.previews.example.com. */
     public function hostnamePrefix(): string
     {
         return match ($this) {
@@ -71,12 +80,26 @@ enum ToolKind: string
         };
     }
 
-    /** phpMyAdmin opens the default database, so it runs only when that database is MySQL. */
+    /**
+     * phpMyAdmin opens the default database, so it runs only when that database is MySQL. The preview template never
+     * deploys, so there the list of what each new preview gets decides.
+     */
     public function runsIn(Environment $environment): bool
     {
         return match ($this) {
             self::MAILPIT => true,
-            self::PHPMYADMIN => self::defaultMysql($environment) !== null,
+            self::PHPMYADMIN => $environment->kind === EnvironmentKind::PREVIEW_TEMPLATE
+                ? collect($environment->preview_attachments)->contains(fn (array $entry) => $entry['is_default'] && $entry['kind'] === DatastoreKind::MYSQL->value)
+                : self::defaultMysql($environment) !== null,
+        };
+    }
+
+    /** What the node of a tool says when runsIn() is false. */
+    public function requirement(): ?string
+    {
+        return match ($this) {
+            self::MAILPIT => null,
+            self::PHPMYADMIN => 'Needs a default MySQL database',
         };
     }
 

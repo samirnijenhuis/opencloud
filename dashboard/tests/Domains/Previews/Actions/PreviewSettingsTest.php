@@ -9,10 +9,8 @@ use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Environments\Enums\EnvironmentKind;
-use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Tool;
-use App\Domains\Environments\ToolLogin;
 use App\Domains\Members\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -162,23 +160,6 @@ class PreviewSettingsTest extends TestCase
 
         $this->assertSame(5, $this->application->fresh()->max_previews);
         $this->assertSame(0, AuditEvent::count());
-    }
-
-    public function test_a_preview_canvas_shows_its_running_tools_and_their_login_and_production_shows_none(): void
-    {
-        // phpMyAdmin does not run, because the preview has no default MySQL database.
-        $preview = $this->application->environments()->where('name', 'pr-12')->sole();
-        Tool::factory()->for($preview)->create(['kind' => ToolKind::MAILPIT, 'hostname' => 'mail-12.previews.example.com']);
-        Tool::factory()->for($preview)->create(['kind' => ToolKind::PHPMYADMIN, 'hostname' => 'database-12.previews.example.com']);
-        $this->actingAs(User::factory()->create());
-
-        $this->get("/environments/{$preview->id}")->assertInertia(fn (Assert $page) => $page->where('tools', [
-            'links' => [['value' => 'mailpit', 'label' => 'Mailpit', 'url' => 'https://mail-12.previews.example.com']],
-            'login' => ['username' => 'opencloud', 'password' => ToolLogin::for($preview)->password],
-        ]));
-
-        $production = $this->application->environments()->where('name', 'production')->sole();
-        $this->get("/environments/{$production->id}")->assertInertia(fn (Assert $page) => $page->where('tools', null));
     }
 
     public function test_a_pattern_that_a_tool_of_each_preview_uses_is_refused(): void

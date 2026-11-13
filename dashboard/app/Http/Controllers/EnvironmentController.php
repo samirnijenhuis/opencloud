@@ -118,7 +118,7 @@ class EnvironmentController extends Controller
                     return [...$entry, 'family' => $kind->family(), 'label' => self::label($kind, DatastoreSource::STANDARD, Provisioners::for($kind, DatastoreSource::STANDARD)->capabilities())];
                 }, $environment->preview_attachments),
             ] : null,
-            'tools' => $this->tools($environment),
+            ...$this->toolProps($environment, $previewHostname),
             'compute' => $environment->only(['size', 'min_instances', 'max_instances', 'cpu_target', 'health_path']),
             'sizes' => array_map(fn (Size $size) => [
                 'value' => $size->value,
@@ -215,27 +215,45 @@ class EnvironmentController extends Controller
     }
 
     /**
-     * The tools that run for a preview, and the login in front of them. Each role may change a preview, and a developer
-     * can read each env value of an unprotected environment through a command, so each viewer sees the password.
+     * The tools of a preview or of the preview template, each kind that it can still add with the hostname that the sheet
+     * offers, and on a preview the login in front of the tools. Each role may change a preview, and a developer can read
+     * each env value of an unprotected environment through a command, so each viewer sees the password.
      *
-     * @return array{links: list<array{value: ToolKind, label: string, url: string}>, login: array{username: string, password: string}}|null
+     * @return array{tools: list<array<string, mixed>>, tool_kinds: list<array<string, mixed>>, tool_login: array{username: string, password: string}|null}
      */
-    private function tools(Environment $environment): ?array
+    private function toolProps(Environment $environment, PreviewHostname $previewHostname): array
     {
-        // The tools of the preview template are patterns for each new preview, and no link reaches them.
-        if ($environment->kind !== EnvironmentKind::PREVIEW) {
-            return null;
+        if ($environment->kind === EnvironmentKind::PERMANENT) {
+            return ['tools' => [], 'tool_kinds' => [], 'tool_login' => null];
         }
 
-        $links = array_map(fn (Tool $tool) => ['value' => $tool->kind, 'label' => $tool->kind->label(), 'url' => "https://{$tool->hostname}"], $environment->runningTools());
+        $preview = $environment->kind === EnvironmentKind::PREVIEW;
+        $login = $preview && $environment->tools->isNotEmpty() ? ToolLogin::for($environment) : null;
 
-        if ($links === []) {
-            return null;
-        }
-
-        $login = ToolLogin::for($environment);
-
-        return ['links' => $links, 'login' => ['username' => $login->username, 'password' => $login->password]];
+        return [
+            'tools' => $environment->tools->map(fn (Tool $tool) => [
+                'id' => $tool->id,
+                'kind' => $tool->kind,
+                'label' => $tool->kind->label(),
+                'hostname' => $tool->hostname,
+                'runs' => $tool->kind->runsIn($environment),
+                'requirement' => $tool->kind->requirement(),
+                'url' => $preview ? "https://{$tool->hostname}" : null,
+            ])->all(),
+            'tool_kinds' => collect(ToolKind::cases())
+                ->reject(fn (ToolKind $kind) => $environment->tools->contains('kind', $kind))
+                ->map(fn (ToolKind $kind) => [
+                    'value' => $kind,
+                    'label' => $kind->label(),
+                    'description' => $kind->description(),
+                    'hostname' => $preview
+                        ? $previewHostname->forSide($environment->application, $environment->pr_number, $kind->hostnamePrefix())
+                        : $previewHostname->sidePattern($environment->application, $kind->hostnamePrefix()),
+                ])
+                ->values()
+                ->all(),
+            'tool_login' => $login === null ? null : ['username' => $login->username, 'password' => $login->password],
+        ];
     }
 
     /** @return array<string, mixed> */

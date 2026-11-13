@@ -5,6 +5,7 @@ namespace Tests\Domains\Environments\Models;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
+use App\Domains\Environments\Enums\EnvironmentKind;
 use App\Domains\Environments\Enums\ToolKind;
 use App\Domains\Environments\Models\Environment;
 use App\Domains\Environments\Models\Tool;
@@ -27,6 +28,18 @@ class EnvironmentTest extends TestCase
         $other = $this->withBothTools(Environment::factory()->for($environment->application)->create());
         $this->attach($other, DatastoreKind::MYSQL, 'main', isDefault: true);
         $this->assertSame([ToolKind::MAILPIT, ToolKind::PHPMYADMIN], $this->runningKinds($other));
+    }
+
+    public function test_on_the_preview_template_phpmyadmin_runs_when_each_preview_gets_a_default_mysql_database(): void
+    {
+        $template = $this->withBothTools(Environment::factory()->create(['kind' => EnvironmentKind::PREVIEW_TEMPLATE, 'preview_attachments' => [
+            ['kind' => 'postgres', 'name' => 'main', 'is_default' => true],
+            ['kind' => 'mysql', 'name' => 'reports', 'is_default' => false],
+        ]]));
+        $this->assertSame([ToolKind::MAILPIT], $this->runningKinds($template));
+
+        $template->update(['preview_attachments' => [['kind' => 'mysql', 'name' => 'main', 'is_default' => true]]]);
+        $this->assertSame([ToolKind::MAILPIT, ToolKind::PHPMYADMIN], $this->runningKinds($template));
     }
 
     public function test_an_environment_without_tools_runs_none_also_with_a_default_mysql_database(): void
