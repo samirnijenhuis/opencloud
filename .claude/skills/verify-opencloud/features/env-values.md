@@ -1,12 +1,12 @@
 # Environment values
 
-A user sets env values for an environment, marks some as secret, and picks when each one is available: at runtime, at build time, or both. A secret is write-only in the dashboard.
+A user sets env values for an environment, marks some as secret, and picks when each one is available: at runtime, at build time, or both. Only an owner or an admin reads a secret in the dashboard. A developer only replaces it.
 
 ## Sub-features
 
 - `env-runtime` gives the running app a value, for example `VERIFY_MARKER`.
 - `env-build` gives the image build a value as a BuildKit secret, for example `VERIFY_BUILD`.
-- `env-secret` gives the app a secret that the dashboard never shows again.
+- `env-secret` gives the app a secret that only an owner or an admin reads in the dashboard.
 - `env-change` changes a value, which takes effect on the next deploy.
 
 ## How to get to it (user POV)
@@ -23,7 +23,7 @@ Preconditions:
 - `matrix.py doctor` reports `OK` on every line.
 
 - **Runtime and build values.** Create apps with both kinds. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'static-none-none' --only 'php-none-none'`. The output shows `PASS step 1: the runtime env value (<cell>-v1)` and `PASS step 1: the build saw its env value or command (<cell>)`.
-- **Secret.** Read the secret in the app, not in the dashboard. In the PHP, Laravel, Node.js, Python, and Ruby cells, the output shows `PASS step 1: the app reads the secret`. The `static` and `site` cells show `SKIP step 1: the app reads the secret`. Each cell shows `PASS the settings page never shows the secret value`.
+- **Secret.** Read the secret in the app, not in the dashboard. In the PHP, Laravel, Node.js, Python, and Ruby cells, the output shows `PASS step 1: the app reads the secret`. The `static` and `site` cells show `SKIP step 1: the app reads the secret`. Each cell shows `PASS the owner reads the secret value on the settings page`. The runner logs in as the owner, so it cannot prove that a developer gets no secret. `EnvironmentControllerTest` proves that.
 - **A static site.** A static site gets only build values. Run `.claude/skills/verify-opencloud/scripts/matrix.py run --set full --only 'site-none-none'`. The output shows `PASS step 1: the build saw its env value or command (site-none-none)` and `SKIP step 1: the runtime env value (the site fixture does not report marker)`.
 - **Change.** Change `VERIFY_MARKER` and deploy. The output shows `PASS the env value VERIFY_MARKER changes (302)` and `PASS step 2: the runtime env value (<cell>-v2)`.
 - **Proof.** Open `step-1-verify.json` and `step-2-verify.json` of a cell. `marker` changes from `-v1` to `-v2`, and `secret_sha` is the SHA-1 of the secret.
