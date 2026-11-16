@@ -320,7 +320,8 @@ class CellRun:
             self.verify_step(3)
 
         settings = self.dash.request('GET', f'/environments/{self.env_id}/settings')[2]
-        self.check('the settings page never shows the secret value', self.secret not in settings)
+        # Since v0.5.7 an owner reads each secret on the settings page. EnvironmentControllerTest proves that a developer does not.
+        self.check('the owner reads the secret value on the settings page', self.secret in settings)
         self.save('canvas.json', self.dash.props(f'/environments/{self.env_id}'))
 
     def configure(self, settings, env_values):
