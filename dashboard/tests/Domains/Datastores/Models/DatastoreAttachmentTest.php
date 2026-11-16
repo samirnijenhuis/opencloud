@@ -182,6 +182,39 @@ class DatastoreAttachmentTest extends TestCase
         ], $this->datastoreEnv($attachment));
     }
 
+    public function test_meilisearch_runs_one_server_per_attachment_and_gives_scout_the_host_and_the_master_key(): void
+    {
+        $attachment = $this->attach(DatastoreKind::MEILISEARCH);
+        $name = "meilisearch-{$attachment->id}";
+
+        $this->assertNull($attachment->datastore->fresh()->root_password);
+        $this->assertSame(['search', null, null, null, false, DatastoreStatus::READY], [$attachment->family->value, $attachment->name, $attachment->database_name, $attachment->username, $attachment->is_default, $attachment->fresh()->status]);
+        $this->assertSame([
+            self::APPLY,
+            self::APPLY,
+            ['rollout', 'status', "deployment/{$name}", '--namespace=oc-datastores', '--timeout=300s'],
+        ], array_column($this->kubectl->calls, 'args'));
+        $this->assertSame(['Namespace/oc-datastores', "Secret/{$name}", "PersistentVolumeClaim/{$name}", "Service/{$name}", "Deployment/{$name}"], $this->appliedNames());
+        $this->assertSame([
+            'MEILISEARCH_HOST' => ["http://{$name}.oc-datastores.svc.cluster.local:7700", false],
+            'MEILISEARCH_KEY' => ['pass0', true],
+            'SCOUT_DRIVER' => ['meilisearch', false],
+        ], $this->datastoreEnv($attachment));
+    }
+
+    public function test_an_environment_keeps_one_meilisearch_next_to_its_valkey(): void
+    {
+        $valkey = $this->attach(DatastoreKind::VALKEY);
+        $meilisearch = $this->attach(DatastoreKind::MEILISEARCH);
+        $again = $this->attach(DatastoreKind::MEILISEARCH);
+
+        $this->assertTrue($again->is($meilisearch));
+        $this->assertSame(
+            [[$valkey->id, 'key_value', null], [$meilisearch->id, 'search', null]],
+            $this->environment->datastoreAttachments()->orderBy('id')->get()->map(fn (DatastoreAttachment $attachment) => [$attachment->id, $attachment->family->value, $attachment->name])->all(),
+        );
+    }
+
     public function test_a_failed_attach_keeps_the_error_without_the_password_and_a_second_attach_retries_it(): void
     {
         $this->kubectl->respond('exec', new KubectlResult(1, '', "psql:<stdin>:2: ERROR:  syntax error\nLINE 1: ALTER ROLE \"env_1\" WITH LOGIN PASSWORD 'pass0';"));
@@ -504,6 +537,28 @@ class DatastoreAttachmentTest extends TestCase
             ['deployment', 'service', 'secret', 'persistentvolumeclaim'],
             array_map(fn (array $call) => $call['args'][1], $this->kubectl->calls),
         );
+    }
+
+    public function test_detaching_meilisearch_removes_the_server_and_destroying_also_removes_the_volume(): void
+    {
+        $attachment = $this->attach(DatastoreKind::MEILISEARCH);
+        $detachedId = $attachment->id;
+        $this->kubectl->calls = [];
+
+        app(DetachDatastore::class)->execute($attachment, $this->owner);
+        $detached = array_column($this->kubectl->calls, 'args');
+
+        $attachment = $this->attach(DatastoreKind::MEILISEARCH);
+        $this->kubectl->calls = [];
+        Provisioners::of($attachment->datastore)->detach($attachment, $this->owner, destroyData: true);
+
+        $this->assertSame([
+            ['delete', 'deployment,service,secret', "--selector=opencloud.dev/attachment={$detachedId}", '--namespace=oc-datastores', '--ignore-not-found', '--wait=false'],
+        ], $detached);
+        $this->assertSame([
+            ['delete', 'deployment,service,secret,persistentvolumeclaim', "--selector=opencloud.dev/attachment={$attachment->id}", '--namespace=oc-datastores', '--ignore-not-found', '--wait=false'],
+        ], array_column($this->kubectl->calls, 'args'));
+        $this->assertSame([], $this->environment->datastoreAttachments()->get()->all());
     }
 
     public function test_another_bucket_gets_its_own_bucket_user_and_policy_on_the_same_server_and_prefixed_env_values(): void

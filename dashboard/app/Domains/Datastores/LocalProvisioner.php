@@ -27,8 +27,8 @@ use Throwable;
  * per kind holds what differs: the server manifests, the names, and the commands that create and remove the access
  * of one attachment. This class holds the queue, the status, and the server rollout that the kinds share.
  *
- * A database or bucket row is one shared server per cluster and kind. A key-value row only groups attachments,
- * because each attachment runs its own Valkey server.
+ * A database or bucket row is one shared server per cluster and kind. A key-value or search row only groups
+ * attachments, because each attachment runs its own Valkey or Meilisearch server.
  */
 abstract class LocalProvisioner implements Provisioner
 {
@@ -40,7 +40,7 @@ abstract class LocalProvisioner implements Provisioner
     abstract protected function server(Datastore $datastore): array;
 
     /**
-     * @param  string|null  $name  the name of a database or a bucket, null for a key-value store
+     * @param  string|null  $name  the name of a database or a bucket, null for a key-value or search store
      * @return array{database_name: ?string, username: ?string}
      */
     abstract protected function names(Environment $environment, ?string $name): array;
@@ -51,7 +51,7 @@ abstract class LocalProvisioner implements Provisioner
     /** Removes the user, key, or server of one attachment. With $destroyData it also removes the data. */
     abstract protected function revoke(Kubectl $kubectl, DatastoreAttachment $attachment, bool $destroyData): void;
 
-    /** One shared server with one database or bucket and user per attachment. Valkey overrides this. */
+    /** One shared server with one database or bucket and user per attachment. Valkey and Meilisearch override this. */
     protected function sharedServer(): bool
     {
         return true;
@@ -62,7 +62,7 @@ abstract class LocalProvisioner implements Provisioner
         return new Capabilities($this->noDatabase());
     }
 
-    /** A shared server serves other environments too, so it keeps running. Valkey overrides this. */
+    /** A shared server serves other environments too, so it keeps running. Valkey and Meilisearch override this. */
     public function scale(DatastoreAttachment $attachment, bool $awake): void {}
 
     public function refusalOn(Cluster $cluster): ?string

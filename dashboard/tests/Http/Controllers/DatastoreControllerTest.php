@@ -69,6 +69,7 @@ class DatastoreControllerTest extends TestCase
             ['standard', 'mysql', 'MySQL', null],
             ['standard', 'postgres', 'Postgres', null],
             ['standard', 'rustfs', 'RustFS bucket', null],
+            ['standard', 'meilisearch', 'Meilisearch', null],
             ['managed', 'mysql', 'Managed MySQL', 'A managed database on DigitalOcean is Postgres only for now. Use managed Postgres, or MySQL in the cluster.'],
             ['managed', 'postgres', 'Managed Postgres', 'A managed database needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the database right.'],
             ['managed', 'rustfs', 'Spaces bucket', 'A Spaces bucket needs a cluster that opencloud created on DigitalOcean and a DigitalOcean key with the spaces_key right.'],
@@ -280,7 +281,7 @@ class DatastoreControllerTest extends TestCase
 
         // More databases are always possible. A second key-value store is not, from any source.
         $this->assertSame(
-            [['standard', 'mysql'], ['standard', 'postgres'], ['standard', 'rustfs'], ['managed', 'mysql'], ['managed', 'postgres'], ['managed', 'rustfs'], ['external', 'mysql'], ['external', 'postgres'], ['external', 'rustfs']],
+            [['standard', 'mysql'], ['standard', 'postgres'], ['standard', 'rustfs'], ['standard', 'meilisearch'], ['managed', 'mysql'], ['managed', 'postgres'], ['managed', 'rustfs'], ['external', 'mysql'], ['external', 'postgres'], ['external', 'rustfs']],
             array_map(fn (array $offer) => array_slice($offer, 0, 2), $this->offers($response)),
         );
     }
@@ -367,6 +368,39 @@ class DatastoreControllerTest extends TestCase
             $offers->where('source', 'external')->whereIn('kind', ['valkey', 'rustfs'])
                 ->flatMap(fn (array $offer) => array_map(fn (array $field) => [$offer['kind'], $field['key'], $field['type']], $offer['fields']))->values()->all(),
         );
+    }
+
+    public function test_the_menu_offers_meilisearch_from_the_standard_source_once_next_to_valkey(): void
+    {
+        $environment = $this->makeEnvironment();
+        $owner = User::factory()->owner()->create();
+        $searchOffers = fn () => collect($this->page($this->actingAs($owner)->get("/environments/{$environment->id}"))['props']['datastores']['offers'])
+            ->where('family', 'search')
+            ->map(fn (array $offer) => [$offer['kind'], $offer['source'], $offer['name_field'], $offer['label'], $offer['description'], $offer['refusal']])->values()->all();
+
+        $before = $searchOffers();
+        $this->attach($environment, DatastoreKind::VALKEY);
+        $withValkey = $searchOffers();
+        $this->attach($environment, DatastoreKind::MEILISEARCH);
+
+        $this->assertSame([['meilisearch', 'standard', null, 'Meilisearch', 'Full-text search', null]], $before);
+        $this->assertSame($before, $withValkey);
+        $this->assertSame([], $searchOffers());
+    }
+
+    public function test_meilisearch_from_a_provider_or_from_outside_is_refused(): void
+    {
+        Queue::fake();
+        $environment = $this->makeEnvironment();
+        $owner = User::factory()->owner()->create();
+
+        $this->actingAs($owner)->post("/environments/{$environment->id}/datastores", ['kind' => 'meilisearch', 'source' => 'managed'])
+            ->assertSessionHasErrors(['kind' => 'Opencloud cannot create this kind at DigitalOcean yet.']);
+        $this->actingAs($owner)->post("/environments/{$environment->id}/datastores", ['kind' => 'meilisearch', 'source' => 'external'])
+            ->assertSessionHasErrors(['kind' => 'Opencloud cannot connect this kind from outside yet.']);
+
+        $this->assertSame([0, 0], [DatastoreAttachment::count(), AuditEvent::count()]);
+        Queue::assertNothingPushed();
     }
 
     public function test_the_action_message_is_shown_on_a_refusal(): void

@@ -166,6 +166,60 @@ class DatastoreManifestsTest extends TestCase
         ], DatastoreManifests::valkey($attachment));
     }
 
+    public function test_meilisearch_is_one_server_per_attachment_in_production_mode_with_the_master_key_from_a_secret(): void
+    {
+        $attachment = new DatastoreAttachment(['datastore_id' => 6, 'environment_id' => 7, 'password' => 'meili-master-key']);
+        $attachment->id = 9;
+        $attachment->setRelation('datastore', $this->datastore(DatastoreKind::MEILISEARCH, 'v1.56', id: 6));
+        $labels = ['opencloud.dev/datastore' => '6', 'opencloud.dev/attachment' => '9', 'opencloud.dev/environment' => '7'];
+        $metadata = ['name' => 'meilisearch-9', 'namespace' => 'oc-datastores', 'labels' => $labels];
+
+        $this->assertSame([
+            ['apiVersion' => 'v1', 'kind' => 'Secret', 'metadata' => $metadata, 'type' => 'Opaque', 'data' => ['MEILI_MASTER_KEY' => 'bWVpbGktbWFzdGVyLWtleQ==']],
+            [
+                'apiVersion' => 'v1',
+                'kind' => 'PersistentVolumeClaim',
+                'metadata' => $metadata,
+                'spec' => ['accessModes' => ['ReadWriteOnce'], 'resources' => ['requests' => ['storage' => '5Gi']]],
+            ],
+            [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => $metadata,
+                'spec' => ['selector' => $labels, 'ports' => [['name' => 'http', 'port' => 7700, 'targetPort' => 'http']]],
+            ],
+            [
+                'apiVersion' => 'apps/v1',
+                'kind' => 'Deployment',
+                'metadata' => $metadata,
+                'spec' => [
+                    'replicas' => 1,
+                    'selector' => ['matchLabels' => $labels],
+                    'strategy' => ['type' => 'Recreate'],
+                    'template' => [
+                        'metadata' => ['labels' => $labels],
+                        'spec' => [
+                            'containers' => [[
+                                'name' => 'meilisearch',
+                                'image' => 'getmeili/meilisearch:v1.56',
+                                'env' => [
+                                    ['name' => 'MEILI_ENV', 'value' => 'production'],
+                                    ['name' => 'MEILI_NO_ANALYTICS', 'value' => 'true'],
+                                    ['name' => 'MEILI_DB_PATH', 'value' => '/meili_data/data.ms'],
+                                    ['name' => 'MEILI_MASTER_KEY', 'valueFrom' => ['secretKeyRef' => ['name' => 'meilisearch-9', 'key' => 'MEILI_MASTER_KEY']]],
+                                ],
+                                'ports' => [['name' => 'http', 'containerPort' => 7700]],
+                                'readinessProbe' => ['httpGet' => ['path' => '/health', 'port' => 'http'], 'periodSeconds' => 5],
+                                'volumeMounts' => [['name' => 'data', 'mountPath' => '/meili_data']],
+                            ]],
+                            'volumes' => [['name' => 'data', 'persistentVolumeClaim' => ['claimName' => 'meilisearch-9']]],
+                        ],
+                    ],
+                ],
+            ],
+        ], DatastoreManifests::meilisearch($attachment));
+    }
+
     public function test_the_bucket_copy_job_syncs_every_bucket_to_a_folder_of_the_backup_target(): void
     {
         $target = new BackupTarget(['endpoint' => 'https://s3.example.com', 'bucket' => 'backups', 'access_key' => 'AK', 'secret_key' => 'SK']);

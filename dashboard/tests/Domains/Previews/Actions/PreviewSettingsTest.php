@@ -100,8 +100,8 @@ class PreviewSettingsTest extends TestCase
         ], json_decode(json_encode($page['props']['previews']['attachments']), true));
         $this->assertSame([$bucket->id], array_column(json_decode(json_encode($page['props']['datastores']['attachments']), true), 'id'));
         $this->assertSame(
-            [['standard', 'mysql', ''], ['standard', 'postgres', ''], ['standard', 'rustfs', 'main']],
-            array_map(fn (array $offer) => [$offer['source'], $offer['kind'], $offer['name_field']['value']], json_decode(json_encode($page['props']['datastores']['offers']), true)),
+            [['standard', 'mysql', ''], ['standard', 'postgres', ''], ['standard', 'rustfs', 'main'], ['standard', 'meilisearch', null]],
+            array_map(fn (array $offer) => [$offer['source'], $offer['kind'], $offer['name_field']['value'] ?? null], json_decode(json_encode($page['props']['datastores']['offers']), true)),
         );
     }
 

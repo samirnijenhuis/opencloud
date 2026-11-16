@@ -20,6 +20,7 @@ final class DatastoreManifests
         'postgres' => '17',
         'valkey' => '9.1',
         'rustfs' => '1.0.3',
+        'meilisearch' => 'v1.56',
     ];
 
     private const IMAGES = [
@@ -27,6 +28,7 @@ final class DatastoreManifests
         'postgres' => 'postgres',
         'valkey' => 'valkey/valkey',
         'rustfs' => 'rustfs/rustfs',
+        'meilisearch' => 'getmeili/meilisearch',
     ];
 
     public const RC_IMAGE = 'rustfs/rc:v0.1.36';
@@ -39,6 +41,8 @@ final class DatastoreManifests
     private const SERVER_VOLUME = '10Gi';
 
     private const VALKEY_VOLUME = '1Gi';
+
+    private const MEILISEARCH_VOLUME = '5Gi';
 
     public static function serverName(Datastore $datastore): string
     {
@@ -54,6 +58,11 @@ final class DatastoreManifests
     public static function valkeyName(DatastoreAttachment $attachment): string
     {
         return "valkey-{$attachment->id}";
+    }
+
+    public static function meilisearchName(DatastoreAttachment $attachment): string
+    {
+        return "meilisearch-{$attachment->id}";
     }
 
     public static function host(string $name): string
@@ -195,6 +204,58 @@ final class DatastoreManifests
                                 'ports' => [['name' => 'valkey', 'containerPort' => 6379]],
                                 'readinessProbe' => ['tcpSocket' => ['port' => 'valkey'], 'periodSeconds' => 5],
                                 'volumeMounts' => [['name' => 'data', 'mountPath' => '/data']],
+                            ]],
+                            'volumes' => [['name' => 'data', 'persistentVolumeClaim' => ['claimName' => $name]]],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Meilisearch has one master key per server, so each attachment gets its own server, like Valkey. The master key
+     * protects every route except /health, so the readiness probe needs no key.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function meilisearch(DatastoreAttachment $attachment): array
+    {
+        $name = self::meilisearchName($attachment);
+        $labels = self::attachmentLabels($attachment);
+
+        return [
+            self::secret($name, $labels, ['MEILI_MASTER_KEY' => $attachment->password]),
+            [
+                'apiVersion' => 'v1',
+                'kind' => 'PersistentVolumeClaim',
+                'metadata' => self::metadata($name, $labels),
+                'spec' => self::volumeSpec(self::MEILISEARCH_VOLUME),
+            ],
+            self::service($name, $labels, 'http', 7700),
+            [
+                'apiVersion' => 'apps/v1',
+                'kind' => 'Deployment',
+                'metadata' => self::metadata($name, $labels),
+                'spec' => [
+                    'replicas' => 1,
+                    'selector' => ['matchLabels' => $labels],
+                    'strategy' => ['type' => 'Recreate'],
+                    'template' => [
+                        'metadata' => ['labels' => $labels],
+                        'spec' => [
+                            'containers' => [[
+                                'name' => 'meilisearch',
+                                'image' => self::image($attachment->datastore),
+                                'env' => [
+                                    ['name' => 'MEILI_ENV', 'value' => 'production'],
+                                    ['name' => 'MEILI_NO_ANALYTICS', 'value' => 'true'],
+                                    ['name' => 'MEILI_DB_PATH', 'value' => '/meili_data/data.ms'],
+                                    ['name' => 'MEILI_MASTER_KEY', 'valueFrom' => ['secretKeyRef' => ['name' => $name, 'key' => 'MEILI_MASTER_KEY']]],
+                                ],
+                                'ports' => [['name' => 'http', 'containerPort' => 7700]],
+                                'readinessProbe' => ['httpGet' => ['path' => '/health', 'port' => 'http'], 'periodSeconds' => 5],
+                                'volumeMounts' => [['name' => 'data', 'mountPath' => '/meili_data']],
                             ]],
                             'volumes' => [['name' => 'data', 'persistentVolumeClaim' => ['claimName' => $name]]],
                         ],

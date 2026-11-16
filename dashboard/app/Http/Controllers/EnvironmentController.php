@@ -63,10 +63,10 @@ class EnvironmentController extends Controller
     private const RESTORE_ACTIONS = ['backup.restore_requested', 'backup.restored', 'backup.restore_failed'];
 
     /** The name of a kind when its capabilities give no label. */
-    private const KIND_NAMES = ['mysql' => 'MySQL', 'postgres' => 'Postgres', 'valkey' => 'Valkey', 'rustfs' => 'RustFS bucket'];
+    private const KIND_NAMES = ['mysql' => 'MySQL', 'postgres' => 'Postgres', 'valkey' => 'Valkey', 'rustfs' => 'RustFS bucket', 'meilisearch' => 'Meilisearch'];
 
     /** What each family is for, whatever the source. */
-    private const PURPOSES = ['database' => 'A SQL database', 'key_value' => 'Cache, queues, and sessions', 'bucket' => 'S3 storage for files'];
+    private const PURPOSES = ['database' => 'A SQL database', 'key_value' => 'Cache, queues, and sessions', 'bucket' => 'S3 storage for files', 'search' => 'Full-text search'];
 
     /** The name field of the add dialog for each named family, and what the dialog says about the first one and a later one. */
     private const NAME_FIELDS = [
@@ -295,7 +295,7 @@ class EnvironmentController extends Controller
         foreach (Provisioners::table() as ['kind' => $kind, 'source' => $source, 'provisioner' => $provisioner]) {
             $family = $kind->family();
 
-            // An environment has one key-value store, and as many databases and buckets as it needs.
+            // An environment has one key-value store, one search store, and as many databases and buckets as it needs.
             if (! $family->isNamed() && $taken->contains('family', $family)) {
                 continue;
             }

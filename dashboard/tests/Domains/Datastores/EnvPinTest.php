@@ -14,6 +14,7 @@ use App\Domains\Datastores\KeyValueConnection;
 use App\Domains\Datastores\Models\Datastore;
 use App\Domains\Datastores\Models\DatastoreAttachment;
 use App\Domains\Datastores\Provisioners;
+use App\Domains\Datastores\SearchConnection;
 use App\Domains\Datastores\SqlConnection;
 use App\Domains\Deployments\EnvironmentVariables;
 use App\Domains\Environments\Models\Environment;
@@ -85,6 +86,7 @@ class EnvPinTest extends TestCase
             42 => new SqlConnection(DatastoreKind::MYSQL, 'mysql-3.oc-datastores.svc.cluster.local', 3306, 'env_9_reports', 'env_9_0b7ec688', 'swap-reports-pass', 'reports', true),
             51 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-10', 'env-10', 'files-main-secret', true, 'main', isDefault: false),
             52 => new BucketConnection('http://rustfs-6.oc-datastores.svc.cluster.local:9000', 'us-east-1', 'env-10-fb611de4', 'env-10-fb611de4', 'files-uploads-secret', true, 'uploads', isDefault: true),
+            61 => new SearchConnection('http://meilisearch-61.oc-datastores.svc.cluster.local:7700', 'meili-master-key'),
         ], DatastoreAttachment::query()->with('datastore')->orderBy('id')->get()
             ->mapWithKeys(fn (DatastoreAttachment $attachment) => [$attachment->id => Provisioners::of($attachment->datastore)->connection($attachment)])
             ->all());
@@ -94,7 +96,7 @@ class EnvPinTest extends TestCase
      * Four environments of one app of the preset. "shop" has every local shape, "blog" has managed Postgres before and
      * after the apply, and "swap" moves the default from one database to another. "files" came later, with the
      * named buckets: a second bucket, then the default moves to it. Its entries come after the others, so the
-     * entries from before named buckets stay the same.
+     * entries from before named buckets stay the same. "search" came last, with Meilisearch, for the same reason.
      *
      * @return array<string, mixed>
      */
@@ -170,6 +172,13 @@ class EnvPinTest extends TestCase
         $this->write([$mainBucket, $uploads]);
         $snapshot['files after the default moves'] = $this->rows($files);
         $snapshot['runtime files'] = EnvironmentVariables::runtime($files->fresh());
+
+        // search: one Meilisearch server of its own.
+        $search = Environment::factory()->for($application)->create(['id' => 11, 'name' => 'search']);
+        $meilisearch = $this->attachment(61, $this->datastore(12, DatastoreKind::MEILISEARCH, DatastoreSource::STANDARD, $cluster), $search, null, false, null, null, null, null, 'meili-master-key');
+        $this->write([$meilisearch]);
+        $snapshot['search'] = $this->rows($search);
+        $snapshot['runtime search'] = EnvironmentVariables::runtime($search->fresh());
 
         return $snapshot;
     }

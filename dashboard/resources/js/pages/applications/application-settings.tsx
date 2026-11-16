@@ -77,7 +77,7 @@ export function ApplicationSettings({ application, canDelete }: { application: {
                             <h3 className="text-sm font-medium">Delete application</h3>
                             <p className="text-muted-foreground text-sm">
                                 Opencloud deletes each environment of {application.name} with its namespace, its domains, and the data of each
-                                database, bucket, and Valkey. You cannot undo this.
+                                database, bucket, Valkey, and Meilisearch. You cannot undo this.
                             </p>
                         </div>
                         <div className="grid gap-2">

@@ -11,6 +11,7 @@ enum DatastoreKind: string
     case POSTGRES = 'postgres';
     case VALKEY = 'valkey';
     case RUSTFS = 'rustfs';
+    case MEILISEARCH = 'meilisearch';
 
     /** No default arm, so a new kind does not run until it has a family. */
     public function family(): ResourceFamily
@@ -19,6 +20,7 @@ enum DatastoreKind: string
             self::MYSQL, self::POSTGRES => ResourceFamily::DATABASE,
             self::VALKEY => ResourceFamily::KEY_VALUE,
             self::RUSTFS => ResourceFamily::BUCKET,
+            self::MEILISEARCH => ResourceFamily::SEARCH,
         };
     }
 }

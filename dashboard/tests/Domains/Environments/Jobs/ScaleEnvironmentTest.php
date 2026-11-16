@@ -28,6 +28,8 @@ class ScaleEnvironmentTest extends TestCase
 
     private DatastoreAttachment $valkey;
 
+    private DatastoreAttachment $meilisearch;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -45,6 +47,7 @@ class ScaleEnvironmentTest extends TestCase
         $this->kubectl->respond('get cronjobs', new KubectlResult(0, json_encode(['items' => [['metadata' => ['name' => 'cleanup']]]])));
 
         $this->valkey = $this->attachment(DatastoreKind::VALKEY, DatastoreSource::STANDARD);
+        $this->meilisearch = $this->attachment(DatastoreKind::MEILISEARCH, DatastoreSource::STANDARD);
         // A shared MySQL server and a managed Valkey keep running.
         $this->attachment(DatastoreKind::MYSQL, DatastoreSource::STANDARD);
         $this->attachment(DatastoreKind::VALKEY, DatastoreSource::MANAGED);
@@ -67,6 +70,7 @@ class ScaleEnvironmentTest extends TestCase
             ['get', 'cronjobs', "--selector=opencloud.dev/environment={$id}", $namespace, '--ignore-not-found', '-o', 'json'],
             ['patch', 'cronjob/cleanup', $namespace, '--type=merge', '--patch={"spec":{"suspend":true}}'],
             ['scale', "deployment/valkey-{$this->valkey->id}", '--replicas=0', '--namespace=oc-datastores'],
+            ['scale', "deployment/meilisearch-{$this->meilisearch->id}", '--replicas=0', '--namespace=oc-datastores'],
         ], array_column($this->kubectl->calls, 'args'));
     }
 
@@ -77,8 +81,9 @@ class ScaleEnvironmentTest extends TestCase
         $id = $this->environment->id;
         $namespace = "--namespace=oc-env-{$id}";
         $this->assertSame([
-            // Valkey starts before the pods that use it.
+            // Valkey and Meilisearch start before the pods that use them.
             ['scale', "deployment/valkey-{$this->valkey->id}", '--replicas=1', '--namespace=oc-datastores'],
+            ['scale', "deployment/meilisearch-{$this->meilisearch->id}", '--replicas=1', '--namespace=oc-datastores'],
             ['get', 'deployments', "--selector=opencloud.dev/environment={$id}", $namespace, '--ignore-not-found', '-o', 'json'],
             ['scale', 'deployment/web', '--replicas=2', $namespace],
             ['scale', 'deployment/worker', '--replicas=3', $namespace],

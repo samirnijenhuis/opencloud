@@ -17,9 +17,9 @@ class AddPreviewAttachment
      *
      * The rules are those of AttachDatastore. A database or a bucket has a name that is unique in its family. The first
      * one of its family is the default and is named "main" without $name. A later one needs a name. A preview has at
-     * most one key-value store.
+     * most one key-value store and at most one search store.
      *
-     * @throws ValidationException when the name is not valid or taken, or the list already has a key-value store
+     * @throws ValidationException when the name is not valid or taken, or the list already has a store of the family
      */
     public function execute(Environment $template, User $by, DatastoreKind $kind, ?string $name = null): void
     {

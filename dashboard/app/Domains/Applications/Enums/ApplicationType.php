@@ -98,9 +98,9 @@ enum ApplicationType: string
     }
 
     /**
-     * The env names of a database, Valkey, and a bucket, as on Laravel Cloud. The preset decides them, and the user has
-     * no choice. Opencloud cannot know the app in a Dockerfile image, so it gets both sets for the same resource. The
-     * first profile gives the config line of a database or a bucket that is not the default.
+     * The env names of a database, Valkey, a bucket, and Meilisearch, as on Laravel Cloud. The preset decides them, and
+     * the user has no choice. Opencloud cannot know the app in a Dockerfile image, so it gets both sets for the same
+     * resource. The first profile gives the config line of a database or a bucket that is not the default.
      *
      * @return list<EnvProfile>
      */

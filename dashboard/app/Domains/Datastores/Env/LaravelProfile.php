@@ -6,6 +6,7 @@ use App\Domains\Datastores\BucketConnection;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Enums\ResourceFamily;
 use App\Domains\Datastores\KeyValueConnection;
+use App\Domains\Datastores\SearchConnection;
 use App\Domains\Datastores\SqlConnection;
 
 /**
@@ -15,7 +16,8 @@ use App\Domains\Datastores\SqlConnection;
  * the same values with the prefix <NAME>_, and the app adds one disk line to config/filesystems.php for it.
  *
  * An attach also changes app behavior: Valkey sets CACHE_STORE=redis and the default bucket sets FILESYSTEM_DISK=s3,
- * like Laravel Cloud does for a PHP app. Those values belong to this profile, not to the resource.
+ * like Laravel Cloud does for a PHP app. Meilisearch sets SCOUT_DRIVER=meilisearch. Those values belong to this
+ * profile, not to the resource.
  */
 final class LaravelProfile implements EnvProfile
 {
@@ -68,6 +70,16 @@ final class LaravelProfile implements EnvProfile
         ];
     }
 
+    /** The names that the stock config/scout.php of Laravel Scout reads. */
+    public function search(SearchConnection $connection): array
+    {
+        return [
+            'SCOUT_DRIVER' => EnvValue::plain('meilisearch'),
+            'MEILISEARCH_HOST' => EnvValue::plain($connection->host),
+            'MEILISEARCH_KEY' => EnvValue::secret($connection->key),
+        ];
+    }
+
     /** A connection in config/database.php for a database, and a disk in config/filesystems.php for a bucket. */
     public function configLine(DatastoreKind $kind, string $name): ?string
     {
@@ -78,7 +90,7 @@ final class LaravelProfile implements EnvProfile
             ResourceFamily::BUCKET => "'{$name}' => ['driver' => 's3', 'key' => env('{$prefix}AWS_ACCESS_KEY_ID'), 'secret' => env('{$prefix}AWS_SECRET_ACCESS_KEY'), "
                 ."'region' => env('{$prefix}AWS_DEFAULT_REGION'), 'bucket' => env('{$prefix}AWS_BUCKET'), 'endpoint' => env('{$prefix}AWS_ENDPOINT'), "
                 ."'use_path_style_endpoint' => env('{$prefix}AWS_USE_PATH_STYLE_ENDPOINT', false)],",
-            ResourceFamily::KEY_VALUE => null,
+            ResourceFamily::KEY_VALUE, ResourceFamily::SEARCH => null,
         };
     }
 

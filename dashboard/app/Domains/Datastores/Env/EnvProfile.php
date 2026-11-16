@@ -5,6 +5,7 @@ namespace App\Domains\Datastores\Env;
 use App\Domains\Datastores\BucketConnection;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\KeyValueConnection;
+use App\Domains\Datastores\SearchConnection;
 use App\Domains\Datastores\SqlConnection;
 
 /**
@@ -24,6 +25,9 @@ interface EnvProfile
 
     /** @return array<string, EnvValue> */
     public function bucket(BucketConnection $connection): array;
+
+    /** @return array<string, EnvValue> */
+    public function search(SearchConnection $connection): array;
 
     /**
      * The line that the app adds to its own config to read a database or a bucket that is not the default, or null

@@ -71,7 +71,7 @@ export default function ApplicationShow({ application, environments, previews, c
                             <span>{application.repository}</span>
                             <Badge
                                 variant="secondary"
-                                title="The preset is fixed. It also sets the env names that the databases, Valkey, and the buckets give the app."
+                                title="The preset is fixed. It also sets the env names that the databases, Valkey, the buckets, and Meilisearch give the app."
                             >
                                 {applicationTypeLabels[application.type]}
                             </Badge>

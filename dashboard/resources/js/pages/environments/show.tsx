@@ -50,6 +50,7 @@ import {
     HardDrive,
     Mail,
     Plus,
+    Search,
     Server,
     ShieldCheck,
     SquareTerminal,
@@ -59,7 +60,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-const resourceIcons = { mysql: Database, postgres: Database, valkey: Zap, rustfs: HardDrive } as const;
+const resourceIcons = { mysql: Database, postgres: Database, valkey: Zap, rustfs: HardDrive, meilisearch: Search } as const;
 
 const toolIcons = { mailpit: Mail, phpmyadmin: Table2 } as const;
 
@@ -310,7 +311,7 @@ function CapacityBar({ clusterName, capacity, requests }: { clusterName: string;
     );
 }
 
-/** The name and the default of a database or a bucket. A key-value store has no name. */
+/** The name and the default of a database or a bucket. A key-value store and a search store have no name. */
 function NameRow({ resource }: { resource: { family: ResourceFamily; name: string | null; is_default: boolean } }) {
     const named = namedTextsFor(resource);
 
