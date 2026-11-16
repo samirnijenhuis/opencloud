@@ -5,12 +5,14 @@ namespace App\Domains\Datastores\Env;
 use App\Domains\Datastores\BucketConnection;
 use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\KeyValueConnection;
+use App\Domains\Datastores\SearchConnection;
 use App\Domains\Datastores\SqlConnection;
 
 /**
  * The names that most frameworks outside PHP read: one URL per database and per key-value server, and the standard
  * AWS SDK names for a bucket. These are the names that Laravel Cloud injects for JavaScript, Go, Python, Ruby, and
- * Rust apps. The Node.js, Python, Ruby, static, and Dockerfile presets use it.
+ * Rust apps. A search server sets MEILISEARCH_HOST and MEILISEARCH_KEY, the same names as the Laravel profile. The
+ * Node.js, Python, Ruby, static, and Dockerfile presets use it.
  *
  * The profile sets no framework behavior: no cache store and no default disk.
  */
@@ -45,6 +47,14 @@ final class GenericProfile implements EnvProfile
             "{$prefix}AWS_REGION" => EnvValue::plain($connection->region),
             "{$prefix}AWS_ACCESS_KEY_ID" => EnvValue::plain($connection->accessKeyId),
             "{$prefix}AWS_SECRET_ACCESS_KEY" => EnvValue::secret($connection->secretAccessKey),
+        ];
+    }
+
+    public function search(SearchConnection $connection): array
+    {
+        return [
+            'MEILISEARCH_HOST' => EnvValue::plain($connection->host),
+            'MEILISEARCH_KEY' => EnvValue::secret($connection->key),
         ];
     }
 

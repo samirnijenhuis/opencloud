@@ -15,9 +15,10 @@ use Illuminate\Foundation\Queue\Queueable;
 
 /**
  * Makes the pods of one environment match its sleep state. Asleep: no autoscaler, zero pods for web and each process, the
- * CronJobs suspended, and its own Valkey stopped. Awake: each Deployment at its minimum, the autoscalers back, the CronJobs
- * running, and Valkey started. The job changes counts only, never a pod template, so it cannot undo a deploy. It reads the
- * state when it runs, so a sleep and a quick wake end awake, and one waiting job covers each later dispatch.
+ * CronJobs suspended, and its own Valkey and Meilisearch stopped. Awake: each Deployment at its minimum, the autoscalers
+ * back, the CronJobs running, and Valkey and Meilisearch started. The job changes counts only, never a pod template, so
+ * it cannot undo a deploy. It reads the state when it runs, so a sleep and a quick wake end awake, and one waiting job
+ * covers each later dispatch.
  */
 class ScaleEnvironment implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {

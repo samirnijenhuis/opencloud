@@ -787,5 +787,39 @@
         "MAIN_AWS_ENDPOINT": "http://rustfs-6.oc-datastores.svc.cluster.local:9000",
         "MAIN_AWS_SECRET_ACCESS_KEY": "files-main-secret",
         "MAIN_AWS_USE_PATH_STYLE_ENDPOINT": "true"
+    },
+    "search": [
+        [
+            "MEILISEARCH_HOST",
+            "http://meilisearch-61.oc-datastores.svc.cluster.local:7700",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "MEILISEARCH_KEY",
+            "meili-master-key",
+            true,
+            "runtime",
+            "datastore",
+            61
+        ],
+        [
+            "SCOUT_DRIVER",
+            "meilisearch",
+            false,
+            "runtime",
+            "datastore",
+            61
+        ]
+    ],
+    "runtime search": {
+        "APP_DEBUG": "false",
+        "APP_ENV": "production",
+        "LOG_CHANNEL": "stderr",
+        "MEILISEARCH_HOST": "http://meilisearch-61.oc-datastores.svc.cluster.local:7700",
+        "MEILISEARCH_KEY": "meili-master-key",
+        "SCOUT_DRIVER": "meilisearch"
     }
 }

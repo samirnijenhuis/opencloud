@@ -15,7 +15,7 @@ export type Domain = {
     dns_checked_at: string | null;
 };
 
-export type DatastoreKind = 'mysql' | 'postgres' | 'valkey' | 'rustfs';
+export type DatastoreKind = 'mysql' | 'postgres' | 'valkey' | 'rustfs' | 'meilisearch';
 
 export type DatastoreStatus = 'pending' | 'provisioning' | 'ready' | 'failed' | 'destroying';
 
@@ -33,7 +33,7 @@ export type Restore = { status: 'running' | 'restored' | 'failed'; at: string; e
 /** Standard runs in the cluster of the app, managed runs at a cloud provider, and external is a server that the user runs. */
 export type DatastoreSource = 'standard' | 'managed' | 'external';
 
-export type ResourceFamily = 'database' | 'key_value' | 'bucket';
+export type ResourceFamily = 'database' | 'key_value' | 'bucket' | 'search';
 
 export type Attachment = {
     id: number;
@@ -42,7 +42,7 @@ export type Attachment = {
     family: ResourceFamily;
     /** The name that the backend gives it, for example "Postgres" or "External MySQL". */
     label: string;
-    /** The name of a database or a bucket. A key-value store, and a managed one that is being destroyed, have none. */
+    /** The name of a database or a bucket. A key-value store, a search store, and a managed one that is being destroyed, have none. */
     name: string | null;
     /** The default of a family sets the default env values. Each other database or bucket sets its own values. */
     is_default: boolean;

@@ -23,10 +23,10 @@ class AttachDatastore
      * Creates the attachment with the provisioner of the kind and source, then its env values and its audit event.
      *
      * A database or a bucket has a name that is unique in its family. The first one of its family in an environment is
-     * the default and is named "main" without $name. A later one needs a name. A key-value store has no name, and
-     * attaching it again returns the existing attachment. Attaching a failed attachment again retries it with the
-     * provisioner of its own datastore. An attach with a typed address never reuses an attachment, so the address that
-     * the user typed never goes unused.
+     * the default and is named "main" without $name. A later one needs a name. A key-value or search store has no
+     * name, and attaching it again returns the existing attachment. Attaching a failed attachment again retries it with
+     * the provisioner of its own datastore. An attach with a typed address never reuses an attachment, so the address
+     * that the user typed never goes unused.
      *
      * @param  Connection|null  $connection  what the user typed for the external source, null for the sources that
      *                                       make their own

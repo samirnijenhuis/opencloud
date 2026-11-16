@@ -11,7 +11,7 @@ These opencloud names are easy to mix up:
 - A `Domain` model is a hostname of an environment, and the `Routing` domain owns it. A domain in `App\Domains` is an area of the code.
 - `web` is a process of each environment, but it is not a `Process` row. The environment holds its settings, and `Process::WEB` names it.
 - The environment kinds are `permanent`, `preview`, and `preview_template`. The preview template holds the settings of future previews and never deploys.
-- A datastore kind (`mysql`, `postgres`, `valkey`, `rustfs`) is not its source (`standard`, `managed`, `external`). Neither is its resource family (`database`, `key_value`, `bucket`).
+- A datastore kind (`mysql`, `postgres`, `valkey`, `rustfs`, `meilisearch`) is not its source (`standard`, `managed`, `external`). Neither is its resource family (`database`, `key_value`, `bucket`, `search`).
 - The cluster kinds are `local`, `connected`, and `created`. Opencloud creates a `created` cluster with OpenTofu.
 - An env value is an `EnvVar` row. Its source is `user` or `datastore`.
 

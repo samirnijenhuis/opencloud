@@ -145,7 +145,7 @@ You install opencloud on one Ubuntu server, or on your Mac with OrbStack. You co
 2. It runs your deploy commands, for example the database migrations, in a Kubernetes Job.
 3. It rolls out the new version with no downtime. A failed step keeps the old version live.
 4. It sends traffic through Caddy, with a free HTTPS address and your own domains.
-5. It gives each environment its own MySQL or Postgres database, Valkey, and S3 buckets, and it writes the env values that your framework reads.
+5. It gives each environment its own MySQL or Postgres database, Valkey, S3 buckets, and Meilisearch, and it writes the env values that your framework reads.
 
 Everything runs on servers and cloud accounts that you own, with your own API keys.
 
@@ -189,6 +189,7 @@ Everything runs on servers and cloud accounts that you own, with your own API ke
   | Managed | OpenTofu creates it at DigitalOcean with your key: Postgres, Valkey, or a Spaces bucket. |
   | External | You type the address of a server that you already run. |
 
+- Meilisearch for full-text search, in your cluster only. Each environment gets its own server. A Laravel app gets `SCOUT_DRIVER=meilisearch`, `MEILISEARCH_HOST`, and `MEILISEARCH_KEY`, so Laravel Scout needs no setup.
 - Several databases and several buckets in one environment, each with a name and one default.
 - Env names that fit your framework, as on Laravel Cloud. A Laravel app gets `DB_HOST` and the other Laravel names. Other apps get `DATABASE_URL`, `REDIS_URL`, and the AWS SDK names. A Dockerfile app gets both sets.
 
@@ -240,6 +241,7 @@ flowchart LR
             db[(MySQL / Postgres)]
             kv[(Valkey)]
             s3[(RustFS)]
+            ms[(Meilisearch)]
         end
     end
 
@@ -271,7 +273,7 @@ flowchart LR
 ### The main design choices
 
 - **Every change goes through one Action.** A controller validates in a Form Request, checks a policy, and calls one Action, which records an audit event. [`.claude/rules/architecture.md`](.claude/rules/architecture.md) and an Architecture test suite hold this shape.
-- **Resources are families and sources.** A database, a key-value store, and a bucket are families. Standard, managed, and external are sources. One registry, `Provisioners`, finds the code for each pair, so a managed database never reaches `kubectl`.
+- **Resources are families and sources.** A database, a key-value store, a bucket, and a search store are families. Standard, managed, and external are sources. One registry, `Provisioners`, finds the code for each pair, so a managed database never reaches `kubectl`.
 - **A provider gives a neutral connection, and the preset picks the env names.** A provisioner returns, for example, a host, a port, a user, and a password. A profile turns that into `DB_HOST` or `DATABASE_URL`.
 - **Each job converges.** A deploy sends the full desired state with `kubectl apply`, and it deletes old processes by label. So a deploy reaches the same result when it runs twice or after a crash.
 

@@ -7,6 +7,7 @@ use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Env\EnvValue;
 use App\Domains\Datastores\Env\LaravelProfile;
 use App\Domains\Datastores\KeyValueConnection;
+use App\Domains\Datastores\SearchConnection;
 use App\Domains\Datastores\SqlConnection;
 use PHPUnit\Framework\TestCase;
 
@@ -97,6 +98,17 @@ class LaravelProfileTest extends TestCase
             'UPLOADS_AWS_BUCKET' => EnvValue::plain('env-7-fb611de4'),
             'UPLOADS_AWS_ENDPOINT' => EnvValue::plain('http://rustfs.internal:9000'),
             'UPLOADS_AWS_USE_PATH_STYLE_ENDPOINT' => EnvValue::plain('true'),
+        ], $connection->envFor(new LaravelProfile));
+    }
+
+    public function test_meilisearch_sets_the_scout_driver_and_the_host_and_the_secret_key_that_scout_reads(): void
+    {
+        $connection = new SearchConnection('http://meilisearch.internal:7700', 'master-key');
+
+        $this->assertEquals([
+            'SCOUT_DRIVER' => EnvValue::plain('meilisearch'),
+            'MEILISEARCH_HOST' => EnvValue::plain('http://meilisearch.internal:7700'),
+            'MEILISEARCH_KEY' => EnvValue::secret('master-key'),
         ], $connection->envFor(new LaravelProfile));
     }
 

@@ -269,6 +269,20 @@ class DatabaseBackupsTest extends TestCase
         $this->assertSame(['backup.requested'], AuditEvent::pluck('action')->all());
     }
 
+    public function test_back_up_now_refuses_meilisearch_and_names_the_scout_import(): void
+    {
+        $meilisearch = DatastoreAttachment::factory()->for(Datastore::factory()->create(['kind' => DatastoreKind::MEILISEARCH]))->create();
+
+        try {
+            app(BackupNow::class)->execute($meilisearch, User::factory()->create());
+            $this->fail('No exception.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertSame('Opencloud does not back up a search index. The app fills it again from its database, for example with php artisan scout:import.', $e->getMessage());
+        }
+
+        $this->assertSame([0, 0], [Backup::count(), AuditEvent::count()]);
+    }
+
     public function test_the_datastore_job_backs_up_each_database_and_goes_on_after_a_failure(): void
     {
         $second = DatastoreAttachment::factory()->for($this->mysql)->create(['database_name' => 'env_second', 'username' => 'env_second']);

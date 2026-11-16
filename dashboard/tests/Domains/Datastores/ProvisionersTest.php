@@ -149,6 +149,7 @@ class ProvisionersTest extends TestCase
             'standard postgres' => $local('SqlConnection', dumps: true),
             'standard valkey' => $local('KeyValueConnection', dumps: false),
             'standard rustfs' => $local('BucketConnection', dumps: false),
+            'standard meilisearch' => $local('SearchConnection', dumps: false),
             'managed mysql' => $managed('SqlConnection', $oneStack),
             'managed postgres' => $managed('SqlConnection', $oneStack),
             'managed valkey' => $managed('KeyValueConnection', $oneStack),
@@ -231,6 +232,7 @@ class ProvisionersTest extends TestCase
 
         $this->assertSame(
             [
+                'app/Domains/Datastores/LocalMeilisearch.php' => true,
                 'app/Domains/Datastores/LocalMysql.php' => true,
                 'app/Domains/Datastores/LocalPostgres.php' => true,
                 'app/Domains/Datastores/LocalProvisioner.php' => true,

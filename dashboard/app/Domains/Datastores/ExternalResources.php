@@ -18,6 +18,7 @@ final class ExternalResources
             DatastoreKind::POSTGRES => new ExternalProvisioner($kind, 'External Postgres'),
             DatastoreKind::VALKEY => new ExternalProvisioner($kind, 'External Redis or Valkey'),
             DatastoreKind::RUSTFS => new ExternalProvisioner($kind, 'External S3 bucket'),
+            DatastoreKind::MEILISEARCH => null,
         };
     }
 

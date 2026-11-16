@@ -96,7 +96,7 @@ const sourceTexts: Record<
 
 /** What the sheet says about the name and the default of each family with names. */
 const namedTexts: Record<
-    Exclude<ResourceFamily, 'key_value'>,
+    Exclude<ResourceFamily, 'key_value' | 'search'>,
     {
         heading: string;
         isDefault: string;
@@ -125,8 +125,9 @@ const namedTexts: Record<
     },
 };
 
-/** The texts of a database or a bucket, or null for a key-value store, which has no name. */
-export const namedTextsFor = (resource: { family: ResourceFamily }) => (resource.family === 'key_value' ? null : namedTexts[resource.family]);
+/** The texts of a database or a bucket, or null for a key-value or search store, which has no name. */
+export const namedTextsFor = (resource: { family: ResourceFamily }) =>
+    resource.family === 'key_value' || resource.family === 'search' ? null : namedTexts[resource.family];
 
 type OfferGroup = { source: DatastoreSource; heading: string; offers: Offer[]; refusal: string | null };
 

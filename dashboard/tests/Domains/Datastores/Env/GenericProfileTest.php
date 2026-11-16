@@ -7,6 +7,7 @@ use App\Domains\Datastores\Enums\DatastoreKind;
 use App\Domains\Datastores\Env\EnvValue;
 use App\Domains\Datastores\Env\GenericProfile;
 use App\Domains\Datastores\KeyValueConnection;
+use App\Domains\Datastores\SearchConnection;
 use App\Domains\Datastores\SqlConnection;
 use PHPUnit\Framework\TestCase;
 
@@ -87,6 +88,16 @@ class GenericProfileTest extends TestCase
             'UPLOADS_AWS_REGION' => EnvValue::plain('us-east-1'),
             'UPLOADS_AWS_ACCESS_KEY_ID' => EnvValue::plain('env-7-fb611de4'),
             'UPLOADS_AWS_SECRET_ACCESS_KEY' => EnvValue::secret('upw'),
+        ], $connection->envFor(new GenericProfile));
+    }
+
+    public function test_meilisearch_sets_the_host_and_the_secret_key_and_no_framework_values(): void
+    {
+        $connection = new SearchConnection('http://meilisearch.internal:7700', 'master-key');
+
+        $this->assertEquals([
+            'MEILISEARCH_HOST' => EnvValue::plain('http://meilisearch.internal:7700'),
+            'MEILISEARCH_KEY' => EnvValue::secret('master-key'),
         ], $connection->envFor(new GenericProfile));
     }
 

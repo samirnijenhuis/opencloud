@@ -4,13 +4,14 @@ namespace App\Domains\Datastores\Enums;
 
 /**
  * The building block an attachment is, whatever its engine and source. The name and one-per-environment rules follow
- * from the family, so a second key-value engine cannot slip past the rule that an environment has one.
+ * from the family, so a second key-value or search engine cannot slip past the rule that an environment has one.
  */
 enum ResourceFamily: string
 {
     case DATABASE = 'database';
     case KEY_VALUE = 'key_value';
     case BUCKET = 'bucket';
+    case SEARCH = 'search';
 
     /** The name of the first database or bucket of an environment, when the user gives none. */
     public const FIRST_NAME = 'main';
@@ -26,11 +27,15 @@ enum ResourceFamily: string
 
     /**
      * An environment can have several databases and several buckets. Each has a name that is unique in its family,
-     * and one of each family is the default. It has at most one key-value store, without a name.
+     * and one of each family is the default. It has at most one key-value store and at most one search store, each
+     * without a name.
      */
     public function isNamed(): bool
     {
-        return $this !== self::KEY_VALUE;
+        return match ($this) {
+            self::DATABASE, self::BUCKET => true,
+            self::KEY_VALUE, self::SEARCH => false,
+        };
     }
 
     /** @return string|null the reason the name of a database or a bucket is not valid, or null */

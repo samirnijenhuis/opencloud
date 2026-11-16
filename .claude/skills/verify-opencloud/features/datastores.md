@@ -42,3 +42,4 @@ Preconditions:
 - `REPORTS_DB_URL` reaches the app only on the next deploy, like each env value. The Laravel fixture reads the `*_DB_URL` values in `config/verify.php`, because the app caches its config at start.
 - A name must not be a Laravel stock connection, such as `mysql` or `pgsql`. The dashboard refuses it.
 - A Laravel app with no database needs `SESSION_DRIVER=cookie` and `CACHE_STORE=file`, because the defaults use the database. The matrix sets them for the `none` cells.
+- The matrix has no Meilisearch cell yet. The PHPUnit tests prove the manifests and the env names, but no run proves a live search against Meilisearch.

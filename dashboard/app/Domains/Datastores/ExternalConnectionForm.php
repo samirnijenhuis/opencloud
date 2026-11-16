@@ -44,6 +44,8 @@ final class ExternalConnectionForm
                 new ExternalField('password', 'Secret access key', 'secret', true, ['string', 'max:1024'], 'Enter the secret access key.'),
                 new ExternalField('path_style', 'Use path-style URLs', 'toggle', false, ['boolean'], 'Turn path-style URLs on or off.', value: false, help: 'Turn it on for MinIO and most servers that you host yourself.'),
             ],
+            // The external source does not serve a search store, so the request refuses the kind and reads no field.
+            ResourceFamily::SEARCH => [],
         };
     }
 

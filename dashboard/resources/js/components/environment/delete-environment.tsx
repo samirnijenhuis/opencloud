@@ -29,7 +29,7 @@ export function DeleteEnvironment({ environment }: { environment: { id: number; 
     return (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 p-4 dark:border-red-900">
             <p className="text-muted-foreground text-sm">
-                Opencloud deletes the namespace, the domains, and the data of each database, bucket, and Valkey of this environment.
+                Opencloud deletes the namespace, the domains, and the data of each database, bucket, Valkey, and Meilisearch of this environment.
             </p>
             <Dialog
                 onOpenChange={() => {
@@ -47,8 +47,8 @@ export function DeleteEnvironment({ environment }: { environment: { id: number; 
                         <DialogHeader>
                             <DialogTitle>Delete {environment.name}?</DialogTitle>
                             <DialogDescription>
-                                Opencloud deletes the namespace, the domains, and the data of each database, bucket, and Valkey of {environment.name}.
-                                You cannot undo this. The other environments keep their data.
+                                Opencloud deletes the namespace, the domains, and the data of each database, bucket, Valkey, and Meilisearch of{' '}
+                                {environment.name}. You cannot undo this. The other environments keep their data.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-2">

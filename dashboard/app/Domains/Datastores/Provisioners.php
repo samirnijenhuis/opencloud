@@ -107,6 +107,7 @@ final class Provisioners
                 DatastoreKind::POSTGRES => new LocalPostgres,
                 DatastoreKind::VALKEY => new LocalValkey,
                 DatastoreKind::RUSTFS => new LocalRustfs,
+                DatastoreKind::MEILISEARCH => new LocalMeilisearch,
             },
             DatastoreSource::MANAGED => ManagedResources::find($kind),
             DatastoreSource::EXTERNAL => ExternalResources::find($kind),
