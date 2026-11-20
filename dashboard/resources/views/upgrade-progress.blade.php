@@ -14,6 +14,7 @@
         p { margin: 0; opacity: 0.7; line-height: 1.5; }
         a { color: inherit; }
         #link { display: inline-block; margin-top: 1rem; }
+        #link[hidden] { display: none; }
         .spinner { width: 1.5rem; height: 1.5rem; margin: 0 auto; border: 2px solid; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
@@ -72,6 +73,8 @@
                 } else if (upgrade.state === 'failed') {
                     show('The update failed', upgrade.message, true);
                     return;
+                } else if (data.version === upgrade.target) {
+                    show(`Opencloud ${upgrade.target} starts`, 'Opencloud checks that the new version answers. Your apps keep running.', false);
                 } else if (upgrade.state === 'starting' && Date.now() - opened > startLimit) {
                     show('The update did not start', `Opencloud ${upgrade.from} still runs. Run "sudo opencloud upgrade ${upgrade.target}" on the server to see why.`, true);
                     return;

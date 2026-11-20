@@ -212,7 +212,7 @@ upgrade() {
         fail "The way back to $from did not finish. Check the pods with: sudo opencloud status. The database copy is $copy. The log is $log."
     echo "Opencloud $from runs again with the database from before the upgrade. The log of the failed upgrade is $log."
     echo "Read the logs of the dashboard with: sudo opencloud logs web"
-    upgrade_status failed "The upgrade to $target failed, so opencloud $from runs again with the database from before the upgrade. ${reason:+The installer said: ${reason#Error: } }The log on the server is $log."
+    upgrade_status failed "The upgrade to $target failed, so opencloud $from runs again with the database from before the upgrade. The log on the server is $log.${reason:+ The installer said: ${reason#Error: }}"
     exit 1
 }
 
