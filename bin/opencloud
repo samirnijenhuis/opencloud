@@ -24,7 +24,18 @@ kc() {
 
 fail() {
     printf 'Error: %s\n' "$*" >&2
+    [[ -z ${UPGRADE_TARGET:-} ]] || upgrade_status failed "$*"
     exit 1
+}
+
+# Usage: upgrade_status <state> <message>. The dashboard mounts the data folder and shows this file on the page that
+# waits for an upgrade, because the dashboard itself restarts during the upgrade.
+upgrade_status() {
+    local message=${2//[$'\t\r\n']/ } file=$STATE_DIR/data/upgrade.json
+    message=${message//\\/\\\\}
+    message=${message//\"/\\\"}
+    printf '{"state":"%s","from":"%s","target":"%s","message":"%s"}\n' "$1" "$UPGRADE_FROM" "$UPGRADE_TARGET" "$message" >"$file.tmp" &&
+        mv "$file.tmp" "$file"
 }
 
 # Usage: dashboard_env <name>. Prints one env value of the web container.
@@ -147,6 +158,9 @@ upgrade() {
     if [[ $force == 0 ]] && is_release "$from" && is_release "$target" && older_than "$target" "$from"; then
         fail "$target is older than $from. To go back anyway, run: sudo opencloud upgrade $target --force"
     fi
+    UPGRADE_FROM=$from
+    UPGRADE_TARGET=$target
+    upgrade_status running "Opencloud downloads and installs $target."
 
     local base=${OPENCLOUD_RELEASE_URL:-https://github.com/$repo/releases/download/$target}
     local name=opencloud-$target.tar.gz dir=/opt/opencloud/$target tmp
@@ -185,6 +199,7 @@ upgrade() {
         echo "Checking that the dashboard answers through Caddy"
         if opencloud_answers; then
             echo "Opencloud $target runs. The database copy from before the upgrade is $copy."
+            upgrade_status done "Opencloud $target runs."
             return 0
         fi
     fi
@@ -197,6 +212,7 @@ upgrade() {
         fail "The way back to $from did not finish. Check the pods with: sudo opencloud status. The database copy is $copy. The log is $log."
     echo "Opencloud $from runs again with the database from before the upgrade. The log of the failed upgrade is $log."
     echo "Read the logs of the dashboard with: sudo opencloud logs web"
+    upgrade_status failed "The upgrade to $target failed, so opencloud $from runs again with the database from before the upgrade. The log on the server is $log.${reason:+ The installer said: ${reason#Error: }}"
     exit 1
 }
 

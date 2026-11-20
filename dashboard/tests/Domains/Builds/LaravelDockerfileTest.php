@@ -112,11 +112,11 @@ class LaravelDockerfileTest extends TestCase
         $this->assertStringStartsWith("FROM dunglas/frankenphp:1-php8.4 AS base\n", $dockerfile);
     }
 
-    public function test_the_default_base_image_is_locked_to_a_frankenphp_release(): void
+    public function test_the_default_base_image_follows_the_latest_frankenphp_1_release(): void
     {
         $dockerfile = LaravelDockerfile::fromConfig()->render(['require' => ['php' => '^8.2']], null);
 
-        $this->assertStringStartsWith("FROM dunglas/frankenphp:1.13.5-php8.4 AS base\n", $dockerfile);
+        $this->assertStringStartsWith("FROM dunglas/frankenphp:1-php8.4 AS base\n", $dockerfile);
     }
 
     /** @return array<string, array{0: array<string, mixed>, 1: list<string>, 2: string}> */

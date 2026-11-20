@@ -47,10 +47,11 @@ return [
 
     /*
      * The base image of a Laravel app. "{php}" becomes the PHP minor version, for example 8.4.
-     * The FrankenPHP release is locked, so each build uses a known image. 1.13.5 ships a Brotli patched against
-     * CVE-2026-111497 (Node2Shell) and the fixes of its own security release. A newer FrankenPHP needs a change here.
+     * FrankenPHP rebuilds only its latest release each day when PHP or Debian ships a fix, and it moves the 1-php<minor>
+     * tags to that build. An exact release tag such as 1.13.5-php8.4 never gets a fix after the next release. BuildKit
+     * reads the digest of the tag from the registry on each build, so the next deploy of an app gets the fix.
      */
-    'php_base_image' => env('OPENCLOUD_PHP_BASE_IMAGE', 'dunglas/frankenphp:1.13.5-php{php}'),
+    'php_base_image' => env('OPENCLOUD_PHP_BASE_IMAGE', 'dunglas/frankenphp:1-php{php}'),
 
     /*
      * The PHP minor versions that have a base image. The build picks LaravelDockerfile::DEFAULT_PHP when composer.json

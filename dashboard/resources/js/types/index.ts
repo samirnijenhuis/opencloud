@@ -29,7 +29,7 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
-    can: { create_application: boolean; view_audit_log: boolean; manage_credentials: boolean };
+    can: { create_application: boolean; view_audit_log: boolean; manage_credentials: boolean; upgrade_opencloud: boolean };
     /** Null for a guest. `update` is a newer release, and only the owner gets it. */
     opencloud: { version: string; update: string | null } | null;
     [key: string]: unknown;

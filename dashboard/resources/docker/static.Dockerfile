@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/root/.npm --mount=type=cache,target=/root/.local/
 RUN for dir in dist build out _site public; do if [ -d "$dir" ]; then mkdir /site && cp -R "$dir/." /site && exit 0; fi; done; echo 'opencloud: the build made no dist, build, out, _site, or public folder. To use another preset, create a new application with the same repository.' >&2; exit 1
 
 {{/build}}
-FROM nginx:1.30-alpine
+FROM nginx:stable-alpine
 COPY <<'NGINX' /etc/nginx/conf.d/default.conf
 server {
     listen 8080;
