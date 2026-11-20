@@ -38,6 +38,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         ...(can.manage_credentials ? [{ title: 'Dashboard address', url: '/settings/dashboard-address', icon: null }] : []),
         ...(can.manage_credentials ? [{ title: 'GitHub', url: '/settings/github', icon: null }] : []),
         ...(can.view_audit_log ? [{ title: 'Audit log', url: '/settings/audit', icon: null }] : []),
+        ...(can.upgrade_opencloud ? [{ title: 'Updates', url: '/settings/updates', icon: null }] : []),
     ];
 
     return (

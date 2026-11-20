@@ -68,6 +68,8 @@ sudo opencloud upgrade v0.1.1     # one specific release
 
 The upgrade downloads the release, copies the dashboard database, runs the installer of the new release, and checks that the dashboard answers. When that check fails, it goes back to the old images and the database copy by itself.
 
+The owner can also click **Update** in Settings, Updates when a newer release is available. The dashboard runs the same upgrade on the server and shows a page that waits for the new version. The dashboard is offline for about a minute, and your apps keep running.
+
 A server that was installed from source, or with the old default repository, needs `OPENCLOUD_REPO` once:
 
 ```bash

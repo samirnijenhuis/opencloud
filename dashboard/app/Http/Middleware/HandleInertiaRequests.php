@@ -52,6 +52,7 @@ class HandleInertiaRequests extends Middleware
                 'create_application' => $request->user()?->can('create', Application::class) ?? false,
                 'manage_credentials' => $request->user()?->role->allows(Ability::MANAGE_CREDENTIALS) ?? false,
                 'view_audit_log' => $request->user()?->role->allows(Ability::MANAGE_APPLICATIONS) ?? false,
+                'upgrade_opencloud' => $request->user()?->role->allows(Ability::UPGRADE_OPENCLOUD) ?? false,
             ],
             // Guests do not learn the version, because it tells an attacker which known bugs apply.
             'opencloud' => fn () => $request->user() === null ? null : [

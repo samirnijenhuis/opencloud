@@ -9,6 +9,7 @@ use App\Http\Controllers\Settings\MemberController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\ProviderKeyController;
+use App\Http\Controllers\Settings\UpdateController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -45,6 +46,10 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/dashboard-address', [DashboardDomainController::class, 'update'])->name('dashboard-domain.update');
     Route::post('settings/dashboard-address/check', [DashboardDomainController::class, 'check'])->name('dashboard-domain.check');
     Route::delete('settings/dashboard-address', [DashboardDomainController::class, 'destroy'])->name('dashboard-domain.destroy');
+    Route::get('settings/updates', [UpdateController::class, 'edit'])->name('updates.edit');
+    Route::post('settings/updates', [UpdateController::class, 'store'])->name('updates.store');
+    Route::get('settings/updates/progress', [UpdateController::class, 'progress'])->name('updates.progress');
+    Route::get('settings/updates/status', [UpdateController::class, 'status'])->name('updates.status');
     Route::get('settings/github', [GitHubController::class, 'index'])->name('github.index');
     Route::get('settings/github/callback', [GitHubController::class, 'callback'])->name('github.callback');
 
