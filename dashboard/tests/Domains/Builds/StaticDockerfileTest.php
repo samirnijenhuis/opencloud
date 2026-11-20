@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 class StaticDockerfileTest extends TestCase
 {
     private const NGINX = <<<'DOCKERFILE'
-        FROM nginx:1.30-alpine
+        FROM nginx:stable-alpine
         COPY <<'NGINX' /etc/nginx/conf.d/default.conf
         server {
             listen 8080;

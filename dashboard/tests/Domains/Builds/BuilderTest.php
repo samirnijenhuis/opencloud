@@ -186,7 +186,7 @@ class BuilderTest extends TestCase
 
         (new Builder)->build($deployment, DeploymentLog::for($deployment));
 
-        $this->assertSame(['FROM nginx:1.30-alpine', 'COPY . /site'], array_values(preg_grep('/^(FROM|RUN|CMD|COPY) [^<]/', explode("\n", $processes->dockerfiles[0]))));
+        $this->assertSame(['FROM nginx:stable-alpine', 'COPY . /site'], array_values(preg_grep('/^(FROM|RUN|CMD|COPY) [^<]/', explode("\n", $processes->dockerfiles[0]))));
         $this->assertSame([".git\nnode_modules\n"], $processes->dockerignores);
     }
 
